@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import { AuthError } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import type { UserRole } from "@prisma/client";
 import { trackEvent } from "@/lib/monitoring";
@@ -7,6 +8,15 @@ import { prisma } from "@/lib/prisma";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   secret: process.env.AUTH_SECRET ?? (process.env.NODE_ENV === "production" ? undefined : "diveplan-local-development-secret-change-me"),
+  logger: {
+    error(error) {
+      if (error instanceof AuthError && error.type === "JWTSessionError") {
+        return;
+      }
+
+      console.error(error);
+    }
+  },
   providers: [
     Credentials({
       name: "Code pilote",
