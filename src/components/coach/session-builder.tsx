@@ -1,0 +1,501 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import type { LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Clock3, Eye, FileText, MoreHorizontal, Plus, Printer, Send, Users, Waves } from "lucide-react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
+import type { CreateSessionInput } from "@/app/coach/sessions/actions";
+import { AssignmentSelector } from "@/components/coach/assignment-selector";
+import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
+import { BlockTypeBadge } from "@/components/training/block-type-badge";
+import { StatusPill } from "@/components/training/status-pill";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+
+const schema = z.object({
+  title: z.string().min(3, "Nom requis"),
+  date: z.string().min(10, "Date requise"),
+  groupId: z.string().min(1, "Groupe requis"),
+  duration: z.number().min(15, "Minimum 15 minutes"),
+  focus: z.string().min(3, "Focus requis"),
+  notes: z.string().optional()
+});
+
+type FormValues = z.infer<typeof schema>;
+
+type BuilderAthlete = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  level?: string;
+  avatar?: string | null;
+};
+
+type BuilderExercise = {
+  id: string;
+  name: string;
+  category: string;
+  sets: number | null;
+  reps: number | null;
+  duration: number | null;
+  equipment: string | null;
+};
+
+type BuilderGroup = {
+  id: string;
+  name: string;
+};
+
+type SessionBuilderProps = {
+  athletes: BuilderAthlete[];
+  drylandLibrary: BuilderExercise[];
+  groups: BuilderGroup[];
+  onCreate: (input: CreateSessionInput) => Promise<void>;
+};
+
+const steps = ["Details", "Dryland", "Piscine", "Assignations", "Publication"];
+
+const poolBlocks = [
+  {
+    id: "pool-a",
+    title: "Piscine A",
+    dives: [
+      ["1 metre", "101C", "Avant groupe", 3],
+      ["1 metre", "201B", "Arriere carpe", 5],
+      ["1 metre", "203C", "Un et demi arriere", 4],
+      ["3 metres", "301C", "Retour groupe", 4],
+      ["3 metres", "401B", "Renverse carpe", 3]
+    ] as Array<[string, string, string, number]>
+  },
+  {
+    id: "pool-b",
+    title: "Piscine B",
+    dives: [
+      ["1 metre", "201C", "Arriere groupe", 4],
+      ["1 metre", "301C", "Retour groupe", 5],
+      ["3 metres", "401B", "Renverse carpe", 4],
+      ["3 metres", "5331D", "Vrille avant", 3]
+    ] as Array<[string, string, string, number]>
+  }
+];
+
+export function SessionBuilder({ athletes, drylandLibrary, groups, onCreate }: SessionBuilderProps) {
+  const [step, setStep] = useState(0);
+  const [isPending, startTransition] = useTransition();
+  const athleteIds = athletes.map((athlete) => athlete.id);
+  const [dryAssigned, setDryAssigned] = useState(athleteIds.slice(0, 2));
+  const [poolA, setPoolA] = useState(athleteIds.slice(0, 2));
+  const [poolB, setPoolB] = useState(athleteIds.slice(2, 3));
+  const [selectedExerciseIds, setSelectedExerciseIds] = useState(drylandLibrary.slice(0, 5).map((exercise) => exercise.id));
+  const [flashBlock, setFlashBlock] = useState<string | null>(null);
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      title: "Arriere + ouverture",
+      date: new Date().toISOString().slice(0, 10),
+      groupId: groups[0]?.id ?? "",
+      duration: 90,
+      focus: "203C, 201B, entrees propres",
+      notes: "Priorite aux entrees propres."
+    }
+  });
+  const watched = useWatch({ control: form.control });
+  const selectedExercises = useMemo(() => orderExercises(drylandLibrary, selectedExerciseIds), [drylandLibrary, selectedExerciseIds]);
+  const allAssignedIds = uniqueIds([...dryAssigned, ...poolA, ...poolB]);
+  const unassignedBlocks = [
+    dryAssigned.length === 0 ? "Dryland" : null,
+    poolA.length === 0 ? "Piscine A" : null,
+    poolB.length === 0 ? "Piscine B" : null
+  ].filter(Boolean);
+  const totalDuration = Number(watched.duration ?? 0);
+  const poolVolume = poolBlocks.reduce((sum, block) => sum + block.dives.reduce((blockSum, dive) => blockSum + dive[3], 0), 0);
+  const dryVolume = selectedExercises.length * Math.max(dryAssigned.length, 1) * 6;
+  const totalVolume = poolVolume + dryVolume;
+
+  function pulse(blockId: string) {
+    setFlashBlock(blockId);
+    window.setTimeout(() => setFlashBlock((current) => (current === blockId ? null : current)), 240);
+  }
+
+  function assign(blockId: string, setter: (ids: string[]) => void) {
+    return (ids: string[]) => {
+      setter(ids);
+      pulse(blockId);
+    };
+  }
+
+  function toggleExercise(exerciseId: string) {
+    setSelectedExerciseIds((current) => {
+      const next = current.includes(exerciseId) ? current.filter((id) => id !== exerciseId) : [...current, exerciseId];
+      pulse("dryland");
+      return next;
+    });
+  }
+
+  function moveExercise(exerciseId: string, direction: -1 | 1) {
+    setSelectedExerciseIds((current) => {
+      const index = current.indexOf(exerciseId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      pulse("dryland");
+      return next;
+    });
+  }
+
+  function publishSession() {
+    void form.handleSubmit((values) => {
+      startTransition(() => {
+        void onCreate({
+          ...values,
+          drylandExerciseIds: selectedExerciseIds,
+          drylandAthleteIds: dryAssigned,
+          poolA,
+          poolB
+        });
+      });
+    })();
+  }
+
+  return (
+    <div className="pb-24 lg:pb-0">
+      <Stepper current={step} onStepChange={setStep} />
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-5">
+          {step === 0 && <DetailsStep form={form} groups={groups} />}
+          {step === 1 && (
+            <DrylandStep
+              exercises={drylandLibrary}
+              selectedExerciseIds={selectedExerciseIds}
+              selectedExercises={selectedExercises}
+              assigned={dryAssigned}
+              athletes={athletes}
+              flash={flashBlock === "dryland"}
+              onToggleExercise={toggleExercise}
+              onMoveExercise={moveExercise}
+              onAssign={assign("dryland", setDryAssigned)}
+            />
+          )}
+          {step === 2 && (
+            <PoolStep
+              athletes={athletes}
+              poolA={poolA}
+              poolB={poolB}
+              flashBlock={flashBlock}
+              onAssignPoolA={assign("pool-a", setPoolA)}
+              onAssignPoolB={assign("pool-b", setPoolB)}
+            />
+          )}
+          {step === 3 && (
+            <AssignmentsStep
+              athletes={athletes}
+              dryAssigned={dryAssigned}
+              poolA={poolA}
+              poolB={poolB}
+              flashBlock={flashBlock}
+              onAssignDry={assign("dryland", setDryAssigned)}
+              onAssignPoolA={assign("pool-a", setPoolA)}
+              onAssignPoolB={assign("pool-b", setPoolB)}
+            />
+          )}
+          {step === 4 && (
+            <PublicationStep
+              title={watched.title ?? ""}
+              focus={watched.focus ?? ""}
+              date={watched.date ?? ""}
+              totalDuration={totalDuration}
+              totalVolume={totalVolume}
+              unassignedBlocks={unassignedBlocks.length}
+              selectedExercises={selectedExercises.length}
+              athleteCount={allAssignedIds.length}
+            />
+          )}
+        </div>
+
+        <SummaryPanel
+          title={watched.title ?? "Nouvelle seance"}
+          date={watched.date ?? ""}
+          duration={totalDuration}
+          blockCount={5}
+          athleteCount={allAssignedIds.length}
+          unassignedCount={unassignedBlocks.length}
+          totalVolume={totalVolume}
+          isPending={isPending}
+          canPublish={athletes.length > 0 && groups.length > 0 && selectedExerciseIds.length > 0 && dryAssigned.length > 0 && poolA.length > 0 && poolB.length > 0}
+          onPublish={publishSession}
+        />
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border)] bg-white/95 p-3 shadow-[0_-16px_34px_rgba(7,20,35,0.12)] backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+          <Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep(step - 1)}>Retour</Button>
+          <Button type="button" variant={step === 4 ? "action" : "default"} disabled={isPending} onClick={() => (step === 4 ? publishSession() : setStep(Math.min(4, step + 1)))}>
+            {step === 4 ? (isPending ? "Publication..." : "Publier") : "Continuer"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stepper({ current, onStepChange }: { current: number; onStepChange: (step: number) => void }) {
+  return (
+    <div className="mb-6 overflow-x-auto">
+      <div className="grid min-w-[680px] gap-2 md:grid-cols-5">
+        {steps.map((label, index) => (
+          <button key={label} type="button" onClick={() => onStepChange(index)} className={cn("flex min-h-12 items-center gap-3 rounded-2xl border px-3 text-left text-sm font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", current === index ? "border-[var(--color-navy)] bg-[var(--color-navy)] text-white" : "border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] hover:border-[var(--color-brand)]")}>
+            <span className={cn("flex h-7 w-7 items-center justify-center rounded-full text-xs", current === index ? "bg-[var(--color-brand)] text-[var(--color-navy)]" : "bg-[var(--color-surface-raised)]")}>{index + 1}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DetailsStep({ form, groups }: { form: ReturnType<typeof useForm<FormValues>>; groups: BuilderGroup[] }) {
+  return (
+    <Card>
+      <CardHeader><CardTitle>Details de la seance</CardTitle></CardHeader>
+      <CardContent className="grid gap-4 md:grid-cols-2">
+        <Field label="Nom"><Input placeholder="Nom" {...form.register("title")} /></Field>
+        <Field label="Date"><Input type="date" {...form.register("date")} /></Field>
+        <Field label="Groupe">
+          <select className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]" {...form.register("groupId")}>
+            {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Duree totale"><Input type="number" placeholder="Duree" {...form.register("duration", { valueAsNumber: true })} /></Field>
+        <Field label="Focus principal" className="md:col-span-2"><Input placeholder="Focus principal" {...form.register("focus")} /></Field>
+        <Field label="Notes coach" className="md:col-span-2"><Textarea placeholder="Notes coach" {...form.register("notes")} /></Field>
+        {Object.values(form.formState.errors).length > 0 && <div className="md:col-span-2 rounded-2xl bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">Certains champs requis sont incomplets.</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function DrylandStep(props: {
+  exercises: BuilderExercise[];
+  selectedExerciseIds: string[];
+  selectedExercises: BuilderExercise[];
+  assigned: string[];
+  athletes: BuilderAthlete[];
+  flash: boolean;
+  onToggleExercise: (id: string) => void;
+  onMoveExercise: (id: string, direction: -1 | 1) => void;
+  onAssign: (ids: string[]) => void;
+}) {
+  return (
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <BlockCard type="dryland" title="Dryland partage" duration={22} assigned={props.assigned} athletes={props.athletes} state={props.selectedExercises.length > 0 ? "Pret" : "A completer"} flash={props.flash}>
+        <div className="mb-4 rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">
+          Selectionne les exercices qui seront envoyes au backend. L&apos;ordre ci-dessous est conserve a la creation.
+        </div>
+        <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+          {props.exercises.map((exercise) => {
+            const selected = props.selectedExerciseIds.includes(exercise.id);
+            return (
+              <div key={exercise.id} className={cn("grid gap-3 rounded-2xl border p-3 sm:grid-cols-[auto_1fr_auto] sm:items-center", selected ? "border-[var(--block-dryland-fg)]/30 bg-[var(--block-dryland-bg)]/45" : "border-[var(--color-border)] bg-white")}>
+                <button type="button" onClick={() => props.onToggleExercise(exercise.id)} className={cn("flex h-11 w-11 items-center justify-center rounded-xl border focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", selected ? "border-[var(--color-success)] bg-[var(--color-success)] text-white" : "border-[var(--color-border)] text-[var(--color-ink-soft)]")}>
+                  {selected ? <CheckCircle2 className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+                </button>
+                <div>
+                  <div className="font-black">{exercise.name}</div>
+                  <div className="text-sm text-[var(--color-ink-muted)]">{exercise.sets ?? 1} x {exercise.reps ?? `${exercise.duration ?? 30} sec`} - {exercise.equipment ?? "Aucun"}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-[var(--color-ink-muted)]">{exercise.category}</span>
+                  {selected && (
+                    <details className="relative">
+                      <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-xl border border-[var(--color-border)] bg-white"><MoreHorizontal className="h-4 w-4" /></summary>
+                      <div className="absolute right-0 z-10 mt-2 grid w-40 gap-1 rounded-2xl border border-[var(--color-border)] bg-white p-2 shadow-[var(--shadow-soft)]">
+                        <button type="button" onClick={() => props.onMoveExercise(exercise.id, -1)} className="flex min-h-9 items-center gap-2 rounded-xl px-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]"><ArrowUp className="h-4 w-4" /> Monter</button>
+                        <button type="button" onClick={() => props.onMoveExercise(exercise.id, 1)} className="flex min-h-9 items-center gap-2 rounded-xl px-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]"><ArrowDown className="h-4 w-4" /> Descendre</button>
+                      </div>
+                    </details>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </BlockCard>
+      <AssignmentSelector selected={props.assigned} onChange={props.onAssign} athletes={props.athletes} />
+    </div>
+  );
+}
+
+function PoolStep({ athletes, poolA, poolB, flashBlock, onAssignPoolA, onAssignPoolB }: { athletes: BuilderAthlete[]; poolA: string[]; poolB: string[]; flashBlock: string | null; onAssignPoolA: (ids: string[]) => void; onAssignPoolB: (ids: string[]) => void }) {
+  return (
+    <div className="space-y-5">
+      <PoolBlock block={poolBlocks[0]} assigned={poolA} athletes={athletes} flash={flashBlock === "pool-a"} onAssign={onAssignPoolA} />
+      <PoolBlock block={poolBlocks[1]} assigned={poolB} athletes={athletes} flash={flashBlock === "pool-b"} onAssign={onAssignPoolB} />
+    </div>
+  );
+}
+
+function PoolBlock({ block, assigned, athletes, flash, onAssign }: { block: (typeof poolBlocks)[number]; assigned: string[]; athletes: BuilderAthlete[]; flash: boolean; onAssign: (ids: string[]) => void }) {
+  return (
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <BlockCard type="pool" title={block.title} duration={45} assigned={assigned} athletes={athletes} state="Modele serveur" flash={flash}>
+        <div className="grid gap-3 md:grid-cols-2">
+          {["1 metre", "3 metres"].map((height) => (
+            <div key={height} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3">
+              <div className="mb-3 text-sm font-black text-[var(--color-ink-muted)]">{height.toUpperCase()}</div>
+              <div className="space-y-2">
+                {block.dives.filter((dive) => dive[0] === height).map((dive) => (
+                  <div key={dive[1]} className="grid grid-cols-[64px_1fr_auto] items-center gap-2 rounded-xl bg-white p-3">
+                    <div className="text-xl font-black">{dive[1]}</div>
+                    <div className="text-sm font-semibold text-[var(--color-ink-muted)]">{dive[2]}</div>
+                    <div className="rounded-full bg-[var(--block-pool-bg)] px-2 py-1 text-xs font-black text-[var(--block-pool-fg)]">{dive[3]} reps</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </BlockCard>
+      <AssignmentSelector selected={assigned} onChange={onAssign} athletes={athletes} />
+    </div>
+  );
+}
+
+function AssignmentsStep(props: { athletes: BuilderAthlete[]; dryAssigned: string[]; poolA: string[]; poolB: string[]; flashBlock: string | null; onAssignDry: (ids: string[]) => void; onAssignPoolA: (ids: string[]) => void; onAssignPoolB: (ids: string[]) => void }) {
+  return (
+    <div className="space-y-5">
+      {[
+        ["dryland", "Dryland partage", props.dryAssigned, props.onAssignDry],
+        ["pool-a", "Piscine A", props.poolA, props.onAssignPoolA],
+        ["pool-b", "Piscine B", props.poolB, props.onAssignPoolB]
+      ].map(([id, title, assigned, onAssign]) => (
+        <div key={String(id)} className={cn("grid gap-5 rounded-[var(--radius-panel)] border border-[var(--color-border)] bg-white p-4 lg:grid-cols-[1fr_1.1fr]", props.flashBlock === id && "builder-pulse")}>
+          <div>
+            <BlockTypeBadge type={String(id) === "dryland" ? "dryland" : "pool"} />
+            <h3 className="mt-3 text-xl font-black">{String(title)}</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--color-ink-muted)]">{(assigned as string[]).length > 1 ? "Plusieurs athletes partagent ce bloc." : (assigned as string[]).length === 1 ? "Bloc individuel." : "Aucune assignation."}</p>
+            <div className="mt-4"><AthleteAvatarGroup ids={assigned as string[]} athletes={props.athletes} limit={8} /></div>
+          </div>
+          <AssignmentSelector selected={assigned as string[]} onChange={onAssign as (ids: string[]) => void} athletes={props.athletes} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PublicationStep({ title, focus, date, totalDuration, totalVolume, unassignedBlocks, selectedExercises, athleteCount }: { title: string; focus: string; date: string; totalDuration: number; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number }) {
+  return (
+    <Card>
+      <CardHeader><CardTitle>Publication</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        <div className="rounded-[var(--radius-panel)] border border-[var(--color-navy)] bg-[var(--color-navy)] p-5 text-white">
+          <StatusPill status="READY" />
+          <h2 className="mt-4 text-3xl font-black leading-none text-white">{title || "Nouvelle seance"}</h2>
+          <p className="mt-3 text-sm leading-6 text-white/68">{date || "Date a definir"} - {focus || "Focus a definir"}</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-4">
+            <DarkMetric label="Duree" value={`${totalDuration || 0} min`} />
+            <DarkMetric label="Athletes" value={athleteCount} />
+            <DarkMetric label="Volume" value={totalVolume} />
+            <DarkMetric label="Exercices" value={selectedExercises} />
+          </div>
+        </div>
+        {unassignedBlocks > 0 && <WarningText>{unassignedBlocks} bloc{unassignedBlocks > 1 ? "s" : ""} sans assignation. La publication sera refusee par validation serveur si dryland ou piscine A/B est vide.</WarningText>}
+        <div className="rounded-2xl bg-[var(--color-surface-raised)] p-4 text-sm font-semibold text-[var(--color-ink-muted)]">
+          Il n&apos;y a pas de sauvegarde automatique dans ce projet. La seance est enregistree et publiee uniquement quand tu cliques sur Publier la seance.
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SummaryPanel(props: { title: string; date: string; duration: number; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number; isPending: boolean; canPublish: boolean; onPublish: () => void }) {
+  return (
+    <aside className="hidden xl:block">
+      <Card className="sticky top-6">
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>Resume</CardTitle>
+              <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{props.title}</p>
+            </div>
+            <StatusPill status="DRAFT" />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <SummaryMetric icon={Clock3} label="Duree totale" value={`${props.duration || 0} min`} />
+          <SummaryMetric icon={FileText} label="Blocs" value={props.blockCount} />
+          <SummaryMetric icon={Users} label="Athletes concernes" value={props.athleteCount} />
+          <SummaryMetric icon={AlertTriangle} label="Sans assignation" value={props.unassignedCount} tone={props.unassignedCount > 0 ? "warning" : "default"} />
+          <SummaryMetric icon={Waves} label="Volume estime" value={props.totalVolume} />
+          <div className="rounded-2xl bg-[var(--color-surface-raised)] p-3 text-xs font-semibold text-[var(--color-ink-muted)]">Sauvegarde: non enregistre. Publication: creation serveur en statut publie.</div>
+          <div className="grid gap-2">
+            <Button type="button" variant="outline" disabled><Eye className="h-4 w-4" /> Apercu apres creation</Button>
+            <Button type="button" variant="outline" disabled><Printer className="h-4 w-4" /> Impression apres creation</Button>
+            <Button type="button" variant="action" disabled={props.isPending || !props.canPublish} onClick={props.onPublish}><Send className="h-4 w-4" /> {props.isPending ? "Publication..." : "Publier la seance"}</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </aside>
+  );
+}
+
+function BlockCard({ type, title, duration, assigned, athletes, state, flash, children }: { type: "dryland" | "pool"; title: string; duration: number; assigned: string[]; athletes: BuilderAthlete[]; state: string; flash?: boolean; children: React.ReactNode }) {
+  return (
+    <Card className={cn("overflow-hidden", flash && "builder-pulse")}>
+      <div className={cn("h-2", type === "dryland" ? "bg-[var(--block-dryland-fg)]" : "bg-[var(--block-pool-fg)]")} />
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <BlockTypeBadge type={type} />
+            <CardTitle className="mt-3 text-2xl">{title}</CardTitle>
+            <div className="mt-2 flex flex-wrap gap-3 text-sm font-bold text-[var(--color-ink-muted)]">
+              <span>{duration} min</span>
+              <span>{assigned.length} athlete{assigned.length > 1 ? "s" : ""}</span>
+              <span>{state}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <AthleteAvatarGroup ids={assigned} athletes={athletes} limit={5} />
+            <details className="relative">
+              <summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-[var(--color-border)] bg-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><MoreHorizontal className="h-4 w-4" /></summary>
+              <div className="absolute right-0 z-10 mt-2 w-52 rounded-2xl border border-[var(--color-border)] bg-white p-3 text-sm font-semibold text-[var(--color-ink-muted)] shadow-[var(--shadow-soft)]">Les actions de duplication et suppression ne sont pas connectees au backend actuel.</div>
+            </details>
+          </div>
+        </div>
+        {assigned.length === 0 && <WarningText>Ce bloc n&apos;est assigne a personne.</WarningText>}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
+function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+  return <label className={cn("grid gap-2 text-sm font-black text-[var(--color-ink-muted)]", className)}><span>{label}</span>{children}</label>;
+}
+
+function SummaryMetric({ icon: Icon, label, value, tone = "default" }: { icon: LucideIcon; label: string; value: string | number; tone?: "default" | "warning" }) {
+  return <div className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--color-surface-raised)] p-3"><div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-muted)]"><Icon className={cn("h-4 w-4", tone === "warning" ? "text-[var(--color-action)]" : "text-[var(--color-brand-strong)]")} /> {label}</div><div className="font-black">{value}</div></div>;
+}
+
+function DarkMetric({ label, value }: { label: string; value: string | number }) {
+  return <div className="rounded-2xl bg-white/8 p-4"><div className="text-xs font-bold uppercase text-white/45">{label}</div><div className="mt-1 text-2xl font-black">{value}</div></div>;
+}
+
+function WarningText({ children }: { children: React.ReactNode }) {
+  return <div className="mt-3 flex items-start gap-2 rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {children}</div>;
+}
+
+function orderExercises(exercises: BuilderExercise[], orderedIds: string[]) {
+  const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
+  return orderedIds.map((id) => byId.get(id)).filter((exercise): exercise is BuilderExercise => Boolean(exercise));
+}
+
+function uniqueIds(ids: string[]) {
+  return Array.from(new Set(ids));
+}
