@@ -22,7 +22,8 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Activer ton compte DivePlan</CardTitle>
-          <p className="text-sm text-slate-500">{invitation.club.name} t&apos;a invite comme {invitation.role === "ATHLETE" ? "athlete" : "coach"}.</p>
+          <p className="text-sm text-slate-500">{invitation.club.name} t&apos;a invite comme {invitation.role === "ATHLETE" ? "athlete" : "coach"} avec l&apos;adresse {invitation.email}.</p>
+          <p className="text-sm text-slate-500">Choisis ton mot de passe, puis tu seras connecte automatiquement.</p>
         </CardHeader>
         <CardContent>
           <AcceptInviteForm token={token} />

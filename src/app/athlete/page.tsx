@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAssignedReadySession, getAthleteProgressTotals, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
-import { blocksForAthlete, demoSession } from "@/lib/data";
+import { formatMontrealDate, formatMontrealTime } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -31,15 +31,15 @@ export default async function AthleteTodayPage() {
         duration: block.duration,
         volume: block.estimatedVolume
       }))
-    : blocksForAthlete("emma");
+    : [];
   const completionStatus = readySession?.completions[0]?.status ?? "NOT_STARTED";
   const started = completionStatus === "IN_PROGRESS";
-  const sessionHref = readySession ? `/athlete/session/${readySession.id}` : "/athlete/session/demo";
-  const sessionTitle = readySession?.title ?? demoSession.title;
-  const sessionFocus = readySession?.focus ?? demoSession.focus;
-  const sessionDuration = readySession?.duration ?? demoSession.duration;
+  const sessionHref = readySession ? `/athlete/session/${readySession.id}` : null;
+  const sessionTitle = readySession?.title ?? "Aucune séance planifiée";
+  const sessionFocus = readySession?.focus ?? "Ton coach n'a pas encore publié de séance à venir.";
+  const sessionDuration = readySession?.duration ?? 0;
   const sessionDate = readySession ? new Date(readySession.date) : null;
-  const sessionTime = sessionDate?.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" }) ?? demoSession.time;
+  const sessionTime = sessionDate ? formatMontrealTime(sessionDate) : "--:--";
   const coachName = readySession?.coach?.user ? `${readySession.coach.user.firstName} ${readySession.coach.user.lastName}` : "Coach";
   const blockTypes = Array.from(new Set(blocks.map((block) => block.type)));
   const totalVolume = blocks.reduce((sum, block) => sum + block.volume, 0);
@@ -74,9 +74,13 @@ export default async function AthleteTodayPage() {
 
         <div className="p-5">
           <div className="mb-5 flex flex-wrap gap-2">{blockTypes.map((type) => <BlockTypeBadge key={type} type={type} />)}</div>
-          <Button asChild size="lg" variant="action" className="h-16 w-full rounded-2xl text-base">
-            <Link href={sessionHref}>{started ? <RotateCcw className="h-5 w-5" /> : <Play className="h-5 w-5 fill-current" />} {started ? "Continuer" : "Commencer la séance"}</Link>
-          </Button>
+          {sessionHref ? (
+            <Button asChild size="lg" variant="action" className="h-16 w-full rounded-2xl text-base">
+              <Link href={sessionHref}>{started ? <RotateCcw className="h-5 w-5" /> : <Play className="h-5 w-5 fill-current" />} {started ? "Continuer" : "Commencer la séance"}</Link>
+            </Button>
+          ) : (
+            <EmptyState className="border-white/10 bg-white/6" title="Aucune séance" description="Reviens quand ton coach aura publié la prochaine séance." />
+          )}
         </div>
       </section>
 
@@ -123,7 +127,7 @@ export default async function AthleteTodayPage() {
                 </div>
                 <span className="shrink-0 rounded-full bg-[var(--color-success)] px-2.5 py-1 text-xs font-black text-white">{completion.status === "COMPLETED" ? "Fait" : completion.status}</span>
               </div>
-              <div className="mt-3 text-xs font-bold text-white/38">{completion.completedAt ? new Date(completion.completedAt).toLocaleDateString("fr-CA", { day: "2-digit", month: "short" }) : "En cours"} - {completion.duration} min</div>
+              <div className="mt-3 text-xs font-bold text-white/38">{completion.completedAt ? formatMontrealDate(completion.completedAt, { day: "2-digit", month: "short" }) : "En cours"} - {completion.duration} min</div>
             </div>
           ))}
           {recentCompletions.length === 0 && <EmptyState className="border-white/10 bg-white/6" title="Aucun historique" description="Tes séances terminées apparaîtront ici." />}

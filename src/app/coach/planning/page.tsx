@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { addMontrealDays, formatMontrealDate, formatMontrealTime, sameMontrealDay, startOfMontrealWeek } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +32,8 @@ export default async function PlanningPage() {
   }
 
   const today = new Date();
-  const weekStart = startOfWeek(today);
-  const weekEnd = addDays(weekStart, 7);
+  const weekStart = startOfMontrealWeek(today);
+  const weekEnd = addMontrealDays(weekStart, 7);
   const rawSessions = await prisma.trainingSession.findMany({
     where: { week: { clubId }, date: { gte: weekStart, lt: weekEnd } },
     orderBy: { date: "asc" },
@@ -56,12 +57,12 @@ export default async function PlanningPage() {
 }
 
 function DemoPlanningPage() {
-  const weekStart = startOfWeek(new Date());
+  const weekStart = startOfMontrealWeek(new Date());
   const sessions = weekSessions.filter((session) => session.title).map((session, index) => ({
     id: index === 1 ? "demo" : `demo-${index}`,
     title: session.title,
     focus: session.focus,
-    date: addDays(weekStart, index),
+    date: addMontrealDays(weekStart, index),
     duration: session.duration,
     status: session.status === "Brouillon" ? "DRAFT" : session.status === "Complete" ? "COMPLETED" : "READY",
     blocks: demoSession.blocks.map((block) => ({ type: block.type, estimatedVolume: block.volume, assignments: block.assignedTo.map((athleteId) => ({ athleteId })) })),
@@ -85,7 +86,7 @@ function PlanningView({ weekStart, sessions, demo = false }: { weekStart: Date; 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Planning hebdomadaire</p>
-          <h1 className="mt-2 text-3xl font-black">Semaine du {weekStart.toLocaleDateString("fr-CA")}</h1>
+          <h1 className="mt-2 text-3xl font-black">Semaine du {formatMontrealDate(weekStart)}</h1>
           <p className="mt-1 text-[var(--color-ink-muted)]">Vue par jour, statuts de publication et volume disponible.</p>
         </div>
         <Button asChild variant="action"><Link href={demo ? "/coach/sessions/demo" : "/coach/sessions/new"}><CalendarPlus className="h-4 w-4" /> {demo ? "Voir la demo" : "Nouvelle séance"}</Link></Button>
@@ -103,7 +104,7 @@ function PlanningView({ weekStart, sessions, demo = false }: { weekStart: Date; 
       ) : (
         <div className="grid gap-3 lg:grid-cols-7">
           {weekDays(weekStart).map((day) => (
-            <DayColumn key={day.key} day={day} sessions={sessions.filter((session) => sameDay(session.date, day.date))} activeSessionIds={activeSessionIds} demo={demo} />
+            <DayColumn key={day.key} day={day} sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))} activeSessionIds={activeSessionIds} demo={demo} />
           ))}
         </div>
       )}
@@ -118,7 +119,7 @@ function DayColumn({ day, sessions, activeSessionIds, demo }: { day: { key: numb
         <div className="mb-4 flex items-center justify-between gap-3 border-b border-[var(--color-border)] pb-3">
           <div>
             <div className="text-lg font-black lg:text-base">{day.label}</div>
-            <div className="text-xs font-bold text-[var(--color-ink-soft)]">{day.date.toLocaleDateString("fr-CA", { day: "2-digit", month: "short" })}</div>
+            <div className="text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealDate(day.date, { day: "2-digit", month: "short" })}</div>
           </div>
           <span className="rounded-full bg-[var(--color-surface-raised)] px-2.5 py-1 text-xs font-black text-[var(--color-ink-muted)]">{sessions.length || "Repos"}</span>
         </div>
@@ -149,7 +150,7 @@ function PlanningSessionCard({ session, active, demo }: { session: PlanningSessi
     <article className={`rounded-2xl border p-3 transition duration-[var(--duration-fast)] hover:-translate-y-0.5 ${statusTone(status)}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <StatusPill status={String(status)} />
-        <span className="text-xs font-bold text-[var(--color-ink-soft)]">{session.date.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })}</span>
+        <span className="text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealTime(session.date)}</span>
       </div>
       <Link href={href} className="mt-3 block font-black leading-tight hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{session.title}</Link>
       <p className="mt-1 text-sm leading-5 text-[var(--color-ink-muted)]">{session.focus}</p>
@@ -193,23 +194,6 @@ function uniqueBlockTypes(blocks: PlanningSession["blocks"]) {
   return Array.from(new Set(blocks.map((block) => block.type)));
 }
 
-function startOfWeek(date: Date) {
-  const copy = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const day = copy.getDay() || 7;
-  copy.setDate(copy.getDate() - day + 1);
-  return copy;
-}
-
-function addDays(date: Date, days: number) {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
-function sameDay(left: Date, right: Date) {
-  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
-}
-
 function weekDays(weekStart: Date) {
-  return ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((label, index) => ({ key: index + 1, label, date: addDays(weekStart, index) }));
+  return ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((label, index) => ({ key: index + 1, label, date: addMontrealDays(weekStart, index) }));
 }

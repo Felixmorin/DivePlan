@@ -36,11 +36,48 @@ export function InvitationForm({ groups }: InvitationFormProps) {
       {state.error && <Alert variant="destructive" title="Invitation impossible">{state.error}</Alert>}
       <Button disabled={pending} type="submit" variant="action"><Send className="h-4 w-4" /> {pending ? "Creation..." : "Creer l'invitation"}</Button>
       {state.inviteLink && (
-        <Alert variant="success" title="Lien pret">
-          <div className="break-all font-semibold text-[var(--color-ink)]">{state.inviteLink}</div>
-          <Button className="mt-3" type="button" variant="outline" onClick={() => navigator.clipboard.writeText(state.inviteLink ?? "")}><Copy className="h-4 w-4" /> Copier</Button>
+        <Alert variant={getDeliveryAlertVariant(state.delivery)} title={getDeliveryAlertTitle(state.delivery)}>
+          <DeliveryMessage delivery={state.delivery} />
+          <div className="break-all rounded-xl bg-white/70 p-3 font-semibold text-[var(--color-ink)]">{state.inviteLink}</div>
+          <Button className="mt-3" type="button" variant="outline" onClick={() => navigator.clipboard.writeText(state.inviteLink ?? "")}><Copy className="h-4 w-4" /> Copier le lien d&apos;activation</Button>
         </Alert>
       )}
     </form>
   );
+}
+
+function getDeliveryAlertVariant(delivery: InviteState["delivery"]) {
+  if (delivery?.status === "FAILED") {
+    return "warning";
+  }
+
+  return "success";
+}
+
+function getDeliveryAlertTitle(delivery: InviteState["delivery"]) {
+  if (delivery?.status === "SENT") {
+    return "Email envoye";
+  }
+
+  if (delivery?.status === "FAILED") {
+    return "Invitation creee, email en erreur";
+  }
+
+  return "Lien pret";
+}
+
+function DeliveryMessage({ delivery }: { delivery?: InviteState["delivery"] }) {
+  if (delivery?.status === "SENT") {
+    return <p className="mb-2">Email envoye. Resend a accepte le message avec l&apos;identifiant {delivery.providerMessageId}.</p>;
+  }
+
+  if (delivery?.status === "SKIPPED_LOCAL") {
+    return <p className="mb-2">{delivery.error}</p>;
+  }
+
+  if (delivery?.status === "FAILED") {
+    return <p className="mb-2">Invitation creee, mais l&apos;email n&apos;a pas ete envoye: {delivery.error} Copie le lien ci-dessous pour l&apos;envoyer manuellement.</p>;
+  }
+
+  return <p className="mb-2">Envoie ce lien a l&apos;athlete. Il ouvre la page d&apos;activation, choisit son mot de passe, puis arrive directement dans son espace.</p>;
 }

@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 import { ImportAthletesForm } from "./import-athletes-form";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +54,7 @@ export default async function AthletesPage() {
         where: {
           week: { clubId },
           status: "READY",
-          date: { gte: startOfToday() },
+          date: { gte: startOfMontrealDay() },
           blocks: { some: { assignments: { some: { athleteId: { in: athleteIds } } } } }
         },
         orderBy: { date: "asc" },
@@ -108,7 +109,7 @@ function DemoAthletesPage() {
     level: athlete.level,
     groupName: "Provincial",
     active: athlete.status !== "surveiller",
-    nextSession: { id: "demo", title: athlete.lastSession, date: new Date("2026-08-25T16:30:00"), status: "READY" },
+    nextSession: { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), status: "READY" },
     lastActivity: athlete.lastSession,
     volume: athlete.recentVolume,
     completedSessions: 0
@@ -254,7 +255,7 @@ function NextSession({ nextSession, demo }: { nextSession?: AthleteRow["nextSess
         {nextSession.title}
       </Link>
       <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-ink-muted)]">
-        {nextSession.date.toLocaleDateString("fr-CA", { weekday: "short", day: "2-digit", month: "short" })}
+        {formatMontrealDate(nextSession.date, { weekday: "short", day: "2-digit", month: "short" })}
         <StatusPill status={nextSession.status} className="min-h-6 px-2" />
       </div>
     </div>
@@ -277,10 +278,4 @@ function MobileMetric({ icon, label, value }: { icon: React.ReactNode; label: st
       <span className="min-w-0 truncate text-right font-bold text-[var(--color-ink)]">{value}</span>
     </div>
   );
-}
-
-function startOfToday() {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return date;
 }

@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { athletes, demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { addMontrealDays, formatMontrealDate, formatMontrealTime, sameMontrealDay, startOfMontrealDay, startOfMontrealWeek } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,10 @@ export default async function CoachDashboard() {
   }
 
   const today = new Date();
-  const weekStart = startOfWeek(today);
-  const weekEnd = addDays(weekStart, 7);
-  const dayStart = startOfDay(today);
-  const dayEnd = addDays(dayStart, 1);
+  const weekStart = startOfMontrealWeek(today);
+  const weekEnd = addMontrealDays(weekStart, 7);
+  const dayStart = startOfMontrealDay(today);
+  const dayEnd = addMontrealDays(dayStart, 1);
 
   const [activeAthletes, rawSessions, recentEvents, recentCompletions] = await Promise.all([
     prisma.athlete.findMany({
@@ -140,7 +141,7 @@ export default async function CoachDashboard() {
           <WeekSelector sessions={sessions} />
         </div>
         <div className="grid gap-3 lg:grid-cols-7">
-          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => sameDay(session.date, day.date))} activeSessionIds={activeSessionIds} />)}
+          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))} activeSessionIds={activeSessionIds} />)}
         </div>
       </section>
 
@@ -166,7 +167,7 @@ export default async function CoachDashboard() {
             {recentActivity.map((item) => (
               <div key={item.key} className="flex items-start justify-between gap-4 rounded-2xl border border-[var(--color-border)] p-3">
                 <div><div className="font-bold">{item.label}</div><div className="text-sm text-[var(--color-ink-muted)]">{item.detail}</div></div>
-                <span className="shrink-0 text-xs font-bold text-[var(--color-ink-soft)]">{item.date.toLocaleDateString("fr-CA", { day: "2-digit", month: "short" })}</span>
+                <span className="shrink-0 text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealDate(item.date, { day: "2-digit", month: "short" })}</span>
               </div>
             ))}
             {recentActivity.length === 0 && <EmptyState title="Aucune activite recente" description="Les completions et evenements apparaitront ici des qu'ils existent." />}
@@ -185,12 +186,12 @@ export default async function CoachDashboard() {
 }
 
 function DemoCoachDashboard({ userName }: { userName: string }) {
-  const weekStart = startOfWeek(new Date());
+  const weekStart = startOfMontrealWeek(new Date());
   const sessions = weekSessions.filter((session) => session.title).map((session, index) => ({
     id: index === 1 ? "demo" : `demo-${index}`,
     title: session.title,
     focus: session.focus,
-    date: addDays(weekStart, index),
+    date: addMontrealDays(weekStart, index),
     duration: session.duration,
     status: session.status === "Brouillon" ? "DRAFT" : session.status === "Complete" ? "COMPLETED" : "READY",
     groupName: demoSession.group,
@@ -230,7 +231,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
           <WeekSelector sessions={sessions} />
         </div>
         <div className="grid gap-3 lg:grid-cols-7">
-          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => sameDay(session.date, day.date))} activeSessionIds={activeSessionIds} demo />)}
+          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))} activeSessionIds={activeSessionIds} demo />)}
         </div>
       </section>
 
@@ -293,7 +294,7 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false }: { sess
       <CardContent className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <StatusPill status={String(effectiveStatus)} />
-          <span className="text-sm font-bold text-white/55">{session.date.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })}</span>
+          <span className="text-sm font-bold text-white/55">{formatMontrealTime(session.date)}</span>
         </div>
         <h2 className="mt-5 max-w-2xl text-4xl font-black leading-none text-white md:text-5xl">{session.title}</h2>
         <p className="mt-3 max-w-xl text-sm leading-6 text-white/68">{session.groupName} - {session.focus}</p>
@@ -320,7 +321,7 @@ function WeekSelector({ sessions }: { sessions: DashboardSession[] }) {
     <div className="hidden gap-1 rounded-2xl bg-white p-1 shadow-sm md:flex">
       {["L", "M", "M", "J", "V", "S", "D"].map((label, index) => {
         const hasSession = sessions.some((session) => (session.date.getDay() || 7) === index + 1);
-        return <a key={`${label}-${index}`} href={`#day-${index + 1}`} className={`flex h-9 w-9 items-center justify-center rounded-xl text-xs font-black transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${hasSession ? "bg-[var(--color-navy)] text-white" : "text-[var(--color-ink-soft)] hover:bg-[var(--color-surface-raised)]"}`}>{label}</a>;
+        return <a key={`${label}-${index}`} href={`#day-${index + 1}`} className={`flex h-9 w-9 items-center justify-center rounded-xl text-xs font-black text-white transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${hasSession ? "bg-[var(--color-navy)]" : "bg-[var(--color-navy)]/45 hover:bg-[var(--color-navy)]/70"}`}>{label}</a>;
       })}
     </div>
   );
@@ -331,7 +332,7 @@ function WeekDayCard({ day, sessions, activeSessionIds, demo = false }: { day: {
     <Card id={`day-${day.key}`} className="min-h-44 scroll-mt-28">
       <CardContent className="p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <div><div className="font-black">{day.label}</div><div className="text-xs font-bold text-[var(--color-ink-soft)]">{day.date.toLocaleDateString("fr-CA", { day: "2-digit", month: "short" })}</div></div>
+          <div><div className="font-black">{day.label}</div><div className="text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealDate(day.date, { day: "2-digit", month: "short" })}</div></div>
           <span className="text-xs font-black text-[var(--color-ink-soft)]">{sessions.length || "Repos"}</span>
         </div>
         <div className="space-y-3">
@@ -422,27 +423,6 @@ function completionStatusLabel(status: CompletionStatus | string) {
   return "Séance assignée";
 }
 
-function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function startOfWeek(date: Date) {
-  const copy = startOfDay(date);
-  const day = copy.getDay() || 7;
-  copy.setDate(copy.getDate() - day + 1);
-  return copy;
-}
-
-function addDays(date: Date, days: number) {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
-function sameDay(left: Date, right: Date) {
-  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
-}
-
 function weekDays(weekStart: Date) {
-  return ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((label, index) => ({ key: index + 1, label, date: addDays(weekStart, index) }));
+  return ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((label, index) => ({ key: index + 1, label, date: addMontrealDays(weekStart, index) }));
 }

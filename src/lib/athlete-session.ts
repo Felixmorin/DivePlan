@@ -1,6 +1,7 @@
 import { PoolHeight } from "@prisma/client";
 import { getCurrentUser } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { startOfMontrealDay } from "@/lib/timezone";
 
 export type AthleteSessionExercise = {
   id: string;
@@ -49,6 +50,8 @@ export type AthleteSessionView = {
   group: string;
   notes: string | null;
   completionStatus: string;
+  finalRating: string | null;
+  finalNote: string | null;
   blocks: AthleteSessionBlock[];
 };
 
@@ -87,9 +90,12 @@ export async function getCurrentAthlete() {
 }
 
 export async function getAssignedReadySession(athleteId: string) {
+  const today = startOfMontrealDay();
+
   return prisma.trainingSession.findFirst({
     where: {
       status: "READY",
+      date: { gte: today },
       blocks: { some: { assignments: { some: { athleteId } } } }
     },
     orderBy: { date: "asc" },
@@ -180,6 +186,8 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
     group: session.week.group.name,
     notes: session.notes,
     completionStatus: session.completions[0]?.status ?? "NOT_STARTED",
+    finalRating: session.completions[0]?.rating ?? null,
+    finalNote: session.completions[0]?.note ?? null,
     blocks: session.blocks.map((block) => ({
       id: block.id,
       title: block.title,

@@ -1,17 +1,20 @@
-"use client";
-
-import { Printer } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { notFound } from "next/navigation";
+import { PrintButton } from "@/components/coach/print-button";
 import { athletes, blocksForAthlete, demoSession } from "@/lib/data";
+import { demoRoutesEnabled } from "@/lib/demo-routes";
 
 export default function PrintPage() {
+  if (!demoRoutesEnabled()) {
+    notFound();
+  }
+
   const activeAthletes = athletes.filter((athlete) => blocksForAthlete(athlete.id).some((block) => block.type === "pool"));
   const commonDry = demoSession.blocks.filter((block) => block.type === "dryland" && block.assignedTo.length > 1);
   return (
     <div className="min-h-screen bg-[var(--color-coach-bg)] p-4 text-[var(--color-ink)] print:p-0">
       <div className="no-print mx-auto mb-4 flex max-w-6xl items-center justify-between rounded-[var(--radius-ui)] border border-[var(--color-border)] bg-white p-4 shadow-[var(--shadow-card)]">
         <div><h1 className="text-xl font-black">Apercu avant impression</h1><p className="text-sm text-[var(--color-ink-muted)]">Feuille de bassin, fiche individuelle et regroupement par atelier.</p></div>
-        <Button onClick={() => window.print()} variant="action"><Printer className="h-4 w-4" /> Imprimer</Button>
+        <PrintButton />
       </div>
 
       <div className="mx-auto max-w-6xl overflow-x-auto pb-4 print:overflow-visible print:pb-0">

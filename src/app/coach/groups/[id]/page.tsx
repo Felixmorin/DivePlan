@@ -1,5 +1,6 @@
 import type * as React from "react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Activity, CheckSquare, Dumbbell, Plus } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
@@ -8,19 +9,57 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCoach } from "@/lib/current-user";
-import { athletes } from "@/lib/data";
+import { prisma } from "@/lib/prisma";
+import { formatMontrealDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
-export default async function GroupDetailPage() {
-  await requireCoach();
+type GroupAthlete = {
+  id: string;
+  level: string;
+  user: { firstName: string; lastName: string; avatar: string | null };
+  completions: Array<{ status: string; session: { title: string; date: Date } }>;
+  diveLogs: Array<{ repetitionsCompleted: number }>;
+};
+
+export default async function GroupDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const [{ id }, { clubId }] = await Promise.all([params, requireCoach()]);
+  const group = await prisma.trainingGroup.findFirst({
+    where: { id, clubId },
+    include: {
+      athletes: {
+        where: { active: true },
+        include: {
+          user: true,
+          completions: {
+            orderBy: [{ completedAt: "desc" }, { startedAt: "desc" }],
+            take: 1,
+            include: { session: { select: { title: true, date: true } } }
+          },
+          diveLogs: {
+            where: { session: { week: { clubId } } },
+            select: { repetitionsCompleted: true }
+          }
+        },
+        orderBy: { user: { firstName: "asc" } }
+      }
+    }
+  });
+
+  if (!group) {
+    notFound();
+  }
+
+  const athletes = group.athletes.map(toGroupAthlete);
+  const watchCount = athletes.filter((athlete) => athlete.completions.some((completion) => completion.status === "IN_PROGRESS" || completion.status === "SKIPPED")).length;
+  const totalVolume = athletes.reduce((sum, athlete) => sum + athlete.recentVolume, 0);
 
   return (
     <CoachShell active="Groupes">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Groupe</p>
-          <h1 className="mt-2 text-3xl font-black text-[var(--color-ink)]">Provincial</h1>
+          <h1 className="mt-2 text-3xl font-black text-[var(--color-ink)]">{group.name}</h1>
           <p className="mt-1 text-sm text-[var(--color-ink-muted)]">Sélection multiple pour préparer une séance à partir du collectif.</p>
         </div>
         <Button asChild variant="action">
@@ -30,8 +69,8 @@ export default async function GroupDetailPage() {
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
         <GroupStat icon={<Activity className="h-5 w-5" />} label="Athletes actifs" value={athletes.length} />
-        <GroupStat icon={<Dumbbell className="h-5 w-5" />} label="A surveiller" value={athletes.filter((athlete) => athlete.status === "surveiller").length} tone="warning" />
-        <GroupStat icon={<CheckSquare className="h-5 w-5" />} label="Volume disponible" value={athletes.reduce((sum, athlete) => sum + athlete.recentVolume, 0)} />
+        <GroupStat icon={<Dumbbell className="h-5 w-5" />} label="A surveiller" value={watchCount} tone="warning" />
+        <GroupStat icon={<CheckSquare className="h-5 w-5" />} label="Volume disponible" value={totalVolume} />
       </div>
 
       <Card className="overflow-hidden">
@@ -39,7 +78,7 @@ export default async function GroupDetailPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>Effectif</CardTitle>
-            <CardDescription>Les athlètes sont lisibles par statut et volume sans ajouter de filtre artificiel.</CardDescription>
+              <CardDescription>Les athlètes sont lisibles par statut et volume sans ajouter de filtre artificiel.</CardDescription>
             </div>
             <AthleteAvatarGroup ids={athletes.map((athlete) => athlete.id)} athletes={athletes} limit={8} />
           </div>
@@ -63,10 +102,10 @@ export default async function GroupDetailPage() {
                     <td className="px-5 py-4">
                       <input type="checkbox" className="h-5 w-5 rounded border-[var(--color-border-strong)] text-[var(--color-brand)] focus-visible:shadow-[var(--focus-ring)]" aria-label={`Selectionner ${athlete.firstName} ${athlete.lastName}`} />
                     </td>
-                    <td className="px-4 py-4"><AthleteIdentity athlete={athlete} /></td>
+                    <td className="px-4 py-4"><AthleteIdentity athlete={athlete} groupName={group.name} /></td>
                     <td className="px-4 py-4 font-bold">{athlete.level}</td>
-                    <td className="px-4 py-4"><Badge variant={athlete.status === "surveiller" ? "warning" : "success"}>{statusLabel(athlete.status)}</Badge></td>
-                    <td className="px-4 py-4 text-[var(--color-ink-muted)]">{athlete.lastSession}</td>
+                    <td className="px-4 py-4"><Badge variant={athlete.watch ? "warning" : "success"}>{athlete.watch ? "à surveiller" : "actif"}</Badge></td>
+                    <td className="px-4 py-4 text-[var(--color-ink-muted)]">{athlete.lastActivity}</td>
                     <td className="px-5 py-4 text-right text-lg font-black">{athlete.recentVolume}</td>
                   </tr>
                 ))}
@@ -80,13 +119,13 @@ export default async function GroupDetailPage() {
                 <div className="flex items-start justify-between gap-3">
                   <label className="flex min-w-0 items-center gap-3">
                     <input type="checkbox" className="h-5 w-5 rounded border-[var(--color-border-strong)]" aria-label={`Selectionner ${athlete.firstName} ${athlete.lastName}`} />
-                    <AthleteIdentity athlete={athlete} />
+                    <AthleteIdentity athlete={athlete} groupName={group.name} />
                   </label>
-                  <Badge variant={athlete.status === "surveiller" ? "warning" : "success"}>{statusLabel(athlete.status)}</Badge>
+                  <Badge variant={athlete.watch ? "warning" : "success"}>{athlete.watch ? "à surveiller" : "actif"}</Badge>
                 </div>
                 <div className="mt-4 grid gap-3 text-sm">
                   <GroupMetric label="Niveau" value={athlete.level} />
-                  <GroupMetric label="Activite" value={athlete.lastSession} />
+                  <GroupMetric label="Activite" value={athlete.lastActivity} />
                   <GroupMetric label="Volume" value={`${athlete.recentVolume} reps`} />
                 </div>
               </div>
@@ -96,6 +135,23 @@ export default async function GroupDetailPage() {
       </Card>
     </CoachShell>
   );
+}
+
+function toGroupAthlete(athlete: GroupAthlete) {
+  const latestCompletion = athlete.completions[0];
+  const recentVolume = athlete.diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0);
+
+  return {
+    id: athlete.id,
+    firstName: athlete.user.firstName,
+    lastName: athlete.user.lastName,
+    avatar: athlete.user.avatar,
+    level: athlete.level,
+    completions: athlete.completions,
+    watch: latestCompletion?.status === "IN_PROGRESS" || latestCompletion?.status === "SKIPPED",
+    lastActivity: latestCompletion ? `${latestCompletion.session.title} · ${formatMontrealDate(latestCompletion.session.date)}` : "Aucune activite",
+    recentVolume
+  };
 }
 
 function GroupStat({ icon, label, value, tone = "pool" }: { icon: React.ReactNode; label: string; value: number; tone?: "pool" | "warning" }) {
@@ -114,16 +170,16 @@ function GroupStat({ icon, label, value, tone = "pool" }: { icon: React.ReactNod
   );
 }
 
-function AthleteIdentity({ athlete }: { athlete: (typeof athletes)[number] }) {
+function AthleteIdentity({ athlete, groupName }: { athlete: ReturnType<typeof toGroupAthlete>; groupName: string }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
       <Avatar className="h-11 w-11 border border-[var(--color-border)]">
-        <AvatarImage src={athlete.avatar} />
+        <AvatarImage src={athlete.avatar ?? undefined} />
         <AvatarFallback>{athlete.firstName[0]}{athlete.lastName[0]}</AvatarFallback>
       </Avatar>
       <div className="min-w-0">
         <div className="truncate font-black">{athlete.firstName} {athlete.lastName}</div>
-        <div className="truncate text-xs font-bold text-[var(--color-ink-muted)]">Provincial</div>
+        <div className="truncate text-xs font-bold text-[var(--color-ink-muted)]">{groupName}</div>
       </div>
     </div>
   );
@@ -136,10 +192,4 @@ function GroupMetric({ label, value }: { label: string; value: string }) {
       <span className="min-w-0 truncate text-right font-bold">{value}</span>
     </div>
   );
-}
-
-function statusLabel(status: string) {
-  if (status === "pret") return "prêt";
-  if (status === "surveiller") return "à surveiller";
-  return status;
 }

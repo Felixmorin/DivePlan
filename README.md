@@ -21,7 +21,7 @@ npm install
 cp .env.example .env
 npm run prisma:generate
 npm run prisma:migrate
-npm run db:seed
+npm run db:seed:pilot
 npm run dev
 ```
 
@@ -29,10 +29,10 @@ Ouvrir `http://localhost:3000`.
 
 ## Routes principales
 
-- Coach: `/coach`, `/coach/planning`, `/coach/sessions`, `/coach/sessions/new`, `/coach/sessions/demo`, `/coach/sessions/demo/print`, `/coach/athletes`, `/coach/groups`, `/coach/library`, `/coach/templates`
-- Athlete: `/athlete`, `/athlete/week`, `/athlete/session/demo`, `/athlete/progress`, `/athlete/skills`, `/athlete/profile`
+- Coach: `/coach`, `/coach/planning`, `/coach/sessions`, `/coach/sessions/new`, `/coach/athletes`, `/coach/groups`, `/coach/library`, `/coach/templates`
+- Athlete: `/athlete`, `/athlete/week`, `/athlete/progress`, `/athlete/skills`, `/athlete/profile`
 
-Les routes dynamiques `/coach/sessions/[id]`, `/coach/sessions/[id]/edit`, `/coach/sessions/[id]/print` et `/athlete/session/[id]` sont preparees.
+Les routes dynamiques `/coach/sessions/[id]`, `/coach/sessions/[id]/edit`, `/coach/sessions/[id]/print` et `/athlete/session/[id]` sont preparees. Les routes demo sont locales et opt-in; elles retournent 404 sauf si `NEXT_PUBLIC_ENABLE_DEMO_ROUTES=true`.
 
 ## Modele d'assignation
 
@@ -61,19 +61,29 @@ Le seed Club Mustang demontre:
 - `npm run lint`: ESLint
 - `npm run prisma:generate`: genere Prisma Client
 - `npm run prisma:migrate`: applique les migrations
-- `npm run db:seed`: insere les donnees de demonstration
+- `npm run prisma:migrate:deploy`: applique les migrations en production
+- `npm run db:seed:pilot`: prepare un club pilote non destructif
+- `npm run db:seed`: insere les donnees de demonstration en vidant les tables applicatives
 
 ## Deploiement Vercel
 
-Configurer `DATABASE_URL`, `AUTH_SECRET` et `AUTH_URL` dans Vercel, puis deployer le projet. Executer les migrations Prisma contre la base PostgreSQL cible avant usage.
+Configurer `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `NEXT_PUBLIC_APP_URL`, `RESEND_API_KEY` et `INVITATION_EMAIL_FROM` dans Vercel, puis deployer le projet. `INVITATION_EMAIL_REPLY_TO` est optionnel. Le script `postinstall` genere Prisma Client automatiquement et `npm run prisma:migrate:deploy` applique les migrations contre la base PostgreSQL cible.
+
+## Emails transactionnels
+
+Les invitations coach envoient le lien d'activation via Resend. En local, aucun email n'est envoye par defaut: l'interface affiche le lien a copier et marque l'envoi comme ignore localement. Pour tester un vrai envoi local, definir `RESEND_API_KEY`, `INVITATION_EMAIL_FROM` et `INVITATION_EMAIL_SEND_IN_DEVELOPMENT=true`.
+
+En production, verifier le domaine d'envoi dans Resend avant d'utiliser une adresse `INVITATION_EMAIL_FROM` du club ou de DivePlan.
 
 ## Acces pilote
 
-Le MVP utilise un login par email + mot de passe. Le code pilote reste disponible pour faciliter les demos locales.
+Le chemin recommande pour un test club est l'invitation par lien: le coach cree une invitation, copie le lien d'activation, puis l'athlete choisit son mot de passe et arrive dans son espace. Le seed pilote donne aussi des comptes prets si le test doit demarrer sans invitations.
 
 - En local, le code par defaut est `diveplan-demo` si `PILOT_ACCESS_CODE` n'est pas defini.
 - En production, definir obligatoirement `PILOT_ACCESS_CODE`.
-- Comptes seed utiles: `coach@diveplan.local` et `emma@diveplan.local`.
-- Mot de passe seed: `diveplan-demo`.
+- Pendant le pilote, garder `NEXT_PUBLIC_ENABLE_DEMO_ROUTES=false`.
+- Comptes seed pilote utiles: `coach.pilote@diveplan.local`, `emma.pilote@diveplan.local`, `leo.pilote@diveplan.local`, `mia.pilote@diveplan.local`.
+- Mot de passe seed pilote: `diveplan-pilot`, surchargeable avec `PILOT_SEED_PASSWORD`.
+- Le seed demo historique reste disponible avec `npm run db:seed`: `coach@diveplan.local` et `emma@diveplan.local` / `diveplan-demo`.
 
 Voir `SELLABLE_CHECKLIST.md` pour le chemin restant vers une version vendable en pilote club.

@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
+import { formatMontrealDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export default async function AthleteWeekPage() {
             </div>
             <div className="mt-4 flex items-center gap-2 text-xs font-bold text-white/45">
               <Clock3 className="h-4 w-4" />
-              {completion.duration} min - {completion.completedAt ? new Date(completion.completedAt).toLocaleDateString("fr-CA", { day: "2-digit", month: "short" }) : "En cours"}
+              {completion.duration} min - {completion.completedAt ? formatMontrealDate(completion.completedAt, { day: "2-digit", month: "short" }) : "En cours"}
             </div>
           </Link>
         ))}

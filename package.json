@@ -6,9 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "postinstall": "prisma generate",
     "lint": "eslint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "db:seed:pilot": "tsx prisma/seed-pilot.ts",
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
@@ -27,6 +30,7 @@
     "react-dom": "^19.2.3",
     "react-hook-form": "^7.68.0",
     "recharts": "^3.6.0",
+    "resend": "^6.25.0",
     "tailwind-merge": "^3.4.0",
     "zod": "^4.2.1"
   },

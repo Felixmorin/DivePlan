@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Edit, Printer } from "lucide-react";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { CoachShell } from "@/components/coach/coach-shell";
@@ -7,8 +8,13 @@ import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { athleteName, demoSession } from "@/lib/data";
+import { demoRoutesEnabled } from "@/lib/demo-routes";
 
 export default function SessionDetailPage() {
+  if (!demoRoutesEnabled()) {
+    notFound();
+  }
+
   return (
     <CoachShell active="Seances">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

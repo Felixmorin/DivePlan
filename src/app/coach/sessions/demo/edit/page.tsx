@@ -1,11 +1,17 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarPlus, Printer } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { demoRoutesEnabled } from "@/lib/demo-routes";
 
 export default function EditSessionPage() {
+  if (!demoRoutesEnabled()) {
+    notFound();
+  }
+
   return (
     <CoachShell active="Seances">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

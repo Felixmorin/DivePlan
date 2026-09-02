@@ -16,6 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import type { SessionTemplatePayload } from "@/lib/session-template";
+import { toMontrealDateInputValue } from "@/lib/timezone";
 
 const schema = z.object({
   title: z.string().min(3, "Nom requis"),
@@ -51,69 +53,85 @@ type BuilderGroup = {
   name: string;
 };
 
+type BuilderPoolDive = {
+  diveCode: string;
+  diveName: string;
+  position: string;
+  repetitions: number;
+  notes: string | null;
+  order: number;
+};
+
+type BuilderPoolSection = {
+  height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
+  label: string | null;
+  dives: BuilderPoolDive[];
+};
+
+type BuilderPoolBlock = {
+  id: string;
+  title: string;
+  duration: number;
+  athleteIds: string[];
+  sections: BuilderPoolSection[];
+};
+
 type SessionBuilderProps = {
   athletes: BuilderAthlete[];
   drylandLibrary: BuilderExercise[];
   groups: BuilderGroup[];
+  poolBlocks: BuilderPoolBlock[];
+  initialTemplate?: {
+    id: string;
+    name: string;
+    category: string;
+    payload: SessionTemplatePayload;
+  } | null;
   onCreate: (input: CreateSessionInput) => Promise<void>;
 };
 
 const steps = ["Details", "Dryland", "Piscine", "Assignations", "Publication"];
 
-const poolBlocks = [
-  {
-    id: "pool-a",
-    title: "Piscine A",
-    dives: [
-      ["1 metre", "101C", "Avant groupe", 3],
-      ["1 metre", "201B", "Arriere carpe", 5],
-      ["1 metre", "203C", "Un et demi arriere", 4],
-      ["3 metres", "301C", "Retour groupe", 4],
-      ["3 metres", "401B", "Renverse carpe", 3]
-    ] as Array<[string, string, string, number]>
-  },
-  {
-    id: "pool-b",
-    title: "Piscine B",
-    dives: [
-      ["1 metre", "201C", "Arriere groupe", 4],
-      ["1 metre", "301C", "Retour groupe", 5],
-      ["3 metres", "401B", "Renverse carpe", 4],
-      ["3 metres", "5331D", "Vrille avant", 3]
-    ] as Array<[string, string, string, number]>
-  }
-];
-
-export function SessionBuilder({ athletes, drylandLibrary, groups, onCreate }: SessionBuilderProps) {
+export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, initialTemplate, onCreate }: SessionBuilderProps) {
   const [step, setStep] = useState(0);
   const [isPending, startTransition] = useTransition();
   const athleteIds = athletes.map((athlete) => athlete.id);
-  const [dryAssigned, setDryAssigned] = useState(athleteIds.slice(0, 2));
-  const [poolA, setPoolA] = useState(athleteIds.slice(0, 2));
-  const [poolB, setPoolB] = useState(athleteIds.slice(2, 3));
-  const [selectedExerciseIds, setSelectedExerciseIds] = useState(drylandLibrary.slice(0, 5).map((exercise) => exercise.id));
+  const templateBlocks = initialTemplate?.payload.blocks ?? [];
+  const templateDryland = templateBlocks.find((block) => block.type === "DRYLAND");
+  const templatePoolBlocks = templateBlocks.filter((block) => block.type === "POOL");
+  const activePoolBlocks = templatePoolBlocks.length > 0 ? poolBlocksFromTemplate(templatePoolBlocks) : poolBlocks;
+  const templateExerciseIds = uniqueIds(templateBlocks.flatMap((block) => block.drylandExercises.map((item) => item.exerciseId)));
+  const [dryAssigned, setDryAssigned] = useState((templateDryland?.athleteIds ?? athleteIds.slice(0, 2)).filter((id) => athleteIds.includes(id)));
+  const [poolAssignments, setPoolAssignments] = useState(() =>
+    Object.fromEntries(activePoolBlocks.map((block, index) => [block.id, (block.athleteIds.length > 0 ? block.athleteIds : defaultPoolAthletes(index, athleteIds)).filter((id) => athleteIds.includes(id))]))
+  );
+  const [selectedExerciseIds, setSelectedExerciseIds] = useState(
+    (templateExerciseIds.length > 0 ? templateExerciseIds : drylandLibrary.slice(0, 5).map((exercise) => exercise.id)).filter((id) =>
+      drylandLibrary.some((exercise) => exercise.id === id)
+    )
+  );
   const [flashBlock, setFlashBlock] = useState<string | null>(null);
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      title: "Arriere + ouverture",
-      date: new Date().toISOString().slice(0, 10),
+      title: initialTemplate?.payload.title ?? "Arriere + ouverture",
+      date: toMontrealDateInputValue(),
       groupId: groups[0]?.id ?? "",
-      duration: 90,
-      focus: "203C, 201B, entrees propres",
-      notes: "Priorite aux entrees propres."
+      duration: initialTemplate?.payload.duration ?? 90,
+      focus: initialTemplate?.payload.focus ?? "203C, 201B, entrees propres",
+      notes: initialTemplate?.payload.notes ?? "Priorite aux entrees propres."
     }
   });
   const watched = useWatch({ control: form.control });
   const selectedExercises = useMemo(() => orderExercises(drylandLibrary, selectedExerciseIds), [drylandLibrary, selectedExerciseIds]);
-  const allAssignedIds = uniqueIds([...dryAssigned, ...poolA, ...poolB]);
+  const poolAssignmentValues = activePoolBlocks.map((block) => poolAssignments[block.id] ?? []);
+  const allAssignedIds = uniqueIds([...dryAssigned, ...poolAssignmentValues.flat()]);
   const unassignedBlocks = [
     dryAssigned.length === 0 ? "Dryland" : null,
-    poolA.length === 0 ? "Piscine A" : null,
-    poolB.length === 0 ? "Piscine B" : null
+    ...activePoolBlocks.map((block) => ((poolAssignments[block.id] ?? []).length === 0 ? block.title : null))
   ].filter(Boolean);
   const totalDuration = Number(watched.duration ?? 0);
-  const poolVolume = poolBlocks.reduce((sum, block) => sum + block.dives.reduce((blockSum, dive) => blockSum + dive[3], 0), 0);
+  const poolVolume = activePoolBlocks.reduce((sum, block) => sum + block.sections.reduce((sectionSum, section) => sectionSum + section.dives.reduce((diveSum, dive) => diveSum + dive.repetitions, 0), 0), 0);
   const dryVolume = selectedExercises.length * Math.max(dryAssigned.length, 1) * 6;
   const totalVolume = poolVolume + dryVolume;
 
@@ -125,6 +143,13 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, onCreate }: S
   function assign(blockId: string, setter: (ids: string[]) => void) {
     return (ids: string[]) => {
       setter(ids);
+      pulse(blockId);
+    };
+  }
+
+  function assignPoolBlock(blockId: string) {
+    return (ids: string[]) => {
+      setPoolAssignments((current) => ({ ...current, [blockId]: ids }));
       pulse(blockId);
     };
   }
@@ -154,10 +179,15 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, onCreate }: S
       startTransition(() => {
         void onCreate({
           ...values,
+          templateId: initialTemplate?.id,
           drylandExerciseIds: selectedExerciseIds,
           drylandAthleteIds: dryAssigned,
-          poolA,
-          poolB
+          poolBlocks: activePoolBlocks.map((block) => ({
+            title: block.title,
+            duration: block.duration,
+            athleteIds: poolAssignments[block.id] ?? [],
+            sections: block.sections
+          }))
         });
       });
     })();
@@ -166,6 +196,15 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, onCreate }: S
   return (
     <div className="pb-24 lg:pb-0">
       <Stepper current={step} onStepChange={setStep} />
+      {initialTemplate && (
+        <div className="mb-5 rounded-[var(--radius-panel)] border border-[var(--color-brand)]/35 bg-[var(--color-brand)]/10 p-4">
+          <div className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Modele charge</div>
+          <div className="mt-1 text-xl font-black">{initialTemplate.name}</div>
+          <p className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">
+            {initialTemplate.category} - {initialTemplate.payload.blocks.length} blocs seront recrees avec leurs exercices, plongeons et assignations.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
@@ -186,23 +225,21 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, onCreate }: S
           {step === 2 && (
             <PoolStep
               athletes={athletes}
-              poolA={poolA}
-              poolB={poolB}
+              poolBlocks={activePoolBlocks}
+              poolAssignments={poolAssignments}
               flashBlock={flashBlock}
-              onAssignPoolA={assign("pool-a", setPoolA)}
-              onAssignPoolB={assign("pool-b", setPoolB)}
+              onAssignPoolBlock={assignPoolBlock}
             />
           )}
           {step === 3 && (
             <AssignmentsStep
               athletes={athletes}
               dryAssigned={dryAssigned}
-              poolA={poolA}
-              poolB={poolB}
+              poolBlocks={activePoolBlocks}
+              poolAssignments={poolAssignments}
               flashBlock={flashBlock}
               onAssignDry={assign("dryland", setDryAssigned)}
-              onAssignPoolA={assign("pool-a", setPoolA)}
-              onAssignPoolB={assign("pool-b", setPoolB)}
+              onAssignPoolBlock={assignPoolBlock}
             />
           )}
           {step === 4 && (
@@ -223,12 +260,16 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, onCreate }: S
           title={watched.title ?? "Nouvelle seance"}
           date={watched.date ?? ""}
           duration={totalDuration}
-          blockCount={5}
+          blockCount={initialTemplate ? initialTemplate.payload.blocks.length : activePoolBlocks.length + 3}
           athleteCount={allAssignedIds.length}
           unassignedCount={unassignedBlocks.length}
           totalVolume={totalVolume}
           isPending={isPending}
-          canPublish={athletes.length > 0 && groups.length > 0 && selectedExerciseIds.length > 0 && dryAssigned.length > 0 && poolA.length > 0 && poolB.length > 0}
+          canPublish={
+            initialTemplate
+              ? athletes.length > 0 && groups.length > 0 && initialTemplate.payload.blocks.length > 0
+              : athletes.length > 0 && groups.length > 0 && selectedExerciseIds.length > 0 && dryAssigned.length > 0 && activePoolBlocks.length > 0 && poolAssignmentValues.every((ids) => ids.length > 0)
+          }
           onPublish={publishSession}
         />
       </div>
@@ -332,29 +373,37 @@ function DrylandStep(props: {
   );
 }
 
-function PoolStep({ athletes, poolA, poolB, flashBlock, onAssignPoolA, onAssignPoolB }: { athletes: BuilderAthlete[]; poolA: string[]; poolB: string[]; flashBlock: string | null; onAssignPoolA: (ids: string[]) => void; onAssignPoolB: (ids: string[]) => void }) {
+function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignPoolBlock }: { athletes: BuilderAthlete[]; poolBlocks: BuilderPoolBlock[]; poolAssignments: Record<string, string[]>; flashBlock: string | null; onAssignPoolBlock: (blockId: string) => (ids: string[]) => void }) {
   return (
     <div className="space-y-5">
-      <PoolBlock block={poolBlocks[0]} assigned={poolA} athletes={athletes} flash={flashBlock === "pool-a"} onAssign={onAssignPoolA} />
-      <PoolBlock block={poolBlocks[1]} assigned={poolB} athletes={athletes} flash={flashBlock === "pool-b"} onAssign={onAssignPoolB} />
+      {poolBlocks.map((block) => (
+        <PoolBlock key={block.id} block={block} assigned={poolAssignments[block.id] ?? []} athletes={athletes} flash={flashBlock === block.id} onAssign={onAssignPoolBlock(block.id)} />
+      ))}
+      {poolBlocks.length === 0 && (
+        <Card>
+          <CardContent className="p-5">
+            <WarningText>Aucun bloc piscine disponible. Cree ou charge un modele de seance avec blocs piscine pour alimenter cette etape.</WarningText>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
 
-function PoolBlock({ block, assigned, athletes, flash, onAssign }: { block: (typeof poolBlocks)[number]; assigned: string[]; athletes: BuilderAthlete[]; flash: boolean; onAssign: (ids: string[]) => void }) {
+function PoolBlock({ block, assigned, athletes, flash, onAssign }: { block: BuilderPoolBlock; assigned: string[]; athletes: BuilderAthlete[]; flash: boolean; onAssign: (ids: string[]) => void }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <BlockCard type="pool" title={block.title} duration={45} assigned={assigned} athletes={athletes} state="Modele serveur" flash={flash}>
+      <BlockCard type="pool" title={block.title} duration={block.duration} assigned={assigned} athletes={athletes} state="Modele serveur" flash={flash}>
         <div className="grid gap-3 md:grid-cols-2">
-          {["1 metre", "3 metres"].map((height) => (
-            <div key={height} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3">
-              <div className="mb-3 text-sm font-black text-[var(--color-ink-muted)]">{height.toUpperCase()}</div>
+          {block.sections.map((section) => (
+            <div key={`${block.id}-${section.height}-${section.label ?? "section"}`} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3">
+              <div className="mb-3 text-sm font-black text-[var(--color-ink-muted)]">{(section.label ?? heightLabel(section.height)).toUpperCase()}</div>
               <div className="space-y-2">
-                {block.dives.filter((dive) => dive[0] === height).map((dive) => (
-                  <div key={dive[1]} className="grid grid-cols-[64px_1fr_auto] items-center gap-2 rounded-xl bg-white p-3">
-                    <div className="text-xl font-black">{dive[1]}</div>
-                    <div className="text-sm font-semibold text-[var(--color-ink-muted)]">{dive[2]}</div>
-                    <div className="rounded-full bg-[var(--block-pool-bg)] px-2 py-1 text-xs font-black text-[var(--block-pool-fg)]">{dive[3]} reps</div>
+                {section.dives.map((dive) => (
+                  <div key={`${dive.diveCode}-${dive.order}`} className="grid grid-cols-[64px_1fr_auto] items-center gap-2 rounded-xl bg-white p-3">
+                    <div className="text-xl font-black">{dive.diveCode}</div>
+                    <div className="text-sm font-semibold text-[var(--color-ink-muted)]">{dive.diveName}</div>
+                    <div className="rounded-full bg-[var(--block-pool-bg)] px-2 py-1 text-xs font-black text-[var(--block-pool-fg)]">{dive.repetitions} reps</div>
                   </div>
                 ))}
               </div>
@@ -367,22 +416,29 @@ function PoolBlock({ block, assigned, athletes, flash, onAssign }: { block: (typ
   );
 }
 
-function AssignmentsStep(props: { athletes: BuilderAthlete[]; dryAssigned: string[]; poolA: string[]; poolB: string[]; flashBlock: string | null; onAssignDry: (ids: string[]) => void; onAssignPoolA: (ids: string[]) => void; onAssignPoolB: (ids: string[]) => void }) {
+function AssignmentsStep(props: { athletes: BuilderAthlete[]; dryAssigned: string[]; poolBlocks: BuilderPoolBlock[]; poolAssignments: Record<string, string[]>; flashBlock: string | null; onAssignDry: (ids: string[]) => void; onAssignPoolBlock: (blockId: string) => (ids: string[]) => void }) {
+  const assignmentBlocks = [
+    { id: "dryland", title: "Dryland partage", assigned: props.dryAssigned, onAssign: props.onAssignDry, type: "dryland" as const },
+    ...props.poolBlocks.map((block) => ({
+      id: block.id,
+      title: block.title,
+      assigned: props.poolAssignments[block.id] ?? [],
+      onAssign: props.onAssignPoolBlock(block.id),
+      type: "pool" as const
+    }))
+  ];
+
   return (
     <div className="space-y-5">
-      {[
-        ["dryland", "Dryland partage", props.dryAssigned, props.onAssignDry],
-        ["pool-a", "Piscine A", props.poolA, props.onAssignPoolA],
-        ["pool-b", "Piscine B", props.poolB, props.onAssignPoolB]
-      ].map(([id, title, assigned, onAssign]) => (
-        <div key={String(id)} className={cn("grid gap-5 rounded-[var(--radius-panel)] border border-[var(--color-border)] bg-white p-4 lg:grid-cols-[1fr_1.1fr]", props.flashBlock === id && "builder-pulse")}>
+      {assignmentBlocks.map((block) => (
+        <div key={block.id} className={cn("grid gap-5 rounded-[var(--radius-panel)] border border-[var(--color-border)] bg-white p-4 lg:grid-cols-[1fr_1.1fr]", props.flashBlock === block.id && "builder-pulse")}>
           <div>
-            <BlockTypeBadge type={String(id) === "dryland" ? "dryland" : "pool"} />
-            <h3 className="mt-3 text-xl font-black">{String(title)}</h3>
-            <p className="mt-2 text-sm leading-6 text-[var(--color-ink-muted)]">{(assigned as string[]).length > 1 ? "Plusieurs athletes partagent ce bloc." : (assigned as string[]).length === 1 ? "Bloc individuel." : "Aucune assignation."}</p>
-            <div className="mt-4"><AthleteAvatarGroup ids={assigned as string[]} athletes={props.athletes} limit={8} /></div>
+            <BlockTypeBadge type={block.type} />
+            <h3 className="mt-3 text-xl font-black">{block.title}</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--color-ink-muted)]">{block.assigned.length > 1 ? "Plusieurs athletes partagent ce bloc." : block.assigned.length === 1 ? "Bloc individuel." : "Aucune assignation."}</p>
+            <div className="mt-4"><AthleteAvatarGroup ids={block.assigned} athletes={props.athletes} limit={8} /></div>
           </div>
-          <AssignmentSelector selected={assigned as string[]} onChange={onAssign as (ids: string[]) => void} athletes={props.athletes} />
+          <AssignmentSelector selected={block.assigned} onChange={block.onAssign} athletes={props.athletes} />
         </div>
       ))}
     </div>
@@ -494,6 +550,33 @@ function WarningText({ children }: { children: React.ReactNode }) {
 function orderExercises(exercises: BuilderExercise[], orderedIds: string[]) {
   const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
   return orderedIds.map((id) => byId.get(id)).filter((exercise): exercise is BuilderExercise => Boolean(exercise));
+}
+
+function poolBlocksFromTemplate(blocks: SessionTemplatePayload["blocks"]): BuilderPoolBlock[] {
+  return blocks.map((block, index) => ({
+    id: `template-pool-${index}`,
+    title: block.title,
+    duration: block.duration,
+    athleteIds: block.athleteIds,
+    sections: block.poolTraining?.sections.map((section) => ({
+      height: section.height,
+      label: section.label,
+      dives: section.dives
+    })) ?? []
+  }));
+}
+
+function defaultPoolAthletes(index: number, athleteIds: string[]) {
+  if (index === 0) return athleteIds.slice(0, 2);
+  if (index === 1) return athleteIds.slice(2, 3);
+  return [];
+}
+
+function heightLabel(height: BuilderPoolSection["height"]) {
+  if (height === "ONE_METER") return "1 metre";
+  if (height === "THREE_METER") return "3 metres";
+  if (height === "PLATFORM") return "Plateforme";
+  return "Section";
 }
 
 function uniqueIds(ids: string[]) {

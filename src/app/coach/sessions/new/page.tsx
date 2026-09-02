@@ -6,12 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { parseSessionTemplatePayload } from "@/lib/session-template";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewSessionPage() {
+export default async function NewSessionPage({ searchParams }: { searchParams: Promise<{ templateId?: string }> }) {
   const { clubId } = await requireCoach();
+  const { templateId } = await searchParams;
   if (clubId === "dev-club") {
     return (
       <CoachShell active="Seances">
@@ -31,7 +33,7 @@ export default async function NewSessionPage() {
     );
   }
 
-  const [groups, athletes, drylandLibrary] = await Promise.all([
+  const [groups, athletes, drylandLibrary, template, recentPoolSessions] = await Promise.all([
     prisma.trainingGroup.findMany({ where: { clubId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.athlete.findMany({
       where: { clubId, active: true },
@@ -41,8 +43,33 @@ export default async function NewSessionPage() {
     prisma.drylandExercise.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, equipment: true }
+    }),
+    templateId ? prisma.sessionTemplate.findFirst({ where: { id: templateId, clubId } }) : Promise.resolve(null),
+    prisma.trainingSession.findMany({
+      where: { week: { clubId }, blocks: { some: { type: "POOL", poolTraining: { isNot: null } } } },
+      orderBy: { date: "desc" },
+      take: 8,
+      include: {
+        blocks: {
+          where: { type: "POOL" },
+          orderBy: { position: "asc" },
+          include: {
+            assignments: true,
+            poolTraining: { include: { sections: { include: { dives: { orderBy: { order: "asc" } } } } } }
+          }
+        }
+      }
     })
   ]);
+  const poolBlocks = recentPoolSessions.flatMap((session) => session.blocks).filter((block) => block.poolTraining).slice(0, 3);
+  const initialTemplate = template
+    ? {
+        id: template.id,
+        name: template.name,
+        category: template.category,
+        payload: parseSessionTemplatePayload(template.payload)
+      }
+    : null;
 
   return (
     <CoachShell active="Seances">
@@ -53,6 +80,8 @@ export default async function NewSessionPage() {
       </div>
       {groups.length === 0 || athletes.length === 0 || drylandLibrary.length === 0 ? (
         <EmptyState title="Donnees requises manquantes" description="Le builder a besoin d'un groupe, d'athletes actifs et d'exercices dryland pour publier une seance." action={<Button asChild><Link href="/coach/athletes">Verifier les athletes</Link></Button>} />
+      ) : poolBlocks.length === 0 && !initialTemplate ? (
+        <EmptyState title="Blocs piscine requis" description="Cree une premiere seance ou charge un modele contenant des blocs piscine pour alimenter le builder." action={<Button asChild><Link href="/coach/sessions">Voir les seances</Link></Button>} />
       ) : (
         <SessionBuilder
           athletes={athletes.map((athlete) => ({
@@ -72,6 +101,25 @@ export default async function NewSessionPage() {
             equipment: exercise.equipment
           }))}
           groups={groups}
+          poolBlocks={poolBlocks.map((block) => ({
+            id: block.id,
+            title: block.title,
+            duration: block.duration,
+            athleteIds: block.assignments.map((assignment) => assignment.athleteId),
+            sections: block.poolTraining?.sections.map((section) => ({
+              height: section.height,
+              label: section.label,
+              dives: section.dives.map((dive) => ({
+                diveCode: dive.diveCode,
+                diveName: dive.diveName,
+                position: dive.position,
+                repetitions: dive.repetitions,
+                notes: dive.notes,
+                order: dive.order
+              }))
+            })) ?? []
+          }))}
+          initialTemplate={initialTemplate}
           onCreate={createTrainingSession}
         />
       )}

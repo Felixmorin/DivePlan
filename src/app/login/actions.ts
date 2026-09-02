@@ -18,7 +18,7 @@ export async function login(_: LoginState, formData: FormData): Promise<LoginSta
       email: devQuickLogin ? "coach@diveplan.local" : submittedEmail,
       password: devQuickLogin ? "diveplan-demo" : submittedPassword,
       accessCode: submittedAccessCode,
-      redirectTo: devQuickLogin ? "/coach/sessions/demo" : "/coach"
+      redirectTo: "/coach"
     });
   } catch (error) {
     if (error instanceof AuthError) {

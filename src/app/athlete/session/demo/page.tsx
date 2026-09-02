@@ -1,11 +1,16 @@
 import { notFound, redirect } from "next/navigation";
 import { SessionPlayer } from "@/components/athlete/session-player";
 import { getAssignedReadySession, getAthleteSession, getCurrentAthlete } from "@/lib/athlete-session";
-import { completeAthleteSession, startAthleteSession } from "../[id]/actions";
+import { demoRoutesEnabled } from "@/lib/demo-routes";
+import { completeAthleteSession, saveAthleteProgress, startAthleteSession } from "../[id]/actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AthleteSessionDemoPage() {
+  if (!demoRoutesEnabled()) {
+    notFound();
+  }
+
   const athlete = await getCurrentAthlete();
 
   if (!athlete) {
@@ -19,5 +24,5 @@ export default async function AthleteSessionDemoPage() {
     notFound();
   }
 
-  return <SessionPlayer session={session} onStart={startAthleteSession} onComplete={completeAthleteSession} />;
+  return <SessionPlayer session={session} onStart={startAthleteSession} onSaveProgress={saveAthleteProgress} onComplete={completeAthleteSession} />;
 }

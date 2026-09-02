@@ -1,5 +1,6 @@
 import { PrintButton } from "@/components/coach/print-button";
 import { getCoachSession } from "@/lib/coach-session";
+import { formatMontrealDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function PrintPage({ params }: { params: Promise<{ id: stri
       <section className="print-page min-w-[960px] bg-white p-6 print:min-w-0">
         <header className="mb-3 border-b-2 border-black pb-2">
           <h1 className="text-2xl font-black">FEUILLE DE BASSIN · {session.title.toUpperCase()}</h1>
-          <p className="text-sm">{session.date.toLocaleDateString("fr-CA")} · {session.week.group.name} · {session.duration} min</p>
+          <p className="text-sm">{formatMontrealDate(session.date)} · {session.week.group.name} · {session.duration} min</p>
         </header>
         <div className="print-block mb-3 rounded border border-black p-2">
           <h2 className="font-black">DRYLAND COMMUN</h2>

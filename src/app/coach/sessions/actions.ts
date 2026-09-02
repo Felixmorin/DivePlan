@@ -7,6 +7,13 @@ import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
 import { prisma } from "@/lib/prisma";
+import {
+  buildSessionTemplatePayload,
+  createSessionFromPayload,
+  getSessionSnapshot,
+  parseSessionTemplatePayload
+} from "@/lib/session-template";
+import { formatMontrealDate, parseMontrealDateTimeInput, parseMontrealSessionDate, startOfMontrealWeek } from "@/lib/timezone";
 
 const sessionInputSchema = z.object({
   title: z.string().min(3),
@@ -15,10 +22,26 @@ const sessionInputSchema = z.object({
   duration: z.number().min(15),
   focus: z.string().min(3),
   notes: z.string().optional(),
-  drylandExerciseIds: z.array(z.string()).min(1),
-  drylandAthleteIds: z.array(z.string()).min(1),
-  poolA: z.array(z.string()).min(1),
-  poolB: z.array(z.string()).min(1)
+  templateId: z.string().optional(),
+  drylandExerciseIds: z.array(z.string()).default([]),
+  drylandAthleteIds: z.array(z.string()).default([]),
+  poolBlocks: z.array(z.object({
+    title: z.string().min(1),
+    duration: z.number().min(1),
+    athleteIds: z.array(z.string()).default([]),
+    sections: z.array(z.object({
+      height: z.nativeEnum(PoolHeight),
+      label: z.string().nullable(),
+      dives: z.array(z.object({
+        diveCode: z.string().min(1),
+        diveName: z.string().min(1),
+        position: z.string().min(1),
+        repetitions: z.number().min(1),
+        notes: z.string().nullable(),
+        order: z.number()
+      })).min(1)
+    })).min(1)
+  })).default([])
 });
 
 export type CreateSessionInput = z.infer<typeof sessionInputSchema>;
@@ -26,16 +49,63 @@ export type CreateSessionInput = z.infer<typeof sessionInputSchema>;
 export async function createTrainingSession(input: CreateSessionInput) {
   const { user, coach, clubId } = await requireCoach();
   const data = sessionInputSchema.parse(input);
-  const sessionDate = new Date(`${data.date}T16:30:00`);
+  const sessionDate = parseMontrealSessionDate(data.date);
+  const group = await prisma.trainingGroup.findFirst({
+    where: { id: data.groupId, clubId }
+  });
 
-  const [group, athletes, exercises] = await Promise.all([
-    prisma.trainingGroup.findFirst({
-      where: { id: data.groupId, clubId }
-    }),
+  if (!group) {
+    throw new Error("Groupe introuvable pour ce club.");
+  }
+
+  if (data.templateId) {
+    const template = await prisma.sessionTemplate.findFirst({
+      where: { id: data.templateId, clubId }
+    });
+
+    if (!template) {
+      throw new Error("Modele introuvable pour ce club.");
+    }
+
+    const payload = parseSessionTemplatePayload(template.payload);
+    const session = await prisma.$transaction((tx) =>
+      createSessionFromPayload(tx, {
+        clubId,
+        coachId: coach.id,
+        groupId: data.groupId,
+        date: sessionDate,
+        title: data.title.trim(),
+        duration: data.duration,
+        focus: data.focus.trim(),
+        notes: data.notes?.trim() || null,
+        payload,
+        status: SessionStatus.READY
+      })
+    );
+
+    revalidatePath("/coach");
+    revalidatePath("/coach/planning");
+    revalidatePath("/coach/sessions");
+    await trackEvent({
+      type: "session.created_from_template",
+      message: `Seance creee depuis modele: ${session.title}`,
+      clubId,
+      userId: user.id,
+      metadata: { sessionId: session.id, templateId: template.id }
+    });
+    redirect(`/coach/sessions/${session.id}`);
+  }
+
+  if (data.drylandExerciseIds.length === 0 || data.drylandAthleteIds.length === 0 || data.poolBlocks.length === 0 || data.poolBlocks.some((block) => block.athleteIds.length === 0)) {
+    throw new Error("La seance doit contenir des exercices dryland et des assignations dryland/piscine.");
+  }
+
+  const poolAthleteIds = data.poolBlocks.flatMap((block) => block.athleteIds);
+  const [athletes, exercises] = await Promise.all([
     prisma.athlete.findMany({
       where: {
         clubId,
-        id: { in: Array.from(new Set([...data.drylandAthleteIds, ...data.poolA, ...data.poolB])) }
+        id: { in: Array.from(new Set([...data.drylandAthleteIds, ...poolAthleteIds])) }
       },
       select: { id: true }
     }),
@@ -45,25 +115,20 @@ export async function createTrainingSession(input: CreateSessionInput) {
     })
   ]);
 
-  if (!group) {
-    throw new Error("Groupe introuvable pour ce club.");
-  }
-
   const validAthleteIds = new Set(athletes.map((athlete) => athlete.id));
   const validExerciseIds = new Set(exercises.map((exercise) => exercise.id));
 
   const requireValidAthletes = (ids: string[]) => ids.filter((id) => validAthleteIds.has(id));
   const allAthleteIds = Array.from(validAthleteIds);
   const drylandAthleteIds = requireValidAthletes(data.drylandAthleteIds);
-  const poolAIds = requireValidAthletes(data.poolA);
-  const poolBIds = requireValidAthletes(data.poolB);
+  const poolBlocks = data.poolBlocks.map((block) => ({ ...block, athleteIds: requireValidAthletes(block.athleteIds) }));
   const drylandExercises = exercises.filter((exercise) => validExerciseIds.has(exercise.id));
 
-  if (allAthleteIds.length === 0 || drylandAthleteIds.length === 0 || drylandExercises.length === 0) {
+  if (allAthleteIds.length === 0 || drylandAthleteIds.length === 0 || drylandExercises.length === 0 || poolBlocks.some((block) => block.athleteIds.length === 0)) {
     throw new Error("La seance doit contenir au moins un athlete et un exercice valides.");
   }
 
-  const weekStart = startOfWeek(sessionDate);
+  const weekStart = startOfMontrealWeek(sessionDate);
   const session = await prisma.$transaction(async (tx) => {
     let week = await tx.trainingWeek.findFirst({
       where: { clubId, groupId: data.groupId, startDate: weekStart }
@@ -74,7 +139,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         clubId,
         groupId: data.groupId,
         startDate: weekStart,
-        title: `Semaine du ${weekStart.toLocaleDateString("fr-CA")}`,
+        title: `Semaine du ${formatMontrealDate(weekStart)}`,
         status: WeekStatus.PUBLISHED
       }
     });
@@ -123,23 +188,8 @@ export async function createTrainingSession(input: CreateSessionInput) {
       }))
     });
 
-    if (poolAIds.length > 0) {
-      await createPoolBlock(tx, createdSession.id, "Entrainement piscine A", 3, poolAIds, [
-        ["101C", "Avant groupe", 3],
-        ["201B", "Arriere carpe", 5],
-        ["203C", "Un et demi arriere", 4],
-        ["301C", "Retour groupe", 4],
-        ["401B", "Renverse carpe", 3]
-      ]);
-    }
-
-    if (poolBIds.length > 0) {
-      await createPoolBlock(tx, createdSession.id, "Entrainement piscine B", 4, poolBIds, [
-        ["201C", "Arriere groupe", 4],
-        ["301C", "Retour groupe", 5],
-        ["401B", "Renverse carpe", 4],
-        ["5331D", "Vrille avant", 3]
-      ]);
+    for (const [index, poolBlock] of poolBlocks.entries()) {
+      await createPoolBlock(tx, createdSession.id, poolBlock, index + 3);
     }
 
     await createBlock(tx, {
@@ -168,12 +218,135 @@ export async function createTrainingSession(input: CreateSessionInput) {
   redirect(`/coach/sessions/${session.id}`);
 }
 
+export async function duplicateTrainingSession(formData: FormData) {
+  const { user, coach, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const source = await getSessionSnapshot(sessionId, clubId);
+
+  if (!source) {
+    throw new Error("Seance introuvable.");
+  }
+
+  const payload = buildSessionTemplatePayload(source);
+  const copyDate = new Date(source.date);
+  const session = await prisma.$transaction((tx) =>
+    createSessionFromPayload(tx, {
+      clubId,
+      coachId: coach.id,
+      groupId: source.week.groupId,
+      date: copyDate,
+      title: `Copie de ${source.title}`,
+      duration: source.duration,
+      focus: source.focus,
+      notes: source.notes,
+      payload,
+      status: SessionStatus.DRAFT
+    })
+  );
+
+  await trackEvent({
+    type: "session.duplicated",
+    message: `Seance dupliquee: ${source.title}`,
+    clubId,
+    userId: user.id,
+    metadata: { sourceSessionId: source.id, sessionId: session.id }
+  });
+
+  revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/coach/sessions");
+  redirect(`/coach/sessions/${session.id}/edit`);
+}
+
+export async function saveSessionAsTemplate(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const category = String(formData.get("category") ?? "General").trim() || "General";
+  const source = await getSessionSnapshot(sessionId, clubId);
+
+  if (!source) {
+    throw new Error("Seance introuvable.");
+  }
+
+  if (name.length < 3) {
+    throw new Error("Le nom du modele est requis.");
+  }
+
+  const template = await prisma.sessionTemplate.create({
+    data: {
+      name,
+      category,
+      sessionId: source.id,
+      clubId,
+      payload: buildSessionTemplatePayload(source)
+    }
+  });
+
+  await trackEvent({
+    type: "session_template.created",
+    message: `Modele cree: ${template.name}`,
+    clubId,
+    userId: user.id,
+    metadata: { templateId: template.id, sessionId: source.id }
+  });
+
+  revalidatePath("/coach/templates");
+  revalidatePath("/coach/library");
+  revalidatePath(`/coach/sessions/${source.id}`);
+}
+
+export async function deleteSessionTemplate(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const templateId = String(formData.get("templateId") ?? "");
+  const template = await prisma.sessionTemplate.findFirst({
+    where: { id: templateId, clubId }
+  });
+
+  if (!template) {
+    throw new Error("Modele introuvable.");
+  }
+
+  await prisma.sessionTemplate.delete({ where: { id: template.id } });
+  await trackEvent({
+    type: "session_template.deleted",
+    message: `Modele supprime: ${template.name}`,
+    clubId,
+    userId: user.id,
+    metadata: { templateId: template.id }
+  });
+  revalidatePath("/coach/templates");
+  revalidatePath("/coach/library");
+}
+
+export async function toggleSessionTemplateFavorite(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const templateId = String(formData.get("templateId") ?? "");
+  const template = await prisma.sessionTemplate.findFirst({
+    where: { id: templateId, clubId }
+  });
+
+  if (!template) {
+    throw new Error("Modele introuvable.");
+  }
+
+  await prisma.sessionTemplate.update({
+    where: { id: template.id },
+    data: { favorite: !template.favorite }
+  });
+  revalidatePath("/coach/templates");
+  revalidatePath("/coach/library");
+}
+
 export async function updateTrainingSession(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
   const existing = await prisma.trainingSession.findFirst({
     where: { id: sessionId, week: { clubId } },
     include: {
+      completions: true,
+      diveLogs: { select: { id: true } },
+      exerciseLogs: { select: { id: true } },
       blocks: {
         include: {
           assignments: true,
@@ -186,6 +359,15 @@ export async function updateTrainingSession(formData: FormData) {
 
   if (!existing) {
     throw new Error("Seance introuvable.");
+  }
+
+  const hasStarted =
+    existing.completions.some((completion) => completion.startedAt || completion.status !== "NOT_STARTED") ||
+    existing.diveLogs.length > 0 ||
+    existing.exerciseLogs.length > 0;
+
+  if (hasStarted) {
+    throw new Error("Cette seance a deja ete commencee. Duplique-la pour modifier la planification sans alterer les donnees realisees.");
   }
 
   const title = String(formData.get("title") ?? "").trim();
@@ -211,7 +393,7 @@ export async function updateTrainingSession(formData: FormData) {
         title,
         focus,
         duration: Number.isFinite(duration) ? duration : existing.duration,
-        date: new Date(date),
+        date: parseMontrealDateTimeInput(date),
         notes: String(formData.get("notes") ?? "").trim() || null,
         status
       }
@@ -322,52 +504,36 @@ async function createBlock(
   return block;
 }
 
-async function createPoolBlock(tx: Tx, sessionId: string, title: string, position: number, athleteIds: string[], dives: Array<[string, string, number]>) {
-  const volume = dives.reduce((sum, [, , reps]) => sum + reps, 0);
+async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInput["poolBlocks"][number], position: number) {
+  const volume = data.sections.reduce((sum, section) => sum + section.dives.reduce((sectionSum, dive) => sectionSum + dive.repetitions, 0), 0);
   const block = await createBlock(tx, {
     sessionId,
     type: BlockType.POOL,
-    title,
-    duration: 45,
+    title: data.title,
+    duration: data.duration,
     position,
     estimatedVolume: volume,
-    athleteIds
+    athleteIds: data.athleteIds
   });
 
   await tx.poolTraining.create({ data: { blockId: block.id } });
-  const oneMeter = await tx.poolSection.create({ data: { poolTrainingId: block.id, height: PoolHeight.ONE_METER, label: "1 metre" } });
-  const threeMeter = await tx.poolSection.create({ data: { poolTrainingId: block.id, height: PoolHeight.THREE_METER, label: "3 metres" } });
-  const split = Math.ceil(dives.length / 2);
+  for (const section of data.sections) {
+    const createdSection = await tx.poolSection.create({
+      data: { poolTrainingId: block.id, height: section.height, label: section.label }
+    });
 
-  await tx.poolDive.createMany({
-    data: dives.slice(0, split).map(([diveCode, diveName, repetitions], order) => ({
-      poolSectionId: oneMeter.id,
-      diveCode,
-      diveName,
-      position: diveCode.slice(-1),
-      repetitions,
-      order
-    }))
-  });
-
-  await tx.poolDive.createMany({
-    data: dives.slice(split).map(([diveCode, diveName, repetitions], order) => ({
-      poolSectionId: threeMeter.id,
-      diveCode,
-      diveName,
-      position: diveCode.slice(-1),
-      repetitions,
-      order
-    }))
-  });
-}
-
-function startOfWeek(date: Date) {
-  const copy = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const day = copy.getUTCDay() || 7;
-  copy.setUTCDate(copy.getUTCDate() - day + 1);
-  copy.setUTCHours(0, 0, 0, 0);
-  return copy;
+    await tx.poolDive.createMany({
+      data: section.dives.map((dive) => ({
+        poolSectionId: createdSection.id,
+        diveCode: dive.diveCode,
+        diveName: dive.diveName,
+        position: dive.position,
+        repetitions: dive.repetitions,
+        notes: dive.notes,
+        order: dive.order
+      }))
+    });
+  }
 }
 
 function nullableNumber(value: FormDataEntryValue | null) {

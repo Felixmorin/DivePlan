@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { SessionPlayer } from "@/components/athlete/session-player";
 import { getAthleteSession, getCurrentAthlete } from "@/lib/athlete-session";
-import { completeAthleteSession, startAthleteSession } from "./actions";
+import { completeAthleteSession, saveAthleteProgress, startAthleteSession } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,5 +18,5 @@ export default async function AthleteSessionPage({ params }: { params: Promise<{
     notFound();
   }
 
-  return <SessionPlayer session={session} onStart={startAthleteSession} onComplete={completeAthleteSession} />;
+  return <SessionPlayer session={session} onStart={startAthleteSession} onSaveProgress={saveAthleteProgress} onComplete={completeAthleteSession} />;
 }

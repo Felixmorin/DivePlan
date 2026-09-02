@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Circle, Dumbbell, NotebookPen, Play, RotateCcw, Save, Timer, Waves } from "lucide-react";
-import type { CompleteSessionPayload } from "@/app/athlete/session/[id]/actions";
+import type { CompleteSessionPayload, SaveAthleteProgressPayload } from "@/app/athlete/session/[id]/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { Badge } from "@/components/ui/badge";
@@ -12,20 +12,23 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { AthleteSessionView } from "@/lib/athlete-session";
+import { formatMontrealTime } from "@/lib/timezone";
 
 const ratings = ["dur", "moyen", "bon", "excellent"];
 
 type SessionPlayerProps = {
   session: AthleteSessionView;
   onStart: (sessionId: string) => Promise<void>;
+  onSaveProgress: (payload: SaveAthleteProgressPayload) => Promise<void>;
   onComplete: (payload: CompleteSessionPayload) => Promise<void>;
 };
 
 type BlockFeedback = Record<string, { rating: string; note: string }>;
 type DiveChecks = Record<string, boolean[]>;
 type ExerciseChecks = Record<string, boolean>;
+type SaveStatus = "saved" | "saving" | "error";
 
-export function SessionPlayer({ session, onStart, onComplete }: SessionPlayerProps) {
+export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: SessionPlayerProps) {
   const router = useRouter();
   const blocks = session.blocks;
   const [current, setCurrent] = useState(0);
@@ -34,7 +37,15 @@ export function SessionPlayer({ session, onStart, onComplete }: SessionPlayerPro
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
+  const feedbackSaveTimeouts = useRef<Record<string, number | undefined>>({});
+  const finalFeedbackSaveTimeout = useRef<number | undefined>(undefined);
+  const saveVersion = useRef(0);
   const [pulseKey, setPulseKey] = useState<string | null>(null);
+  const [finalFeedback, setFinalFeedback] = useState(() => ({
+    rating: session.finalRating ?? "moyen",
+    note: session.finalNote ?? ""
+  }));
   const [exerciseChecks, setExerciseChecks] = useState<ExerciseChecks>(() =>
     Object.fromEntries(blocks.flatMap((block) => block.exercises.map((exercise) => [exercise.id, exercise.completed])))
   );
@@ -60,6 +71,11 @@ export function SessionPlayer({ session, onStart, onComplete }: SessionPlayerPro
       })
     )
   );
+  const exerciseChecksRef = useRef(exerciseChecks);
+  const diveChecksRef = useRef(diveChecks);
+  const blockFeedbackRef = useRef(blockFeedback);
+  const finalFeedbackRef = useRef(finalFeedback);
+  const finalFeedbackTouchedRef = useRef(false);
   const block = blocks[current];
   const feedback = blockFeedback[block.id] ?? { rating: "moyen", note: "" };
   const totalItems = useMemo(() => countSessionItems(blocks), [blocks]);
@@ -68,16 +84,88 @@ export function SessionPlayer({ session, onStart, onComplete }: SessionPlayerPro
   const blockRemaining = countBlockRemaining(block, exerciseChecks, diveChecks);
   const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
 
+  function markDirty() {
+    setDirty(true);
+    setSaveStatus("saving");
+    return ++saveVersion.current;
+  }
+
+  const saveProgressForBlock = useCallback(
+    async (
+      sessionBlock: AthleteSessionView["blocks"][number],
+      exercises: ExerciseChecks,
+      dives: DiveChecks,
+      feedbackByBlock: BlockFeedback,
+      version = ++saveVersion.current
+    ) => {
+      const payload = buildBlockProgressPayload(session.id, sessionBlock, exercises, dives, feedbackByBlock);
+      if (payload.exercises.length === 0 && payload.dives.length === 0 && !payload.sessionFeedback) {
+        if (version === saveVersion.current) {
+          setDirty(false);
+          setSaveStatus("saved");
+        }
+        return;
+      }
+
+      setError(null);
+      await onSaveProgress(payload);
+      if (version === saveVersion.current) {
+        setDirty(false);
+        setSaveStatus("saved");
+      }
+    },
+    [onSaveProgress, session.id]
+  );
+
+  const saveProgressBeforePageHide = useCallback(() => {
+    if (!dirty) return;
+
+    const payload = buildSessionProgressPayload(
+      session.id,
+      blocks,
+      exerciseChecksRef.current,
+      diveChecksRef.current,
+      blockFeedbackRef.current,
+      finalFeedbackTouchedRef.current ? finalFeedbackRef.current : undefined
+    );
+    const body = JSON.stringify(payload);
+
+    if (navigator.sendBeacon) {
+      const sent = navigator.sendBeacon("/api/athlete/session-progress", new Blob([body], { type: "application/json" }));
+      if (sent) return;
+    }
+
+    void fetch("/api/athlete/session-progress", {
+      method: "POST",
+      body,
+      headers: { "content-type": "application/json" },
+      keepalive: true
+    }).catch(() => undefined);
+  }, [blocks, dirty, session.id]);
+
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
-      if (!dirty || reviewing) return;
+      if (!dirty) return;
+      saveProgressBeforePageHide();
       event.preventDefault();
       event.returnValue = "";
     };
 
+    window.addEventListener("pagehide", saveProgressBeforePageHide);
     window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [dirty, reviewing]);
+    return () => {
+      window.removeEventListener("pagehide", saveProgressBeforePageHide);
+      window.removeEventListener("beforeunload", handler);
+    };
+  }, [dirty, reviewing, saveProgressBeforePageHide]);
+
+  useEffect(() => {
+    const timeouts = feedbackSaveTimeouts.current;
+    return () => {
+      Object.values(timeouts).forEach((timeout) => window.clearTimeout(timeout));
+      window.clearTimeout(finalFeedbackSaveTimeout.current);
+    };
+  }, []);
 
   function pulse(key: string) {
     setPulseKey(key);
@@ -97,23 +185,77 @@ export function SessionPlayer({ session, onStart, onComplete }: SessionPlayerPro
   }
 
   function toggleExercise(exerciseId: string) {
-    setDirty(true);
+    const version = markDirty();
     pulse(exerciseId);
-    setExerciseChecks((previous) => ({ ...previous, [exerciseId]: !previous[exerciseId] }));
+    setExerciseChecks((previous) => {
+      const next = { ...previous, [exerciseId]: !previous[exerciseId] };
+      exerciseChecksRef.current = next;
+      void saveProgressForBlock(block, next, diveChecksRef.current, blockFeedbackRef.current, version).catch(() => {
+        setDirty(true);
+        if (version === saveVersion.current) setSaveStatus("error");
+        setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
+      });
+      return next;
+    });
   }
 
   function toggleDiveRep(diveId: string, repIndex: number) {
-    setDirty(true);
+    const version = markDirty();
     pulse(`${diveId}-${repIndex}`);
-    setDiveChecks((previous) => ({
-      ...previous,
-      [diveId]: (previous[diveId] ?? []).map((checked, index) => (index === repIndex ? !checked : checked))
-    }));
+    setDiveChecks((previous) => {
+      const next = {
+        ...previous,
+        [diveId]: (previous[diveId] ?? []).map((checked, index) => (index === repIndex ? !checked : checked))
+      };
+      diveChecksRef.current = next;
+      void saveProgressForBlock(block, exerciseChecksRef.current, next, blockFeedbackRef.current, version).catch(() => {
+        setDirty(true);
+        if (version === saveVersion.current) setSaveStatus("error");
+        setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
+      });
+      return next;
+    });
   }
 
   function updateFeedback(next: Partial<{ rating: string; note: string }>) {
-    setDirty(true);
-    setBlockFeedback((previous) => ({ ...previous, [block.id]: { ...feedback, ...next } }));
+    const version = markDirty();
+    setBlockFeedback((previous) => {
+      const nextFeedbackByBlock = { ...previous, [block.id]: { ...feedback, ...next } };
+      blockFeedbackRef.current = nextFeedbackByBlock;
+      window.clearTimeout(feedbackSaveTimeouts.current[block.id]);
+      feedbackSaveTimeouts.current[block.id] = window.setTimeout(() => {
+        void saveProgressForBlock(block, exerciseChecksRef.current, diveChecksRef.current, nextFeedbackByBlock, version).catch(() => {
+          setDirty(true);
+          if (version === saveVersion.current) setSaveStatus("error");
+          setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
+        });
+      }, 650);
+      return nextFeedbackByBlock;
+    });
+  }
+
+  function updateFinalFeedback(next: Partial<{ rating: string; note: string }>) {
+    const version = markDirty();
+    finalFeedbackTouchedRef.current = true;
+    setFinalFeedback((previous) => {
+      const nextFeedback = { ...previous, ...next };
+      finalFeedbackRef.current = nextFeedback;
+      window.clearTimeout(finalFeedbackSaveTimeout.current);
+      finalFeedbackSaveTimeout.current = window.setTimeout(() => {
+        const payload = buildSessionProgressPayload(session.id, blocks, exerciseChecksRef.current, diveChecksRef.current, blockFeedbackRef.current, nextFeedback);
+        void onSaveProgress(payload).then(() => {
+          if (version === saveVersion.current) {
+            setDirty(false);
+            setSaveStatus("saved");
+          }
+        }).catch(() => {
+          setDirty(true);
+          if (version === saveVersion.current) setSaveStatus("error");
+          setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
+        });
+      }, 650);
+      return nextFeedback;
+    });
   }
 
   function leaveSession() {
@@ -143,24 +285,27 @@ export function SessionPlayer({ session, onStart, onComplete }: SessionPlayerPro
 
   function completeSession() {
     setError(null);
+    Object.values(feedbackSaveTimeouts.current).forEach((timeout) => window.clearTimeout(timeout));
+    window.clearTimeout(finalFeedbackSaveTimeout.current);
     startTransition(() => {
       void onComplete({
         sessionId: session.id,
+        sessionFeedback: finalFeedbackRef.current,
         exercises: blocks.flatMap((sessionBlock) =>
           sessionBlock.exercises.map((exercise) => ({
             exerciseId: exercise.id,
-            completed: exerciseChecks[exercise.id] ?? false,
-            rating: blockFeedback[sessionBlock.id]?.rating ?? null,
-            note: blockFeedback[sessionBlock.id]?.note ?? null
+            completed: exerciseChecksRef.current[exercise.id] ?? false,
+            rating: blockFeedbackRef.current[sessionBlock.id]?.rating ?? null,
+            note: blockFeedbackRef.current[sessionBlock.id]?.note ?? null
           }))
         ),
         dives: blocks.flatMap((sessionBlock) =>
           sessionBlock.poolSections.flatMap((section) =>
             section.dives.map((dive) => ({
               poolDiveId: dive.id,
-              repetitionsCompleted: (diveChecks[dive.id] ?? []).filter(Boolean).length,
-              rating: blockFeedback[sessionBlock.id]?.rating ?? null,
-              note: blockFeedback[sessionBlock.id]?.note ?? null
+              repetitionsCompleted: (diveChecksRef.current[dive.id] ?? []).filter(Boolean).length,
+              rating: blockFeedbackRef.current[sessionBlock.id]?.rating ?? null,
+              note: blockFeedbackRef.current[sessionBlock.id]?.note ?? null
             }))
           )
         )
@@ -174,7 +319,7 @@ export function SessionPlayer({ session, onStart, onComplete }: SessionPlayerPro
         <div className="flex min-h-[calc(100vh-2rem)] flex-col justify-between">
           <button type="button" onClick={leaveSession} className="mb-4 flex min-h-11 items-center gap-2 self-start rounded-xl px-1 text-sm font-bold text-white/62 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowLeft className="h-4 w-4" /> Retour</button>
           <section className="rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
-            <Badge className="bg-white text-[var(--color-navy)]">{new Date(session.date).toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })}</Badge>
+            <Badge className="bg-white text-[var(--color-navy)]">{formatMontrealTime(session.date)}</Badge>
             <h1 className="mt-5 text-4xl font-black leading-none">{session.title}</h1>
             <p className="mt-3 text-sm font-semibold leading-6 text-white/68">{session.focus}</p>
             <div className="mt-5 grid grid-cols-3 gap-2">
@@ -210,14 +355,15 @@ export function SessionPlayer({ session, onStart, onComplete }: SessionPlayerPro
             <StartStat label="Blocs" value={`${completedBlocks}/${blocks.length}`} />
             <StartStat label="Actions" value={`${completedItems}/${totalItems}`} />
           </div>
+          <SaveIndicator status={saveStatus} />
           <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-black"><NotebookPen className="h-4 w-4 text-[var(--color-action)]" /> Ressenti final</div>
             <div className="grid grid-cols-2 gap-2">
               {ratings.map((rating) => (
-                <Button key={rating} type="button" variant="dark" className={feedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFeedback({ rating })}>{rating}</Button>
+                <Button key={rating} type="button" variant="dark" className={finalFeedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFinalFeedback({ rating })}>{rating}</Button>
               ))}
             </div>
-            <Textarea className="mt-3 min-h-28 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note pour ton coach" value={feedback.note} onChange={(event) => updateFeedback({ note: event.target.value })} />
+            <Textarea className="mt-3 min-h-28 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note pour ton coach" value={finalFeedback.note} onChange={(event) => updateFinalFeedback({ note: event.target.value })} />
           </section>
           {error && <ErrorBanner message={error} />}
           <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
@@ -237,7 +383,10 @@ export function SessionPlayer({ session, onStart, onComplete }: SessionPlayerPro
         <header className="sticky top-0 z-20 -mx-4 bg-[var(--color-athlete-bg)]/96 px-4 pb-3 pt-2 backdrop-blur">
           <div className="flex items-center justify-between gap-3">
             <button type="button" onClick={leaveSession} className="flex min-h-11 items-center gap-2 rounded-xl px-1 text-sm font-bold text-white/62 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowLeft className="h-4 w-4" /> Quitter</button>
-            <div className="text-right text-xs font-bold text-white/45">Bloc {current + 1}/{blocks.length}</div>
+            <div className="flex flex-col items-end gap-1">
+              <div className="text-right text-xs font-bold text-white/45">Bloc {current + 1}/{blocks.length}</div>
+              <SaveIndicator status={saveStatus} compact />
+            </div>
           </div>
           <Progress value={progress} className="mt-2 h-2 bg-white/10" />
         </header>
@@ -340,10 +489,95 @@ function countBlockRemaining(block: AthleteSessionView["blocks"][number], exerci
   return Math.max(0, total - complete);
 }
 
+function buildBlockProgressPayload(
+  sessionId: string,
+  block: AthleteSessionView["blocks"][number],
+  exercises: ExerciseChecks,
+  dives: DiveChecks,
+  feedbackByBlock: BlockFeedback
+): SaveAthleteProgressPayload {
+  const feedback = feedbackByBlock[block.id] ?? { rating: "moyen", note: "" };
+
+  return {
+    sessionId,
+    exercises: block.exercises.map((exercise) => ({
+      exerciseId: exercise.id,
+      completed: exercises[exercise.id] ?? false,
+      rating: feedback.rating,
+      note: feedback.note
+    })),
+    dives: block.poolSections.flatMap((section) =>
+      section.dives.map((dive) => ({
+        poolDiveId: dive.id,
+        repetitionsCompleted: (dives[dive.id] ?? []).filter(Boolean).length,
+        rating: feedback.rating,
+        note: feedback.note
+      }))
+    )
+  };
+}
+
+function buildSessionProgressPayload(
+  sessionId: string,
+  blocks: AthleteSessionView["blocks"],
+  exercises: ExerciseChecks,
+  dives: DiveChecks,
+  feedbackByBlock: BlockFeedback,
+  sessionFeedback?: { rating: string; note: string }
+): SaveAthleteProgressPayload {
+  return {
+    sessionId,
+    sessionFeedback,
+    exercises: blocks.flatMap((block) =>
+      block.exercises.map((exercise) => {
+        const feedback = feedbackByBlock[block.id] ?? { rating: "moyen", note: "" };
+
+        return {
+          exerciseId: exercise.id,
+          completed: exercises[exercise.id] ?? false,
+          rating: feedback.rating,
+          note: feedback.note
+        };
+      })
+    ),
+    dives: blocks.flatMap((block) =>
+      block.poolSections.flatMap((section) =>
+        section.dives.map((dive) => {
+          const feedback = feedbackByBlock[block.id] ?? { rating: "moyen", note: "" };
+
+          return {
+            poolDiveId: dive.id,
+            repetitionsCompleted: (dives[dive.id] ?? []).filter(Boolean).length,
+            rating: feedback.rating,
+            note: feedback.note
+          };
+        })
+      )
+    )
+  };
+}
+
 function StartStat({ label, value }: { label: string; value: string | number }) {
   return <div className="rounded-2xl bg-white/8 p-3 text-left"><div className="text-[10px] font-bold uppercase text-white/38">{label}</div><div className="mt-2 truncate text-xl font-black">{value}</div></div>;
 }
 
 function ErrorBanner({ message }: { message: string }) {
   return <div className="flex items-start gap-2 rounded-2xl border border-[var(--color-action)]/40 bg-[var(--color-action)]/12 p-3 text-sm font-semibold text-white"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-action)]" /> {message}</div>;
+}
+
+function SaveIndicator({ status, compact = false }: { status: SaveStatus; compact?: boolean }) {
+  const label = status === "saving" ? "Sauvegarde..." : status === "error" ? "Erreur réseau" : "Sauvegardé";
+  const className =
+    status === "error"
+      ? "border-[var(--color-action)]/40 bg-[var(--color-action)]/12 text-[var(--color-action)]"
+      : status === "saving"
+        ? "border-white/10 bg-white/8 text-white/62"
+        : "border-[var(--color-success)]/30 bg-[var(--color-success)]/14 text-[var(--color-success)]";
+
+  return (
+    <div role="status" aria-live="polite" className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-black ${className} ${compact ? "" : "w-fit"}`}>
+      {status === "error" ? <AlertTriangle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+      {label}
+    </div>
+  );
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { AlertTriangle, Clock3, Eye, FileText, Printer, Save, Send, Users, Waves } from "lucide-react";
-import { updateTrainingSession } from "@/app/coach/sessions/actions";
+import { AlertTriangle, Copy, Clock3, Eye, FileText, Printer, Save, Send, Users, Waves } from "lucide-react";
+import { duplicateTrainingSession, updateTrainingSession } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getCoachSession } from "@/lib/coach-session";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { toMontrealDateTimeInputValue } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,41 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
   const assignedIds = Array.from(new Set(session.blocks.flatMap((block) => block.assignments.map((assignment) => assignment.athleteId))));
   const unassignedBlocks = session.blocks.filter((block) => block.assignments.length === 0).length;
   const totalVolume = session.blocks.reduce((sum, block) => sum + block.estimatedVolume, 0);
+  const hasStarted =
+    session.completions.some((completion) => completion.startedAt || completion.status !== "NOT_STARTED") ||
+    session.diveLogs.length > 0 ||
+    session.exerciseLogs.length > 0;
+
+  if (hasStarted) {
+    return (
+      <CoachShell active="Seances">
+        <div className="mx-auto max-w-3xl">
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-action)]/12 text-[var(--color-action)]">
+                  <AlertTriangle className="h-5 w-5" />
+                </span>
+                <div>
+                  <CardTitle>Modification bloquee</CardTitle>
+                  <p className="mt-2 text-sm leading-6 text-[var(--color-ink-muted)]">
+                    Cette seance a deja ete commencee par au moins un athlete. Pour conserver un comparatif fiable entre le prevu et le realise, la planification ne peut plus etre modifiee.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}`}><Eye className="h-4 w-4" /> Voir la seance</Link></Button>
+              <form action={duplicateTrainingSession}>
+                <input type="hidden" name="sessionId" value={session.id} />
+                <Button type="submit" variant="action"><Copy className="h-4 w-4" /> Dupliquer pour modifier</Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </CoachShell>
+    );
+  }
 
   return (
     <CoachShell active="Seances">
@@ -57,7 +93,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
               <CardHeader><CardTitle>Details</CardTitle></CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
                 <Field label="Nom"><Input name="title" defaultValue={session.title} required /></Field>
-                <Field label="Date et heure"><Input name="date" type="datetime-local" defaultValue={toLocalInputValue(session.date)} required /></Field>
+                <Field label="Date et heure"><Input name="date" type="datetime-local" defaultValue={toMontrealDateTimeInputValue(session.date)} required /></Field>
                 <Field label="Duree"><Input name="duration" type="number" defaultValue={session.duration} required /></Field>
                 <Field label="Statut">
                   <select name="status" defaultValue={session.status} className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]">
@@ -181,9 +217,4 @@ function Field({ label, className, children }: { label: string; className?: stri
 
 function SummaryMetric({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string | number }) {
   return <div className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--color-surface-raised)] p-3"><div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-muted)]"><Icon className="h-4 w-4 text-[var(--color-brand-strong)]" /> {label}</div><div className="font-black">{value}</div></div>;
-}
-
-function toLocalInputValue(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

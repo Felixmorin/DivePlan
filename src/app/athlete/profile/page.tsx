@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/training/status-pill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAthleteProgressTotals, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
+import { formatMontrealDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,7 @@ export default async function ProfilePage() {
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <ActivityMeta icon={<Clock3 className="h-4 w-4" />} label={`${completion.duration} min`} />
-                <ActivityMeta icon={<CalendarCheck2 className="h-4 w-4" />} label={completion.completedAt ? new Date(completion.completedAt).toLocaleDateString("fr-CA", { day: "2-digit", month: "short" }) : "En cours"} />
+                <ActivityMeta icon={<CalendarCheck2 className="h-4 w-4" />} label={completion.completedAt ? formatMontrealDate(completion.completedAt, { day: "2-digit", month: "short" }) : "En cours"} />
               </div>
             </div>
           ))}

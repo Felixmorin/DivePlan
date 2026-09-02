@@ -54,6 +54,13 @@ enum CompletionStatus {
   SKIPPED
 }
 
+enum InvitationEmailDeliveryStatus {
+  NOT_ATTEMPTED
+  SKIPPED_LOCAL
+  SENT
+  FAILED
+}
+
 model Club {
   id        String   @id @default(cuid())
   name      String
@@ -66,6 +73,7 @@ model Club {
   weeks     TrainingWeek[]
   invitations UserInvitation[]
   events    AppEvent[]
+  templates SessionTemplate[]
 }
 
 model User {
@@ -100,6 +108,10 @@ model UserInvitation {
   acceptedById String?
   expiresAt    DateTime
   acceptedAt   DateTime?
+  emailDeliveryStatus InvitationEmailDeliveryStatus @default(NOT_ATTEMPTED)
+  emailDeliveryError  String?
+  emailProviderMessageId String?
+  emailSentAt   DateTime?
   createdAt    DateTime @default(now())
   club         Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
   group        TrainingGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
@@ -286,6 +298,10 @@ model SessionTemplate {
   favorite  Boolean @default(false)
   payload   Json
   session   TrainingSession? @relation(fields: [sessionId], references: [id])
+  club      Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, favorite, name])
+  @@index([sessionId])
 }
 
 model Skill {
@@ -318,6 +334,8 @@ model AthleteSessionCompletion {
   startedAt   DateTime?
   completedAt DateTime?
   status      CompletionStatus @default(NOT_STARTED)
+  rating      String?
+  note        String?
   athlete     Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   session     TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
