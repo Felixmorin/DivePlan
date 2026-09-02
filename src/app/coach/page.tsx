@@ -318,10 +318,10 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false }: { sess
 
 function WeekSelector({ sessions }: { sessions: DashboardSession[] }) {
   return (
-    <div className="hidden gap-1 rounded-2xl bg-white p-1 shadow-sm md:flex">
+    <div className="hidden gap-1 rounded-2xl bg-white p-1 text-white shadow-sm md:flex">
       {["L", "M", "M", "J", "V", "S", "D"].map((label, index) => {
         const hasSession = sessions.some((session) => (session.date.getDay() || 7) === index + 1);
-        return <a key={`${label}-${index}`} href={`#day-${index + 1}`} className={`flex h-9 w-9 items-center justify-center rounded-xl text-xs font-black text-white transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${hasSession ? "bg-[var(--color-navy)]" : "bg-[var(--color-navy)]/45 hover:bg-[var(--color-navy)]/70"}`}>{label}</a>;
+        return <a key={`${label}-${index}`} href={`#day-${index + 1}`} className={`flex h-9 w-9 items-center justify-center rounded-xl text-xs font-black text-white [color:white] transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${hasSession ? "bg-[var(--color-navy)]" : "bg-[var(--color-navy)]/45 hover:bg-[var(--color-navy)]/70"}`}>{label}</a>;
       })}
     </div>
   );

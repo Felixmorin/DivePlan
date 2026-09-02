@@ -31,9 +31,9 @@ export function CoachShell({ children, active }: { children: React.ReactNode; ac
             const Icon = item.icon;
             const isActive = active === item.label || active === item.match;
             return (
-              <Link key={item.href} href={item.href} className={cn("flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-bold text-white/62 transition duration-[var(--duration-fast)] hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive && "bg-[var(--color-brand)] text-[var(--color-navy)] hover:bg-[var(--color-brand)] hover:text-[var(--color-navy)]")}>
-                <Icon className="h-4 w-4" />
-                {item.label}
+              <Link key={item.href} href={item.href} style={isActive ? { color: "#ffffff" } : undefined} className={cn("flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-bold transition duration-[var(--duration-fast)] hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive ? "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand)]" : "text-white/62")}>
+                <Icon className={cn("h-4 w-4", isActive && "text-white")} />
+                <span className={cn(isActive && "text-white")}>{item.label}</span>
               </Link>
             );
           })}
@@ -52,9 +52,9 @@ export function CoachShell({ children, active }: { children: React.ReactNode; ac
             const Icon = item.icon;
             const isActive = active === item.label || active === item.match;
             return (
-              <Link key={item.href} href={item.href} className={cn("flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-xs font-black text-[var(--color-ink-muted)] transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive && "bg-[var(--color-navy)] text-white")}>
-                <Icon className="h-4 w-4" />
-                {item.label}
+              <Link key={item.href} href={item.href} style={isActive ? { color: "#ffffff" } : undefined} className={cn("flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-xs font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive ? "bg-[var(--color-navy)] text-white hover:text-white" : "text-[var(--color-ink-muted)]")}>
+                <Icon className={cn("h-4 w-4", isActive && "text-white")} />
+                <span className={cn(isActive && "text-white")}>{item.label}</span>
               </Link>
             );
           })}
