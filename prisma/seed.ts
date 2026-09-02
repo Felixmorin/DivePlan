@@ -30,7 +30,7 @@ async function main() {
 
   const club = await prisma.club.create({ data: { name: "Club Mustang", logo: "/mustang-mark.svg" } });
   const coachUser = await prisma.user.create({
-    data: { firstName: "Felix", lastName: "Lavoie", email: "coach@diveplan.local", role: UserRole.COACH, clubId: club.id, passwordHash: demoPasswordHash, passwordSetAt: new Date() }
+    data: { firstName: "Felix", lastName: "Morin", email: "coach@diveplan.local", role: UserRole.COACH, clubId: club.id, passwordHash: demoPasswordHash, passwordSetAt: new Date() }
   });
   const coach = await prisma.coach.create({ data: { userId: coachUser.id, clubId: club.id } });
   const group = await prisma.trainingGroup.create({ data: { name: "Provincial", clubId: club.id, coachId: coach.id } });
