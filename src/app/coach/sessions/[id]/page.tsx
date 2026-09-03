@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save } from "lucide-react";
-import { duplicateTrainingSession, saveSessionAsTemplate } from "@/app/coach/sessions/actions";
+import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
+import { deleteTrainingSession, duplicateTrainingSession, markTrainingSessionNotDone, saveSessionAsTemplate } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -51,6 +51,16 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             <Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}/edit`}><Edit className="h-4 w-4" /> Modifier</Link></Button>
           )}
           <Button asChild><Link href={`/coach/sessions/${session.id}/print`}><Printer className="h-4 w-4" /> Imprimer</Link></Button>
+          {session.status !== "NOT_DONE" && (
+            <form action={markTrainingSessionNotDone}>
+              <input type="hidden" name="sessionId" value={session.id} />
+              <Button type="submit" variant="outline"><XCircle className="h-4 w-4" /> Non faite</Button>
+            </form>
+          )}
+          <form action={deleteTrainingSession}>
+            <input type="hidden" name="sessionId" value={session.id} />
+            <Button type="submit" variant="outline" disabled={hasStarted} title={hasStarted ? "Impossible de supprimer une seance commencee" : "Supprimer la seance"}><Trash2 className="h-4 w-4" /> Supprimer</Button>
+          </form>
         </div>
       </div>
       {hasStarted && (
@@ -144,7 +154,17 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               <CardContent>
                 {block.drylandExercises.length > 0 && <div className="grid gap-2 md:grid-cols-3">{block.drylandExercises.map((item) => <div key={item.exerciseId} className="rounded-2xl bg-[var(--color-surface-raised)] p-3"><div className="font-bold">{item.exercise.name}</div><div className="text-sm text-[var(--color-ink-muted)]">{item.sets ?? 1} x {item.reps ?? `${item.duration ?? 30} sec`}</div></div>)}</div>}
                 {block.poolTraining && <div className="grid gap-4 md:grid-cols-2">{block.poolTraining.sections.map((section) => <div key={section.id}><div className="mb-2 font-black">{(section.label ?? section.height).toUpperCase()}</div>{section.dives.map((dive) => <div key={dive.id} className="flex justify-between border-b border-[var(--color-border)] py-2"><span className="font-bold">{dive.diveCode} · {dive.diveName}</span><span>{dive.repetitions} reps</span></div>)}</div>)}</div>}
-                <p className="mt-4 text-sm text-[var(--color-ink-muted)]">Athletes: {block.assignments.map((assignment) => `${assignment.athlete.user.firstName} ${assignment.athlete.user.lastName}`).join(", ")}</p>
+                <p className="mt-4 text-sm text-[var(--color-ink-muted)]">
+                  Athletes:{" "}
+                  {block.assignments.map((assignment, index) => (
+                    <span key={assignment.athleteId}>
+                      {index > 0 && ", "}
+                      <Link href={`/coach/athletes/${assignment.athleteId}`} className="font-black text-[var(--color-ink)] hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+                        {assignment.athlete.user.firstName} {assignment.athlete.user.lastName}
+                      </Link>
+                    </span>
+                  ))}
+                </p>
               </CardContent>
             </Card>
           );

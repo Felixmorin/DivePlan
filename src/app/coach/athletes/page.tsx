@@ -1,6 +1,7 @@
 import type * as React from "react";
 import Link from "next/link";
-import { Activity, CalendarClock, Dumbbell, FileUp, Plus } from "lucide-react";
+import { Activity, CalendarClock, Dumbbell, FileUp, Plus, Trash2, UserPlus } from "lucide-react";
+import { createCoachOnlyAthlete, deleteAthlete } from "@/app/coach/athletes/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { StatusPill } from "@/components/training/status-pill";
@@ -9,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
 import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
@@ -31,22 +33,30 @@ type AthleteRow = {
   completedSessions: number;
 };
 
+type AthleteGroup = {
+  id: string;
+  name: string;
+};
+
 export default async function AthletesPage() {
   const { clubId } = await requireCoach();
   if (clubId === "dev-club") {
     return <DemoAthletesPage />;
   }
 
-  const athletes = await prisma.athlete.findMany({
-    where: { clubId },
-    orderBy: [{ group: { name: "asc" } }, { user: { firstName: "asc" } }],
-    include: {
-      user: true,
-      group: true,
-      completions: { where: { status: "COMPLETED" }, include: { session: true }, orderBy: { completedAt: "desc" } },
-      diveLogs: true
-    }
-  });
+  const [athletes, groups] = await Promise.all([
+    prisma.athlete.findMany({
+      where: { clubId },
+      orderBy: [{ group: { name: "asc" } }, { user: { firstName: "asc" } }],
+      include: {
+        user: true,
+        group: true,
+        completions: { where: { status: "COMPLETED" }, include: { session: true }, orderBy: { completedAt: "desc" } },
+        diveLogs: true
+      }
+    }),
+    prisma.trainingGroup.findMany({ where: { clubId }, orderBy: { name: "asc" }, select: { id: true, name: true } })
+  ]);
 
   const athleteIds = athletes.map((athlete) => athlete.id);
   const sessions = athleteIds.length
@@ -94,6 +104,7 @@ export default async function AthletesPage() {
   return (
     <CoachShell active="Athletes">
       <DirectoryHeader title="Athletes" description="Reperer rapidement les groupes, statuts et prochaines seances." actionHref="/coach/sessions/new" actionLabel="Creer une seance" />
+      <CoachOnlyAthleteCard groups={groups} />
       <ImportCard />
       <AthleteDirectory rows={rows} />
     </CoachShell>
@@ -118,6 +129,7 @@ function DemoAthletesPage() {
   return (
     <CoachShell active="Athletes">
       <DirectoryHeader title="Athletes" description="Mode demo local sans PostgreSQL." actionHref="/coach/sessions/demo" actionLabel="Voir la seance" />
+      <CoachOnlyAthleteCard groups={[{ id: "provincial", name: "Provincial" }]} demo />
       <AthleteDirectory rows={rows} demo />
     </CoachShell>
   );
@@ -135,6 +147,38 @@ function DirectoryHeader({ title, description, actionHref, actionLabel }: { titl
         <Link href={actionHref}><Plus className="h-4 w-4" /> {actionLabel}</Link>
       </Button>
     </div>
+  );
+}
+
+function CoachOnlyAthleteCard({ groups, demo = false }: { groups: AthleteGroup[]; demo?: boolean }) {
+  return (
+    <Card className="mb-6 overflow-hidden">
+      <CardHeader className="border-b border-[var(--color-border)] bg-white">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]">
+            <UserPlus className="h-5 w-5" />
+          </div>
+          <div>
+            <CardTitle>Ajouter un athlète coach seulement</CardTitle>
+            <CardDescription>Pour les jeunes sans téléphone: visible côté coach, assignable aux séances et présent sur les feuilles imprimées.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-5">
+        <form action={demo ? undefined : createCoachOnlyAthlete} className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_170px_190px_1fr_auto]">
+          <Input name="firstName" placeholder="Prénom" disabled={demo} required />
+          <Input name="lastName" placeholder="Nom" disabled={demo} required />
+          <Input name="level" placeholder="Niveau" disabled={demo} required />
+          <Input name="birthDate" type="date" disabled={demo} />
+          <select name="groupId" disabled={demo} className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold text-[var(--color-ink)] outline-none transition duration-[var(--duration-fast)] focus-visible:shadow-[var(--focus-ring)]">
+            <option value="">Aucun groupe</option>
+            {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+          </select>
+          <Button type="submit" variant="action" disabled={demo}><Plus className="h-4 w-4" /> Ajouter</Button>
+        </form>
+        {demo && <p className="mt-3 text-sm font-semibold text-[var(--color-ink-muted)]">Disponible avec un club connecté à la base de données.</p>}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -192,6 +236,7 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
                 <th className="px-4 py-3">Prochaine seance</th>
                 <th className="px-4 py-3">Activite</th>
                 <th className="px-5 py-3 text-right">Volume</th>
+                <th className="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
@@ -203,6 +248,7 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
                   <td className="px-4 py-4"><NextSession nextSession={row.nextSession} demo={demo} /></td>
                   <td className="px-4 py-4"><ActivitySummary row={row} /></td>
                   <td className="px-5 py-4 text-right text-lg font-black">{row.volume}</td>
+                  <td className="px-5 py-4 text-right"><DeleteAthleteButton athleteId={row.id} demo={demo} /></td>
                 </tr>
               ))}
             </tbody>
@@ -221,11 +267,23 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
                 <MobileMetric icon={<CalendarClock className="h-4 w-4" />} label="Prochaine" value={row.nextSession ? row.nextSession.title : "Aucune seance publiee"} />
                 <MobileMetric icon={<Activity className="h-4 w-4" />} label="Activite" value={`${row.completedSessions} completees · ${row.volume} reps`} />
               </div>
+              <div className="mt-4"><DeleteAthleteButton athleteId={row.id} demo={demo} /></div>
             </div>
           ))}
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function DeleteAthleteButton({ athleteId, demo }: { athleteId: string; demo: boolean }) {
+  return (
+    <form action={demo ? undefined : deleteAthlete}>
+      <input type="hidden" name="athleteId" value={athleteId} />
+      <Button type="submit" variant="outline" size="sm" disabled={demo} className="text-[var(--color-danger)] hover:border-[var(--color-danger)]">
+        <Trash2 className="h-4 w-4" /> Supprimer
+      </Button>
+    </form>
   );
 }
 
@@ -237,7 +295,9 @@ function Identity({ row }: { row: AthleteRow }) {
         <AvatarFallback>{row.firstName[0]}{row.lastName[0]}</AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <div className="truncate font-black text-[var(--color-ink)]">{row.firstName} {row.lastName}</div>
+        <Link href={`/coach/athletes/${row.id}`} className="block truncate font-black text-[var(--color-ink)] hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+          {row.firstName} {row.lastName}
+        </Link>
         <div className="truncate text-xs font-bold text-[var(--color-ink-muted)]">{row.level}</div>
       </div>
     </div>

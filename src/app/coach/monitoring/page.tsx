@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { formatMontrealDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export default async function MonitoringPage() {
           type: event.type,
           message: event.message,
           source: event.user?.email ?? "system",
-          date: event.createdAt.toLocaleString("fr-CA")
+          date: formatMonitoringDate(event.createdAt)
         }))}
       />
     </CoachShell>
@@ -131,4 +132,16 @@ function sinceHours(hours: number) {
   const date = new Date();
   date.setHours(date.getHours() - hours);
   return date;
+}
+
+function formatMonitoringDate(date: Date) {
+  return formatMontrealDate(date, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  });
 }

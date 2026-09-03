@@ -1,6 +1,7 @@
 import type * as React from "react";
 import Link from "next/link";
-import { CalendarClock, Users, Waves } from "lucide-react";
+import { CalendarClock, Plus, Save, Users, Waves } from "lucide-react";
+import { createTrainingGroup, assignAthletesToGroup } from "@/app/coach/groups/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatars } from "@/components/coach/athlete-avatars";
 import { StatusPill } from "@/components/training/status-pill";
@@ -8,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
 import { requireCoach } from "@/lib/current-user";
 import { athletes as demoAthletes, demoSession } from "@/lib/data";
 import { prisma } from "@/lib/prisma";
@@ -22,34 +24,50 @@ export default async function GroupsPage() {
     return <DemoGroupsPage />;
   }
 
-  const groups = await prisma.trainingGroup.findMany({
-    where: { clubId },
-    orderBy: { name: "asc" },
-    include: {
-      coach: { include: { user: true } },
-      athletes: {
-        where: { active: true },
-        include: {
-          user: true,
-          completions: {
-            where: { status: { in: ["IN_PROGRESS", "SKIPPED"] } },
-            select: { status: true },
-            take: 1
-          }
+  const [groups, allAthletes] = await Promise.all([
+    prisma.trainingGroup.findMany({
+      where: { clubId },
+      orderBy: { name: "asc" },
+      include: {
+        coach: { include: { user: true } },
+        athletes: {
+          where: { active: true },
+          include: {
+            user: true,
+            completions: {
+              where: { status: { in: ["IN_PROGRESS", "SKIPPED"] } },
+              select: { status: true },
+              take: 1
+            }
+          },
+          orderBy: { user: { firstName: "asc" } }
         },
-        orderBy: { user: { firstName: "asc" } }
-      },
-      weeks: {
-        include: {
-          sessions: {
-            where: { date: { gte: startOfMontrealDay() } },
-            orderBy: { date: "asc" },
-            take: 1
+        weeks: {
+          include: {
+            sessions: {
+              where: { date: { gte: startOfMontrealDay() } },
+              orderBy: { date: "asc" },
+              take: 1
+            }
           }
         }
       }
-    }
-  });
+    }),
+    prisma.athlete.findMany({
+      where: { clubId, active: true },
+      orderBy: [{ user: { firstName: "asc" } }, { user: { lastName: "asc" } }],
+      include: { user: true, group: { select: { name: true } } }
+    })
+  ]);
+
+  const assignmentGroups = groups.map((group) => ({ id: group.id, name: group.name }));
+  const assignmentAthletes = allAthletes.map((athlete) => ({
+    id: athlete.id,
+    name: `${athlete.user.firstName} ${athlete.user.lastName}`,
+    level: athlete.level,
+    groupId: athlete.groupId,
+    groupName: athlete.group?.name ?? null
+  }));
 
   return (
     <CoachShell active="Groupes">
@@ -65,6 +83,25 @@ export default async function GroupsPage() {
       </div>
 
       <Card className="overflow-hidden">
+        <CardHeader className="border-b border-[var(--color-border)] bg-white">
+          <CardTitle>Créer un groupe</CardTitle>
+          <CardDescription>Ajoute rapidement un collectif avant d&apos;y assigner des athlètes.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-5">
+          <form action={createTrainingGroup} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div>
+              <label htmlFor="group-name" className="text-xs font-black uppercase text-[var(--color-ink-muted)]">Nom du groupe</label>
+              <Input id="group-name" name="name" placeholder="Ex. Provincial 11-13" required minLength={2} className="mt-2" />
+            </div>
+            <Button type="submit" variant="action">
+              <Plus className="h-4 w-4" />
+              Créer
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6 overflow-hidden">
         <CardHeader className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
           <CardTitle>Groupes existants</CardTitle>
           <CardDescription>Les lignes deviennent des cartes sur mobile pour garder les actions tactiles.</CardDescription>
@@ -183,6 +220,8 @@ export default async function GroupsPage() {
           )}
         </CardContent>
       </Card>
+
+      <GroupAssignmentGrid groups={assignmentGroups} athletes={assignmentAthletes} />
     </CoachShell>
   );
 }
@@ -210,6 +249,25 @@ function DemoGroupsPage() {
       </div>
 
       <Card className="overflow-hidden">
+        <CardHeader className="border-b border-[var(--color-border)] bg-white">
+          <CardTitle>Créer un groupe</CardTitle>
+          <CardDescription>La création sera disponible dès que la base PostgreSQL est connectée.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-5">
+          <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div>
+              <label htmlFor="demo-group-name" className="text-xs font-black uppercase text-[var(--color-ink-muted)]">Nom du groupe</label>
+              <Input id="demo-group-name" name="name" placeholder="Ex. Provincial 11-13" disabled className="mt-2" />
+            </div>
+            <Button type="button" variant="action" disabled>
+              <Plus className="h-4 w-4" />
+              Créer
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6 overflow-hidden">
         <CardHeader className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
           <CardTitle>Groupes existants</CardTitle>
           <CardDescription>Les donnees demo restent locales tant qu&apos;une base PostgreSQL valide n&apos;est pas configuree.</CardDescription>
@@ -288,6 +346,18 @@ function DemoGroupsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <GroupAssignmentGrid
+        demo
+        groups={[{ id: "demo-group", name: demoSession.group }]}
+        athletes={demoAthletes.map((athlete) => ({
+          id: athlete.id,
+          name: `${athlete.firstName} ${athlete.lastName}`,
+          level: athlete.level,
+          groupId: "demo-group",
+          groupName: demoSession.group
+        }))}
+      />
     </CoachShell>
   );
 }
@@ -306,5 +376,95 @@ function GroupMetric({ icon, label, value }: { icon: React.ReactNode; label: str
       <span className="flex shrink-0 items-center gap-2 text-xs font-black uppercase text-[var(--color-ink-muted)]">{icon}{label}</span>
       <span className="min-w-0 truncate text-right font-bold">{value}</span>
     </div>
+  );
+}
+
+type AssignmentGroup = {
+  id: string;
+  name: string;
+};
+
+type AssignmentAthlete = {
+  id: string;
+  name: string;
+  level: string;
+  groupId: string | null;
+  groupName: string | null;
+};
+
+function GroupAssignmentGrid({ groups, athletes, demo = false }: { groups: AssignmentGroup[]; athletes: AssignmentAthlete[]; demo?: boolean }) {
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="mt-6">
+      <div className="mb-3">
+        <h2 className="text-xl font-black text-[var(--color-ink)]">Assigner les athlètes</h2>
+        <p className="mt-1 text-sm text-[var(--color-ink-muted)]">Coche les athlètes à garder dans chaque groupe, puis enregistre le groupe modifié.</p>
+      </div>
+      {athletes.length === 0 ? (
+        <Card>
+          <CardContent className="p-5">
+            <EmptyState title="Aucun athlète actif" description="Crée un athlète avant de composer tes groupes." />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {groups.map((group) => {
+            const assignedCount = athletes.filter((athlete) => athlete.groupId === group.id).length;
+
+            return (
+              <Card key={group.id} className="overflow-hidden">
+                <CardHeader className="border-b border-[var(--color-border)] bg-white">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <CardTitle>{group.name}</CardTitle>
+                      <CardDescription>{assignedCount} athlète{assignedCount > 1 ? "s" : ""} assigné{assignedCount > 1 ? "s" : ""}</CardDescription>
+                    </div>
+                    <Badge>{athletes.length} disponibles</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4">
+                  <form action={demo ? undefined : assignAthletesToGroup} className="space-y-4">
+                    <input type="hidden" name="groupId" value={group.id} />
+                    <div className="grid max-h-80 gap-2 overflow-y-auto pr-1">
+                      {athletes.map((athlete) => {
+                        const assignedHere = athlete.groupId === group.id;
+                        const assignedElsewhere = athlete.groupId !== null && !assignedHere;
+
+                        return (
+                          <label key={athlete.id} className="flex min-h-14 cursor-pointer items-center gap-3 rounded-[var(--radius-ui)] border border-[var(--color-border)] bg-white px-3 py-2 text-sm transition duration-[var(--duration-fast)] has-[:checked]:border-[var(--color-brand)] has-[:checked]:bg-[var(--block-pool-bg)]">
+                            <input
+                              type="checkbox"
+                              name="athleteId"
+                              value={athlete.id}
+                              defaultChecked={assignedHere}
+                              disabled={demo}
+                              className="h-5 w-5 shrink-0 rounded border-[var(--color-border-strong)] text-[var(--color-brand)] focus-visible:shadow-[var(--focus-ring)]"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate font-black text-[var(--color-ink)]">{athlete.name}</span>
+                              <span className="block truncate text-xs font-bold text-[var(--color-ink-muted)]">
+                                {athlete.level}{assignedElsewhere ? ` · ${athlete.groupName}` : ""}
+                              </span>
+                            </span>
+                            {assignedElsewhere && <Badge variant="outline">déplacer</Badge>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <Button type="submit" variant="action" disabled={demo}>
+                      <Save className="h-4 w-4" />
+                      Enregistrer
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

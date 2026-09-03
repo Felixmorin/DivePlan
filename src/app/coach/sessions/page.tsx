@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Trash2, XCircle } from "lucide-react";
+import { deleteTrainingSession, markTrainingSessionNotDone } from "@/app/coach/sessions/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +48,20 @@ export default async function SessionsPage() {
               duration={session.duration}
               volume={session.blocks.reduce((sum, block) => sum + block.estimatedVolume, 0)}
               athleteCount={uniqueAssignmentCount(session.blocks)}
+              actions={
+                <>
+                  {session.status !== "NOT_DONE" && (
+                    <form action={markTrainingSessionNotDone}>
+                      <input type="hidden" name="sessionId" value={session.id} />
+                      <Button type="submit" variant="outline" size="icon" className="h-9 min-h-9 w-9" aria-label="Marquer non faite"><XCircle className="h-4 w-4" /></Button>
+                    </form>
+                  )}
+                  <form action={deleteTrainingSession}>
+                    <input type="hidden" name="sessionId" value={session.id} />
+                    <Button type="submit" variant="outline" size="icon" className="h-9 min-h-9 w-9" aria-label="Supprimer"><Trash2 className="h-4 w-4" /></Button>
+                  </form>
+                </>
+              }
             />
           ))}
           {sessions.length === 0 && <EmptyState title="Aucune seance publiee" description="Cree une premiere seance pour lancer un pilote." />}

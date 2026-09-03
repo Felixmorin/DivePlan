@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Clock3, Eye, FileText, MoreHorizontal, Plus, Printer, Send, Users, Waves } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Clock3, Eye, FileText, MoreHorizontal, Plus, Printer, Send, Tag, Users, Waves } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
-import type { CreateSessionInput } from "@/app/coach/sessions/actions";
+import type { CreateSessionInput, QuickExerciseInput } from "@/app/coach/sessions/actions";
 import { AssignmentSelector } from "@/components/coach/assignment-selector";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -46,6 +46,7 @@ type BuilderExercise = {
   reps: number | null;
   duration: number | null;
   equipment: string | null;
+  tags: string[];
 };
 
 type BuilderGroup = {
@@ -88,13 +89,15 @@ type SessionBuilderProps = {
     payload: SessionTemplatePayload;
   } | null;
   onCreate: (input: CreateSessionInput) => Promise<void>;
+  onCreateExercise: (input: QuickExerciseInput) => Promise<BuilderExercise>;
 };
 
 const steps = ["Details", "Dryland", "Piscine", "Assignations", "Publication"];
 
-export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, initialTemplate, onCreate }: SessionBuilderProps) {
+export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, initialTemplate, onCreate, onCreateExercise }: SessionBuilderProps) {
   const [step, setStep] = useState(0);
   const [isPending, startTransition] = useTransition();
+  const [library, setLibrary] = useState(drylandLibrary);
   const athleteIds = athletes.map((athlete) => athlete.id);
   const templateBlocks = initialTemplate?.payload.blocks ?? [];
   const templateDryland = templateBlocks.find((block) => block.type === "DRYLAND");
@@ -106,8 +109,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
     Object.fromEntries(activePoolBlocks.map((block, index) => [block.id, (block.athleteIds.length > 0 ? block.athleteIds : defaultPoolAthletes(index, athleteIds)).filter((id) => athleteIds.includes(id))]))
   );
   const [selectedExerciseIds, setSelectedExerciseIds] = useState(
-    (templateExerciseIds.length > 0 ? templateExerciseIds : drylandLibrary.slice(0, 5).map((exercise) => exercise.id)).filter((id) =>
-      drylandLibrary.some((exercise) => exercise.id === id)
+    (templateExerciseIds.length > 0 ? templateExerciseIds : library.slice(0, 5).map((exercise) => exercise.id)).filter((id) =>
+      library.some((exercise) => exercise.id === id)
     )
   );
   const [flashBlock, setFlashBlock] = useState<string | null>(null);
@@ -123,7 +126,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
     }
   });
   const watched = useWatch({ control: form.control });
-  const selectedExercises = useMemo(() => orderExercises(drylandLibrary, selectedExerciseIds), [drylandLibrary, selectedExerciseIds]);
+  const selectedExercises = useMemo(() => orderExercises(library, selectedExerciseIds), [library, selectedExerciseIds]);
   const poolAssignmentValues = activePoolBlocks.map((block) => poolAssignments[block.id] ?? []);
   const allAssignedIds = uniqueIds([...dryAssigned, ...poolAssignmentValues.flat()]);
   const unassignedBlocks = [
@@ -174,6 +177,13 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
     });
   }
 
+  async function addExercise(input: QuickExerciseInput) {
+    const exercise = await onCreateExercise(input);
+    setLibrary((current) => [exercise, ...current.filter((item) => item.id !== exercise.id)]);
+    setSelectedExerciseIds((current) => uniqueIds([exercise.id, ...current]));
+    pulse("dryland");
+  }
+
   function publishSession() {
     void form.handleSubmit((values) => {
       startTransition(() => {
@@ -211,7 +221,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
           {step === 0 && <DetailsStep form={form} groups={groups} />}
           {step === 1 && (
             <DrylandStep
-              exercises={drylandLibrary}
+              exercises={library}
               selectedExerciseIds={selectedExerciseIds}
               selectedExercises={selectedExercises}
               assigned={dryAssigned}
@@ -220,6 +230,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
               onToggleExercise={toggleExercise}
               onMoveExercise={moveExercise}
               onAssign={assign("dryland", setDryAssigned)}
+              onCreateExercise={addExercise}
             />
           )}
           {step === 2 && (
@@ -332,10 +343,12 @@ function DrylandStep(props: {
   onToggleExercise: (id: string) => void;
   onMoveExercise: (id: string, direction: -1 | 1) => void;
   onAssign: (ids: string[]) => void;
+  onCreateExercise: (input: QuickExerciseInput) => Promise<void>;
 }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <BlockCard type="dryland" title="Dryland partage" duration={22} assigned={props.assigned} athletes={props.athletes} state={props.selectedExercises.length > 0 ? "Pret" : "A completer"} flash={props.flash}>
+        <QuickExerciseForm onCreateExercise={props.onCreateExercise} />
         <div className="mb-4 rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">
           Selectionne les exercices qui seront envoyes au backend. L&apos;ordre ci-dessous est conserve a la creation.
         </div>
@@ -350,6 +363,11 @@ function DrylandStep(props: {
                 <div>
                   <div className="font-black">{exercise.name}</div>
                   <div className="text-sm text-[var(--color-ink-muted)]">{exercise.sets ?? 1} x {exercise.reps ?? `${exercise.duration ?? 30} sec`} - {exercise.equipment ?? "Aucun"}</div>
+                  {exercise.tags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {exercise.tags.map((tag) => <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-[11px] font-black text-[var(--color-ink-muted)]"><Tag className="h-3 w-3" /> {tag}</span>)}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-[var(--color-ink-muted)]">{exercise.category}</span>
@@ -370,6 +388,61 @@ function DrylandStep(props: {
       </BlockCard>
       <AssignmentSelector selected={props.assigned} onChange={props.onAssign} athletes={props.athletes} />
     </div>
+  );
+}
+
+function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: QuickExerciseInput) => Promise<void> }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const name = String(formData.get("name") ?? "").trim();
+    const category = String(formData.get("category") ?? "").trim() || "Custom";
+    const equipment = String(formData.get("equipment") ?? "").trim();
+    const tags = String(formData.get("tags") ?? "")
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    if (name.length < 2) {
+      setError("Nom d'exercice requis.");
+      return;
+    }
+
+    setError(null);
+    startTransition(() => {
+      void onCreateExercise({
+        name,
+        category,
+        equipment,
+        defaultSets: optionalNumber(formData.get("sets")),
+        defaultReps: optionalNumber(formData.get("reps")),
+        defaultDuration: optionalNumber(formData.get("duration")),
+        tags
+      })
+        .then(() => form.reset())
+        .catch((caught) => setError(caught instanceof Error ? caught.message : "Creation impossible."));
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="mb-4 rounded-[var(--radius-panel)] border border-[var(--block-dryland-fg)]/20 bg-[var(--block-dryland-bg)]/45 p-4">
+      <div className="mb-3 flex items-center gap-2 font-black text-[var(--block-dryland-fg)]"><Plus className="h-4 w-4" /> Créer un exercice rapide</div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <Input name="name" placeholder="Nom de l'exercice" required />
+        <Input name="category" placeholder="Catégorie" defaultValue="Custom" />
+        <Input name="equipment" placeholder="Équipement" />
+        <Input name="tags" placeholder="Tags: force, ouverture" />
+        <Input name="sets" type="number" min="1" placeholder="Séries" />
+        <Input name="reps" type="number" min="1" placeholder="Répétitions" />
+        <Input name="duration" type="number" min="1" placeholder="Durée sec." />
+        <Button type="submit" variant="action" disabled={pending}><Plus className="h-4 w-4" /> {pending ? "Création..." : "Ajouter"}</Button>
+      </div>
+      {error && <div className="mt-3 rounded-xl bg-[var(--color-danger)]/10 p-3 text-sm font-semibold text-[var(--color-danger)]">{error}</div>}
+    </form>
   );
 }
 
@@ -463,7 +536,7 @@ function PublicationStep({ title, focus, date, totalDuration, totalVolume, unass
         </div>
         {unassignedBlocks > 0 && <WarningText>{unassignedBlocks} bloc{unassignedBlocks > 1 ? "s" : ""} sans assignation. La publication sera refusee par validation serveur si dryland ou piscine A/B est vide.</WarningText>}
         <div className="rounded-2xl bg-[var(--color-surface-raised)] p-4 text-sm font-semibold text-[var(--color-ink-muted)]">
-          Il n&apos;y a pas de sauvegarde automatique dans ce projet. La seance est enregistree et publiee uniquement quand tu cliques sur Publier la seance.
+          La seance est enregistree et publiee uniquement quand tu cliques sur Publier la seance.
         </div>
       </CardContent>
     </Card>
@@ -581,4 +654,11 @@ function heightLabel(height: BuilderPoolSection["height"]) {
 
 function uniqueIds(ids: string[]) {
   return Array.from(new Set(ids));
+}
+
+function optionalNumber(value: FormDataEntryValue | null) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const number = Number(text);
+  return Number.isFinite(number) ? number : null;
 }

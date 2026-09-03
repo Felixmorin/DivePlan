@@ -23,6 +23,7 @@ enum SessionStatus {
   DRAFT
   READY
   COMPLETED
+  NOT_DONE
 }
 
 enum BlockType {
@@ -54,11 +55,10 @@ enum CompletionStatus {
   SKIPPED
 }
 
-enum InvitationEmailDeliveryStatus {
-  NOT_ATTEMPTED
-  SKIPPED_LOCAL
-  SENT
-  FAILED
+enum PlanningEventType {
+  COMPETITION
+  CAMP
+  TRAINING_SCHEDULE
 }
 
 model Club {
@@ -74,6 +74,7 @@ model Club {
   invitations UserInvitation[]
   events    AppEvent[]
   templates SessionTemplate[]
+  planningEvents PlanningEvent[]
 }
 
 model User {
@@ -108,10 +109,6 @@ model UserInvitation {
   acceptedById String?
   expiresAt    DateTime
   acceptedAt   DateTime?
-  emailDeliveryStatus InvitationEmailDeliveryStatus @default(NOT_ATTEMPTED)
-  emailDeliveryError  String?
-  emailProviderMessageId String?
-  emailSentAt   DateTime?
   createdAt    DateTime @default(now())
   club         Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
   group        TrainingGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
@@ -152,6 +149,7 @@ model Athlete {
   diveLogs    AthleteDiveLog[]
   exerciseLogs AthleteExerciseLog[]
   skills      AthleteSkill[]
+  planningEvents PlanningEvent[]
 }
 
 model Coach {
@@ -174,6 +172,28 @@ model TrainingGroup {
   athletes  Athlete[]
   weeks     TrainingWeek[]
   invitations UserInvitation[]
+  planningEvents PlanningEvent[]
+}
+
+model PlanningEvent {
+  id        String   @id @default(cuid())
+  clubId    String
+  groupId   String?
+  athleteId String?
+  type      PlanningEventType
+  title     String
+  startsAt  DateTime
+  duration  Int?
+  location  String?
+  notes     String?
+  createdAt DateTime @default(now())
+  club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  group     TrainingGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  athlete   Athlete? @relation(fields: [athleteId], references: [id], onDelete: SetNull)
+
+  @@index([clubId, startsAt])
+  @@index([groupId, startsAt])
+  @@index([athleteId, startsAt])
 }
 
 model TrainingWeek {

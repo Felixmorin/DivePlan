@@ -4,13 +4,11 @@ import { revalidatePath } from "next/cache";
 import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
-import { sendInvitationEmail, type InvitationEmailDeliveryResult } from "@/lib/invitation-email";
 import { trackEvent } from "@/lib/monitoring";
 import { createToken, hashToken } from "@/lib/tokens";
 import { prisma } from "@/lib/prisma";
 
 export type InviteState = {
-  delivery?: InvitationEmailDeliveryResult;
   error?: string;
   inviteLink?: string;
 };
@@ -51,7 +49,7 @@ export async function createInvitation(_: InviteState, formData: FormData): Prom
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 14);
 
-  const invitation = await prisma.userInvitation.create({
+  await prisma.userInvitation.create({
     data: {
       email: data.email,
       firstName: data.firstName.trim(),
@@ -65,36 +63,22 @@ export async function createInvitation(_: InviteState, formData: FormData): Prom
     }
   });
 
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
-  const inviteLink = `${baseUrl}/invite/${token}`;
-  const delivery = await sendInvitationEmail({
-    activationUrl: inviteLink,
-    clubName: user.club?.name ?? "ton club",
-    email: invitation.email,
-    firstName: invitation.firstName,
-    invitationId: invitation.id,
-    invitedByName: `${user.firstName} ${user.lastName}`,
-    roleLabel: data.role === "ATHLETE" ? "athlete" : "coach"
-  });
-
-  await prisma.userInvitation.update({
-    where: { id: invitation.id },
-    data: {
-      emailDeliveryStatus: delivery.status,
-      emailDeliveryError: delivery.status === "SENT" ? null : delivery.error,
-      emailProviderMessageId: delivery.status === "SENT" ? delivery.providerMessageId : null,
-      emailSentAt: delivery.status === "SENT" ? new Date() : null
-    }
-  });
+  const baseUrl = getAppBaseUrl();
+  const inviteLink = `${baseUrl}/invite/${encodeURIComponent(token)}`;
 
   await trackEvent({
     type: "invitation.created",
     message: `Invitation creee pour ${data.email}`,
     clubId,
     userId: user.id,
-    metadata: { emailDeliveryStatus: delivery.status, role: data.role }
+    metadata: { role: data.role }
   });
 
   revalidatePath("/coach/invitations");
-  return { delivery, inviteLink };
+  return { inviteLink };
+}
+
+function getAppBaseUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  return (configuredUrl || "http://localhost:3000").replace(/\/+$/, "");
 }

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { parseSessionTemplatePayload } from "@/lib/session-template";
+import { sessionTemplatePayloadSchema } from "@/lib/session-template";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,10 @@ export default async function LibraryPage() {
           orderBy: [{ favorite: "desc" }, { name: "asc" }]
         })
       ]);
+  const parsedTemplates = templates.map((template) => ({
+    ...template,
+    parsedPayload: sessionTemplatePayloadSchema.safeParse(template.payload)
+  }));
 
   return (
     <CoachShell active="Bibliotheque">
@@ -39,8 +43,8 @@ export default async function LibraryPage() {
         </TabsContent>
         <TabsContent value="dives" className="mt-4 grid gap-4 md:grid-cols-3">{["101C", "201B", "201C", "203C", "301C", "401B", "5331D"].map((code) => <Card key={code}><CardContent className="p-4"><div className="text-2xl font-black">{code}</div><p className="text-sm text-slate-500">Categorie technique · 1m / 3m</p></CardContent></Card>)}</TabsContent>
         <TabsContent value="templates" className="mt-4 grid gap-4 md:grid-cols-3">
-          {templates.map((template) => {
-            const payload = parseSessionTemplatePayload(template.payload);
+          {parsedTemplates.map((template) => {
+            const payload = template.parsedPayload.success ? template.parsedPayload.data : null;
 
             return (
               <Card key={template.id}>
@@ -48,11 +52,15 @@ export default async function LibraryPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="font-black">{template.name}</div>
-                      <p className="text-sm text-slate-500">{template.category} · {payload.blocks.length} blocs</p>
+                      <p className="text-sm text-slate-500">{template.category} · {payload ? `${payload.blocks.length} blocs` : "modele a recreer"}</p>
                     </div>
                     {template.favorite && <Star className="h-4 w-4 fill-current text-orange-400" />}
                   </div>
-                  <Button asChild size="sm"><Link href={`/coach/sessions/new?templateId=${template.id}`}>Charger</Link></Button>
+                  {payload ? (
+                    <Button asChild size="sm"><Link href={`/coach/sessions/new?templateId=${template.id}`}>Charger</Link></Button>
+                  ) : (
+                    <Button size="sm" disabled>Indisponible</Button>
+                  )}
                 </CardContent>
               </Card>
             );

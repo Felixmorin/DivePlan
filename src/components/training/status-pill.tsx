@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleDashed, Clock3, PauseCircle } from "lucide-react";
+import { CheckCircle2, CircleDashed, Clock3, PauseCircle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const statusMap = {
@@ -8,6 +8,7 @@ const statusMap = {
   Complete: { label: "Terminée", icon: CheckCircle2, className: "bg-[var(--color-success-soft)] text-[var(--color-success)]" },
   DRAFT: { label: "Brouillon", icon: CircleDashed, className: "bg-[var(--block-dryland-bg)] text-[var(--block-dryland-fg)]" },
   Brouillon: { label: "Brouillon", icon: CircleDashed, className: "bg-[var(--block-dryland-bg)] text-[var(--block-dryland-fg)]" },
+  NOT_DONE: { label: "Non faite", icon: XCircle, className: "bg-[var(--color-danger)]/10 text-[var(--color-danger)]" },
   PUBLISHED: { label: "Publie", icon: Clock3, className: "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]" },
   Planifie: { label: "Planifie", icon: Clock3, className: "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]" },
   IN_PROGRESS: { label: "En cours", icon: Clock3, className: "bg-[var(--color-action)] text-white" },

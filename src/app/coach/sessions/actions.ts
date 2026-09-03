@@ -46,6 +46,50 @@ const sessionInputSchema = z.object({
 
 export type CreateSessionInput = z.infer<typeof sessionInputSchema>;
 
+const quickExerciseSchema = z.object({
+  name: z.string().trim().min(2),
+  category: z.string().trim().min(2).default("Custom"),
+  equipment: z.string().trim().optional(),
+  defaultSets: z.number().int().min(1).max(20).nullable().optional(),
+  defaultReps: z.number().int().min(1).max(200).nullable().optional(),
+  defaultDuration: z.number().int().min(1).max(3600).nullable().optional(),
+  tags: z.array(z.string().trim().min(1)).default([])
+});
+
+export type QuickExerciseInput = z.infer<typeof quickExerciseSchema>;
+
+export async function createDrylandExercise(input: QuickExerciseInput) {
+  await requireCoach();
+  const data = quickExerciseSchema.parse(input);
+  const exercise = await prisma.drylandExercise.create({
+    data: {
+      name: data.name,
+      category: data.category || "Custom",
+      description: `Exercice ajoute rapidement: ${data.name}`,
+      equipment: data.equipment?.trim() || null,
+      defaultSets: data.defaultSets ?? null,
+      defaultReps: data.defaultReps ?? null,
+      defaultDuration: data.defaultDuration ?? null,
+      tags: Array.from(new Set(data.tags.map((tag) => tag.toLowerCase())))
+    },
+    select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, equipment: true, tags: true }
+  });
+
+  revalidatePath("/coach/sessions/new");
+  revalidatePath("/coach/library");
+
+  return {
+    id: exercise.id,
+    name: exercise.name,
+    category: exercise.category,
+    sets: exercise.defaultSets,
+    reps: exercise.defaultReps,
+    duration: exercise.defaultDuration,
+    equipment: exercise.equipment,
+    tags: exercise.tags
+  };
+}
+
 export async function createTrainingSession(input: CreateSessionInput) {
   const { user, coach, clubId } = await requireCoach();
   const data = sessionInputSchema.parse(input);
@@ -317,6 +361,91 @@ export async function deleteSessionTemplate(formData: FormData) {
   });
   revalidatePath("/coach/templates");
   revalidatePath("/coach/library");
+}
+
+export async function markTrainingSessionNotDone(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, week: { clubId } },
+    select: { id: true, title: true }
+  });
+
+  if (!session) {
+    throw new Error("Seance introuvable.");
+  }
+
+  await prisma.trainingSession.update({
+    where: { id: session.id },
+    data: { status: SessionStatus.NOT_DONE }
+  });
+
+  await trackEvent({
+    type: "session.not_done",
+    message: `Seance marquee non faite: ${session.title}`,
+    clubId,
+    userId: user.id,
+    metadata: { sessionId: session.id }
+  });
+
+  revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/coach/sessions");
+  revalidatePath(`/coach/sessions/${session.id}`);
+}
+
+export async function deleteTrainingSession(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, week: { clubId } },
+    include: {
+      completions: true,
+      diveLogs: { select: { id: true } },
+      exerciseLogs: { select: { id: true } },
+      blocks: { select: { id: true } }
+    }
+  });
+
+  if (!session) {
+    throw new Error("Seance introuvable.");
+  }
+
+  const hasStarted =
+    session.completions.some((completion) => completion.startedAt || completion.status !== "NOT_STARTED") ||
+    session.diveLogs.length > 0 ||
+    session.exerciseLogs.length > 0;
+
+  if (hasStarted) {
+    throw new Error("Cette seance contient deja des donnees athletes. Marque-la non faite au lieu de la supprimer.");
+  }
+
+  const blockIds = session.blocks.map((block) => block.id);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.sessionTemplate.updateMany({ where: { sessionId: session.id }, data: { sessionId: null } });
+    await tx.athleteSessionCompletion.deleteMany({ where: { sessionId: session.id } });
+    await tx.poolDive.deleteMany({ where: { poolSection: { poolTrainingId: { in: blockIds } } } });
+    await tx.poolSection.deleteMany({ where: { poolTrainingId: { in: blockIds } } });
+    await tx.poolTraining.deleteMany({ where: { blockId: { in: blockIds } } });
+    await tx.drylandBlockExercise.deleteMany({ where: { blockId: { in: blockIds } } });
+    await tx.sessionBlockAssignment.deleteMany({ where: { sessionBlockId: { in: blockIds } } });
+    await tx.sessionBlock.deleteMany({ where: { sessionId: session.id } });
+    await tx.trainingSession.delete({ where: { id: session.id } });
+  });
+
+  await trackEvent({
+    type: "session.deleted",
+    message: `Seance supprimee: ${session.title}`,
+    clubId,
+    userId: user.id,
+    metadata: { sessionId: session.id }
+  });
+
+  revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/coach/sessions");
+  redirect("/coach/sessions");
 }
 
 export async function toggleSessionTemplateFavorite(formData: FormData) {

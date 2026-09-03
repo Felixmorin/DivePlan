@@ -1,5 +1,4 @@
-import { MailCheck, MailPlus, MailWarning, UserCheck } from "lucide-react";
-import type { InvitationEmailDeliveryStatus } from "@prisma/client";
+import { Link2, UserCheck } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +22,7 @@ export default async function InvitationsPage() {
             <CardDescription>Les invitations doivent etre persistantes pour rester valides et securisees.</CardDescription>
           </CardHeader>
           <CardContent>
-            <EmptyState title="Invitations indisponibles en demo" description="Configure un DATABASE_URL valide pour creer et suivre les liens d'activation." icon={MailPlus} />
+            <EmptyState title="Invitations indisponibles en demo" description="Configure un DATABASE_URL valide pour creer et suivre les liens d'activation." icon={Link2} />
           </CardContent>
         </Card>
       </CoachShell>
@@ -65,14 +64,10 @@ export default async function InvitationsPage() {
                       <div className="truncate font-black text-[var(--color-ink)]">{invite.firstName} {invite.lastName}</div>
                       <div className="truncate text-sm font-semibold text-[var(--color-ink-muted)]">{invite.email}</div>
                       <div className="mt-1 text-xs font-bold text-[var(--color-ink-soft)]">Expire le {formatMontrealDate(invite.expiresAt)} · creee le {formatMontrealDate(invite.createdAt)}</div>
-                      {invite.emailDeliveryStatus === "FAILED" && invite.emailDeliveryError && (
-                        <div className="mt-1 text-xs font-bold text-[var(--color-danger)]">Email en erreur: {invite.emailDeliveryError}</div>
-                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{invite.role}</Badge>
                       <Badge variant={invite.acceptedAt ? "success" : "warning"}>{invite.acceptedAt ? "Acceptee" : "En attente"}</Badge>
-                      <DeliveryBadge status={invite.emailDeliveryStatus} error={invite.emailDeliveryError} />
                     </div>
                   </div>
                 ))}
@@ -87,22 +82,6 @@ export default async function InvitationsPage() {
       </div>
     </CoachShell>
   );
-}
-
-function DeliveryBadge({ status, error }: { status: InvitationEmailDeliveryStatus; error: string | null }) {
-  if (status === "SENT") {
-    return <Badge variant="success"><MailCheck className="mr-1 h-3.5 w-3.5" /> Email envoye</Badge>;
-  }
-
-  if (status === "SKIPPED_LOCAL") {
-    return <Badge variant="outline">Email local ignore</Badge>;
-  }
-
-  if (status === "FAILED") {
-    return <Badge variant="warning" title={error ?? undefined}><MailWarning className="mr-1 h-3.5 w-3.5" /> Email en erreur</Badge>;
-  }
-
-  return <Badge variant="outline">Email non tente</Badge>;
 }
 
 function PageHeader({ description }: { description: string }) {

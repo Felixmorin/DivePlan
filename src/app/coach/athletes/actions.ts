@@ -1,16 +1,28 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
+import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
 import { prisma } from "@/lib/prisma";
+import { parseMontrealSessionDate } from "@/lib/timezone";
 
 export type ImportAthletesState = {
   error?: string;
   imported?: number;
   updated?: number;
 };
+
+const manualAthleteSchema = z.object({
+  firstName: z.string().trim().min(1),
+  lastName: z.string().trim().min(1),
+  level: z.string().trim().min(1),
+  groupId: z.string().optional(),
+  birthDate: z.string().optional()
+});
 
 type CsvAthlete = {
   firstName: string;
@@ -117,6 +129,108 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
   revalidatePath("/coach/athletes");
   revalidatePath("/coach/groups");
   return { imported, updated };
+}
+
+export async function createCoachOnlyAthlete(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const parsed = manualAthleteSchema.safeParse({
+    firstName: formData.get("firstName"),
+    lastName: formData.get("lastName"),
+    level: formData.get("level"),
+    groupId: String(formData.get("groupId") ?? ""),
+    birthDate: String(formData.get("birthDate") ?? "")
+  });
+
+  if (!parsed.success) {
+    throw new Error("Informations athlete invalides.");
+  }
+
+  const data = parsed.data;
+  const groupId = data.groupId || null;
+
+  if (groupId) {
+    const group = await prisma.trainingGroup.findFirst({ where: { id: groupId, clubId }, select: { id: true } });
+    if (!group) {
+      throw new Error("Groupe invalide pour ce club.");
+    }
+  }
+
+  const syntheticEmail = `coach-only-${randomUUID()}@diveplan.local`;
+  const account = await prisma.user.create({
+    data: {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: syntheticEmail,
+      role: UserRole.ATHLETE,
+      clubId,
+      passwordHash: null,
+      passwordSetAt: null
+    }
+  });
+
+  const athlete = await prisma.athlete.create({
+    data: {
+      userId: account.id,
+      clubId,
+      groupId,
+      birthDate: data.birthDate ? parseMontrealSessionDate(data.birthDate, "12:00") : parseMontrealSessionDate("2015-01-01", "12:00"),
+      level: data.level,
+      active: true
+    }
+  });
+
+  await trackEvent({
+    type: "athlete.created_coach_only",
+    message: `Athlete coach seulement cree: ${data.firstName} ${data.lastName}`,
+    clubId,
+    userId: user.id,
+    metadata: { athleteId: athlete.id }
+  });
+
+  revalidatePath("/coach");
+  revalidatePath("/coach/athletes");
+  revalidatePath("/coach/groups");
+  revalidatePath("/coach/sessions/new");
+}
+
+export async function deleteAthlete(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const athleteId = String(formData.get("athleteId") ?? "");
+  const athlete = await prisma.athlete.findFirst({
+    where: { id: athleteId, clubId },
+    include: { user: true }
+  });
+
+  if (!athlete) {
+    throw new Error("Athlete introuvable.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.planningEvent.updateMany({ where: { athleteId: athlete.id }, data: { athleteId: null } });
+    await tx.sessionBlockAssignment.deleteMany({ where: { athleteId: athlete.id } });
+    await tx.athleteSessionCompletion.deleteMany({ where: { athleteId: athlete.id } });
+    await tx.athleteDiveLog.deleteMany({ where: { athleteId: athlete.id } });
+    await tx.athleteExerciseLog.deleteMany({ where: { athleteId: athlete.id } });
+    await tx.athleteSkill.deleteMany({ where: { athleteId: athlete.id } });
+    await tx.athlete.delete({ where: { id: athlete.id } });
+    await tx.userInvitation.updateMany({ where: { acceptedById: athlete.userId }, data: { acceptedById: null } });
+    await tx.user.delete({ where: { id: athlete.userId } });
+  });
+
+  await trackEvent({
+    type: "athlete.deleted",
+    message: `Athlete supprime: ${athlete.user.firstName} ${athlete.user.lastName}`,
+    clubId,
+    userId: user.id,
+    metadata: { athleteId: athlete.id }
+  });
+
+  revalidatePath("/coach");
+  revalidatePath("/coach/athletes");
+  revalidatePath("/coach/groups");
+  revalidatePath("/coach/planning");
+  revalidatePath("/coach/sessions");
+  redirect("/coach/athletes");
 }
 
 function parseCsv(input: string) {

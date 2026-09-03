@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Clock3, Printer, Users, Waves } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,9 +16,10 @@ type SessionCardProps = {
   volume?: number;
   athleteCount?: number;
   className?: string;
+  actions?: ReactNode;
 };
 
-export function SessionCard({ title, focus, href, printHref, status, group, duration, volume, athleteCount, className }: SessionCardProps) {
+export function SessionCard({ title, focus, href, printHref, status, group, duration, volume, athleteCount, className, actions }: SessionCardProps) {
   return (
     <article className={cn("rounded-[var(--radius-ui)] border border-[var(--color-border)] bg-white p-4 shadow-[var(--shadow-card)] transition duration-[var(--duration-fast)] hover:-translate-y-0.5 hover:border-[var(--color-brand)]", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -31,6 +33,7 @@ export function SessionCard({ title, focus, href, printHref, status, group, dura
         <div className="flex gap-2">
           <Button asChild variant="outline" size="sm"><Link href={href}>Ouvrir</Link></Button>
           {printHref && <Button asChild variant="outline" size="icon" className="h-9 min-h-9 w-9" aria-label="Imprimer"><Link href={printHref}><Printer className="h-4 w-4" /></Link></Button>}
+          {actions}
         </div>
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-bold text-[var(--color-ink-muted)]">
@@ -41,4 +44,3 @@ export function SessionCard({ title, focus, href, printHref, status, group, dura
     </article>
   );
 }
-

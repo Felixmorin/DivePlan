@@ -100,6 +100,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
                     <option value="DRAFT">Brouillon</option>
                     <option value="READY">Publiee</option>
                     <option value="COMPLETED">Terminee</option>
+                    <option value="NOT_DONE">Non faite</option>
                   </select>
                 </Field>
                 <Field label="Focus" className="md:col-span-2"><Input name="focus" defaultValue={session.focus} required /></Field>

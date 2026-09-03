@@ -67,13 +67,7 @@ Le seed Club Mustang demontre:
 
 ## Deploiement Vercel
 
-Configurer `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `NEXT_PUBLIC_APP_URL`, `RESEND_API_KEY` et `INVITATION_EMAIL_FROM` dans Vercel, puis deployer le projet. `INVITATION_EMAIL_REPLY_TO` est optionnel. Le script `postinstall` genere Prisma Client automatiquement et `npm run prisma:migrate:deploy` applique les migrations contre la base PostgreSQL cible.
-
-## Emails transactionnels
-
-Les invitations coach envoient le lien d'activation via Resend. En local, aucun email n'est envoye par defaut: l'interface affiche le lien a copier et marque l'envoi comme ignore localement. Pour tester un vrai envoi local, definir `RESEND_API_KEY`, `INVITATION_EMAIL_FROM` et `INVITATION_EMAIL_SEND_IN_DEVELOPMENT=true`.
-
-En production, verifier le domaine d'envoi dans Resend avant d'utiliser une adresse `INVITATION_EMAIL_FROM` du club ou de DivePlan.
+Configurer `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL` et `NEXT_PUBLIC_APP_URL` dans Vercel, puis deployer le projet. Le script `postinstall` genere Prisma Client automatiquement et `npm run prisma:migrate:deploy` applique les migrations contre la base PostgreSQL cible.
 
 ## Acces pilote
 

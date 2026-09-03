@@ -1,6 +1,6 @@
 import { CoachShell } from "@/components/coach/coach-shell";
 import { SessionBuilder } from "@/components/coach/session-builder";
-import { createTrainingSession } from "@/app/coach/sessions/actions";
+import { createDrylandExercise, createTrainingSession } from "@/app/coach/sessions/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -42,7 +42,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     }),
     prisma.drylandExercise.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, equipment: true }
+      select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, equipment: true, tags: true }
     }),
     templateId ? prisma.sessionTemplate.findFirst({ where: { id: templateId, clubId } }) : Promise.resolve(null),
     prisma.trainingSession.findMany({
@@ -98,7 +98,8 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
             sets: exercise.defaultSets,
             reps: exercise.defaultReps,
             duration: exercise.defaultDuration,
-            equipment: exercise.equipment
+            equipment: exercise.equipment,
+            tags: exercise.tags
           }))}
           groups={groups}
           poolBlocks={poolBlocks.map((block) => ({
@@ -121,6 +122,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
           }))}
           initialTemplate={initialTemplate}
           onCreate={createTrainingSession}
+          onCreateExercise={createDrylandExercise}
         />
       )}
     </CoachShell>

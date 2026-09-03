@@ -178,7 +178,9 @@ function AthleteIdentity({ athlete, groupName }: { athlete: ReturnType<typeof to
         <AvatarFallback>{athlete.firstName[0]}{athlete.lastName[0]}</AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <div className="truncate font-black">{athlete.firstName} {athlete.lastName}</div>
+        <Link href={`/coach/athletes/${athlete.id}`} className="block truncate font-black hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+          {athlete.firstName} {athlete.lastName}
+        </Link>
         <div className="truncate text-xs font-bold text-[var(--color-ink-muted)]">{groupName}</div>
       </div>
     </div>

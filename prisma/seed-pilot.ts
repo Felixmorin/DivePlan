@@ -9,7 +9,7 @@ async function main() {
   const passwordHash = await hashPassword(pilotPassword);
   const nextMonday = getNextMonday();
 
-  const club = await findOrCreateClub("DivePlan Pilote");
+  const club = await findOrCreateClub("DivePlan");
   const coachUser = await prisma.user.upsert({
     where: { email: "coach.pilote@diveplan.local" },
     create: {
