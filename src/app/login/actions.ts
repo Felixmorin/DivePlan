@@ -1,6 +1,7 @@
 "use server";
 
 import { AuthError } from "next-auth";
+import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 
 export type LoginState = {
@@ -16,7 +17,7 @@ export async function login(_: LoginState, formData: FormData): Promise<LoginSta
     await signIn("credentials", {
       email: devQuickLogin ? "coach@diveplan.local" : submittedEmail,
       password: devQuickLogin ? "diveplan-demo" : submittedPassword,
-      redirectTo: "/"
+      redirect: false
     });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -26,5 +27,5 @@ export async function login(_: LoginState, formData: FormData): Promise<LoginSta
     throw error;
   }
 
-  return {};
+  redirect("/");
 }
