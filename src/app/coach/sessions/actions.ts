@@ -24,6 +24,19 @@ const sessionInputSchema = z.object({
   focus: z.string().min(3),
   notes: z.string().optional(),
   templateId: z.string().optional(),
+  warmup: z.object({
+    enabled: z.boolean(),
+    title: z.string().trim().min(1),
+    duration: z.number().int().min(1),
+    description: z.string().optional()
+  }),
+  cooldown: z.object({
+    enabled: z.boolean(),
+    title: z.string().trim().min(1),
+    duration: z.number().int().min(1),
+    description: z.string().optional()
+  }),
+  drylandEnabled: z.boolean(),
   drylandExerciseIds: z.array(z.string()).default([]),
   drylandAthleteIds: z.array(z.string()).default([]),
   poolBlocks: z.array(z.object({
@@ -148,17 +161,17 @@ export async function createTrainingSession(input: CreateSessionInput) {
     redirect(`/coach/sessions/${session.id}`);
   }
 
-  if (data.drylandExerciseIds.length === 0 || data.drylandAthleteIds.length === 0 || data.poolBlocks.length === 0 || data.poolBlocks.some((block) => block.athleteIds.length === 0)) {
-    throw new Error("La seance doit contenir des exercices dryland et des assignations dryland/piscine.");
+  if ((!data.warmup.enabled && !data.cooldown.enabled && !data.drylandEnabled && data.poolBlocks.length === 0) ||
+      (data.drylandEnabled && (data.drylandExerciseIds.length === 0 || data.drylandAthleteIds.length === 0)) ||
+      data.poolBlocks.some((block) => block.athleteIds.length === 0)) {
+    throw new Error("La seance doit contenir au moins un bloc et chaque bloc d'entrainement doit etre complet et assigne.");
   }
 
   const poolAthleteIds = data.poolBlocks.flatMap((block) => block.athleteIds);
+  const requestedAthleteIds = Array.from(new Set([...data.drylandAthleteIds, ...poolAthleteIds]));
   const [athletes, exercises] = await Promise.all([
     prisma.athlete.findMany({
-      where: {
-        clubId,
-        id: { in: Array.from(new Set([...data.drylandAthleteIds, ...poolAthleteIds])) }
-      },
+      where: { clubId, active: true },
       select: { id: true }
     }),
     prisma.drylandExercise.findMany({
@@ -171,12 +184,14 @@ export async function createTrainingSession(input: CreateSessionInput) {
   const validExerciseIds = new Set(exercises.map((exercise) => exercise.id));
 
   const requireValidAthletes = (ids: string[]) => ids.filter((id) => validAthleteIds.has(id));
-  const allAthleteIds = Array.from(validAthleteIds);
+  const allAthleteIds = requestedAthleteIds.length > 0
+    ? requestedAthleteIds.filter((id) => validAthleteIds.has(id))
+    : Array.from(validAthleteIds);
   const drylandAthleteIds = requireValidAthletes(data.drylandAthleteIds);
   const poolBlocks = data.poolBlocks.map((block) => ({ ...block, athleteIds: requireValidAthletes(block.athleteIds) }));
   const drylandExercises = exercises.filter((exercise) => validExerciseIds.has(exercise.id));
 
-  if (allAthleteIds.length === 0 || drylandAthleteIds.length === 0 || drylandExercises.length === 0 || poolBlocks.some((block) => block.athleteIds.length === 0)) {
+  if (allAthleteIds.length === 0 || (data.drylandEnabled && (drylandAthleteIds.length === 0 || drylandExercises.length === 0)) || poolBlocks.some((block) => block.athleteIds.length === 0)) {
     throw new Error("La seance doit contenir au moins un athlete et un exercice valides.");
   }
 
@@ -209,17 +224,20 @@ export async function createTrainingSession(input: CreateSessionInput) {
       }
     });
 
-    await createBlock(tx, {
-      sessionId: createdSession.id,
-      type: BlockType.WARMUP,
-      title: "Echauffement dynamique",
-      duration: 12,
-      position: 1,
-      estimatedVolume: 0,
-      athleteIds: allAthleteIds
-    });
+    if (data.warmup.enabled) {
+      await createBlock(tx, {
+        sessionId: createdSession.id,
+        type: BlockType.WARMUP,
+        title: data.warmup.title,
+        description: data.warmup.description,
+        duration: data.warmup.duration,
+        position: 1,
+        estimatedVolume: 0,
+        athleteIds: allAthleteIds
+      });
+    }
 
-    const drylandBlock = await createBlock(tx, {
+    const drylandBlock = data.drylandEnabled ? await createBlock(tx, {
       sessionId: createdSession.id,
       type: BlockType.DRYLAND,
       title: "Dryland - Activation technique",
@@ -227,9 +245,9 @@ export async function createTrainingSession(input: CreateSessionInput) {
       position: 2,
       estimatedVolume: drylandExercises.length * drylandAthleteIds.length * 6,
       athleteIds: drylandAthleteIds
-    });
+    }) : null;
 
-    await tx.drylandBlockExercise.createMany({
+    if (drylandBlock) await tx.drylandBlockExercise.createMany({
       data: drylandExercises.map((exercise, order) => ({
         blockId: drylandBlock.id,
         exerciseId: exercise.id,
@@ -244,15 +262,18 @@ export async function createTrainingSession(input: CreateSessionInput) {
       await createPoolBlock(tx, createdSession.id, poolBlock, index + 3);
     }
 
-    await createBlock(tx, {
-      sessionId: createdSession.id,
-      type: BlockType.COOLDOWN,
-      title: "Retour au calme",
-      duration: 8,
-      position: 99,
-      estimatedVolume: 0,
-      athleteIds: allAthleteIds
-    });
+    if (data.cooldown.enabled) {
+      await createBlock(tx, {
+        sessionId: createdSession.id,
+        type: BlockType.COOLDOWN,
+        title: data.cooldown.title,
+        description: data.cooldown.description,
+        duration: data.cooldown.duration,
+        position: 99,
+        estimatedVolume: 0,
+        athleteIds: allAthleteIds
+      });
+    }
 
     return createdSession;
   });
@@ -522,6 +543,10 @@ export async function updateTrainingSession(formData: FormData) {
     select: { id: true }
   });
   const validAthleteIds = new Set(validAthletes.map((athlete) => athlete.id));
+  const includedBlockIds = new Set(formData.getAll("includedBlocks").map(String));
+  if (includedBlockIds.size === 0) {
+    throw new Error("La seance doit contenir au moins un bloc.");
+  }
   const selectedDrylandIds = Array.from(new Set(existing.blocks.flatMap((block) =>
     block.type === BlockType.DRYLAND ? formData.getAll(`exerciseSelection:${block.id}`).map(String) : []
   )));
@@ -544,7 +569,12 @@ export async function updateTrainingSession(formData: FormData) {
       }
     });
 
+    await tx.sessionBlock.deleteMany({
+      where: { sessionId, id: { notIn: Array.from(includedBlockIds) } }
+    });
+
     for (const block of existing.blocks) {
+      if (!includedBlockIds.has(block.id)) continue;
       const blockTitle = String(formData.get(`blockTitle:${block.id}`) ?? block.title).trim();
       const blockDuration = Number(formData.get(`blockDuration:${block.id}`) ?? block.duration);
       const estimatedVolume = Number(formData.get(`blockVolume:${block.id}`) ?? block.estimatedVolume);
@@ -641,6 +671,7 @@ async function createBlock(
     position: number;
     estimatedVolume: number;
     athleteIds: string[];
+    description?: string;
   }
 ) {
   const block = await tx.sessionBlock.create({
@@ -650,7 +681,8 @@ async function createBlock(
       title: data.title,
       duration: data.duration,
       position: data.position,
-      estimatedVolume: data.estimatedVolume
+      estimatedVolume: data.estimatedVolume,
+      description: data.description?.trim() || null
     }
   });
 
