@@ -80,8 +80,8 @@ async function main() {
   const pool = await findOrCreateBlock({ sessionId: session.id, type: BlockType.POOL, title: "Piscine pilote - arriere", duration: 45, position: 2, estimatedVolume: 27 });
   await assignBlock(pool.id, athletes.map((athlete) => athlete.id));
   await prisma.poolTraining.upsert({ where: { blockId: pool.id }, create: { blockId: pool.id }, update: {} });
-  const oneMeter = await findOrCreatePoolSection(pool.id, PoolHeight.ONE_METER, "1 metre");
-  const threeMeter = await findOrCreatePoolSection(pool.id, PoolHeight.THREE_METER, "3 metres");
+  const oneMeter = await findOrCreatePoolSection(pool.id, PoolHeight.ONE_METER, "1 metre", 0);
+  const threeMeter = await findOrCreatePoolSection(pool.id, PoolHeight.THREE_METER, "3 metres", 1);
   await createDiveIfMissing(oneMeter.id, "101C", "Avant groupe", "C", 3, 1);
   await createDiveIfMissing(oneMeter.id, "201C", "Arriere groupe", "C", 4, 2);
   await createDiveIfMissing(oneMeter.id, "201B", "Arriere carpe", "B", 4, 3);
@@ -178,8 +178,8 @@ async function assignBlock(blockId: string, athleteIds: string[]) {
   });
 }
 
-async function findOrCreatePoolSection(poolTrainingId: string, height: PoolHeight, label: string) {
-  return (await prisma.poolSection.findFirst({ where: { poolTrainingId, height } })) ?? prisma.poolSection.create({ data: { poolTrainingId, height, label } });
+async function findOrCreatePoolSection(poolTrainingId: string, height: PoolHeight, label: string, order: number) {
+  return (await prisma.poolSection.findFirst({ where: { poolTrainingId, height } })) ?? prisma.poolSection.create({ data: { poolTrainingId, height, label, order } });
 }
 
 async function createDiveIfMissing(poolSectionId: string, diveCode: string, diveName: string, position: string, repetitions: number, order: number) {

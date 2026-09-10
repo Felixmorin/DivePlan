@@ -55,7 +55,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
           orderBy: { position: "asc" },
           include: {
             assignments: true,
-            poolTraining: { include: { sections: { include: { dives: { orderBy: { order: "asc" } } } } } }
+            poolTraining: { include: { sections: { orderBy: { order: "asc" }, include: { dives: { orderBy: { order: "asc" } } } } } }
           }
         }
       }
