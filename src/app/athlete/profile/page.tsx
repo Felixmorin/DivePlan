@@ -1,9 +1,11 @@
 import type * as React from "react";
 import { redirect } from "next/navigation";
-import { CalendarCheck2, Clock3, Waves } from "lucide-react";
+import { CalendarCheck2, Clock3, LogOut, Waves } from "lucide-react";
+import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { StatusPill } from "@/components/training/status-pill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAthleteProgressTotals, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
 import { formatMontrealDate } from "@/lib/timezone";
@@ -72,6 +74,13 @@ export default async function ProfilePage() {
           )}
         </div>
       </section>
+
+      <form action={signOutAthlete} className="mt-6">
+        <Button type="submit" variant="dark" className="w-full">
+          <LogOut className="h-4 w-4" />
+          Me déconnecter
+        </Button>
+      </form>
     </AthleteShell>
   );
 }
