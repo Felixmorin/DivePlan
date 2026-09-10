@@ -80,8 +80,6 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
       </div>
       {groups.length === 0 || athletes.length === 0 || drylandLibrary.length === 0 ? (
         <EmptyState title="Donnees requises manquantes" description="Le builder a besoin d'un groupe, d'athletes actifs et d'exercices dryland pour publier une seance." action={<Button asChild><Link href="/coach/athletes">Verifier les athletes</Link></Button>} />
-      ) : poolBlocks.length === 0 && !initialTemplate ? (
-        <EmptyState title="Blocs piscine requis" description="Cree une premiere seance ou charge un modele contenant des blocs piscine pour alimenter le builder." action={<Button asChild><Link href="/coach/sessions">Voir les seances</Link></Button>} />
       ) : (
         <SessionBuilder
           athletes={athletes.map((athlete) => ({
