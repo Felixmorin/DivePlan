@@ -397,6 +397,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
             <span className="inline-flex items-center gap-1 text-sm font-bold text-white/55"><Timer className="h-4 w-4" /> {block.duration} min</span>
           </div>
           <h1 className="mt-5 text-4xl font-black leading-none">{block.title}</h1>
+          {block.description && <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6 text-white/78">{block.description}</p>}
           <p className="mt-3 text-sm font-semibold leading-6 text-white/68">{session.focus}</p>
           {session.notes && <div className="mt-4 rounded-2xl bg-[var(--color-athlete-bg)] p-3 text-sm leading-6 text-white/70">{session.notes}</div>}
           <div className="mt-5 rounded-2xl bg-white/8 p-4">
