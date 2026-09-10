@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentAthlete } from "@/lib/athlete-session";
 import { getAssignedSessionBlocks, persistAthleteProgress, type AthleteProgressPayload } from "@/lib/athlete-progress";
+import { prisma } from "@/lib/prisma";
+import { isSessionStartAvailable, SESSION_NOT_STARTED_MESSAGE } from "@/lib/session-availability";
 
 export async function POST(request: Request) {
   const athlete = await getCurrentAthlete();
@@ -25,6 +27,15 @@ export async function POST(request: Request) {
 
   if (assignedBlocks.length === 0) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const session = await prisma.trainingSession.findUnique({
+    where: { id: payload.sessionId },
+    select: { date: true }
+  });
+
+  if (!session || !isSessionStartAvailable(session.date)) {
+    return NextResponse.json({ error: SESSION_NOT_STARTED_MESSAGE }, { status: 409 });
   }
 
   await persistAthleteProgress(payload, athlete.id, assignedBlocks);
