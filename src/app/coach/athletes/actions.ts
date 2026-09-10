@@ -381,7 +381,6 @@ export async function deleteAthlete(formData: FormData) {
     await tx.athleteExerciseLog.deleteMany({ where: { athleteId: athlete.id } });
     await tx.athleteSkill.deleteMany({ where: { athleteId: athlete.id } });
     await tx.athlete.delete({ where: { id: athlete.id } });
-    await tx.userInvitation.updateMany({ where: { acceptedById: athlete.userId }, data: { acceptedById: null } });
     await tx.user.delete({ where: { id: athlete.userId } });
   });
 

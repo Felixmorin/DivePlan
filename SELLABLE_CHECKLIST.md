@@ -22,10 +22,8 @@ Ce n'est pas encore un SaaS self-serve complet. Le bon positionnement commercial
 - [x] Verification serveur dans les actions critiques.
 - [x] Acces coach limite au club connecte.
 - [x] Suppression du fallback athlete code en dur.
-- [x] Invitations par lien d'activation.
 - [x] Mots de passe haches avec PBKDF2 natif Node.
-- [x] Journal d'audit minimal pour auth, invitation, import, creation, modification et completion.
-- [ ] Envoi email transactionnel.
+- [x] Journal d'audit minimal pour auth, import, creation, modification et completion.
 - [ ] SSO via fournisseur d'auth production.
 
 ## 3. Pilote commercial

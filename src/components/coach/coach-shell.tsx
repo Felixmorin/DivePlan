@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Activity, BarChart3, CalendarDays, Dumbbell, LayoutDashboard, Library, Send, Settings, Users, Waves } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, Dumbbell, LayoutDashboard, Library, Settings, Users, Waves } from "lucide-react";
 import { requireCoach } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,6 @@ const nav = [
   { href: "/coach/sessions", label: "Séances", match: "Seances", icon: Activity },
   { href: "/coach/athletes", label: "Athlètes", match: "Athletes", icon: Users },
   { href: "/coach/groups", label: "Groupes", icon: Dumbbell },
-  { href: "/coach/invitations", label: "Invitations", icon: Send },
   { href: "/coach/monitoring", label: "Monitoring", icon: BarChart3 },
   { href: "/coach/library", label: "Bibliothèque", match: "Bibliotheque", icon: Library },
   { href: "/coach/settings", label: "Réglages", match: "Reglages", icon: Settings }

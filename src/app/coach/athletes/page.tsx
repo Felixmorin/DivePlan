@@ -174,8 +174,7 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
     return (
       <EmptyState
         title="Aucun athlete dans ce club"
-        description="Ajoute un athlete ou cree une invitation pour demarrer la planification."
-        action={<Button asChild variant="action"><Link href="/coach/invitations">Inviter un athlete</Link></Button>}
+        description="Crée un compte athlète pour démarrer la planification."
       />
     );
   }

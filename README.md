@@ -71,7 +71,7 @@ Configurer `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL` et `NEXT_PUBLIC_APP_URL` da
 
 ## Acces pilote
 
-Le chemin recommande pour un test club est l'invitation par lien: le coach cree une invitation, copie le lien d'activation, puis l'athlete choisit son mot de passe et arrive dans son espace. Le seed pilote donne aussi des comptes prets si le test doit demarrer sans invitations.
+Le seed pilote fournit des comptes prets pour tester les parcours coach et athlete.
 
 - En local, le code par defaut est `diveplan-demo` si `PILOT_ACCESS_CODE` n'est pas defini.
 - En production, definir obligatoirement `PILOT_ACCESS_CODE`.

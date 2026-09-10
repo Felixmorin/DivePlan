@@ -62,61 +62,36 @@ enum PlanningEventType {
 }
 
 model Club {
-  id        String   @id @default(cuid())
-  name      String
-  logo      String?
-  createdAt DateTime @default(now())
-  users     User[]
-  athletes  Athlete[]
-  coaches   Coach[]
-  groups    TrainingGroup[]
-  weeks     TrainingWeek[]
-  invitations UserInvitation[]
-  events    AppEvent[]
-  templates SessionTemplate[]
+  id             String            @id @default(cuid())
+  name           String
+  logo           String?
+  createdAt      DateTime          @default(now())
+  users          User[]
+  athletes       Athlete[]
+  coaches        Coach[]
+  groups         TrainingGroup[]
+  weeks          TrainingWeek[]
+  events         AppEvent[]
+  templates      SessionTemplate[]
   planningEvents PlanningEvent[]
 }
 
 model User {
-  id        String   @id @default(cuid())
-  firstName String
-  lastName  String
-  email     String   @unique
-  username  String?  @unique
-  role      UserRole
-  passwordHash String?
+  id            String     @id @default(cuid())
+  firstName     String
+  lastName      String
+  email         String     @unique
+  username      String?    @unique
+  role          UserRole
+  passwordHash  String?
   passwordSetAt DateTime?
-  avatar    String?
-  clubId    String?
-  createdAt DateTime @default(now())
-  club      Club?    @relation(fields: [clubId], references: [id])
-  athlete   Athlete?
-  coach     Coach?
-  sentInvitations UserInvitation[] @relation("InvitedBy")
-  acceptedInvitations UserInvitation[] @relation("AcceptedBy")
-  events    AppEvent[]
-}
-
-model UserInvitation {
-  id           String   @id @default(cuid())
-  email        String
-  firstName    String
-  lastName     String
-  role         UserRole
-  tokenHash    String   @unique
-  clubId       String
-  groupId      String?
-  invitedById  String
-  acceptedById String?
-  expiresAt    DateTime
-  acceptedAt   DateTime?
-  createdAt    DateTime @default(now())
-  club         Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  group        TrainingGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  invitedBy    User     @relation("InvitedBy", fields: [invitedById], references: [id])
-  acceptedBy   User?    @relation("AcceptedBy", fields: [acceptedById], references: [id])
-
-  @@index([clubId, email])
+  avatar        String?
+  clubId        String?
+  createdAt     DateTime   @default(now())
+  club          Club?      @relation(fields: [clubId], references: [id])
+  athlete       Athlete?
+  coach         Coach?
+  events        AppEvent[]
 }
 
 model AppEvent {
@@ -135,22 +110,22 @@ model AppEvent {
 }
 
 model Athlete {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  clubId      String
-  groupId     String?
-  birthDate   DateTime
-  level       String
-  active      Boolean  @default(true)
-  user        User     @relation(fields: [userId], references: [id])
-  club        Club     @relation(fields: [clubId], references: [id])
-  group       TrainingGroup? @relation(fields: [groupId], references: [id])
-  assignments SessionBlockAssignment[]
-  completions AthleteSessionCompletion[]
-  diveLogs    AthleteDiveLog[]
-  exerciseLogs AthleteExerciseLog[]
-  skills      AthleteSkill[]
-  planningEvents PlanningEvent[]
+  id               String                     @id @default(cuid())
+  userId           String                     @unique
+  clubId           String
+  groupId          String?
+  birthDate        DateTime
+  level            String
+  active           Boolean                    @default(true)
+  user             User                       @relation(fields: [userId], references: [id])
+  club             Club                       @relation(fields: [clubId], references: [id])
+  group            TrainingGroup?             @relation(fields: [groupId], references: [id])
+  assignments      SessionBlockAssignment[]
+  completions      AthleteSessionCompletion[]
+  diveLogs         AthleteDiveLog[]
+  exerciseLogs     AthleteExerciseLog[]
+  skills           AthleteSkill[]
+  planningEvents   PlanningEvent[]
   competitionDives CompetitionDive[]
 }
 
@@ -169,30 +144,29 @@ model CompetitionDive {
 }
 
 model Coach {
-  id        String @id @default(cuid())
-  userId    String @unique
-  clubId    String
-  user      User   @relation(fields: [userId], references: [id])
-  club      Club   @relation(fields: [clubId], references: [id])
-  groups    TrainingGroup[]
-  sessions  TrainingSession[]
+  id       String            @id @default(cuid())
+  userId   String            @unique
+  clubId   String
+  user     User              @relation(fields: [userId], references: [id])
+  club     Club              @relation(fields: [clubId], references: [id])
+  groups   TrainingGroup[]
+  sessions TrainingSession[]
 }
 
 model TrainingGroup {
-  id        String @id @default(cuid())
-  name      String
-  clubId    String
-  coachId   String
-  club      Club   @relation(fields: [clubId], references: [id])
-  coach     Coach  @relation(fields: [coachId], references: [id])
-  athletes  Athlete[]
-  weeks     TrainingWeek[]
-  invitations UserInvitation[]
+  id             String          @id @default(cuid())
+  name           String
+  clubId         String
+  coachId        String
+  club           Club            @relation(fields: [clubId], references: [id])
+  coach          Coach           @relation(fields: [coachId], references: [id])
+  athletes       Athlete[]
+  weeks          TrainingWeek[]
   planningEvents PlanningEvent[]
 }
 
 model PlanningEvent {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   clubId    String
   groupId   String?
   athleteId String?
@@ -202,10 +176,10 @@ model PlanningEvent {
   duration  Int?
   location  String?
   notes     String?
-  createdAt DateTime @default(now())
-  club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  group     TrainingGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  athlete   Athlete? @relation(fields: [athleteId], references: [id], onDelete: SetNull)
+  createdAt DateTime          @default(now())
+  club      Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  group     TrainingGroup?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  athlete   Athlete?          @relation(fields: [athleteId], references: [id], onDelete: SetNull)
 
   @@index([clubId, startsAt])
   @@index([groupId, startsAt])
@@ -213,63 +187,63 @@ model PlanningEvent {
 }
 
 model TrainingWeek {
-  id        String     @id @default(cuid())
+  id        String            @id @default(cuid())
   clubId    String
   groupId   String
   startDate DateTime
   title     String
-  status    WeekStatus @default(DRAFT)
-  club      Club       @relation(fields: [clubId], references: [id])
-  group     TrainingGroup @relation(fields: [groupId], references: [id])
+  status    WeekStatus        @default(DRAFT)
+  club      Club              @relation(fields: [clubId], references: [id])
+  group     TrainingGroup     @relation(fields: [groupId], references: [id])
   sessions  TrainingSession[]
 }
 
 model TrainingSession {
-  id        String   @id @default(cuid())
-  date      DateTime
-  title     String
-  duration  Int
-  focus     String
-  notes     String?
-  weekId    String
-  coachId   String
-  status    SessionStatus @default(DRAFT)
-  week      TrainingWeek @relation(fields: [weekId], references: [id])
-  coach     Coach @relation(fields: [coachId], references: [id])
-  blocks    SessionBlock[]
-  completions AthleteSessionCompletion[]
-  diveLogs  AthleteDiveLog[]
+  id           String                     @id @default(cuid())
+  date         DateTime
+  title        String
+  duration     Int
+  focus        String
+  notes        String?
+  weekId       String
+  coachId      String
+  status       SessionStatus              @default(DRAFT)
+  week         TrainingWeek               @relation(fields: [weekId], references: [id])
+  coach        Coach                      @relation(fields: [coachId], references: [id])
+  blocks       SessionBlock[]
+  completions  AthleteSessionCompletion[]
+  diveLogs     AthleteDiveLog[]
   exerciseLogs AthleteExerciseLog[]
-  templates SessionTemplate[]
+  templates    SessionTemplate[]
 }
 
 model SessionBlock {
-  id              String    @id @default(cuid())
-  sessionId       String
-  type            BlockType
-  title           String
-  description     String?
-  duration        Int
-  position        Int
-  estimatedVolume Int       @default(0)
-  session         TrainingSession @relation(fields: [sessionId], references: [id])
-  assignments     SessionBlockAssignment[]
+  id               String                   @id @default(cuid())
+  sessionId        String
+  type             BlockType
+  title            String
+  description      String?
+  duration         Int
+  position         Int
+  estimatedVolume  Int                      @default(0)
+  session          TrainingSession          @relation(fields: [sessionId], references: [id])
+  assignments      SessionBlockAssignment[]
   drylandExercises DrylandBlockExercise[]
-  poolTraining    PoolTraining?
+  poolTraining     PoolTraining?
 }
 
 model SessionBlockAssignment {
-  id             String @id @default(cuid())
+  id             String       @id @default(cuid())
   sessionBlockId String
   athleteId      String
   sessionBlock   SessionBlock @relation(fields: [sessionBlockId], references: [id], onDelete: Cascade)
-  athlete        Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  athlete        Athlete      @relation(fields: [athleteId], references: [id], onDelete: Cascade)
 
   @@unique([sessionBlockId, athleteId])
 }
 
 model DrylandExercise {
-  id              String @id @default(cuid())
+  id              String                 @id @default(cuid())
   name            String
   category        String
   description     String
@@ -291,20 +265,20 @@ model DrylandBlockExercise {
   duration   Int?
   notes      String?
   order      Int
-  block      SessionBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  block      SessionBlock    @relation(fields: [blockId], references: [id], onDelete: Cascade)
   exercise   DrylandExercise @relation(fields: [exerciseId], references: [id])
 
   @@id([blockId, exerciseId])
 }
 
 model PoolTraining {
-  blockId  String @id
-  block    SessionBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  blockId  String        @id
+  block    SessionBlock  @relation(fields: [blockId], references: [id], onDelete: Cascade)
   sections PoolSection[]
 }
 
 model PoolSection {
-  id             String @id @default(cuid())
+  id             String       @id @default(cuid())
   poolTrainingId String
   height         PoolHeight
   label          String?
@@ -313,7 +287,7 @@ model PoolSection {
 }
 
 model PoolDive {
-  id            String @id @default(cuid())
+  id            String           @id @default(cuid())
   poolSectionId String
   diveCode      String
   diveName      String
@@ -321,29 +295,29 @@ model PoolDive {
   repetitions   Int
   notes         String?
   order         Int
-  poolSection   PoolSection @relation(fields: [poolSectionId], references: [id], onDelete: Cascade)
+  poolSection   PoolSection      @relation(fields: [poolSectionId], references: [id], onDelete: Cascade)
   logs          AthleteDiveLog[]
 }
 
 model SessionTemplate {
-  id        String @id @default(cuid())
+  id        String           @id @default(cuid())
   name      String
   category  String
   sessionId String?
   clubId    String
-  favorite  Boolean @default(false)
+  favorite  Boolean          @default(false)
   payload   Json
   session   TrainingSession? @relation(fields: [sessionId], references: [id])
-  club      Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  club      Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
   @@index([clubId, favorite, name])
   @@index([sessionId])
 }
 
 model Skill {
-  id            String @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String
-  code          String @unique
+  code          String         @unique
   category      String
   height        String
   prerequisites String[]
@@ -351,15 +325,15 @@ model Skill {
 }
 
 model AthleteSkill {
-  athleteId String
-  skillId   String
-  level     Int
-  progress  Int
-  status    SkillStatus
-  trainings Int @default(0)
-  repetitions Int @default(0)
-  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  skill     Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  athleteId   String
+  skillId     String
+  level       Int
+  progress    Int
+  status      SkillStatus
+  trainings   Int         @default(0)
+  repetitions Int         @default(0)
+  athlete     Athlete     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  skill       Skill       @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@id([athleteId, skillId])
 }
@@ -372,37 +346,37 @@ model AthleteSessionCompletion {
   status      CompletionStatus @default(NOT_STARTED)
   rating      String?
   note        String?
-  athlete     Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  session     TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  athlete     Athlete          @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  session     TrainingSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@id([athleteId, sessionId])
 }
 
 model AthleteDiveLog {
-  id                   String @id @default(cuid())
+  id                   String          @id @default(cuid())
   athleteId            String
   sessionId            String
   poolDiveId           String
   repetitionsCompleted Int
   rating               String
   note                 String?
-  timestamp            DateTime @default(now())
-  athlete              Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  timestamp            DateTime        @default(now())
+  athlete              Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   session              TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  poolDive             PoolDive @relation(fields: [poolDiveId], references: [id], onDelete: Cascade)
+  poolDive             PoolDive        @relation(fields: [poolDiveId], references: [id], onDelete: Cascade)
 
   @@unique([athleteId, sessionId, poolDiveId])
 }
 
 model AthleteExerciseLog {
-  id         String @id @default(cuid())
+  id         String          @id @default(cuid())
   athleteId  String
   sessionId  String
   exerciseId String
-  completed  Boolean @default(false)
+  completed  Boolean         @default(false)
   rating     String?
   note       String?
-  athlete    Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  athlete    Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   session    TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   exercise   DrylandExercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
 

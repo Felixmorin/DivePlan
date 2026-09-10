@@ -6,7 +6,6 @@ const prisma = new PrismaClient();
 async function main() {
   const demoPasswordHash = await hashPassword("diveplan-demo");
   await prisma.appEvent.deleteMany();
-  await prisma.userInvitation.deleteMany();
   await prisma.athleteExerciseLog.deleteMany();
   await prisma.athleteDiveLog.deleteMany();
   await prisma.athleteSessionCompletion.deleteMany();
