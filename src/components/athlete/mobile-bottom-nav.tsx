@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, BarChart3, History, User } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, History, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/athlete", label: "Aujourd'hui", icon: Activity },
+  { href: "/athlete/calendar", label: "Calendrier", icon: CalendarDays },
   { href: "/athlete/progress", label: "Progres", icon: BarChart3 },
   { href: "/athlete/week", label: "Historique", icon: History },
   { href: "/athlete/profile", label: "Profil", icon: User }
@@ -16,7 +17,7 @@ export function MobileBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[430px] -translate-x-1/2 grid-cols-4 border-t border-white/10 bg-[var(--color-athlete-bg)] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-16px_34px_rgba(0,0,0,0.28)]">
+    <nav className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[430px] -translate-x-1/2 grid-cols-5 border-t border-white/10 bg-[var(--color-athlete-bg)] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-16px_34px_rgba(0,0,0,0.28)]">
       {items.map((item) => {
         const Icon = item.icon;
         const active = pathname === item.href || (item.href !== "/athlete" && pathname.startsWith(item.href));

@@ -56,6 +56,7 @@ export async function createPlanningEvent(formData: FormData) {
 
   revalidatePath("/coach");
   revalidatePath("/coach/planning");
+  revalidatePath("/athlete/calendar");
 }
 
 function parseTarget(value?: string) {

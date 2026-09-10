@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
-import { Badge } from "@/components/ui/badge";
 import { getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +39,6 @@ export default async function AthleteProgressPage() {
       </div>
       <ProgressChart data={totals?.chartData ?? []} />
       <div className="mt-5 grid grid-cols-2 gap-3">{metrics.map(([label, value]) => <div key={label} className="rounded-2xl border border-white/10 bg-[var(--color-athlete-panel)] p-4"><div className="text-xs font-bold uppercase text-white/38">{label}</div><div className="mt-2 text-3xl font-black">{value}</div></div>)}</div>
-      <div className="mt-5 flex flex-wrap gap-2">{(totals?.skillCategories.length ? totals.skillCategories : ["Avant", "Arriere", "Retour", "Renverse", "Vrille", "Equilibre"]).map((item) => <Badge key={item}>{item}</Badge>)}</div>
     </AthleteShell>
   );
 }
