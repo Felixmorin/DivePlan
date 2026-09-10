@@ -2,6 +2,7 @@ import type * as React from "react";
 import Link from "next/link";
 import { Activity, CalendarClock, Dumbbell, Plus, Trash2, UserPlus } from "lucide-react";
 import { createCoachOnlyAthlete, deleteAthlete } from "@/app/coach/athletes/actions";
+import { CreateAthleteAccountForm } from "@/app/coach/athletes/create-athlete-account-form";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { StatusPill } from "@/components/training/status-pill";
@@ -103,6 +104,7 @@ export default async function AthletesPage() {
   return (
     <CoachShell active="Athletes">
       <DirectoryHeader title="Athletes" description="Reperer rapidement les groupes, statuts et prochaines seances." actionHref="/coach/sessions/new" actionLabel="Creer une seance" />
+      <AthleteAccountCard groups={groups} />
       <CoachOnlyAthleteCard groups={groups} />
       <AthleteDirectory rows={rows} />
     </CoachShell>
@@ -127,6 +129,7 @@ function DemoAthletesPage() {
   return (
     <CoachShell active="Athletes">
       <DirectoryHeader title="Athletes" description="Mode demo local sans PostgreSQL." actionHref="/coach/sessions/demo" actionLabel="Voir la seance" />
+      <AthleteAccountCard groups={[{ id: "provincial", name: "Provincial" }]} demo />
       <CoachOnlyAthleteCard groups={[{ id: "provincial", name: "Provincial" }]} demo />
       <AthleteDirectory rows={rows} demo />
     </CoachShell>
@@ -145,6 +148,27 @@ function DirectoryHeader({ title, description, actionHref, actionLabel }: { titl
         <Link href={actionHref}><Plus className="h-4 w-4" /> {actionLabel}</Link>
       </Button>
     </div>
+  );
+}
+
+function AthleteAccountCard({ groups, demo = false }: { groups: AthleteGroup[]; demo?: boolean }) {
+  return (
+    <Card className="mb-6 overflow-hidden">
+      <CardHeader className="border-b border-[var(--color-border)] bg-white">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-success-soft)] text-[var(--color-success)]">
+            <UserPlus className="h-5 w-5" />
+          </div>
+          <div>
+            <CardTitle>Créer un compte athlète</CardTitle>
+            <CardDescription>Remets-lui son nom d’utilisateur et son mot de passe temporaire. Il devra choisir son propre mot de passe à sa première connexion.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-5">
+        <CreateAthleteAccountForm groups={groups} disabled={demo} />
+      </CardContent>
+    </Card>
   );
 }
 

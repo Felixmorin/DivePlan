@@ -1,12 +1,13 @@
 "use server";
 
-import { randomUUID } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
+import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { parseMontrealSessionDate } from "@/lib/timezone";
 
@@ -16,12 +17,26 @@ export type ImportAthletesState = {
   updated?: number;
 };
 
+export type CreateAthleteAccountState = {
+  error?: string;
+  credentials?: {
+    athleteName: string;
+    username: string;
+    temporaryPassword: string;
+  };
+};
+
 const manualAthleteSchema = z.object({
   firstName: z.string().trim().min(1),
   lastName: z.string().trim().min(1),
   level: z.string().trim().min(1),
   groupId: z.string().optional(),
   birthDate: z.string().optional()
+});
+
+const athleteAccountSchema = manualAthleteSchema.extend({
+  username: z.string().trim().toLowerCase().min(3).max(30).regex(/^[a-z0-9._-]+$/),
+  temporaryPassword: z.string().min(10).max(128).regex(/[A-Za-z]/).regex(/[0-9]/).optional()
 });
 
 type CsvAthlete = {
@@ -193,6 +208,88 @@ export async function createCoachOnlyAthlete(formData: FormData) {
   revalidatePath("/coach/sessions/new");
 }
 
+export async function createAthleteAccount(_: CreateAthleteAccountState, formData: FormData): Promise<CreateAthleteAccountState> {
+  const { user, clubId } = await requireCoach();
+  const parsed = athleteAccountSchema.safeParse({
+    firstName: formData.get("firstName"),
+    lastName: formData.get("lastName"),
+    level: formData.get("level"),
+    groupId: String(formData.get("groupId") ?? ""),
+    birthDate: String(formData.get("birthDate") ?? ""),
+    username: formData.get("username"),
+    temporaryPassword: String(formData.get("temporaryPassword") ?? "") || undefined
+  });
+
+  if (!parsed.success) {
+    return { error: "Vérifie les informations. Le nom d'utilisateur doit contenir 3 à 30 caractères autorisés et le mot de passe temporaire, si fourni, au moins 10 caractères avec une lettre et un chiffre." };
+  }
+
+  const data = parsed.data;
+  const groupId = data.groupId || null;
+  const existingAccount = await prisma.user.findUnique({ where: { username: data.username }, select: { id: true } });
+
+  if (existingAccount) {
+    return { error: "Ce nom d'utilisateur est déjà utilisé." };
+  }
+
+  if (groupId) {
+    const group = await prisma.trainingGroup.findFirst({ where: { id: groupId, clubId }, select: { id: true } });
+    if (!group) {
+      return { error: "Ce groupe n'appartient pas à ton club." };
+    }
+  }
+
+  const temporaryPassword = data.temporaryPassword || generateTemporaryPassword();
+  const passwordHash = await hashPassword(temporaryPassword);
+  const internalEmail = `${data.username}-${randomUUID()}@accounts.diveplan.local`;
+  const athlete = await prisma.$transaction(async (tx) => {
+    const account = await tx.user.create({
+      data: {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: internalEmail,
+        username: data.username,
+        role: UserRole.ATHLETE,
+        clubId,
+        passwordHash,
+        passwordSetAt: null
+      }
+    });
+
+    return tx.athlete.create({
+      data: {
+        userId: account.id,
+        clubId,
+        groupId,
+        birthDate: data.birthDate ? parseMontrealSessionDate(data.birthDate, "12:00") : parseMontrealSessionDate("2015-01-01", "12:00"),
+        level: data.level,
+        active: true
+      }
+    });
+  });
+
+  await trackEvent({
+    type: "athlete.account_created",
+    message: `Compte athlète créé: ${data.firstName} ${data.lastName}`,
+    clubId,
+    userId: user.id,
+    metadata: { athleteId: athlete.id, username: data.username }
+  });
+
+  revalidatePath("/coach");
+  revalidatePath("/coach/athletes");
+  revalidatePath("/coach/groups");
+  revalidatePath("/coach/sessions/new");
+
+  return {
+    credentials: {
+      athleteName: `${data.firstName} ${data.lastName}`,
+      username: data.username,
+      temporaryPassword
+    }
+  };
+}
+
 export async function deleteAthlete(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const athleteId = String(formData.get("athleteId") ?? "");
@@ -240,4 +337,20 @@ function parseCsv(input: string) {
 function value(row: string[], header: string[], name: string) {
   const index = header.indexOf(name);
   return index >= 0 ? row[index]?.trim() ?? "" : "";
+}
+
+function generateTemporaryPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const characters = ["D", "v", "7", "!"];
+
+  while (characters.length < 14) {
+    characters.push(alphabet[randomInt(alphabet.length)]);
+  }
+
+  for (let index = characters.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(index + 1);
+    [characters[index], characters[swapIndex]] = [characters[swapIndex], characters[index]];
+  }
+
+  return characters.join("");
 }

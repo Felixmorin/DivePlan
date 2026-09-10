@@ -1,14 +1,16 @@
 import { redirect } from "next/navigation";
 import { Activity, ShieldCheck, Waves } from "lucide-react";
 import { auth } from "@/auth";
+import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoginForm } from "./login-form";
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ passwordChanged?: string }> }) {
   const session = await auth();
+  const query = await searchParams;
 
   if (session?.user?.role === "ATHLETE") {
-    redirect("/athlete");
+    redirect(session.user.mustChangePassword ? "/change-password" : "/athlete");
   }
 
   if (session?.user?.role === "COACH" || session?.user?.role === "ADMIN") {
@@ -27,6 +29,11 @@ export default async function LoginPage() {
           <p className="text-sm leading-6 text-[var(--color-ink-muted)]">Accès pilote pour clubs, coachs et athlètes. Planifie, publie et suis les séances depuis un seul espace.</p>
         </CardHeader>
         <CardContent>
+          {query.passwordChanged === "1" && (
+            <Alert variant="success" title="Mot de passe enregistré" className="mb-4">
+              Reconnecte-toi maintenant avec ton nouveau mot de passe.
+            </Alert>
+          )}
           <LoginForm />
           <div className="mt-5 grid gap-2 text-xs font-bold text-[var(--color-ink-muted)]">
             <div className="min-w-0 overflow-hidden rounded-xl bg-[var(--color-surface-raised)] p-3">

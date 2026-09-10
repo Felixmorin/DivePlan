@@ -21,16 +21,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Credentials({
       name: "Code pilote",
       credentials: {
-        email: { label: "Email", type: "email" },
+        email: { label: "Courriel ou nom d'utilisateur", type: "text" },
         password: { label: "Mot de passe", type: "password" },
         accessCode: { label: "Code pilote", type: "password" }
       },
       async authorize(credentials) {
-        const email = String(credentials?.email ?? "").trim().toLowerCase();
+        const identifier = String(credentials?.email ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
         const accessCode = String(credentials?.accessCode ?? "");
         const expectedCode = process.env.PILOT_ACCESS_CODE ?? (process.env.NODE_ENV === "production" ? "" : "diveplan-demo");
-        const devDemoLogin = process.env.NODE_ENV !== "production" && email === "coach@diveplan.local" && password === "diveplan-demo";
+        const devDemoLogin = process.env.NODE_ENV !== "production" && identifier === "coach@diveplan.local" && password === "diveplan-demo";
 
         if (devDemoLogin) {
           return {
@@ -42,15 +42,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           };
         }
 
-        const lookupEmail = email === "coach@diveplan.local" ? "felix@diveplan.local" : email;
-        let user = await prisma.user.findUnique({
-          where: { email },
-          select: { id: true, email: true, firstName: true, lastName: true, role: true, clubId: true, passwordHash: true }
+        const lookupEmail = identifier === "coach@diveplan.local" ? "felix@diveplan.local" : identifier;
+        let user = await prisma.user.findFirst({
+          where: { OR: [{ email: identifier }, { username: identifier }] },
+          select: { id: true, email: true, firstName: true, lastName: true, role: true, clubId: true, passwordHash: true, passwordSetAt: true }
         });
 
         user ??= await prisma.user.findUnique({
           where: { email: lookupEmail },
-          select: { id: true, email: true, firstName: true, lastName: true, role: true, clubId: true, passwordHash: true }
+          select: { id: true, email: true, firstName: true, lastName: true, role: true, clubId: true, passwordHash: true, passwordSetAt: true }
         });
 
         if (!user) {
@@ -63,7 +63,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!passwordOk && !pilotCodeOk) {
           await trackEvent({
             type: "auth.failed",
-            message: `Connexion refusee pour ${email}`,
+            message: `Connexion refusee pour ${identifier}`,
             clubId: user.clubId,
             userId: user.id
           });
@@ -82,7 +82,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           name: `${user.firstName} ${user.lastName}`,
           role: user.role,
-          clubId: user.clubId
+          clubId: user.clubId,
+          mustChangePassword: user.passwordSetAt === null
         };
       }
     })
@@ -93,6 +94,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.role = user.role;
         token.clubId = user.clubId;
+        token.mustChangePassword = user.mustChangePassword;
       }
 
       return token;
@@ -102,6 +104,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.sub ?? "";
         session.user.role = token.role as UserRole | undefined;
         session.user.clubId = typeof token.clubId === "string" ? token.clubId : null;
+        session.user.mustChangePassword = token.mustChangePassword === true;
       }
 
       return session;

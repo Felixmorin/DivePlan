@@ -18,11 +18,11 @@ export async function login(_: LoginState, formData: FormData): Promise<LoginSta
       email: devQuickLogin ? "coach@diveplan.local" : submittedEmail,
       password: devQuickLogin ? "diveplan-demo" : submittedPassword,
       accessCode: submittedAccessCode,
-      redirectTo: "/coach"
+      redirectTo: "/"
     });
   } catch (error) {
     if (error instanceof AuthError) {
-      return { error: "Email, mot de passe ou code pilote invalide." };
+      return { error: "Nom d'utilisateur, courriel, mot de passe ou code pilote invalide." };
     }
 
     throw error;

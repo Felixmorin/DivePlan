@@ -1,4 +1,5 @@
 import { PoolHeight } from "@prisma/client";
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { startOfMontrealDay } from "@/lib/timezone";
@@ -81,6 +82,10 @@ export async function getCurrentAthlete() {
 
   if (!user || user.role !== "ATHLETE") {
     return null;
+  }
+
+  if (!user.passwordSetAt) {
+    redirect("/change-password");
   }
 
   return prisma.athlete.findUnique({

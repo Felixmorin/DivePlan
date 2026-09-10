@@ -68,6 +68,10 @@ export async function requireCoach() {
 export async function requireAthlete() {
   const user = await requireCurrentUser("ATHLETE");
 
+  if (!user.passwordSetAt) {
+    redirect("/change-password");
+  }
+
   if (!user.athlete || !user.clubId) {
     redirect("/login");
   }

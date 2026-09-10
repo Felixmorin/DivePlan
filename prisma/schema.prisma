@@ -82,6 +82,7 @@ model User {
   firstName String
   lastName  String
   email     String   @unique
+  username  String?  @unique
   role      UserRole
   passwordHash String?
   passwordSetAt DateTime?
