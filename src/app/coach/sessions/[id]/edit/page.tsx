@@ -134,9 +134,9 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
                   </CardHeader>
                   <CardContent className="space-y-5">
                     <div className="grid gap-3 md:grid-cols-3">
-                      <Input name={`blockTitle:${block.id}`} defaultValue={block.title} />
-                      <Input name={`blockDuration:${block.id}`} type="number" defaultValue={block.duration} />
-                      <Input name={`blockVolume:${block.id}`} type="number" defaultValue={block.estimatedVolume} />
+                      <Field label="Nom du bloc"><Input name={`blockTitle:${block.id}`} defaultValue={block.title} required /></Field>
+                      <Field label="Durée du bloc"><Input name={`blockDuration:${block.id}`} type="number" min="1" defaultValue={block.duration} required /></Field>
+                      <Field label="Volume estimé"><Input name={`blockVolume:${block.id}`} type="number" min="0" defaultValue={block.estimatedVolume} /></Field>
                     </div>
                     <Field label={block.type === "WARMUP" || block.type === "COOLDOWN" ? "Contenu du bloc" : "Description du bloc"}>
                       <Textarea

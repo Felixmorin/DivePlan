@@ -36,9 +36,12 @@ const sessionInputSchema = z.object({
     duration: z.number().int().min(1),
     description: z.string().optional()
   }),
-  drylandEnabled: z.boolean(),
-  drylandExerciseIds: z.array(z.string()).default([]),
-  drylandAthleteIds: z.array(z.string()).default([]),
+  drylandBlocks: z.array(z.object({
+    title: z.string().trim().min(1),
+    duration: z.number().int().min(1),
+    exerciseIds: z.array(z.string()).min(1),
+    athleteIds: z.array(z.string()).min(1)
+  })).default([]),
   poolBlocks: z.array(z.object({
     title: z.string().min(1),
     duration: z.number().min(1),
@@ -161,37 +164,37 @@ export async function createTrainingSession(input: CreateSessionInput) {
     redirect(`/coach/sessions/${session.id}`);
   }
 
-  if ((!data.warmup.enabled && !data.cooldown.enabled && !data.drylandEnabled && data.poolBlocks.length === 0) ||
-      (data.drylandEnabled && (data.drylandExerciseIds.length === 0 || data.drylandAthleteIds.length === 0)) ||
+  if ((!data.warmup.enabled && !data.cooldown.enabled && data.drylandBlocks.length === 0 && data.poolBlocks.length === 0) ||
       data.poolBlocks.some((block) => block.athleteIds.length === 0)) {
     throw new Error("La seance doit contenir au moins un bloc et chaque bloc d'entrainement doit etre complet et assigne.");
   }
 
   const poolAthleteIds = data.poolBlocks.flatMap((block) => block.athleteIds);
-  const requestedAthleteIds = Array.from(new Set([...data.drylandAthleteIds, ...poolAthleteIds]));
+  const requestedAthleteIds = Array.from(new Set([...data.drylandBlocks.flatMap((block) => block.athleteIds), ...poolAthleteIds]));
   const [athletes, exercises] = await Promise.all([
     prisma.athlete.findMany({
       where: { clubId, active: true },
       select: { id: true }
     }),
     prisma.drylandExercise.findMany({
-      where: { id: { in: data.drylandExerciseIds } },
+      where: { id: { in: data.drylandBlocks.flatMap((block) => block.exerciseIds) } },
       select: { id: true, defaultSets: true, defaultReps: true, defaultDuration: true }
     })
   ]);
 
   const validAthleteIds = new Set(athletes.map((athlete) => athlete.id));
-  const validExerciseIds = new Set(exercises.map((exercise) => exercise.id));
-
   const requireValidAthletes = (ids: string[]) => ids.filter((id) => validAthleteIds.has(id));
   const allAthleteIds = requestedAthleteIds.length > 0
     ? requestedAthleteIds.filter((id) => validAthleteIds.has(id))
     : Array.from(validAthleteIds);
-  const drylandAthleteIds = requireValidAthletes(data.drylandAthleteIds);
+  const drylandBlocks = data.drylandBlocks.map((block) => ({
+    ...block,
+    athleteIds: requireValidAthletes(block.athleteIds),
+    exercises: block.exerciseIds.map((id) => exercises.find((exercise) => exercise.id === id)).filter((exercise): exercise is (typeof exercises)[number] => Boolean(exercise))
+  }));
   const poolBlocks = data.poolBlocks.map((block) => ({ ...block, athleteIds: requireValidAthletes(block.athleteIds) }));
-  const drylandExercises = exercises.filter((exercise) => validExerciseIds.has(exercise.id));
 
-  if (allAthleteIds.length === 0 || (data.drylandEnabled && (drylandAthleteIds.length === 0 || drylandExercises.length === 0)) || poolBlocks.some((block) => block.athleteIds.length === 0)) {
+  if (allAthleteIds.length === 0 || drylandBlocks.some((block) => block.athleteIds.length === 0 || block.exercises.length !== block.exerciseIds.length) || poolBlocks.some((block) => block.athleteIds.length === 0)) {
     throw new Error("La seance doit contenir au moins un athlete et un exercice valides.");
   }
 
@@ -237,29 +240,31 @@ export async function createTrainingSession(input: CreateSessionInput) {
       });
     }
 
-    const drylandBlock = data.drylandEnabled ? await createBlock(tx, {
-      sessionId: createdSession.id,
-      type: BlockType.DRYLAND,
-      title: "Dryland - Activation technique",
-      duration: 22,
-      position: 2,
-      estimatedVolume: drylandExercises.length * drylandAthleteIds.length * 6,
-      athleteIds: drylandAthleteIds
-    }) : null;
+    for (const [index, dryland] of drylandBlocks.entries()) {
+      const drylandBlock = await createBlock(tx, {
+        sessionId: createdSession.id,
+        type: BlockType.DRYLAND,
+        title: dryland.title,
+        duration: dryland.duration,
+        position: index + 2,
+        estimatedVolume: dryland.exercises.length * dryland.athleteIds.length * 6,
+        athleteIds: dryland.athleteIds
+      });
 
-    if (drylandBlock) await tx.drylandBlockExercise.createMany({
-      data: drylandExercises.map((exercise, order) => ({
-        blockId: drylandBlock.id,
-        exerciseId: exercise.id,
-        sets: exercise.defaultSets,
-        reps: exercise.defaultReps,
-        duration: exercise.defaultDuration,
-        order
-      }))
-    });
+      await tx.drylandBlockExercise.createMany({
+        data: dryland.exercises.map((exercise, order) => ({
+          blockId: drylandBlock.id,
+          exerciseId: exercise.id,
+          sets: exercise.defaultSets,
+          reps: exercise.defaultReps,
+          duration: exercise.defaultDuration,
+          order
+        }))
+      });
+    }
 
     for (const [index, poolBlock] of poolBlocks.entries()) {
-      await createPoolBlock(tx, createdSession.id, poolBlock, index + 3);
+      await createPoolBlock(tx, createdSession.id, poolBlock, index + drylandBlocks.length + 2);
     }
 
     if (data.cooldown.enabled) {
