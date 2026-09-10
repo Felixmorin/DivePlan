@@ -3,6 +3,7 @@ import { AlertTriangle, Copy, Clock3, Eye, FileText, Printer, Save, Send, Users,
 import { duplicateTrainingSession, updateTrainingSession } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { CoachShell } from "@/components/coach/coach-shell";
+import { PoolListFormTable } from "@/components/coach/pool-list-table";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
@@ -157,19 +158,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
                         ))}
                       </div>
                     )}
-                    {block.poolTraining?.sections.map((section) => (
-                      <div key={section.id} className="space-y-3">
-                        <Input name={`sectionLabel:${section.id}`} defaultValue={section.label ?? ""} />
-                        {section.dives.map((dive) => (
-                          <div key={dive.id} className="grid gap-3 rounded-2xl bg-[var(--color-surface-raised)] p-3 md:grid-cols-[110px_1fr_90px_1fr]">
-                            <Input name={`diveCode:${dive.id}`} defaultValue={dive.diveCode} />
-                            <Input name={`diveName:${dive.id}`} defaultValue={dive.diveName} />
-                            <Input name={`diveReps:${dive.id}`} type="number" defaultValue={dive.repetitions} />
-                            <Input name={`diveNotes:${dive.id}`} defaultValue={dive.notes ?? ""} placeholder="Notes" />
-                          </div>
-                        ))}
-                      </div>
-                    ))}
+                    {block.poolTraining && <PoolListFormTable inputName={`poolRows:${block.id}`} initialRows={block.poolTraining.sections.map((section) => ({ id: section.id, context: section.label ?? poolHeightLabel(section.height), diveCodes: section.dives.map((dive) => dive.diveCode), repetitions: section.dives.map((dive) => dive.repetitions) }))} />}
                   </CardContent>
                 </Card>
               );
@@ -218,4 +207,11 @@ function Field({ label, className, children }: { label: string; className?: stri
 
 function SummaryMetric({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string | number }) {
   return <div className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--color-surface-raised)] p-3"><div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-muted)]"><Icon className="h-4 w-4 text-[var(--color-brand-strong)]" /> {label}</div><div className="font-black">{value}</div></div>;
+}
+
+function poolHeightLabel(height: string) {
+  if (height === "ONE_METER") return "1m";
+  if (height === "THREE_METER") return "3m";
+  if (height === "PLATFORM") return "Plateforme";
+  return "Section";
 }

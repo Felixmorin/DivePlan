@@ -9,6 +9,7 @@ import { z } from "zod";
 import type { CreateSessionInput, QuickExerciseInput } from "@/app/coach/sessions/actions";
 import { AssignmentSelector } from "@/components/coach/assignment-selector";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
+import { PoolListTable } from "@/components/coach/pool-list-table";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { SessionTemplatePayload } from "@/lib/session-template";
+import { countPoolContexts, validatePoolListRow, type PoolListRow } from "@/lib/pool-list";
 import { toMontrealDateInputValue } from "@/lib/timezone";
 
 const schema = z.object({
@@ -135,7 +137,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
     ...activePoolBlocks.map((block) => ((poolAssignments[block.id] ?? []).length === 0 ? block.title : null))
   ].filter(Boolean);
   const totalDuration = Number(watched.duration ?? 0);
-  const poolVolume = activePoolBlocks.reduce((sum, block) => sum + block.sections.reduce((sectionSum, section) => sectionSum + section.dives.reduce((diveSum, dive) => diveSum + dive.repetitions, 0), 0), 0);
+  const poolVolume = activePoolBlocks.reduce((sum, block) => sum + block.sections.reduce((sectionSum, section) => sectionSum + sectionVolume(section), 0), 0);
   const dryVolume = selectedExercises.length * Math.max(dryAssigned.length, 1) * 6;
   const totalVolume = poolVolume + dryVolume;
 
@@ -223,7 +225,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
       startTransition(() => {
         void onCreate({
           ...values,
-          templateId: initialTemplate?.id,
           drylandExerciseIds: selectedExerciseIds,
           drylandAthleteIds: dryAssigned,
           poolBlocks: activePoolBlocks.map((block) => ({
@@ -276,8 +277,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
               onAssignPoolBlock={assignPoolBlock}
               onAddPoolBlock={addPoolBlock}
               onRemovePoolBlock={removePoolBlock}
-              onAddPoolDive={addPoolDive}
-              onRemovePoolDive={removePoolDive}
+              onUpdatePoolRows={updatePoolRows}
             />
           )}
           {step === 3 && (
@@ -315,9 +315,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
           totalVolume={totalVolume}
           isPending={isPending}
           canPublish={
-            initialTemplate
-              ? athletes.length > 0 && groups.length > 0 && initialTemplate.payload.blocks.length > 0
-              : athletes.length > 0 && groups.length > 0 && selectedExerciseIds.length > 0 && dryAssigned.length > 0 && activePoolBlocks.length > 0 && poolAssignmentValues.every((ids) => ids.length > 0)
+            athletes.length > 0 && groups.length > 0 && selectedExerciseIds.length > 0 && dryAssigned.length > 0 && activePoolBlocks.length > 0 && activePoolBlocks.every(poolBlockIsValid) && poolAssignmentValues.every((ids) => ids.length > 0)
           }
           onPublish={publishSession}
         />
@@ -550,37 +548,7 @@ function QuickPoolBlockForm({ onAdd }: { onAdd: (block: BuilderPoolBlock) => voi
   );
 }
 
-function QuickPoolDiveForm({ nextOrder, onAdd }: { nextOrder: number; onAdd: (dive: BuilderPoolDive) => void }) {
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    onAdd({
-      diveCode: String(data.get("diveCode") ?? "").trim().toUpperCase(),
-      diveName: String(data.get("diveName") ?? "").trim(),
-      position: String(data.get("position") ?? "Libre").trim() || "Libre",
-      repetitions: Number(data.get("repetitions")),
-      notes: null,
-      order: nextOrder
-    });
-    form.reset();
-  }
-
-  return (
-    <form onSubmit={submit} className="grid gap-2 rounded-xl border border-dashed border-[var(--block-pool-fg)]/35 bg-white/70 p-3">
-      <div className="text-xs font-black uppercase text-[var(--block-pool-fg)]">Ajouter un plongeon</div>
-      <div className="grid grid-cols-2 gap-2">
-        <Input name="diveCode" placeholder="Code" required />
-        <Input name="repetitions" type="number" min="1" defaultValue="3" placeholder="Reps" required />
-      </div>
-      <Input name="diveName" placeholder="Nom du plongeon" required />
-      <Input name="position" placeholder="Position" defaultValue="Libre" required />
-      <Button type="submit" variant="outline"><Plus className="h-4 w-4" /> Ajouter</Button>
-    </form>
-  );
-}
-
-function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignPoolBlock, onAddPoolBlock, onRemovePoolBlock, onAddPoolDive, onRemovePoolDive }: {
+function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignPoolBlock, onAddPoolBlock, onRemovePoolBlock, onUpdatePoolRows }: {
   athletes: BuilderAthlete[];
   poolBlocks: BuilderPoolBlock[];
   poolAssignments: Record<string, string[]>;
@@ -588,14 +556,13 @@ function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignP
   onAssignPoolBlock: (blockId: string) => (ids: string[]) => void;
   onAddPoolBlock: (block: BuilderPoolBlock) => void;
   onRemovePoolBlock: (blockId: string) => void;
-  onAddPoolDive: (blockId: string, sectionIndex: number, dive: BuilderPoolDive) => void;
-  onRemovePoolDive: (blockId: string, sectionIndex: number, diveOrder: number) => void;
+  onUpdatePoolRows: (blockId: string, rows: PoolListRow[]) => void;
 }) {
   return (
     <div className="space-y-5">
       <QuickPoolBlockForm onAdd={onAddPoolBlock} />
       {poolBlocks.map((block) => (
-        <PoolBlock key={block.id} block={block} assigned={poolAssignments[block.id] ?? []} athletes={athletes} flash={flashBlock === block.id} onAssign={onAssignPoolBlock(block.id)} onRemove={() => onRemovePoolBlock(block.id)} onAddDive={(sectionIndex, dive) => onAddPoolDive(block.id, sectionIndex, dive)} onRemoveDive={(sectionIndex, diveOrder) => onRemovePoolDive(block.id, sectionIndex, diveOrder)} />
+        <PoolBlock key={block.id} block={block} assigned={poolAssignments[block.id] ?? []} athletes={athletes} flash={flashBlock === block.id} onAssign={onAssignPoolBlock(block.id)} onRemove={() => onRemovePoolBlock(block.id)} onRowsChange={(rows) => onUpdatePoolRows(block.id, rows)} />
       ))}
       {poolBlocks.length === 0 && (
         <Card>
@@ -608,31 +575,14 @@ function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignP
   );
 }
 
-function PoolBlock({ block, assigned, athletes, flash, onAssign, onRemove, onAddDive, onRemoveDive }: { block: BuilderPoolBlock; assigned: string[]; athletes: BuilderAthlete[]; flash: boolean; onAssign: (ids: string[]) => void; onRemove: () => void; onAddDive: (sectionIndex: number, dive: BuilderPoolDive) => void; onRemoveDive: (sectionIndex: number, diveOrder: number) => void }) {
+function PoolBlock({ block, assigned, athletes, flash, onAssign, onRemove, onRowsChange }: { block: BuilderPoolBlock; assigned: string[]; athletes: BuilderAthlete[]; flash: boolean; onAssign: (ids: string[]) => void; onRemove: () => void; onRowsChange: (rows: PoolListRow[]) => void }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <BlockCard type="pool" title={block.title} duration={block.duration} assigned={assigned} athletes={athletes} state="Personnalisable" flash={flash}>
         <div className="mb-4 flex justify-end">
           <Button type="button" variant="outline" onClick={onRemove}><Trash2 className="h-4 w-4" /> Supprimer le bloc</Button>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          {block.sections.map((section, sectionIndex) => (
-            <div key={`${block.id}-${sectionIndex}`} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3">
-              <div className="mb-3 text-sm font-black text-[var(--color-ink-muted)]">{(section.label ?? heightLabel(section.height)).toUpperCase()}</div>
-              <div className="space-y-2">
-                {section.dives.map((dive) => (
-                  <div key={`${dive.diveCode}-${dive.order}`} className="grid grid-cols-[64px_1fr_auto_auto] items-center gap-2 rounded-xl bg-white p-3">
-                    <div className="text-xl font-black">{dive.diveCode}</div>
-                    <div className="text-sm font-semibold text-[var(--color-ink-muted)]">{dive.diveName}</div>
-                    <div className="rounded-full bg-[var(--block-pool-bg)] px-2 py-1 text-xs font-black text-[var(--block-pool-fg)]">{dive.repetitions} reps</div>
-                    <button type="button" aria-label={`Supprimer ${dive.diveCode}`} onClick={() => onRemoveDive(sectionIndex, dive.order)} className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10"><Trash2 className="h-4 w-4" /></button>
-                  </div>
-                ))}
-                <QuickPoolDiveForm nextOrder={Math.max(-1, ...section.dives.map((dive) => dive.order)) + 1} onAdd={(dive) => onAddDive(sectionIndex, dive)} />
-              </div>
-            </div>
-          ))}
-        </div>
+        <PoolListTable rows={poolSectionsToRows(block.sections)} onChange={onRowsChange} />
       </BlockCard>
       <AssignmentSelector selected={assigned} onChange={onAssign} athletes={athletes} />
     </div>
@@ -800,6 +750,55 @@ function heightLabel(height: BuilderPoolSection["height"]) {
   if (height === "THREE_METER") return "3 metres";
   if (height === "PLATFORM") return "Plateforme";
   return "Section";
+}
+
+function poolSectionsToRows(sections: BuilderPoolSection[]): PoolListRow[] {
+  return sections.map((section, index) => ({
+    id: `section-${index}`,
+    context: section.label ?? heightLabel(section.height),
+    diveCodes: section.dives.map((dive) => dive.diveCode),
+    repetitions: section.dives.map((dive) => dive.repetitions)
+  }));
+}
+
+function poolRowsToSections(rows: PoolListRow[], existing: BuilderPoolSection[]): BuilderPoolSection[] {
+  return rows.map((row, sectionIndex) => {
+    const previous = existing[sectionIndex];
+    const repetitions = row.repetitions.length === 1 ? row.diveCodes.map(() => row.repetitions[0]) : row.repetitions;
+    return {
+      height: inferPoolHeight(row.context),
+      label: row.context || null,
+      dives: row.diveCodes.map((diveCode, order) => {
+        const previousDive = previous?.dives.find((dive) => dive.diveCode === diveCode);
+        return {
+          diveCode,
+          diveName: previousDive?.diveName ?? diveCode,
+          position: previousDive?.position ?? "Libre",
+          repetitions: repetitions[order] ?? 0,
+          notes: previousDive?.notes ?? null,
+          order
+        };
+      })
+    };
+  });
+}
+
+function inferPoolHeight(context: string): BuilderPoolSection["height"] {
+  const normalized = context.trim().toLowerCase();
+  if (countPoolContexts(context) > 1) return "CUSTOM";
+  if (normalized.startsWith("1m")) return "ONE_METER";
+  if (normalized.startsWith("3m")) return "THREE_METER";
+  if (normalized.includes("plateforme")) return "PLATFORM";
+  return "CUSTOM";
+}
+
+function sectionVolume(section: BuilderPoolSection) {
+  return Math.max(1, countPoolContexts(section.label ?? heightLabel(section.height))) * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0);
+}
+
+function poolBlockIsValid(block: BuilderPoolBlock) {
+  const rows = poolSectionsToRows(block.sections);
+  return rows.length > 0 && rows.every((row) => validatePoolListRow(row).errors.length === 0);
 }
 
 function uniqueIds(ids: string[]) {

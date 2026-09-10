@@ -1,6 +1,7 @@
 import { PrintButton } from "@/components/coach/print-button";
 import { getCoachSession } from "@/lib/coach-session";
 import { formatMontrealDate } from "@/lib/timezone";
+import { countPoolContexts } from "@/lib/pool-list";
 
 export const dynamic = "force-dynamic";
 
@@ -45,17 +46,12 @@ export default async function PrintPage({ params }: { params: Promise<{ id: stri
           {activeAthletes.map((athlete) => {
             const poolBlock = session.blocks.find((block) => block.type === "POOL" && block.assignments.some((assignment) => assignment.athleteId === athlete.id));
             const sections = poolBlock?.poolTraining?.sections ?? [];
-            const total = sections.flatMap((section) => section.dives).reduce((sum, dive) => sum + dive.repetitions, 0);
+            const total = sections.reduce((sum, section) => sum + sectionTotal(section), 0);
 
             return (
               <div key={athlete.id} className="print-athlete-card min-h-52 border border-black p-2 text-xs">
                 <h3 className="text-base font-black">{athlete.user.firstName}</h3>
-                {sections.map((section) => (
-                  <div key={section.id} className="print-keep">
-                    <div className="mt-1 font-black">{section.label ?? section.height}</div>
-                    {section.dives.map((dive) => <div key={dive.id} className="flex justify-between"><span>□ {dive.diveCode}</span><span>x {dive.repetitions}</span></div>)}
-                  </div>
-                ))}
+                <table className="mt-1 w-full border-collapse"><thead><tr className="border-b border-black text-left"><th>Hauteur(s)</th><th>Plongeons</th><th>Reps</th><th className="text-right">Total</th></tr></thead><tbody>{sections.map((section) => <tr key={section.id} className="border-b border-black/30"><td>{section.label ?? section.height}</td><td>{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td>{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="text-right font-black">{sectionTotal(section)}</td></tr>)}</tbody></table>
                 <div className="mt-2 border-t border-black pt-1 font-black">Total {total}</div>
                 <div className="mt-2 h-10 border border-dashed border-black p-1">Notes</div>
               </div>
@@ -75,7 +71,7 @@ export default async function PrintPage({ params }: { params: Promise<{ id: stri
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="print-block"><h2 className="font-black">DRYLAND</h2>{blocks.filter((block) => block.type === "DRYLAND").flatMap((block) => block.drylandExercises).map((item) => <p key={item.exerciseId}>□ {item.exercise.name} · {item.sets ?? 1} x {item.reps ?? `${item.duration ?? 30} sec`}</p>)}</div>
               <div className="print-block"><h2 className="font-black">OBJECTIFS</h2><p>{session.focus}</p><div className="mt-4 h-28 border border-black p-2">Notes</div></div>
-              {poolBlock?.poolTraining?.sections.map((section) => <div key={section.id} className="print-block"><h2 className="font-black">{section.label ?? section.height}</h2>{section.dives.map((dive) => <p key={dive.id}>□ {dive.diveCode} x {dive.repetitions}</p>)}</div>)}
+              {poolBlock && <div className="print-block col-span-2"><h2 className="font-black">LISTE PISCINE</h2><table className="w-full border-collapse"><thead><tr className="border-b border-black text-left"><th>Hauteur(s)</th><th>Plongeons</th><th>Repetitions</th><th className="text-right">Total</th></tr></thead><tbody>{poolBlock.poolTraining?.sections.map((section) => <tr key={section.id} className="border-b border-black/30"><td>{section.label ?? section.height}</td><td>{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td>{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="text-right font-black">{sectionTotal(section)}</td></tr>)}</tbody><tfoot><tr className="border-t-2 border-black font-black"><td colSpan={3}>Total general</td><td className="text-right">{poolBlock.estimatedVolume}</td></tr></tfoot></table></div>}
             </div>
           </section>
         );
@@ -92,4 +88,8 @@ export default async function PrintPage({ params }: { params: Promise<{ id: stri
       </section>
     </div>
   );
+}
+
+function sectionTotal(section: { label: string | null; dives: Array<{ repetitions: number }> }) {
+  return Math.max(1, countPoolContexts(section.label ?? "")) * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0);
 }
