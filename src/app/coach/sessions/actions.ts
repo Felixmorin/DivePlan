@@ -522,6 +522,14 @@ export async function updateTrainingSession(formData: FormData) {
     select: { id: true }
   });
   const validAthleteIds = new Set(validAthletes.map((athlete) => athlete.id));
+  const selectedDrylandIds = Array.from(new Set(existing.blocks.flatMap((block) =>
+    block.type === BlockType.DRYLAND ? formData.getAll(`exerciseSelection:${block.id}`).map(String) : []
+  )));
+  const validDrylandExercises = await prisma.drylandExercise.findMany({
+    where: { id: { in: selectedDrylandIds } },
+    select: { id: true, defaultSets: true, defaultReps: true, defaultDuration: true }
+  });
+  const validDrylandById = new Map(validDrylandExercises.map((exercise) => [exercise.id, exercise]));
 
   await prisma.$transaction(async (tx) => {
     await tx.trainingSession.update({
@@ -540,12 +548,14 @@ export async function updateTrainingSession(formData: FormData) {
       const blockTitle = String(formData.get(`blockTitle:${block.id}`) ?? block.title).trim();
       const blockDuration = Number(formData.get(`blockDuration:${block.id}`) ?? block.duration);
       const estimatedVolume = Number(formData.get(`blockVolume:${block.id}`) ?? block.estimatedVolume);
+      const blockDescription = String(formData.get(`blockDescription:${block.id}`) ?? block.description ?? "").trim();
       const assignedIds = formData.getAll(`assign:${block.id}`).map(String).filter((id) => validAthleteIds.has(id));
 
       await tx.sessionBlock.update({
         where: { id: block.id },
         data: {
           title: blockTitle || block.title,
+          description: blockDescription || null,
           duration: Number.isFinite(blockDuration) ? blockDuration : block.duration,
           estimatedVolume: Number.isFinite(estimatedVolume) ? estimatedVolume : block.estimatedVolume
         }
@@ -559,16 +569,35 @@ export async function updateTrainingSession(formData: FormData) {
         });
       }
 
-      for (const exercise of block.drylandExercises) {
-        await tx.drylandBlockExercise.update({
-          where: { blockId_exerciseId: { blockId: exercise.blockId, exerciseId: exercise.exerciseId } },
-          data: {
-            sets: nullableNumber(formData.get(`exerciseSets:${block.id}:${exercise.exerciseId}`)),
-            reps: nullableNumber(formData.get(`exerciseReps:${block.id}:${exercise.exerciseId}`)),
-            duration: nullableNumber(formData.get(`exerciseDuration:${block.id}:${exercise.exerciseId}`)),
-            notes: nullableText(formData.get(`exerciseNotes:${block.id}:${exercise.exerciseId}`))
-          }
+      if (block.type === BlockType.DRYLAND) {
+        const selectedIds = Array.from(new Set(formData.getAll(`exerciseSelection:${block.id}`).map(String)))
+          .filter((id) => validDrylandById.has(id));
+        await tx.drylandBlockExercise.deleteMany({
+          where: { blockId: block.id, exerciseId: { notIn: selectedIds } }
         });
+
+        for (const [order, exerciseId] of selectedIds.entries()) {
+          const defaults = validDrylandById.get(exerciseId)!;
+          const existingExercise = block.drylandExercises.find((exercise) => exercise.exerciseId === exerciseId);
+          await tx.drylandBlockExercise.upsert({
+            where: { blockId_exerciseId: { blockId: block.id, exerciseId } },
+            create: {
+              blockId: block.id,
+              exerciseId,
+              sets: defaults.defaultSets,
+              reps: defaults.defaultReps,
+              duration: defaults.defaultDuration,
+              order
+            },
+            update: {
+              sets: existingExercise ? nullableNumber(formData.get(`exerciseSets:${block.id}:${exerciseId}`)) : defaults.defaultSets,
+              reps: existingExercise ? nullableNumber(formData.get(`exerciseReps:${block.id}:${exerciseId}`)) : defaults.defaultReps,
+              duration: existingExercise ? nullableNumber(formData.get(`exerciseDuration:${block.id}:${exerciseId}`)) : defaults.defaultDuration,
+              notes: existingExercise ? nullableText(formData.get(`exerciseNotes:${block.id}:${exerciseId}`)) : null,
+              order
+            }
+          });
+        }
       }
 
       if (block.poolTraining) {

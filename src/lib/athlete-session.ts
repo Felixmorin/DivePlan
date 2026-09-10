@@ -31,6 +31,7 @@ export type AthleteSessionDive = {
 export type AthleteSessionBlock = {
   id: string;
   title: string;
+  description: string | null;
   type: "WARMUP" | "DRYLAND" | "POOL" | "COOLDOWN" | "CUSTOM";
   duration: number;
   volume: number;
@@ -202,6 +203,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
     blocks: session.blocks.map((block) => ({
       id: block.id,
       title: block.title,
+      description: block.description,
       type: block.type,
       duration: block.duration,
       volume: block.estimatedVolume,
