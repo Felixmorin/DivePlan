@@ -429,9 +429,6 @@ export async function deleteTrainingSession(formData: FormData) {
   const session = await prisma.trainingSession.findFirst({
     where: { id: sessionId, week: { clubId } },
     include: {
-      completions: true,
-      diveLogs: { select: { id: true } },
-      exerciseLogs: { select: { id: true } },
       blocks: { select: { id: true } }
     }
   });
@@ -440,19 +437,12 @@ export async function deleteTrainingSession(formData: FormData) {
     throw new Error("Seance introuvable.");
   }
 
-  const hasStarted =
-    session.completions.some((completion) => completion.startedAt || completion.status !== "NOT_STARTED") ||
-    session.diveLogs.length > 0 ||
-    session.exerciseLogs.length > 0;
-
-  if (hasStarted) {
-    throw new Error("Cette seance contient deja des donnees athletes. Marque-la non faite au lieu de la supprimer.");
-  }
-
   const blockIds = session.blocks.map((block) => block.id);
 
   await prisma.$transaction(async (tx) => {
     await tx.sessionTemplate.updateMany({ where: { sessionId: session.id }, data: { sessionId: null } });
+    await tx.athleteDiveLog.deleteMany({ where: { sessionId: session.id } });
+    await tx.athleteExerciseLog.deleteMany({ where: { sessionId: session.id } });
     await tx.athleteSessionCompletion.deleteMany({ where: { sessionId: session.id } });
     await tx.poolDive.deleteMany({ where: { poolSection: { poolTrainingId: { in: blockIds } } } });
     await tx.poolSection.deleteMany({ where: { poolTrainingId: { in: blockIds } } });
