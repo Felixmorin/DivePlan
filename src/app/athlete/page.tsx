@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarDays, CheckCircle2, Clock3, History, Play, RotateCcw, UserRound, Waves } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, Eye, History, Play, RotateCcw, UserRound, Waves } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { ProgressRing } from "@/components/training/progress-ring";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAssignedReadySession, getAthleteProgressTotals, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
 import { formatMontrealDate, formatMontrealTime } from "@/lib/timezone";
+import { isSessionStartAvailable } from "@/lib/session-availability";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ export default async function AthleteTodayPage() {
   const sessionFocus = readySession?.focus ?? "Ton coach n'a pas encore publié de séance à venir.";
   const sessionDuration = readySession?.duration ?? 0;
   const sessionDate = readySession ? new Date(readySession.date) : null;
+  const canStart = sessionDate ? isSessionStartAvailable(sessionDate) : false;
   const sessionTime = sessionDate ? formatMontrealTime(sessionDate) : "--:--";
   const coachName = readySession?.coach?.user ? `${readySession.coach.user.firstName} ${readySession.coach.user.lastName}` : "Coach";
   const blockTypes = Array.from(new Set(blocks.map((block) => block.type)));
@@ -76,7 +78,10 @@ export default async function AthleteTodayPage() {
           <div className="mb-5 flex flex-wrap gap-2">{blockTypes.map((type) => <BlockTypeBadge key={type} type={type} />)}</div>
           {sessionHref ? (
             <Button asChild size="lg" variant="action" className="h-16 w-full rounded-2xl text-base">
-              <Link href={sessionHref}>{started ? <RotateCcw className="h-5 w-5" /> : <Play className="h-5 w-5 fill-current" />} {started ? "Continuer" : "Commencer la séance"}</Link>
+              <Link href={sessionHref}>
+                {started ? <RotateCcw className="h-5 w-5" /> : canStart ? <Play className="h-5 w-5 fill-current" /> : <Eye className="h-5 w-5" />}
+                {started ? "Continuer" : canStart ? "Commencer la séance" : "Voir l’aperçu"}
+              </Link>
             </Button>
           ) : (
             <EmptyState className="border-white/10 bg-white/6" title="Aucune séance" description="Reviens quand ton coach aura publié la prochaine séance." />
