@@ -15,7 +15,6 @@ export function LoginForm() {
     <form action={action} className="space-y-4">
       <Input name="email" type="text" autoComplete="username" placeholder="Courriel ou nom d'utilisateur" />
       <Input name="password" type="password" placeholder="Mot de passe" />
-      <Input name="accessCode" type="password" placeholder="Code pilote temporaire" />
       {state.error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-[var(--color-danger)]">{state.error}</p>}
       <Button type="submit" variant="action" className="w-full" disabled={pending}>
         <LogIn className="h-4 w-4" />

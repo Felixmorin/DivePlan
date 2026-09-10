@@ -20,17 +20,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   providers: [
     Credentials({
-      name: "Code pilote",
+      name: "Identifiants DivePlan",
       credentials: {
         email: { label: "Courriel ou nom d'utilisateur", type: "text" },
-        password: { label: "Mot de passe", type: "password" },
-        accessCode: { label: "Code pilote", type: "password" }
+        password: { label: "Mot de passe", type: "password" }
       },
       async authorize(credentials) {
         const identifier = String(credentials?.email ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
-        const accessCode = String(credentials?.accessCode ?? "");
-        const expectedCode = process.env.PILOT_ACCESS_CODE ?? (process.env.NODE_ENV === "production" ? "" : "diveplan-demo");
         const devDemoLogin = process.env.NODE_ENV !== "production" && identifier === "coach@diveplan.local" && password === "diveplan-demo";
 
         if (devDemoLogin) {
@@ -59,9 +56,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const passwordOk = await verifyPassword(password, user.passwordHash);
-        const pilotCodeOk = Boolean(expectedCode && (accessCode === expectedCode || password === expectedCode));
 
-        if (!passwordOk && !pilotCodeOk) {
+        if (!passwordOk) {
           await trackEvent({
             type: "auth.failed",
             message: `Connexion refusee pour ${identifier}`,

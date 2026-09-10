@@ -10,19 +10,17 @@ export type LoginState = {
 export async function login(_: LoginState, formData: FormData): Promise<LoginState> {
   const submittedEmail = String(formData.get("email") ?? "").trim();
   const submittedPassword = String(formData.get("password") ?? "");
-  const submittedAccessCode = String(formData.get("accessCode") ?? "");
-  const devQuickLogin = process.env.NODE_ENV !== "production" && !submittedEmail && !submittedPassword && !submittedAccessCode;
+  const devQuickLogin = process.env.NODE_ENV !== "production" && !submittedEmail && !submittedPassword;
 
   try {
     await signIn("credentials", {
       email: devQuickLogin ? "coach@diveplan.local" : submittedEmail,
       password: devQuickLogin ? "diveplan-demo" : submittedPassword,
-      accessCode: submittedAccessCode,
       redirectTo: "/"
     });
   } catch (error) {
     if (error instanceof AuthError) {
-      return { error: "Nom d'utilisateur, courriel, mot de passe ou code pilote invalide." };
+      return { error: "Nom d'utilisateur, courriel ou mot de passe invalide." };
     }
 
     throw error;

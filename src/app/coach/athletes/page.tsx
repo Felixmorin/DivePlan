@@ -1,7 +1,7 @@
 import type * as React from "react";
 import Link from "next/link";
 import { Activity, CalendarClock, Dumbbell, Plus, Trash2, UserPlus } from "lucide-react";
-import { createCoachOnlyAthlete, deleteAthlete } from "@/app/coach/athletes/actions";
+import { deleteAthlete } from "@/app/coach/athletes/actions";
 import { CreateAthleteAccountForm } from "@/app/coach/athletes/create-athlete-account-form";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
@@ -105,7 +104,6 @@ export default async function AthletesPage() {
     <CoachShell active="Athletes">
       <DirectoryHeader title="Athletes" description="Reperer rapidement les groupes, statuts et prochaines seances." actionHref="/coach/sessions/new" actionLabel="Creer une seance" />
       <AthleteAccountCard groups={groups} />
-      <CoachOnlyAthleteCard groups={groups} />
       <AthleteDirectory rows={rows} />
     </CoachShell>
   );
@@ -130,7 +128,6 @@ function DemoAthletesPage() {
     <CoachShell active="Athletes">
       <DirectoryHeader title="Athletes" description="Mode demo local sans PostgreSQL." actionHref="/coach/sessions/demo" actionLabel="Voir la seance" />
       <AthleteAccountCard groups={[{ id: "provincial", name: "Provincial" }]} demo />
-      <CoachOnlyAthleteCard groups={[{ id: "provincial", name: "Provincial" }]} demo />
       <AthleteDirectory rows={rows} demo />
     </CoachShell>
   );
@@ -167,38 +164,6 @@ function AthleteAccountCard({ groups, demo = false }: { groups: AthleteGroup[]; 
       </CardHeader>
       <CardContent className="p-5">
         <CreateAthleteAccountForm groups={groups} disabled={demo} />
-      </CardContent>
-    </Card>
-  );
-}
-
-function CoachOnlyAthleteCard({ groups, demo = false }: { groups: AthleteGroup[]; demo?: boolean }) {
-  return (
-    <Card className="mb-6 overflow-hidden">
-      <CardHeader className="border-b border-[var(--color-border)] bg-white">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]">
-            <UserPlus className="h-5 w-5" />
-          </div>
-          <div>
-            <CardTitle>Ajouter un athlète coach seulement</CardTitle>
-            <CardDescription>Pour les jeunes sans téléphone: visible côté coach, assignable aux séances et présent sur les feuilles imprimées.</CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="p-5">
-        <form action={demo ? undefined : createCoachOnlyAthlete} className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_170px_190px_1fr_auto]">
-          <Input name="firstName" placeholder="Prénom" disabled={demo} required />
-          <Input name="lastName" placeholder="Nom" disabled={demo} required />
-          <Input name="level" placeholder="Niveau" disabled={demo} required />
-          <Input name="birthDate" type="date" disabled={demo} />
-          <select name="groupId" disabled={demo} className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold text-[var(--color-ink)] outline-none transition duration-[var(--duration-fast)] focus-visible:shadow-[var(--focus-ring)]">
-            <option value="">Aucun groupe</option>
-            {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-          </select>
-          <Button type="submit" variant="action" disabled={demo}><Plus className="h-4 w-4" /> Ajouter</Button>
-        </form>
-        {demo && <p className="mt-3 text-sm font-semibold text-[var(--color-ink-muted)]">Disponible avec un club connecté à la base de données.</p>}
       </CardContent>
     </Card>
   );
