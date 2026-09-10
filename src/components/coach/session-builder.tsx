@@ -175,6 +175,14 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
     });
   }
 
+  function updatePoolRows(blockId: string, rows: PoolListRow[]) {
+    setActivePoolBlocks((current) => current.map((block) => block.id === blockId ? {
+      ...block,
+      sections: poolRowsToSections(rows, block.sections)
+    } : block));
+    pulse(blockId);
+  }
+
   function addPoolDive(blockId: string, sectionIndex: number, dive: BuilderPoolDive) {
     setActivePoolBlocks((current) => current.map((block) => block.id !== blockId ? block : {
       ...block,
