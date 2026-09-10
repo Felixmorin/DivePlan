@@ -629,8 +629,8 @@ export async function updateTrainingSession(formData: FormData) {
         const rows = parsePoolRows(formData.get(`poolRows:${block.id}`));
         await tx.poolDive.deleteMany({ where: { poolSection: { poolTrainingId: block.id } } });
         await tx.poolSection.deleteMany({ where: { poolTrainingId: block.id } });
-        for (const row of rows) {
-          const section = await tx.poolSection.create({ data: { poolTrainingId: block.id, height: poolHeightFromContext(row.context), label: row.context } });
+        for (const [sectionOrder, row] of rows.entries()) {
+          const section = await tx.poolSection.create({ data: { poolTrainingId: block.id, height: poolHeightFromContext(row.context), label: row.context, order: sectionOrder } });
           const repetitions = row.repetitions.length === 1 ? row.diveCodes.map(() => row.repetitions[0]) : row.repetitions;
           await tx.poolDive.createMany({ data: row.diveCodes.map((diveCode, order) => ({ poolSectionId: section.id, diveCode, diveName: diveCode, position: "Libre", repetitions: repetitions[order], order })) });
         }
@@ -702,9 +702,9 @@ async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInp
   });
 
   await tx.poolTraining.create({ data: { blockId: block.id } });
-  for (const section of data.sections) {
+  for (const [sectionOrder, section] of data.sections.entries()) {
     const createdSection = await tx.poolSection.create({
-      data: { poolTrainingId: block.id, height: section.height, label: section.label }
+      data: { poolTrainingId: block.id, height: section.height, label: section.label, order: sectionOrder }
     });
 
     await tx.poolDive.createMany({

@@ -22,7 +22,7 @@ export async function getCoachSession(sessionId: string) {
           poolTraining: {
             include: {
               sections: {
-                orderBy: { height: "asc" },
+                orderBy: { order: "asc" },
                 include: { dives: { orderBy: { order: "asc" } } }
               }
             }

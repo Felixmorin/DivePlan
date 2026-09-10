@@ -128,8 +128,8 @@ async function main() {
     const block = await prisma.sessionBlock.create({ data: { sessionId: session.id, type: BlockType.POOL, title, duration: 45, position: 10, estimatedVolume: volume } });
     await createAssignments(block.id, assignedIds);
     await prisma.poolTraining.create({ data: { blockId: block.id } });
-    const one = await prisma.poolSection.create({ data: { poolTrainingId: block.id, height: PoolHeight.ONE_METER, label: "1 metre" } });
-    const three = await prisma.poolSection.create({ data: { poolTrainingId: block.id, height: PoolHeight.THREE_METER, label: "3 metres" } });
+    const one = await prisma.poolSection.create({ data: { poolTrainingId: block.id, height: PoolHeight.ONE_METER, label: "1 metre", order: 0 } });
+    const three = await prisma.poolSection.create({ data: { poolTrainingId: block.id, height: PoolHeight.THREE_METER, label: "3 metres", order: 1 } });
     await prisma.poolDive.createMany({ data: meterOne.map(([code, name, reps], order) => ({ poolSectionId: one.id, diveCode: code, diveName: name, position: code.slice(-1), repetitions: Number(reps), order })) });
     await prisma.poolDive.createMany({ data: meterThree.map(([code, name, reps], order) => ({ poolSectionId: three.id, diveCode: code, diveName: name, position: code.slice(-1), repetitions: Number(reps), order })) });
   }

@@ -124,7 +124,7 @@ export async function getAssignedReadySession(athleteId: string) {
           poolTraining: {
             include: {
               sections: {
-                orderBy: { height: "asc" },
+                orderBy: { order: "asc" },
                 include: { dives: { orderBy: { order: "asc" } } }
               }
             }
@@ -173,7 +173,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
           poolTraining: {
             include: {
               sections: {
-                orderBy: { height: "asc" },
+                orderBy: { order: "asc" },
                 include: { dives: { orderBy: { order: "asc" }, include: { logs: { where: { athleteId, sessionId } } } } }
               }
             }

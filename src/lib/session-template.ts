@@ -89,21 +89,24 @@ export function buildSessionTemplatePayload(session: SessionSnapshot): SessionTe
           })),
         poolTraining: block.poolTraining
           ? {
-              sections: block.poolTraining.sections.map((section) => ({
-                height: section.height,
-                label: section.label,
-                dives: section.dives
-                  .slice()
-                  .sort((a, b) => a.order - b.order)
-                  .map((dive) => ({
-                    diveCode: dive.diveCode,
-                    diveName: dive.diveName,
-                    position: dive.position,
-                    repetitions: dive.repetitions,
-                    notes: dive.notes,
-                    order: dive.order
-                  }))
-              }))
+              sections: block.poolTraining.sections
+                .slice()
+                .sort((a, b) => a.order - b.order)
+                .map((section) => ({
+                  height: section.height,
+                  label: section.label,
+                  dives: section.dives
+                    .slice()
+                    .sort((a, b) => a.order - b.order)
+                    .map((dive) => ({
+                      diveCode: dive.diveCode,
+                      diveName: dive.diveName,
+                      position: dive.position,
+                      repetitions: dive.repetitions,
+                      notes: dive.notes,
+                      order: dive.order
+                    }))
+                }))
             }
           : null
       }))
@@ -201,12 +204,13 @@ export async function createSessionFromPayload(
 
     if (block.poolTraining) {
       await tx.poolTraining.create({ data: { blockId: createdBlock.id } });
-      for (const section of block.poolTraining.sections) {
+      for (const [sectionOrder, section] of block.poolTraining.sections.entries()) {
         const createdSection = await tx.poolSection.create({
           data: {
             poolTrainingId: createdBlock.id,
             height: section.height,
-            label: section.label
+            label: section.label,
+            order: sectionOrder
           }
         });
 
@@ -243,6 +247,7 @@ export async function getSessionSnapshot(sessionId: string, clubId: string) {
           poolTraining: {
             include: {
               sections: {
+                orderBy: { order: "asc" },
                 include: { dives: { orderBy: { order: "asc" } } }
               }
             }
