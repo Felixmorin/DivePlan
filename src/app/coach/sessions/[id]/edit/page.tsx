@@ -120,6 +120,10 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
                   <CardHeader>
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
+                        <label className="mb-3 flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-black">
+                          <input type="checkbox" name="includedBlocks" value={block.id} defaultChecked />
+                          Inclure ce bloc dans l&apos;entraînement
+                        </label>
                         <BlockTypeBadge type={block.type} />
                         <CardTitle className="mt-3">{index + 1}. {block.title}</CardTitle>
                         <p className="mt-2 text-sm text-[var(--color-ink-muted)]">{block.duration} min - {block.estimatedVolume} volume estime - {blockAssignedIds.length} athlete{blockAssignedIds.length > 1 ? "s" : ""}</p>

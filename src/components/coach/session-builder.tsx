@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Clock3, Eye, FileText, MoreHorizontal, Plus, Printer, Send, Tag, Trash2, Users, Waves } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Clock3, Eye, FileText, MoreHorizontal, Plus, Printer, Send, Tag, Users, Waves } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -116,6 +116,21 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
       library.some((exercise) => exercise.id === id)
     )
   );
+  const [drylandEnabled, setDrylandEnabled] = useState(Boolean(templateDryland ?? !initialTemplate));
+  const templateWarmup = templateBlocks.find((block) => block.type === "WARMUP");
+  const templateCooldown = templateBlocks.find((block) => block.type === "COOLDOWN");
+  const [warmup, setWarmup] = useState({
+    enabled: Boolean(templateWarmup ?? !initialTemplate),
+    title: templateWarmup?.title ?? "Echauffement dynamique",
+    duration: templateWarmup?.duration ?? 12,
+    description: templateWarmup?.description ?? ""
+  });
+  const [cooldown, setCooldown] = useState({
+    enabled: Boolean(templateCooldown ?? !initialTemplate),
+    title: templateCooldown?.title ?? "Retour au calme",
+    duration: templateCooldown?.duration ?? 8,
+    description: templateCooldown?.description ?? ""
+  });
   const [flashBlock, setFlashBlock] = useState<string | null>(null);
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -133,7 +148,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
   const poolAssignmentValues = activePoolBlocks.map((block) => poolAssignments[block.id] ?? []);
   const allAssignedIds = uniqueIds([...dryAssigned, ...poolAssignmentValues.flat()]);
   const unassignedBlocks = [
-    dryAssigned.length === 0 ? "Dryland" : null,
+    drylandEnabled && dryAssigned.length === 0 ? "Dryland" : null,
     ...activePoolBlocks.map((block) => ((poolAssignments[block.id] ?? []).length === 0 ? block.title : null))
   ].filter(Boolean);
   const totalDuration = Number(watched.duration ?? 0);
@@ -233,6 +248,9 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
       startTransition(() => {
         void onCreate({
           ...values,
+          warmup,
+          cooldown,
+          drylandEnabled,
           drylandExerciseIds: selectedExerciseIds,
           drylandAthleteIds: dryAssigned,
           poolBlocks: activePoolBlocks.map((block) => ({
@@ -261,7 +279,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
-          {step === 0 && <DetailsStep form={form} groups={groups} />}
+          {step === 0 && <DetailsStep form={form} groups={groups} warmup={warmup} cooldown={cooldown} onWarmupChange={setWarmup} onCooldownChange={setCooldown} />}
           {step === 1 && (
             <DrylandStep
               exercises={library}
@@ -274,6 +292,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
               onMoveExercise={moveExercise}
               onAssign={assign("dryland", setDryAssigned)}
               onCreateExercise={addExercise}
+              enabled={drylandEnabled}
+              onEnabledChange={setDrylandEnabled}
             />
           )}
           {step === 2 && (
@@ -317,13 +337,13 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
           title={watched.title ?? "Nouvelle seance"}
           date={watched.date ?? ""}
           duration={totalDuration}
-          blockCount={initialTemplate ? initialTemplate.payload.blocks.length : activePoolBlocks.length + 3}
+          blockCount={activePoolBlocks.length + Number(drylandEnabled) + Number(warmup.enabled) + Number(cooldown.enabled)}
           athleteCount={allAssignedIds.length}
           unassignedCount={unassignedBlocks.length}
           totalVolume={totalVolume}
           isPending={isPending}
           canPublish={
-            athletes.length > 0 && groups.length > 0 && selectedExerciseIds.length > 0 && dryAssigned.length > 0 && activePoolBlocks.length > 0 && activePoolBlocks.every(poolBlockIsValid) && poolAssignmentValues.every((ids) => ids.length > 0)
+            athletes.length > 0 && groups.length > 0 && (warmup.enabled || cooldown.enabled || drylandEnabled || activePoolBlocks.length > 0) && (!drylandEnabled || (selectedExerciseIds.length > 0 && dryAssigned.length > 0)) && activePoolBlocks.every(poolBlockIsValid) && poolAssignmentValues.every((ids) => ids.length > 0)
           }
           onPublish={publishSession}
         />
@@ -356,7 +376,9 @@ function Stepper({ current, onStepChange }: { current: number; onStepChange: (st
   );
 }
 
-function DetailsStep({ form, groups }: { form: ReturnType<typeof useForm<FormValues>>; groups: BuilderGroup[] }) {
+type OptionalBlock = { enabled: boolean; title: string; duration: number; description: string };
+
+function DetailsStep({ form, groups, warmup, cooldown, onWarmupChange, onCooldownChange }: { form: ReturnType<typeof useForm<FormValues>>; groups: BuilderGroup[]; warmup: OptionalBlock; cooldown: OptionalBlock; onWarmupChange: (block: OptionalBlock) => void; onCooldownChange: (block: OptionalBlock) => void }) {
   return (
     <Card>
       <CardHeader><CardTitle>Details de la seance</CardTitle></CardHeader>
@@ -372,8 +394,26 @@ function DetailsStep({ form, groups }: { form: ReturnType<typeof useForm<FormVal
         <Field label="Focus principal" className="md:col-span-2"><Input placeholder="Focus principal" {...form.register("focus")} /></Field>
         <Field label="Notes coach" className="md:col-span-2"><Textarea placeholder="Notes coach" {...form.register("notes")} /></Field>
         {Object.values(form.formState.errors).length > 0 && <div className="md:col-span-2 rounded-2xl bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">Certains champs requis sont incomplets.</div>}
+        <EditableOptionalBlock label="Échauffement dynamique" block={warmup} onChange={onWarmupChange} />
+        <EditableOptionalBlock label="Retour au calme" block={cooldown} onChange={onCooldownChange} />
       </CardContent>
     </Card>
+  );
+}
+
+function EditableOptionalBlock({ label, block, onChange }: { label: string; block: OptionalBlock; onChange: (block: OptionalBlock) => void }) {
+  return (
+    <div className={cn("rounded-2xl border p-4 md:col-span-2", block.enabled ? "border-[var(--color-brand)]/35 bg-[var(--color-brand)]/5" : "border-[var(--color-border)] bg-[var(--color-surface-raised)] opacity-70")}>
+      <label className="flex items-center gap-3 font-black text-[var(--color-ink)]">
+        <input type="checkbox" checked={block.enabled} onChange={(event) => onChange({ ...block, enabled: event.target.checked })} />
+        Inclure le bloc « {label} »
+      </label>
+      <div className="mt-3 grid gap-3 md:grid-cols-[1fr_130px]">
+        <Input aria-label={`Nom du bloc ${label}`} value={block.title} disabled={!block.enabled} onChange={(event) => onChange({ ...block, title: event.target.value })} />
+        <Input aria-label={`Durée du bloc ${label}`} type="number" min="1" value={block.duration} disabled={!block.enabled} onChange={(event) => onChange({ ...block, duration: Number(event.target.value) })} />
+        <Textarea className="md:col-span-2" aria-label={`Contenu du bloc ${label}`} placeholder="Mouvements, étirements et consignes…" value={block.description} disabled={!block.enabled} onChange={(event) => onChange({ ...block, description: event.target.value })} />
+      </div>
+    </div>
   );
 }
 
@@ -388,15 +428,21 @@ function DrylandStep(props: {
   onMoveExercise: (id: string, direction: -1 | 1) => void;
   onAssign: (ids: string[]) => void;
   onCreateExercise: (input: QuickExerciseInput) => Promise<void>;
+  enabled: boolean;
+  onEnabledChange: (enabled: boolean) => void;
 }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <BlockCard type="dryland" title="Dryland partage" duration={22} assigned={props.assigned} athletes={props.athletes} state={props.selectedExercises.length > 0 ? "Pret" : "A completer"} flash={props.flash}>
-        <QuickExerciseForm onCreateExercise={props.onCreateExercise} />
-        <div className="mb-4 rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">
-          Selectionne les exercices qui seront envoyes au backend. L&apos;ordre ci-dessous est conserve a la creation.
-        </div>
-        <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+        <label className="mb-4 flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-white p-3 font-black">
+          <input type="checkbox" checked={props.enabled} onChange={(event) => props.onEnabledChange(event.target.checked)} /> Inclure ce bloc dans l&apos;entraînement
+        </label>
+        <div className={cn(!props.enabled && "pointer-events-none opacity-50")}>
+          <QuickExerciseForm onCreateExercise={props.onCreateExercise} />
+          <div className="mb-4 rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">
+            Selectionne les exercices qui seront envoyes au backend. L&apos;ordre ci-dessous est conserve a la creation.
+          </div>
+          <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
           {props.exercises.map((exercise) => {
             const selected = props.selectedExerciseIds.includes(exercise.id);
             return (
@@ -428,6 +474,7 @@ function DrylandStep(props: {
               </div>
             );
           })}
+          </div>
         </div>
       </BlockCard>
       <AssignmentSelector selected={props.assigned} onChange={props.onAssign} athletes={props.athletes} />
@@ -587,9 +634,9 @@ function PoolBlock({ block, assigned, athletes, flash, onAssign, onRemove, onRow
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <BlockCard type="pool" title={block.title} duration={block.duration} assigned={assigned} athletes={athletes} state="Personnalisable" flash={flash}>
-        <div className="mb-4 flex justify-end">
-          <Button type="button" variant="outline" onClick={onRemove}><Trash2 className="h-4 w-4" /> Supprimer le bloc</Button>
-        </div>
+        <label className="mb-4 flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-white p-3 font-black">
+          <input type="checkbox" defaultChecked onChange={(event) => { if (!event.target.checked) onRemove(); }} /> Inclure ce bloc dans l&apos;entraînement
+        </label>
         <PoolListTable rows={poolSectionsToRows(block.sections)} onChange={onRowsChange} />
       </BlockCard>
       <AssignmentSelector selected={assigned} onChange={onAssign} athletes={athletes} />
