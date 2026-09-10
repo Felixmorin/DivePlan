@@ -67,7 +67,7 @@ Le seed Club Mustang demontre:
 
 ## Deploiement Vercel
 
-Configurer `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL` et `NEXT_PUBLIC_APP_URL` dans Vercel, puis deployer le projet. Le script `postinstall` genere Prisma Client automatiquement et `npm run prisma:migrate:deploy` applique les migrations contre la base PostgreSQL cible.
+Configurer `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL` et `NEXT_PUBLIC_APP_URL` dans Vercel, puis deployer le projet. Le script `postinstall` genere Prisma Client automatiquement et le script `prebuild` execute `prisma migrate deploy` afin d'appliquer les migrations contre la base PostgreSQL cible avant chaque build de production. La commande `npm run prisma:migrate:deploy` permet aussi de les appliquer manuellement.
 
 ## Acces pilote
 
