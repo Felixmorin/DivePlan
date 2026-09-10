@@ -299,29 +299,36 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
     setError(null);
     Object.values(feedbackSaveTimeouts.current).forEach((timeout) => window.clearTimeout(timeout));
     window.clearTimeout(finalFeedbackSaveTimeout.current);
-    startTransition(() => {
-      void onComplete({
-        sessionId: session.id,
-        sessionFeedback: finalFeedbackRef.current,
-        exercises: blocks.flatMap((sessionBlock) =>
-          sessionBlock.exercises.map((exercise) => ({
-            exerciseId: exercise.id,
-            completed: exerciseChecksRef.current[exercise.id] ?? false,
-            rating: blockFeedbackRef.current[sessionBlock.id]?.rating ?? null,
-            note: blockFeedbackRef.current[sessionBlock.id]?.note ?? null
-          }))
-        ),
-        dives: blocks.flatMap((sessionBlock) =>
-          sessionBlock.poolSections.flatMap((section) =>
-            section.dives.map((dive) => ({
-              poolDiveId: dive.id,
-              repetitionsCompleted: (diveChecksRef.current[dive.id] ?? []).filter(Boolean).length,
+    startTransition(async () => {
+      try {
+        await onComplete({
+          sessionId: session.id,
+          sessionFeedback: finalFeedbackRef.current,
+          exercises: blocks.flatMap((sessionBlock) =>
+            sessionBlock.exercises.map((exercise) => ({
+              exerciseId: exercise.id,
+              completed: exerciseChecksRef.current[exercise.id] ?? false,
               rating: blockFeedbackRef.current[sessionBlock.id]?.rating ?? null,
               note: blockFeedbackRef.current[sessionBlock.id]?.note ?? null
             }))
+          ),
+          dives: blocks.flatMap((sessionBlock) =>
+            sessionBlock.poolSections.flatMap((section) =>
+              section.dives.map((dive) => ({
+                poolDiveId: dive.id,
+                repetitionsCompleted: (diveChecksRef.current[dive.id] ?? []).filter(Boolean).length,
+                rating: blockFeedbackRef.current[sessionBlock.id]?.rating ?? null,
+                note: blockFeedbackRef.current[sessionBlock.id]?.note ?? null
+              }))
+            )
           )
-        )
-      }).catch(() => setError("L'enregistrement a echoue. Verifie la connexion et reessaie."));
+        });
+        setDirty(false);
+        setSaveStatus("saved");
+        router.push("/athlete/progress");
+      } catch {
+        setError("L'enregistrement a echoue. Verifie la connexion et reessaie.");
+      }
     });
   }
 

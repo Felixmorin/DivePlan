@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { trackEvent } from "@/lib/monitoring";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAthlete } from "@/lib/athlete-session";
@@ -130,7 +129,6 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   revalidatePath("/athlete");
   revalidatePath("/athlete/progress");
   revalidatePath(`/athlete/session/${payload.sessionId}`);
-  redirect("/athlete/progress");
 }
 
 async function assertSessionStartAvailable(sessionId: string) {
