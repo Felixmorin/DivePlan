@@ -2,6 +2,7 @@ import { PoolHeight } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { countPoolContexts } from "@/lib/pool-list";
 import { startOfMontrealDay } from "@/lib/timezone";
 
 export type AthleteSessionExercise = {
@@ -232,7 +233,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
               id: dive.id,
               code: dive.diveCode,
               name: dive.diveName,
-              repetitions: dive.repetitions,
+              repetitions: dive.repetitions * Math.max(1, countPoolContexts(section.label ?? poolHeightLabel(section.height))),
               completedRepetitions: latestLog?.repetitionsCompleted ?? 0,
               rating: latestLog?.rating ?? null,
               note: latestLog?.note ?? null

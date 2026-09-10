@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
 import { prisma } from "@/lib/prisma";
+import { countPoolContexts, validatePoolListRow, type PoolListRow } from "@/lib/pool-list";
 import {
   buildSessionTemplatePayload,
   createSessionFromPayload,
@@ -55,6 +56,13 @@ const quickExerciseSchema = z.object({
   defaultDuration: z.number().int().min(1).max(3600).nullable().optional(),
   tags: z.array(z.string().trim().min(1)).default([])
 });
+
+const poolRowsEditSchema = z.array(z.object({
+  id: z.string(),
+  context: z.string(),
+  diveCodes: z.array(z.string()),
+  repetitions: z.array(z.number())
+})).min(1);
 
 export type QuickExerciseInput = z.infer<typeof quickExerciseSchema>;
 
@@ -563,24 +571,16 @@ export async function updateTrainingSession(formData: FormData) {
         });
       }
 
-      for (const section of block.poolTraining?.sections ?? []) {
-        await tx.poolSection.update({
-          where: { id: section.id },
-          data: { label: nullableText(formData.get(`sectionLabel:${section.id}`)) }
-        });
-
-        for (const dive of section.dives) {
-          const repetitions = Number(formData.get(`diveReps:${dive.id}`) ?? dive.repetitions);
-          await tx.poolDive.update({
-            where: { id: dive.id },
-            data: {
-              diveCode: String(formData.get(`diveCode:${dive.id}`) ?? dive.diveCode).trim() || dive.diveCode,
-              diveName: String(formData.get(`diveName:${dive.id}`) ?? dive.diveName).trim() || dive.diveName,
-              repetitions: Number.isFinite(repetitions) ? repetitions : dive.repetitions,
-              notes: nullableText(formData.get(`diveNotes:${dive.id}`))
-            }
-          });
+      if (block.poolTraining) {
+        const rows = parsePoolRows(formData.get(`poolRows:${block.id}`));
+        await tx.poolDive.deleteMany({ where: { poolSection: { poolTrainingId: block.id } } });
+        await tx.poolSection.deleteMany({ where: { poolTrainingId: block.id } });
+        for (const row of rows) {
+          const section = await tx.poolSection.create({ data: { poolTrainingId: block.id, height: poolHeightFromContext(row.context), label: row.context } });
+          const repetitions = row.repetitions.length === 1 ? row.diveCodes.map(() => row.repetitions[0]) : row.repetitions;
+          await tx.poolDive.createMany({ data: row.diveCodes.map((diveCode, order) => ({ poolSectionId: section.id, diveCode, diveName: diveCode, position: "Libre", repetitions: repetitions[order], order })) });
         }
+        await tx.sessionBlock.update({ where: { id: block.id }, data: { estimatedVolume: poolRowsVolume(rows) } });
       }
     }
   });
@@ -634,7 +634,7 @@ async function createBlock(
 }
 
 async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInput["poolBlocks"][number], position: number) {
-  const volume = data.sections.reduce((sum, section) => sum + section.dives.reduce((sectionSum, dive) => sectionSum + dive.repetitions, 0), 0);
+  const volume = data.sections.reduce((sum, section) => sum + Math.max(1, countPoolContexts(section.label ?? "")) * section.dives.reduce((sectionSum, dive) => sectionSum + dive.repetitions, 0), 0);
   const block = await createBlock(tx, {
     sessionId,
     type: BlockType.POOL,
@@ -663,6 +663,33 @@ async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInp
       }))
     });
   }
+}
+
+function parsePoolRows(value: FormDataEntryValue | null): PoolListRow[] {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(String(value ?? "[]"));
+  } catch {
+    throw new Error("La liste de plongeons est illisible.");
+  }
+  const parsed = poolRowsEditSchema.safeParse(payload);
+  if (!parsed.success || parsed.data.some((row) => validatePoolListRow(row).errors.length > 0)) {
+    throw new Error("Chaque ligne piscine doit contenir une hauteur, des plongeons et des repetitions correspondantes.");
+  }
+  return parsed.data;
+}
+
+function poolRowsVolume(rows: PoolListRow[]) {
+  return rows.reduce((sum, row) => sum + validatePoolListRow(row).total, 0);
+}
+
+function poolHeightFromContext(context: string): PoolHeight {
+  const normalized = context.trim().toLowerCase();
+  if (countPoolContexts(context) > 1) return PoolHeight.CUSTOM;
+  if (normalized.startsWith("1m")) return PoolHeight.ONE_METER;
+  if (normalized.startsWith("3m")) return PoolHeight.THREE_METER;
+  if (normalized.includes("plateforme")) return PoolHeight.PLATFORM;
+  return PoolHeight.CUSTOM;
 }
 
 function nullableNumber(value: FormDataEntryValue | null) {
