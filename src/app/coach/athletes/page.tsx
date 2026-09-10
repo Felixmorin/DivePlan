@@ -1,6 +1,6 @@
 import type * as React from "react";
 import Link from "next/link";
-import { Activity, CalendarClock, Dumbbell, FileUp, Plus, Trash2, UserPlus } from "lucide-react";
+import { Activity, CalendarClock, Dumbbell, Plus, Trash2, UserPlus } from "lucide-react";
 import { createCoachOnlyAthlete, deleteAthlete } from "@/app/coach/athletes/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
@@ -15,7 +15,6 @@ import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
-import { ImportAthletesForm } from "./import-athletes-form";
 
 export const dynamic = "force-dynamic";
 
@@ -105,7 +104,6 @@ export default async function AthletesPage() {
     <CoachShell active="Athletes">
       <DirectoryHeader title="Athletes" description="Reperer rapidement les groupes, statuts et prochaines seances." actionHref="/coach/sessions/new" actionLabel="Creer une seance" />
       <CoachOnlyAthleteCard groups={groups} />
-      <ImportCard />
       <AthleteDirectory rows={rows} />
     </CoachShell>
   );
@@ -182,33 +180,12 @@ function CoachOnlyAthleteCard({ groups, demo = false }: { groups: AthleteGroup[]
   );
 }
 
-function ImportCard() {
-  return (
-    <Card className="mb-6 overflow-hidden">
-      <CardHeader className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]">
-            <FileUp className="h-5 w-5" />
-          </div>
-          <div>
-            <CardTitle>Import CSV</CardTitle>
-            <CardDescription>Colonnes supportees: firstName, lastName, email, level, group.</CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="p-5">
-        <ImportAthletesForm />
-      </CardContent>
-    </Card>
-  );
-}
-
 function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: boolean }) {
   if (rows.length === 0) {
     return (
       <EmptyState
         title="Aucun athlete dans ce club"
-        description="Ajoute des athletes par CSV ou cree une invitation pour demarrer la planification."
+        description="Ajoute un athlete ou cree une invitation pour demarrer la planification."
         action={<Button asChild variant="action"><Link href="/coach/invitations">Inviter un athlete</Link></Button>}
       />
     );

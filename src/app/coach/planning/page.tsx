@@ -161,14 +161,6 @@ function DemoPlanningPage({ period }: { period: PlanningPeriod }) {
 
 function PlanningView({ period, sessions, events, targets, demo = false }: { period: PlanningPeriod; sessions: PlanningSession[]; events: PlanningEvent[]; targets: PlanningTarget[]; demo?: boolean }) {
   const activeSessionIds = new Set(sessions.filter((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
-  const stats = {
-    draft: sessions.filter((session) => session.status === "DRAFT").length,
-    ready: sessions.filter((session) => session.status === "READY").length,
-    completed: sessions.filter((session) => session.status === "COMPLETED").length,
-    notDone: sessions.filter((session) => session.status === "NOT_DONE").length,
-    inProgress: activeSessionIds.size,
-    events: events.length
-  };
 
   return (
     <CoachShell active="Planning">
@@ -204,15 +196,6 @@ function PlanningView({ period, sessions, events, targets, demo = false }: { per
             </span>
           </div>
         )}
-      </div>
-
-      <div className="mb-5 grid gap-3 sm:grid-cols-6">
-        <PlanningStat label="Brouillons" value={stats.draft} tone="draft" />
-        <PlanningStat label="Publiées" value={stats.ready} tone="ready" />
-        <PlanningStat label="En cours" value={stats.inProgress} tone="active" />
-        <PlanningStat label="Terminées" value={stats.completed} tone="done" />
-        <PlanningStat label="Non faites" value={stats.notDone} tone="notDone" />
-        <PlanningStat label="Événements" value={stats.events} tone="event" />
       </div>
 
       <AddPlanningEventPanel targets={targets} demo={demo} />
@@ -418,19 +401,6 @@ function MonthEventItem({ event }: { event: PlanningEvent }) {
       {event.title}
     </div>
   );
-}
-
-function PlanningStat({ label, value, tone }: { label: string; value: number; tone: "draft" | "ready" | "active" | "done" | "notDone" | "event" }) {
-  const tones = {
-    draft: "bg-[var(--block-dryland-bg)] text-[var(--block-dryland-fg)]",
-    ready: "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]",
-    active: "bg-[var(--color-action)] text-white",
-    done: "bg-[var(--color-success-soft)] text-[var(--color-success)]",
-    notDone: "bg-[var(--color-danger)]/10 text-[var(--color-danger)]",
-    event: "bg-white text-[var(--color-ink)]"
-  };
-
-  return <div className={`rounded-2xl p-4 ${tones[tone]}`}><div className="text-xs font-black uppercase opacity-75">{label}</div><div className="mt-2 text-3xl font-black">{value}</div></div>;
 }
 
 function statusTone(status: SessionStatus | string) {
