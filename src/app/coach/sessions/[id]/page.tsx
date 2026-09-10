@@ -60,14 +60,14 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           )}
           <form action={deleteTrainingSession}>
             <input type="hidden" name="sessionId" value={session.id} />
-            <Button type="submit" variant="outline" disabled={hasStarted} title={hasStarted ? "Impossible de supprimer une seance commencee" : "Supprimer la seance"}><Trash2 className="h-4 w-4" /> Supprimer</Button>
+            <Button type="submit" variant="outline" title={hasStarted ? "Supprimer la seance et ses donnees athletes" : "Supprimer la seance"}><Trash2 className="h-4 w-4" /> Supprimer</Button>
           </form>
         </div>
       </div>
       {hasStarted && (
         <div className="mb-4 flex items-start gap-2 rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          Seance deja commencee: la modification est bloquee pour garder les donnees realisees comparables au plan original.
+          Seance deja commencee: la modification est bloquee pour garder les donnees realisees comparables au plan original. La suppression reste possible et effacera les donnees athletes associees.
         </div>
       )}
       <Card className="mb-4">
