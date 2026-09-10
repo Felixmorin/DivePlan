@@ -7,6 +7,7 @@ import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  basePath: "/api/auth",
   secret: process.env.AUTH_SECRET ?? (process.env.NODE_ENV === "production" ? undefined : "diveplan-local-development-secret-change-me"),
   logger: {
     error(error) {
