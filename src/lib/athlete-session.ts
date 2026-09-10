@@ -90,7 +90,12 @@ export async function getCurrentAthlete() {
 
   return prisma.athlete.findUnique({
     where: { userId: user.id },
-    include: { user: true }
+    include: {
+      user: true,
+      club: true,
+      group: { include: { coach: { include: { user: true } } } },
+      competitionDives: { orderBy: [{ height: "asc" }, { position: "asc" }, { createdAt: "asc" }] }
+    }
   });
 }
 

@@ -151,6 +151,21 @@ model Athlete {
   exerciseLogs AthleteExerciseLog[]
   skills      AthleteSkill[]
   planningEvents PlanningEvent[]
+  competitionDives CompetitionDive[]
+}
+
+model CompetitionDive {
+  id         String     @id @default(cuid())
+  athleteId  String
+  height     PoolHeight
+  diveCode   String
+  diveName   String
+  difficulty Float?
+  position   Int        @default(0)
+  createdAt  DateTime   @default(now())
+  athlete    Athlete    @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, height, position])
 }
 
 model Coach {

@@ -3,7 +3,7 @@
 import { randomInt, randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import { PoolHeight, UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
@@ -37,6 +37,14 @@ const manualAthleteSchema = z.object({
 const athleteAccountSchema = manualAthleteSchema.extend({
   username: z.string().trim().toLowerCase().min(3).max(30).regex(/^[a-z0-9._-]+$/),
   temporaryPassword: z.string().min(10).max(128).regex(/[A-Za-z]/).regex(/[0-9]/).optional()
+});
+
+const competitionDiveSchema = z.object({
+  athleteId: z.string().min(1),
+  height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM]),
+  diveCode: z.string().trim().min(1).max(12),
+  diveName: z.string().trim().min(1).max(100),
+  difficulty: z.string().trim().optional()
 });
 
 type CsvAthlete = {
@@ -288,6 +296,69 @@ export async function createAthleteAccount(_: CreateAthleteAccountState, formDat
       temporaryPassword
     }
   };
+}
+
+export async function addCompetitionDive(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const parsed = competitionDiveSchema.safeParse({
+    athleteId: formData.get("athleteId"),
+    height: formData.get("height"),
+    diveCode: formData.get("diveCode"),
+    diveName: formData.get("diveName"),
+    difficulty: String(formData.get("difficulty") ?? "")
+  });
+
+  if (!parsed.success) {
+    throw new Error("Les informations du plongeon sont invalides.");
+  }
+
+  const athlete = await prisma.athlete.findFirst({
+    where: { id: parsed.data.athleteId, clubId },
+    select: { id: true }
+  });
+  if (!athlete) {
+    throw new Error("Athlète introuvable.");
+  }
+
+  const difficulty = parsed.data.difficulty ? Number(parsed.data.difficulty.replace(",", ".")) : null;
+  if (difficulty !== null && (!Number.isFinite(difficulty) || difficulty < 0 || difficulty > 10)) {
+    throw new Error("Le degré de difficulté doit être compris entre 0 et 10.");
+  }
+
+  const position = await prisma.competitionDive.count({
+    where: { athleteId: athlete.id, height: parsed.data.height }
+  });
+
+  await prisma.competitionDive.create({
+    data: {
+      athleteId: athlete.id,
+      height: parsed.data.height,
+      diveCode: parsed.data.diveCode.toUpperCase(),
+      diveName: parsed.data.diveName,
+      difficulty,
+      position
+    }
+  });
+
+  revalidatePath(`/coach/athletes/${athlete.id}`);
+  revalidatePath("/athlete/profile");
+}
+
+export async function removeCompetitionDive(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const diveId = String(formData.get("diveId") ?? "");
+  const dive = await prisma.competitionDive.findFirst({
+    where: { id: diveId, athlete: { clubId } },
+    select: { id: true, athleteId: true }
+  });
+
+  if (!dive) {
+    throw new Error("Plongeon introuvable.");
+  }
+
+  await prisma.competitionDive.delete({ where: { id: dive.id } });
+  revalidatePath(`/coach/athletes/${dive.athleteId}`);
+  revalidatePath("/athlete/profile");
 }
 
 export async function deleteAthlete(formData: FormData) {

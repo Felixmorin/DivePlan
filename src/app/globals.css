@@ -130,6 +130,18 @@ a {
   animation: athlete-success 220ms ease-out;
 }
 
+.profile-hero::after {
+  content: "";
+  position: absolute;
+  inset: -35% -15% -45% 42%;
+  background:
+    radial-gradient(circle at 35% 35%, rgba(34, 211, 238, 0.2), transparent 34%),
+    repeating-radial-gradient(ellipse at center, rgba(103, 232, 249, 0.1) 0 1px, transparent 2px 11px);
+  transform: rotate(-10deg);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
