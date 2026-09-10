@@ -23,9 +23,7 @@ export default async function AthleteCalendarPage() {
   return (
     <AthleteShell>
       <header className="mb-6">
-        <p className="text-sm font-black uppercase text-[var(--color-brand)]">Calendrier</p>
-        <h1 className="mt-2 text-3xl font-black">Tes prochains événements</h1>
-        <p className="mt-2 text-sm font-semibold leading-6 text-white/55">Ton planning personnel, celui de ton groupe et les rendez-vous du club.</p>
+        <h1 className="text-3xl font-black">Calendrier</h1>
       </header>
 
       <div className="space-y-7">
