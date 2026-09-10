@@ -175,9 +175,22 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
     });
   }
 
-  function updatePoolRows(blockId: string, rows: PoolListRow[]) {
-    setActivePoolBlocks((current) => current.map((block) => block.id === blockId ? { ...block, sections: poolRowsToSections(rows, block.sections) } : block));
+  function addPoolDive(blockId: string, sectionIndex: number, dive: BuilderPoolDive) {
+    setActivePoolBlocks((current) => current.map((block) => block.id !== blockId ? block : {
+      ...block,
+      sections: block.sections.map((section, index) => index !== sectionIndex ? section : { ...section, dives: [...section.dives, dive] })
+    }));
     pulse(blockId);
+  }
+
+  function removePoolDive(blockId: string, sectionIndex: number, diveOrder: number) {
+    setActivePoolBlocks((current) => current.map((block) => block.id !== blockId ? block : {
+      ...block,
+      sections: block.sections.map((section, index) => index !== sectionIndex ? section : {
+        ...section,
+        dives: section.dives.filter((dive) => dive.order !== diveOrder)
+      }).filter((section) => section.dives.length > 0)
+    }).filter((block) => block.sections.length > 0));
   }
 
   function toggleExercise(exerciseId: string) {
