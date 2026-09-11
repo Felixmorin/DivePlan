@@ -180,6 +180,7 @@ model PlanningEvent {
   club      Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
   group     TrainingGroup?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
   athlete   Athlete?          @relation(fields: [athleteId], references: [id], onDelete: SetNull)
+  session   TrainingSession?
 
   @@index([clubId, startsAt])
   @@index([groupId, startsAt])
@@ -199,22 +200,24 @@ model TrainingWeek {
 }
 
 model TrainingSession {
-  id           String                     @id @default(cuid())
-  date         DateTime
-  title        String
-  duration     Int
-  focus        String
-  notes        String?
-  weekId       String
-  coachId      String
-  status       SessionStatus              @default(DRAFT)
-  week         TrainingWeek               @relation(fields: [weekId], references: [id])
-  coach        Coach                      @relation(fields: [coachId], references: [id])
-  blocks       SessionBlock[]
-  completions  AthleteSessionCompletion[]
-  diveLogs     AthleteDiveLog[]
-  exerciseLogs AthleteExerciseLog[]
-  templates    SessionTemplate[]
+  id              String                     @id @default(cuid())
+  date            DateTime
+  title           String
+  duration        Int
+  focus           String
+  notes           String?
+  weekId          String
+  coachId         String
+  status          SessionStatus              @default(DRAFT)
+  planningEventId String?                    @unique
+  week            TrainingWeek               @relation(fields: [weekId], references: [id])
+  coach           Coach                      @relation(fields: [coachId], references: [id])
+  blocks          SessionBlock[]
+  completions     AthleteSessionCompletion[]
+  diveLogs        AthleteDiveLog[]
+  exerciseLogs    AthleteExerciseLog[]
+  templates       SessionTemplate[]
+  planningEvent   PlanningEvent?             @relation(fields: [planningEventId], references: [id], onDelete: SetNull)
 }
 
 model SessionBlock {

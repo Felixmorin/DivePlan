@@ -33,7 +33,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     );
   }
 
-  const [groups, athletes, drylandLibrary, template, recentPoolSessions] = await Promise.all([
+  const [groups, athletes, drylandLibrary, template, recentPoolSessions, planningEvents] = await Promise.all([
     prisma.trainingGroup.findMany({ where: { clubId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.athlete.findMany({
       where: { clubId, active: true },
@@ -59,7 +59,8 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
           }
         }
       }
-    })
+    }),
+    prisma.planningEvent.findMany({ where: { clubId, type: "TRAINING_SCHEDULE" }, orderBy: { startsAt: "asc" }, select: { id: true, title: true, startsAt: true, groupId: true, location: true } })
   ]);
   const poolBlocks = recentPoolSessions.flatMap((session) => session.blocks).filter((block) => block.poolTraining).slice(0, 3);
   const initialTemplate = template
@@ -100,6 +101,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
             tags: exercise.tags
           }))}
           groups={groups}
+          planningEvents={planningEvents.map((event) => ({ id: event.id, title: event.title, startsAt: event.startsAt, groupId: event.groupId, location: event.location }))}
           poolBlocks={poolBlocks.map((block) => ({
             id: block.id,
             title: block.title,

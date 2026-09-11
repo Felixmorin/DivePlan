@@ -28,6 +28,7 @@ const schema = z.object({
   duration: z.number().min(15, "Minimum 15 minutes"),
   focus: z.string().min(3, "Focus requis"),
   notes: z.string().optional()
+  ,planningEventId: z.string().optional()
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -55,6 +56,8 @@ type BuilderGroup = {
   id: string;
   name: string;
 };
+
+type BuilderPlanningEvent = { id: string; title: string; startsAt: Date; groupId: string | null; location: string | null };
 
 type BuilderPoolDive = {
   diveCode: string;
@@ -91,6 +94,7 @@ type SessionBuilderProps = {
   athletes: BuilderAthlete[];
   drylandLibrary: BuilderExercise[];
   groups: BuilderGroup[];
+  planningEvents: BuilderPlanningEvent[];
   poolBlocks: BuilderPoolBlock[];
   initialTemplate?: {
     id: string;
@@ -104,7 +108,7 @@ type SessionBuilderProps = {
 
 const steps = ["Details", "Dryland", "Piscine", "Assignations", "Publication"];
 
-export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, initialTemplate, onCreate, onCreateExercise }: SessionBuilderProps) {
+export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvents, poolBlocks, initialTemplate, onCreate, onCreateExercise }: SessionBuilderProps) {
   const [step, setStep] = useState(0);
   const [isPending, startTransition] = useTransition();
   const [library, setLibrary] = useState(drylandLibrary);
@@ -150,6 +154,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
       duration: initialTemplate?.payload.duration ?? 90,
       focus: initialTemplate?.payload.focus ?? "203C, 201B, entrees propres",
       notes: initialTemplate?.payload.notes ?? "Priorite aux entrees propres."
+      ,planningEventId: ""
     }
   });
   const watched = useWatch({ control: form.control });
@@ -279,7 +284,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, poolBlocks, i
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
-          {step === 0 && <DetailsStep form={form} groups={groups} warmup={warmup} cooldown={cooldown} onWarmupChange={setWarmup} onCooldownChange={setCooldown} />}
+          {step === 0 && <DetailsStep form={form} groups={groups} planningEvents={planningEvents} warmup={warmup} cooldown={cooldown} onWarmupChange={setWarmup} onCooldownChange={setCooldown} />}
           {step === 1 && (
             <DrylandStep
               exercises={library}
@@ -377,7 +382,7 @@ function Stepper({ current, onStepChange }: { current: number; onStepChange: (st
 
 type OptionalBlock = { enabled: boolean; title: string; duration: number; description: string };
 
-function DetailsStep({ form, groups, warmup, cooldown, onWarmupChange, onCooldownChange }: { form: ReturnType<typeof useForm<FormValues>>; groups: BuilderGroup[]; warmup: OptionalBlock; cooldown: OptionalBlock; onWarmupChange: (block: OptionalBlock) => void; onCooldownChange: (block: OptionalBlock) => void }) {
+function DetailsStep({ form, groups, planningEvents, warmup, cooldown, onWarmupChange, onCooldownChange }: { form: ReturnType<typeof useForm<FormValues>>; groups: BuilderGroup[]; planningEvents: BuilderPlanningEvent[]; warmup: OptionalBlock; cooldown: OptionalBlock; onWarmupChange: (block: OptionalBlock) => void; onCooldownChange: (block: OptionalBlock) => void }) {
   return (
     <Card>
       <CardHeader><CardTitle>Details de la seance</CardTitle></CardHeader>
@@ -388,6 +393,13 @@ function DetailsStep({ form, groups, warmup, cooldown, onWarmupChange, onCooldow
           <select className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]" {...form.register("groupId")}>
             {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
           </select>
+        </Field>
+        <Field label="Horaire du groupe" className="md:col-span-2">
+          <select className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]" {...form.register("planningEventId")}>
+            <option value="">Aucun horaire lié</option>
+            {planningEvents.filter((event) => !event.groupId || event.groupId === form.getValues("groupId")).map((event) => <option key={event.id} value={event.id}>{event.title} · {new Intl.DateTimeFormat("fr-CA", { dateStyle: "short", timeStyle: "short", timeZone: "America/Toronto" }).format(event.startsAt)}{event.location ? ` · ${event.location}` : ""}</option>)}
+          </select>
+          <span className="mt-1 block text-xs font-semibold normal-case text-[var(--color-ink-muted)]">L’horaire reste affiché dans le planning; la séance sera ouverte depuis ce même élément.</span>
         </Field>
         <Field label="Duree totale"><Input type="number" placeholder="Duree" {...form.register("duration", { valueAsNumber: true })} /></Field>
         <Field label="Focus principal" className="md:col-span-2"><Input placeholder="Focus principal" {...form.register("focus")} /></Field>

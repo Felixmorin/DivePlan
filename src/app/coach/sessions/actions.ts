@@ -23,6 +23,7 @@ const sessionInputSchema = z.object({
   duration: z.number().min(15),
   focus: z.string().min(3),
   notes: z.string().optional(),
+  planningEventId: z.string().optional(),
   templateId: z.string().optional(),
   warmup: z.object({
     enabled: z.boolean(),
@@ -126,6 +127,11 @@ export async function createTrainingSession(input: CreateSessionInput) {
     throw new Error("Groupe introuvable pour ce club.");
   }
 
+  const planningEvent = data.planningEventId
+    ? await prisma.planningEvent.findFirst({ where: { id: data.planningEventId, clubId, groupId: data.groupId, type: "TRAINING_SCHEDULE" } })
+    : null;
+  if (data.planningEventId && !planningEvent) throw new Error("Horaire d'entraînement introuvable pour ce groupe.");
+
   if (data.templateId) {
     const template = await prisma.sessionTemplate.findFirst({
       where: { id: data.templateId, clubId }
@@ -150,6 +156,9 @@ export async function createTrainingSession(input: CreateSessionInput) {
         status: SessionStatus.READY
       })
     );
+    if (planningEvent?.id) {
+      await prisma.trainingSession.update({ where: { id: session.id }, data: { planningEventId: planningEvent.id } });
+    }
 
     revalidatePath("/coach");
     revalidatePath("/coach/planning");
@@ -224,6 +233,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         weekId: week.id,
         coachId: coach.id,
         status: SessionStatus.READY
+        ,planningEventId: planningEvent?.id
       }
     });
 

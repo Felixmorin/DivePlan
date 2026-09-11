@@ -26,6 +26,7 @@ type PlanningSession = {
   status: SessionStatus | string;
   blocks: Array<{ type: BlockType | string; estimatedVolume: number; assignments: Array<{ athleteId: string }> }>;
   completions: Array<{ status: CompletionStatus | string }>;
+  planningEventId: string | null;
 };
 
 type PlanningEvent = {
@@ -95,9 +96,11 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
     duration: session.duration,
     status: session.status,
     blocks: session.blocks,
-    completions: session.completions
+    completions: session.completions,
+    planningEventId: session.planningEventId
   }));
-  const events: PlanningEvent[] = rawEvents.map((event) => ({
+  const linkedEventIds = new Set(sessions.map((session) => session.planningEventId).filter(Boolean));
+  const events: PlanningEvent[] = rawEvents.filter((event) => !linkedEventIds.has(event.id)).map((event) => ({
     id: event.id,
     type: event.type,
     title: event.title,
@@ -125,7 +128,8 @@ function DemoPlanningPage({ period }: { period: PlanningPeriod }) {
     duration: session.duration,
     status: session.status === "Brouillon" ? "DRAFT" : session.status === "Complete" ? "COMPLETED" : "READY",
     blocks: demoSession.blocks.map((block) => ({ type: block.type, estimatedVolume: block.volume, assignments: block.assignedTo.map((athleteId) => ({ athleteId })) })),
-    completions: []
+    completions: [],
+    planningEventId: null
   })) satisfies PlanningSession[];
   const events: PlanningEvent[] = [
     {

@@ -25,7 +25,9 @@ type DashboardSession = {
   groupName: string;
   blocks: Array<{ type: BlockType | string; estimatedVolume: number; assignments: Array<{ athleteId: string }> }>;
   completions: Array<{ status: CompletionStatus | string }>;
+  planningEventId: string | null;
 };
+type DashboardSchedule = { id: string; title: string; startsAt: Date; duration: number | null; location: string | null; groupName: string | null; sessionId: string | null };
 
 type AvatarAthlete = { id: string; firstName: string; lastName: string; avatar?: string | null };
 
@@ -42,7 +44,7 @@ export default async function CoachDashboard() {
   const dayStart = startOfMontrealDay(today);
   const dayEnd = addMontrealDays(dayStart, 1);
 
-  const [activeAthletes, rawSessions, recentEvents, recentCompletions] = await Promise.all([
+  const [activeAthletes, rawSessions, schedules, recentEvents, recentCompletions] = await Promise.all([
     prisma.athlete.findMany({
       where: { clubId, active: true },
       include: { user: true, group: true },
@@ -56,6 +58,11 @@ export default async function CoachDashboard() {
         blocks: { orderBy: { position: "asc" }, include: { assignments: true } },
         completions: true
       }
+    }),
+    prisma.planningEvent.findMany({
+      where: { clubId, type: "TRAINING_SCHEDULE", startsAt: { gte: weekStart, lt: weekEnd } },
+      orderBy: { startsAt: "asc" },
+      include: { group: true, session: { select: { id: true, status: true } } }
     }),
     prisma.appEvent.findMany({
       where: { OR: [{ clubId }, { clubId: null }] },
@@ -80,7 +87,8 @@ export default async function CoachDashboard() {
     status: session.status,
     groupName: session.week.group.name,
     blocks: session.blocks,
-    completions: session.completions
+    completions: session.completions,
+    planningEventId: session.planningEventId
   }));
   const todaySessions = sessions.filter((session) => session.date >= dayStart && session.date < dayEnd);
   const primarySession = pickPrimarySession(todaySessions, sessions, today);
@@ -132,7 +140,7 @@ export default async function CoachDashboard() {
           <WeekSelector sessions={sessions} />
         </div>
         <div className="grid gap-3 lg:grid-cols-7">
-          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))} activeSessionIds={activeSessionIds} />)}
+          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date))} schedules={schedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date)).map((schedule) => ({ id: schedule.id, title: schedule.title, startsAt: schedule.startsAt, duration: schedule.duration, location: schedule.location, groupName: schedule.group?.name ?? null, sessionId: schedule.session?.id ?? null }))} activeSessionIds={activeSessionIds} />)}
         </div>
       </section>
 
@@ -188,6 +196,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
     groupName: demoSession.group,
     blocks: demoSession.blocks.map((block) => ({ type: block.type, estimatedVolume: block.volume, assignments: block.assignedTo.map((athleteId) => ({ athleteId })) })),
     completions: []
+    ,planningEventId: null
   })) satisfies DashboardSession[];
   const primarySession = sessions.find((session) => session.title === demoSession.title) ?? sessions[0];
   const activeSessionIds = new Set<string>();
@@ -214,7 +223,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
           <WeekSelector sessions={sessions} />
         </div>
         <div className="grid gap-3 lg:grid-cols-7">
-          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))} activeSessionIds={activeSessionIds} demo />)}
+          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))} schedules={[]} activeSessionIds={activeSessionIds} demo />)}
         </div>
       </section>
 
@@ -310,13 +319,13 @@ function WeekSelector({ sessions }: { sessions: DashboardSession[] }) {
   );
 }
 
-function WeekDayCard({ day, sessions, activeSessionIds, demo = false }: { day: { key: number; label: string; date: Date }; sessions: DashboardSession[]; activeSessionIds: Set<string>; demo?: boolean }) {
+function WeekDayCard({ day, sessions, schedules, activeSessionIds, demo = false }: { day: { key: number; label: string; date: Date }; sessions: DashboardSession[]; schedules: DashboardSchedule[]; activeSessionIds: Set<string>; demo?: boolean }) {
   return (
     <Card id={`day-${day.key}`} className="min-h-44 scroll-mt-28">
       <CardContent className="p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div><div className="font-black">{day.label}</div><div className="text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealDate(day.date, { day: "2-digit", month: "short" })}</div></div>
-          <span className="text-xs font-black text-[var(--color-ink-soft)]">{sessions.length || "Repos"}</span>
+          <span className="text-xs font-black text-[var(--color-ink-soft)]">{sessions.length + schedules.length || "Repos"}</span>
         </div>
         <div className="space-y-3">
           {sessions.map((session) => {
@@ -330,7 +339,13 @@ function WeekDayCard({ day, sessions, activeSessionIds, demo = false }: { day: {
               </div>
             );
           })}
-          {sessions.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--color-border-strong)] p-4 text-sm font-semibold text-[var(--color-ink-soft)]">Aucune séance</div>}
+          {schedules.map((schedule) => <div key={schedule.id} className="rounded-2xl border border-[var(--color-brand)]/25 bg-[var(--color-surface-raised)] p-3">
+            <div className="flex items-center justify-between gap-2"><span className="text-xs font-black uppercase text-[var(--color-brand-strong)]">Horaire</span><span className="text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealTime(schedule.startsAt)}</span></div>
+            {schedule.sessionId ? <Link href={`/coach/sessions/${schedule.sessionId}`} className="mt-2 block font-black hover:text-[var(--color-brand-strong)]">{schedule.title}</Link> : <div className="mt-2 font-black">{schedule.title}</div>}
+            <div className="mt-1 text-sm text-[var(--color-ink-muted)]">{schedule.groupName ?? "Club complet"}{schedule.location ? ` · ${schedule.location}` : ""}</div>
+            <div className="mt-2 text-xs font-bold text-[var(--color-action-strong)]">{schedule.sessionId ? "Séance planifiée" : "Entraînement à faire"}</div>
+          </div>)}
+          {sessions.length === 0 && schedules.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--color-border-strong)] p-4 text-sm font-semibold text-[var(--color-ink-soft)]">Aucun horaire ni séance</div>}
         </div>
       </CardContent>
     </Card>
