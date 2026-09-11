@@ -282,8 +282,11 @@ model PoolSection {
   poolTrainingId String
   height         PoolHeight
   label          String?
+  order          Int
   poolTraining   PoolTraining @relation(fields: [poolTrainingId], references: [blockId], onDelete: Cascade)
   dives          PoolDive[]
+
+  @@index([poolTrainingId, order])
 }
 
 model PoolDive {

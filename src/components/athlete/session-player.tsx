@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Circle, Dumbbell, NotebookPen, Play, RotateCcw, Save, Timer, Waves } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, NotebookPen, Play, RotateCcw, Save, Timer, Waves } from "lucide-react";
 import type { CompleteSessionPayload, SaveAthleteProgressPayload } from "@/app/athlete/session/[id]/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { AthleteSessionView } from "@/lib/athlete-session";
 import { formatMontrealTime } from "@/lib/timezone";
+import { isSessionStartAvailable } from "@/lib/session-availability";
 
 const ratings = ["dur", "moyen", "bon", "excellent"];
 
@@ -33,6 +34,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
   const blocks = session.blocks;
   const [current, setCurrent] = useState(0);
   const [started, setStarted] = useState(session.completionStatus === "IN_PROGRESS" || session.completionStatus === "COMPLETED");
+  const [now, setNow] = useState(() => Date.now());
   const [reviewing, setReviewing] = useState(session.completionStatus === "COMPLETED");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +85,14 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
   const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : Math.round(((current + 1) / blocks.length) * 100);
   const blockRemaining = countBlockRemaining(block, exerciseChecks, diveChecks);
   const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
+  const canStart = isSessionStartAvailable(session.date, new Date(now));
+
+  useEffect(() => {
+    if (started || canStart) return;
+    const delay = Math.min(30_000, Math.max(250, new Date(session.date).getTime() - Date.now()));
+    const timeout = window.setTimeout(() => setNow(Date.now()), delay);
+    return () => window.clearTimeout(timeout);
+  }, [canStart, session.date, started, now]);
 
   function markDirty() {
     setDirty(true);
@@ -173,13 +183,15 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
   }
 
   function begin() {
+    if (!canStart) return;
     setError(null);
     startTransition(async () => {
       try {
         await onStart(session.id);
         setStarted(true);
       } catch {
-        setError("Connexion instable. Reessaie avant de commencer.");
+        setNow(Date.now());
+        setError("Impossible de démarrer. Vérifie l’heure prévue et ta connexion, puis réessaie.");
       }
     });
   }
@@ -287,29 +299,36 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
     setError(null);
     Object.values(feedbackSaveTimeouts.current).forEach((timeout) => window.clearTimeout(timeout));
     window.clearTimeout(finalFeedbackSaveTimeout.current);
-    startTransition(() => {
-      void onComplete({
-        sessionId: session.id,
-        sessionFeedback: finalFeedbackRef.current,
-        exercises: blocks.flatMap((sessionBlock) =>
-          sessionBlock.exercises.map((exercise) => ({
-            exerciseId: exercise.id,
-            completed: exerciseChecksRef.current[exercise.id] ?? false,
-            rating: blockFeedbackRef.current[sessionBlock.id]?.rating ?? null,
-            note: blockFeedbackRef.current[sessionBlock.id]?.note ?? null
-          }))
-        ),
-        dives: blocks.flatMap((sessionBlock) =>
-          sessionBlock.poolSections.flatMap((section) =>
-            section.dives.map((dive) => ({
-              poolDiveId: dive.id,
-              repetitionsCompleted: (diveChecksRef.current[dive.id] ?? []).filter(Boolean).length,
+    startTransition(async () => {
+      try {
+        await onComplete({
+          sessionId: session.id,
+          sessionFeedback: finalFeedbackRef.current,
+          exercises: blocks.flatMap((sessionBlock) =>
+            sessionBlock.exercises.map((exercise) => ({
+              exerciseId: exercise.id,
+              completed: exerciseChecksRef.current[exercise.id] ?? false,
               rating: blockFeedbackRef.current[sessionBlock.id]?.rating ?? null,
               note: blockFeedbackRef.current[sessionBlock.id]?.note ?? null
             }))
+          ),
+          dives: blocks.flatMap((sessionBlock) =>
+            sessionBlock.poolSections.flatMap((section) =>
+              section.dives.map((dive) => ({
+                poolDiveId: dive.id,
+                repetitionsCompleted: (diveChecksRef.current[dive.id] ?? []).filter(Boolean).length,
+                rating: blockFeedbackRef.current[sessionBlock.id]?.rating ?? null,
+                note: blockFeedbackRef.current[sessionBlock.id]?.note ?? null
+              }))
+            )
           )
-        )
-      }).catch(() => setError("L'enregistrement a echoue. Verifie la connexion et reessaie."));
+        });
+        setDirty(false);
+        setSaveStatus("saved");
+        router.push("/athlete/progress");
+      } catch {
+        setError("L'enregistrement a echoue. Verifie la connexion et reessaie.");
+      }
     });
   }
 
@@ -330,10 +349,28 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
             <div className="mt-5 flex flex-wrap gap-2">{Array.from(new Set(blocks.map((item) => item.type))).map((type) => <BlockTypeBadge key={type} type={type} />)}</div>
             {session.notes && <div className="mt-5 rounded-2xl bg-[var(--color-athlete-bg)] p-4 text-sm leading-6 text-white/70"><span className="font-black text-white">Consigne: </span>{session.notes}</div>}
           </section>
+          {!canStart && (
+            <div className="mt-4 flex items-start gap-3 rounded-2xl border border-white/10 bg-white/8 p-4 text-sm leading-6 text-white/72">
+              <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-action)]" />
+              <div><div className="font-black text-white">Disponible à {formatMontrealTime(session.date)}</div><p>Tu peux consulter l’aperçu maintenant, mais la séance ne pourra pas être démarrée avant l’heure prévue.</p></div>
+            </div>
+          )}
+          <section className="mt-4 rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-black"><Eye className="h-4 w-4 text-[var(--color-action)]" /> Aperçu de l’entraînement</div>
+            <div className="space-y-3">
+              {blocks.map((previewBlock, index) => (
+                <div key={previewBlock.id} className="rounded-2xl bg-[var(--color-athlete-bg)] p-3">
+                  <div className="flex items-center justify-between gap-3"><div className="font-black">{index + 1}. {previewBlock.title}</div><span className="shrink-0 text-xs font-bold text-white/55">{previewBlock.duration} min</span></div>
+                  {previewBlock.description && <p className="mt-2 whitespace-pre-line text-sm leading-5 text-white/62">{previewBlock.description}</p>}
+                  <div className="mt-2 text-xs font-semibold text-white/48">{previewBlock.exercises.length} exercice(s) · {previewBlock.poolSections.reduce((sum, section) => sum + section.dives.length, 0)} plongeon(s)</div>
+                </div>
+              ))}
+            </div>
+          </section>
           {error && <ErrorBanner message={error} />}
-          <Button type="button" variant="action" size="lg" className="mt-6 h-16 w-full rounded-2xl text-base" disabled={isPending} onClick={begin}>
+          <Button type="button" variant="action" size="lg" className="mt-6 h-16 w-full rounded-2xl text-base" disabled={isPending || !canStart} onClick={begin}>
             {session.completionStatus === "IN_PROGRESS" ? <RotateCcw className="h-5 w-5" /> : <Play className="h-5 w-5 fill-current" />}
-            {isPending ? "Ouverture..." : session.completionStatus === "IN_PROGRESS" ? "Continuer" : "Commencer la séance"}
+            {isPending ? "Ouverture..." : session.completionStatus === "IN_PROGRESS" ? "Continuer" : canStart ? "Commencer la séance" : `Disponible à ${formatMontrealTime(session.date)}`}
           </Button>
         </div>
       </AthleteShell>
@@ -397,6 +434,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
             <span className="inline-flex items-center gap-1 text-sm font-bold text-white/55"><Timer className="h-4 w-4" /> {block.duration} min</span>
           </div>
           <h1 className="mt-5 text-4xl font-black leading-none">{block.title}</h1>
+          {block.description && <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6 text-white/78">{block.description}</p>}
           <p className="mt-3 text-sm font-semibold leading-6 text-white/68">{session.focus}</p>
           {session.notes && <div className="mt-4 rounded-2xl bg-[var(--color-athlete-bg)] p-3 text-sm leading-6 text-white/70">{session.notes}</div>}
           <div className="mt-5 rounded-2xl bg-white/8 p-4">

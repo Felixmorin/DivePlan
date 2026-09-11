@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { trackEvent } from "@/lib/monitoring";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAthlete } from "@/lib/athlete-session";
 import { getAssignedSessionBlocks, persistAthleteProgress, type AthleteProgressPayload } from "@/lib/athlete-progress";
+import { isSessionStartAvailable, SESSION_NOT_STARTED_MESSAGE } from "@/lib/session-availability";
 
 export type CompleteSessionPayload = AthleteProgressPayload;
 
@@ -18,15 +18,20 @@ export async function startAthleteSession(sessionId: string) {
     throw new Error("Aucun athlete actif trouve.");
   }
 
-  const assignedBlocks = await prisma.sessionBlock.count({
+  const session = await prisma.trainingSession.findFirst({
     where: {
-      sessionId,
-      assignments: { some: { athleteId: athlete.id } }
-    }
+      id: sessionId,
+      blocks: { some: { assignments: { some: { athleteId: athlete.id } } } }
+    },
+    select: { date: true }
   });
 
-  if (assignedBlocks === 0) {
+  if (!session) {
     throw new Error("Cette seance n'est pas assignee a l'athlete courant.");
+  }
+
+  if (!isSessionStartAvailable(session.date)) {
+    throw new Error(SESSION_NOT_STARTED_MESSAGE);
   }
 
   await prisma.athleteSessionCompletion.upsert({
@@ -68,6 +73,8 @@ export async function saveAthleteProgress(payload: SaveAthleteProgressPayload) {
     throw new Error("Cette seance n'est pas assignee a l'athlete courant.");
   }
 
+  await assertSessionStartAvailable(payload.sessionId);
+
   await persistAthleteProgress(payload, athlete.id, assignedBlocks);
 
   revalidatePath("/athlete");
@@ -87,6 +94,8 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   if (assignedBlocks.length === 0) {
     throw new Error("Cette seance n'est pas assignee a l'athlete courant.");
   }
+
+  await assertSessionStartAvailable(payload.sessionId);
 
   await persistAthleteProgress(payload, athlete.id, assignedBlocks, async (tx) => {
     await tx.athleteSessionCompletion.upsert({
@@ -120,5 +129,15 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   revalidatePath("/athlete");
   revalidatePath("/athlete/progress");
   revalidatePath(`/athlete/session/${payload.sessionId}`);
-  redirect("/athlete/progress");
+}
+
+async function assertSessionStartAvailable(sessionId: string) {
+  const session = await prisma.trainingSession.findUnique({
+    where: { id: sessionId },
+    select: { date: true }
+  });
+
+  if (!session || !isSessionStartAvailable(session.date)) {
+    throw new Error(SESSION_NOT_STARTED_MESSAGE);
+  }
 }

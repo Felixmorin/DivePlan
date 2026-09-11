@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCoachSession } from "@/lib/coach-session";
 import { formatMontrealDate } from "@/lib/timezone";
+import { countPoolContexts } from "@/lib/pool-list";
 
 export const dynamic = "force-dynamic";
 
@@ -59,14 +60,14 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           )}
           <form action={deleteTrainingSession}>
             <input type="hidden" name="sessionId" value={session.id} />
-            <Button type="submit" variant="outline" disabled={hasStarted} title={hasStarted ? "Impossible de supprimer une seance commencee" : "Supprimer la seance"}><Trash2 className="h-4 w-4" /> Supprimer</Button>
+            <Button type="submit" variant="outline" title={hasStarted ? "Supprimer la seance et ses donnees athletes" : "Supprimer la seance"}><Trash2 className="h-4 w-4" /> Supprimer</Button>
           </form>
         </div>
       </div>
       {hasStarted && (
         <div className="mb-4 flex items-start gap-2 rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          Seance deja commencee: la modification est bloquee pour garder les donnees realisees comparables au plan original.
+          Seance deja commencee: la modification est bloquee pour garder les donnees realisees comparables au plan original. La suppression reste possible et effacera les donnees athletes associees.
         </div>
       )}
       <Card className="mb-4">
@@ -152,8 +153,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 </div>
               </CardHeader>
               <CardContent>
+                {block.description && <p className="mb-4 whitespace-pre-line text-sm leading-6 text-[var(--color-ink-muted)]">{block.description}</p>}
                 {block.drylandExercises.length > 0 && <div className="grid gap-2 md:grid-cols-3">{block.drylandExercises.map((item) => <div key={item.exerciseId} className="rounded-2xl bg-[var(--color-surface-raised)] p-3"><div className="font-bold">{item.exercise.name}</div><div className="text-sm text-[var(--color-ink-muted)]">{item.sets ?? 1} x {item.reps ?? `${item.duration ?? 30} sec`}</div></div>)}</div>}
-                {block.poolTraining && <div className="grid gap-4 md:grid-cols-2">{block.poolTraining.sections.map((section) => <div key={section.id}><div className="mb-2 font-black">{(section.label ?? section.height).toUpperCase()}</div>{section.dives.map((dive) => <div key={dive.id} className="flex justify-between border-b border-[var(--color-border)] py-2"><span className="font-bold">{dive.diveCode} · {dive.diveName}</span><span>{dive.repetitions} reps</span></div>)}</div>)}</div>}
+                {block.poolTraining && <div className="overflow-x-auto rounded-2xl border border-[var(--color-border)]"><table className="w-full min-w-[620px] text-sm"><thead className="bg-[var(--color-navy)] text-left text-white"><tr><th className="p-3">Hauteur(s)</th><th className="p-3">Plongeons</th><th className="p-3">Repetitions</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{block.poolTraining.sections.map((section) => { const multiplier = Math.max(1, countPoolContexts(section.label ?? "")); return <tr key={section.id} className="border-t border-[var(--color-border)]"><td className="p-3 font-black">{section.label ?? section.height}</td><td className="p-3 font-bold">{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td className="p-3">{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="p-3 text-right font-black">{multiplier * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)}</td></tr>; })}</tbody><tfoot className="border-t-2 border-[var(--color-navy)] bg-[var(--color-surface-raised)] font-black"><tr><td className="p-3" colSpan={3}>Total general</td><td className="p-3 text-right">{block.estimatedVolume}</td></tr></tfoot></table></div>}
                 <p className="mt-4 text-sm text-[var(--color-ink-muted)]">
                   Athletes:{" "}
                   {block.assignments.map((assignment, index) => (

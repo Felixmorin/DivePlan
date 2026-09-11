@@ -2,6 +2,7 @@ import { PoolHeight } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { countPoolContexts } from "@/lib/pool-list";
 import { startOfMontrealDay } from "@/lib/timezone";
 
 export type AthleteSessionExercise = {
@@ -30,6 +31,7 @@ export type AthleteSessionDive = {
 export type AthleteSessionBlock = {
   id: string;
   title: string;
+  description: string | null;
   type: "WARMUP" | "DRYLAND" | "POOL" | "COOLDOWN" | "CUSTOM";
   duration: number;
   volume: number;
@@ -122,7 +124,7 @@ export async function getAssignedReadySession(athleteId: string) {
           poolTraining: {
             include: {
               sections: {
-                orderBy: { height: "asc" },
+                orderBy: { order: "asc" },
                 include: { dives: { orderBy: { order: "asc" } } }
               }
             }
@@ -171,7 +173,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
           poolTraining: {
             include: {
               sections: {
-                orderBy: { height: "asc" },
+                orderBy: { order: "asc" },
                 include: { dives: { orderBy: { order: "asc" }, include: { logs: { where: { athleteId, sessionId } } } } }
               }
             }
@@ -201,6 +203,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
     blocks: session.blocks.map((block) => ({
       id: block.id,
       title: block.title,
+      description: block.description,
       type: block.type,
       duration: block.duration,
       volume: block.estimatedVolume,
@@ -232,7 +235,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
               id: dive.id,
               code: dive.diveCode,
               name: dive.diveName,
-              repetitions: dive.repetitions,
+              repetitions: dive.repetitions * Math.max(1, countPoolContexts(section.label ?? poolHeightLabel(section.height))),
               completedRepetitions: latestLog?.repetitionsCompleted ?? 0,
               rating: latestLog?.rating ?? null,
               note: latestLog?.note ?? null

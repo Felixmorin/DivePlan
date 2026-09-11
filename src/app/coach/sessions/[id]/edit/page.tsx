@@ -3,6 +3,7 @@ import { AlertTriangle, Copy, Clock3, Eye, FileText, Printer, Save, Send, Users,
 import { duplicateTrainingSession, updateTrainingSession } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { CoachShell } from "@/components/coach/coach-shell";
+import { PoolListFormTable } from "@/components/coach/pool-list-table";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
@@ -18,13 +19,14 @@ export const dynamic = "force-dynamic";
 
 export default async function EditSessionPage({ params }: { params: Promise<{ id: string }> }) {
   const [{ id }, { clubId }] = await Promise.all([params, requireCoach()]);
-  const [session, athletes] = await Promise.all([
+  const [session, athletes, drylandLibrary] = await Promise.all([
     getCoachSession(id),
     prisma.athlete.findMany({
       where: { clubId, active: true },
       orderBy: { user: { firstName: "asc" } },
       include: { user: true }
-    })
+    }),
+    prisma.drylandExercise.findMany({ orderBy: [{ category: "asc" }, { name: "asc" }] })
   ]);
   const uniqueAthletes = athletes.map((athlete) => ({
     id: athlete.id,
@@ -118,6 +120,10 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
                   <CardHeader>
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
+                        <label className="mb-3 flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-black">
+                          <input type="checkbox" name="includedBlocks" value={block.id} defaultChecked />
+                          Inclure ce bloc dans l&apos;entraînement
+                        </label>
                         <BlockTypeBadge type={block.type} />
                         <CardTitle className="mt-3">{index + 1}. {block.title}</CardTitle>
                         <p className="mt-2 text-sm text-[var(--color-ink-muted)]">{block.duration} min - {block.estimatedVolume} volume estime - {blockAssignedIds.length} athlete{blockAssignedIds.length > 1 ? "s" : ""}</p>
@@ -128,10 +134,17 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
                   </CardHeader>
                   <CardContent className="space-y-5">
                     <div className="grid gap-3 md:grid-cols-3">
-                      <Input name={`blockTitle:${block.id}`} defaultValue={block.title} />
-                      <Input name={`blockDuration:${block.id}`} type="number" defaultValue={block.duration} />
-                      <Input name={`blockVolume:${block.id}`} type="number" defaultValue={block.estimatedVolume} />
+                      <Field label="Nom du bloc"><Input name={`blockTitle:${block.id}`} defaultValue={block.title} required /></Field>
+                      <Field label="Durée du bloc"><Input name={`blockDuration:${block.id}`} type="number" min="1" defaultValue={block.duration} required /></Field>
+                      <Field label="Volume estimé"><Input name={`blockVolume:${block.id}`} type="number" min="0" defaultValue={block.estimatedVolume} /></Field>
                     </div>
+                    <Field label={block.type === "WARMUP" || block.type === "COOLDOWN" ? "Contenu du bloc" : "Description du bloc"}>
+                      <Textarea
+                        name={`blockDescription:${block.id}`}
+                        defaultValue={block.description ?? ""}
+                        placeholder={block.type === "WARMUP" ? "Décris les mouvements et consignes de l’échauffement…" : block.type === "COOLDOWN" ? "Décris les étirements et consignes du retour au calme…" : "Consignes facultatives…"}
+                      />
+                    </Field>
                     <div>
                       <div className="mb-2 text-sm font-black text-[var(--color-ink-muted)]">Assignations du bloc</div>
                       <div className="grid gap-2 md:grid-cols-3">
@@ -143,33 +156,40 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
                         ))}
                       </div>
                     </div>
-                    {block.drylandExercises.length > 0 && (
+                    {block.type === "DRYLAND" && (
                       <div className="space-y-3">
-                        <div className="text-sm font-black text-[var(--color-ink-muted)]">Exercices dryland</div>
+                        <div>
+                          <div className="text-sm font-black text-[var(--color-ink-muted)]">Exercices dryland</div>
+                          <p className="mt-1 text-sm text-[var(--color-ink-muted)]">Décoche un exercice pour l’enlever, ou coche-en un autre pour le remplacer.</p>
+                        </div>
                         {block.drylandExercises.map((item) => (
-                          <div key={item.exerciseId} className="grid gap-3 rounded-2xl bg-[var(--color-surface-raised)] p-3 md:grid-cols-[1fr_90px_90px_110px_1fr]">
-                            <div className="font-bold">{item.exercise.name}</div>
+                          <div key={item.exerciseId} className="grid gap-3 rounded-2xl bg-[var(--color-surface-raised)] p-3 md:grid-cols-[minmax(180px,1fr)_90px_90px_110px_1fr]">
+                            <label className="flex items-center gap-2 font-bold">
+                              <input type="checkbox" name={`exerciseSelection:${block.id}`} value={item.exerciseId} defaultChecked />
+                              {item.exercise.name}
+                            </label>
                             <Input name={`exerciseSets:${block.id}:${item.exerciseId}`} type="number" defaultValue={item.sets ?? ""} placeholder="Sets" />
                             <Input name={`exerciseReps:${block.id}:${item.exerciseId}`} type="number" defaultValue={item.reps ?? ""} placeholder="Reps" />
                             <Input name={`exerciseDuration:${block.id}:${item.exerciseId}`} type="number" defaultValue={item.duration ?? ""} placeholder="Sec" />
                             <Input name={`exerciseNotes:${block.id}:${item.exerciseId}`} defaultValue={item.notes ?? ""} placeholder="Notes" />
                           </div>
                         ))}
+                        {drylandLibrary.filter((exercise) => !block.drylandExercises.some((item) => item.exerciseId === exercise.id)).length > 0 && (
+                          <div className="rounded-2xl border border-[var(--color-border)] bg-white p-3">
+                            <div className="mb-2 text-sm font-black text-[var(--color-ink-muted)]">Ajouter depuis la bibliothèque</div>
+                            <div className="grid gap-2 md:grid-cols-2">
+                              {drylandLibrary.filter((exercise) => !block.drylandExercises.some((item) => item.exerciseId === exercise.id)).map((exercise) => (
+                                <label key={exercise.id} className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--color-border)] px-3 text-sm font-semibold has-[:checked]:border-[var(--block-dryland-fg)] has-[:checked]:bg-[var(--block-dryland-bg)]">
+                                  <input type="checkbox" name={`exerciseSelection:${block.id}`} value={exercise.id} />
+                                  <span>{exercise.name} <span className="font-normal text-[var(--color-ink-muted)]">· {exercise.category}</span></span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
-                    {block.poolTraining?.sections.map((section) => (
-                      <div key={section.id} className="space-y-3">
-                        <Input name={`sectionLabel:${section.id}`} defaultValue={section.label ?? ""} />
-                        {section.dives.map((dive) => (
-                          <div key={dive.id} className="grid gap-3 rounded-2xl bg-[var(--color-surface-raised)] p-3 md:grid-cols-[110px_1fr_90px_1fr]">
-                            <Input name={`diveCode:${dive.id}`} defaultValue={dive.diveCode} />
-                            <Input name={`diveName:${dive.id}`} defaultValue={dive.diveName} />
-                            <Input name={`diveReps:${dive.id}`} type="number" defaultValue={dive.repetitions} />
-                            <Input name={`diveNotes:${dive.id}`} defaultValue={dive.notes ?? ""} placeholder="Notes" />
-                          </div>
-                        ))}
-                      </div>
-                    ))}
+                    {block.poolTraining && <PoolListFormTable inputName={`poolRows:${block.id}`} initialRows={block.poolTraining.sections.map((section) => ({ id: section.id, context: section.label ?? poolHeightLabel(section.height), diveCodes: section.dives.map((dive) => dive.diveCode), repetitions: section.dives.map((dive) => dive.repetitions) }))} />}
                   </CardContent>
                 </Card>
               );
@@ -218,4 +238,11 @@ function Field({ label, className, children }: { label: string; className?: stri
 
 function SummaryMetric({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string | number }) {
   return <div className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--color-surface-raised)] p-3"><div className="flex items-center gap-2 text-sm font-bold text-[var(--color-ink-muted)]"><Icon className="h-4 w-4 text-[var(--color-brand-strong)]" /> {label}</div><div className="font-black">{value}</div></div>;
+}
+
+function poolHeightLabel(height: string) {
+  if (height === "ONE_METER") return "1m";
+  if (height === "THREE_METER") return "3m";
+  if (height === "PLATFORM") return "Plateforme";
+  return "Section";
 }

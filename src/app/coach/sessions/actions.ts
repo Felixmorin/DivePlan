@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
 import { prisma } from "@/lib/prisma";
+import { countPoolContexts, validatePoolListRow, type PoolListRow } from "@/lib/pool-list";
 import {
   buildSessionTemplatePayload,
   createSessionFromPayload,
@@ -23,8 +24,24 @@ const sessionInputSchema = z.object({
   focus: z.string().min(3),
   notes: z.string().optional(),
   templateId: z.string().optional(),
-  drylandExerciseIds: z.array(z.string()).default([]),
-  drylandAthleteIds: z.array(z.string()).default([]),
+  warmup: z.object({
+    enabled: z.boolean(),
+    title: z.string().trim().min(1),
+    duration: z.number().int().min(1),
+    description: z.string().optional()
+  }),
+  cooldown: z.object({
+    enabled: z.boolean(),
+    title: z.string().trim().min(1),
+    duration: z.number().int().min(1),
+    description: z.string().optional()
+  }),
+  drylandBlocks: z.array(z.object({
+    title: z.string().trim().min(1),
+    duration: z.number().int().min(1),
+    exerciseIds: z.array(z.string()).min(1),
+    athleteIds: z.array(z.string()).min(1)
+  })).default([]),
   poolBlocks: z.array(z.object({
     title: z.string().min(1),
     duration: z.number().min(1),
@@ -55,6 +72,13 @@ const quickExerciseSchema = z.object({
   defaultDuration: z.number().int().min(1).max(3600).nullable().optional(),
   tags: z.array(z.string().trim().min(1)).default([])
 });
+
+const poolRowsEditSchema = z.array(z.object({
+  id: z.string(),
+  context: z.string(),
+  diveCodes: z.array(z.string()),
+  repetitions: z.array(z.number())
+})).min(1);
 
 export type QuickExerciseInput = z.infer<typeof quickExerciseSchema>;
 
@@ -140,35 +164,37 @@ export async function createTrainingSession(input: CreateSessionInput) {
     redirect(`/coach/sessions/${session.id}`);
   }
 
-  if (data.drylandExerciseIds.length === 0 || data.drylandAthleteIds.length === 0 || data.poolBlocks.length === 0 || data.poolBlocks.some((block) => block.athleteIds.length === 0)) {
-    throw new Error("La seance doit contenir des exercices dryland et des assignations dryland/piscine.");
+  if ((!data.warmup.enabled && !data.cooldown.enabled && data.drylandBlocks.length === 0 && data.poolBlocks.length === 0) ||
+      data.poolBlocks.some((block) => block.athleteIds.length === 0)) {
+    throw new Error("La seance doit contenir au moins un bloc et chaque bloc d'entrainement doit etre complet et assigne.");
   }
 
   const poolAthleteIds = data.poolBlocks.flatMap((block) => block.athleteIds);
+  const requestedAthleteIds = Array.from(new Set([...data.drylandBlocks.flatMap((block) => block.athleteIds), ...poolAthleteIds]));
   const [athletes, exercises] = await Promise.all([
     prisma.athlete.findMany({
-      where: {
-        clubId,
-        id: { in: Array.from(new Set([...data.drylandAthleteIds, ...poolAthleteIds])) }
-      },
+      where: { clubId, active: true },
       select: { id: true }
     }),
     prisma.drylandExercise.findMany({
-      where: { id: { in: data.drylandExerciseIds } },
+      where: { id: { in: data.drylandBlocks.flatMap((block) => block.exerciseIds) } },
       select: { id: true, defaultSets: true, defaultReps: true, defaultDuration: true }
     })
   ]);
 
   const validAthleteIds = new Set(athletes.map((athlete) => athlete.id));
-  const validExerciseIds = new Set(exercises.map((exercise) => exercise.id));
-
   const requireValidAthletes = (ids: string[]) => ids.filter((id) => validAthleteIds.has(id));
-  const allAthleteIds = Array.from(validAthleteIds);
-  const drylandAthleteIds = requireValidAthletes(data.drylandAthleteIds);
+  const allAthleteIds = requestedAthleteIds.length > 0
+    ? requestedAthleteIds.filter((id) => validAthleteIds.has(id))
+    : Array.from(validAthleteIds);
+  const drylandBlocks = data.drylandBlocks.map((block) => ({
+    ...block,
+    athleteIds: requireValidAthletes(block.athleteIds),
+    exercises: block.exerciseIds.map((id) => exercises.find((exercise) => exercise.id === id)).filter((exercise): exercise is (typeof exercises)[number] => Boolean(exercise))
+  }));
   const poolBlocks = data.poolBlocks.map((block) => ({ ...block, athleteIds: requireValidAthletes(block.athleteIds) }));
-  const drylandExercises = exercises.filter((exercise) => validExerciseIds.has(exercise.id));
 
-  if (allAthleteIds.length === 0 || drylandAthleteIds.length === 0 || drylandExercises.length === 0 || poolBlocks.some((block) => block.athleteIds.length === 0)) {
+  if (allAthleteIds.length === 0 || drylandBlocks.some((block) => block.athleteIds.length === 0 || block.exercises.length !== block.exerciseIds.length) || poolBlocks.some((block) => block.athleteIds.length === 0)) {
     throw new Error("La seance doit contenir au moins un athlete et un exercice valides.");
   }
 
@@ -201,50 +227,58 @@ export async function createTrainingSession(input: CreateSessionInput) {
       }
     });
 
-    await createBlock(tx, {
-      sessionId: createdSession.id,
-      type: BlockType.WARMUP,
-      title: "Echauffement dynamique",
-      duration: 12,
-      position: 1,
-      estimatedVolume: 0,
-      athleteIds: allAthleteIds
-    });
-
-    const drylandBlock = await createBlock(tx, {
-      sessionId: createdSession.id,
-      type: BlockType.DRYLAND,
-      title: "Dryland - Activation technique",
-      duration: 22,
-      position: 2,
-      estimatedVolume: drylandExercises.length * drylandAthleteIds.length * 6,
-      athleteIds: drylandAthleteIds
-    });
-
-    await tx.drylandBlockExercise.createMany({
-      data: drylandExercises.map((exercise, order) => ({
-        blockId: drylandBlock.id,
-        exerciseId: exercise.id,
-        sets: exercise.defaultSets,
-        reps: exercise.defaultReps,
-        duration: exercise.defaultDuration,
-        order
-      }))
-    });
-
-    for (const [index, poolBlock] of poolBlocks.entries()) {
-      await createPoolBlock(tx, createdSession.id, poolBlock, index + 3);
+    if (data.warmup.enabled) {
+      await createBlock(tx, {
+        sessionId: createdSession.id,
+        type: BlockType.WARMUP,
+        title: data.warmup.title,
+        description: data.warmup.description,
+        duration: data.warmup.duration,
+        position: 1,
+        estimatedVolume: 0,
+        athleteIds: allAthleteIds
+      });
     }
 
-    await createBlock(tx, {
-      sessionId: createdSession.id,
-      type: BlockType.COOLDOWN,
-      title: "Retour au calme",
-      duration: 8,
-      position: 99,
-      estimatedVolume: 0,
-      athleteIds: allAthleteIds
-    });
+    for (const [index, dryland] of drylandBlocks.entries()) {
+      const drylandBlock = await createBlock(tx, {
+        sessionId: createdSession.id,
+        type: BlockType.DRYLAND,
+        title: dryland.title,
+        duration: dryland.duration,
+        position: index + 2,
+        estimatedVolume: dryland.exercises.length * dryland.athleteIds.length * 6,
+        athleteIds: dryland.athleteIds
+      });
+
+      await tx.drylandBlockExercise.createMany({
+        data: dryland.exercises.map((exercise, order) => ({
+          blockId: drylandBlock.id,
+          exerciseId: exercise.id,
+          sets: exercise.defaultSets,
+          reps: exercise.defaultReps,
+          duration: exercise.defaultDuration,
+          order
+        }))
+      });
+    }
+
+    for (const [index, poolBlock] of poolBlocks.entries()) {
+      await createPoolBlock(tx, createdSession.id, poolBlock, index + drylandBlocks.length + 2);
+    }
+
+    if (data.cooldown.enabled) {
+      await createBlock(tx, {
+        sessionId: createdSession.id,
+        type: BlockType.COOLDOWN,
+        title: data.cooldown.title,
+        description: data.cooldown.description,
+        duration: data.cooldown.duration,
+        position: 99,
+        estimatedVolume: 0,
+        athleteIds: allAthleteIds
+      });
+    }
 
     return createdSession;
   });
@@ -400,9 +434,6 @@ export async function deleteTrainingSession(formData: FormData) {
   const session = await prisma.trainingSession.findFirst({
     where: { id: sessionId, week: { clubId } },
     include: {
-      completions: true,
-      diveLogs: { select: { id: true } },
-      exerciseLogs: { select: { id: true } },
       blocks: { select: { id: true } }
     }
   });
@@ -411,19 +442,12 @@ export async function deleteTrainingSession(formData: FormData) {
     throw new Error("Seance introuvable.");
   }
 
-  const hasStarted =
-    session.completions.some((completion) => completion.startedAt || completion.status !== "NOT_STARTED") ||
-    session.diveLogs.length > 0 ||
-    session.exerciseLogs.length > 0;
-
-  if (hasStarted) {
-    throw new Error("Cette seance contient deja des donnees athletes. Marque-la non faite au lieu de la supprimer.");
-  }
-
   const blockIds = session.blocks.map((block) => block.id);
 
   await prisma.$transaction(async (tx) => {
     await tx.sessionTemplate.updateMany({ where: { sessionId: session.id }, data: { sessionId: null } });
+    await tx.athleteDiveLog.deleteMany({ where: { sessionId: session.id } });
+    await tx.athleteExerciseLog.deleteMany({ where: { sessionId: session.id } });
     await tx.athleteSessionCompletion.deleteMany({ where: { sessionId: session.id } });
     await tx.poolDive.deleteMany({ where: { poolSection: { poolTrainingId: { in: blockIds } } } });
     await tx.poolSection.deleteMany({ where: { poolTrainingId: { in: blockIds } } });
@@ -514,6 +538,18 @@ export async function updateTrainingSession(formData: FormData) {
     select: { id: true }
   });
   const validAthleteIds = new Set(validAthletes.map((athlete) => athlete.id));
+  const includedBlockIds = new Set(formData.getAll("includedBlocks").map(String));
+  if (includedBlockIds.size === 0) {
+    throw new Error("La seance doit contenir au moins un bloc.");
+  }
+  const selectedDrylandIds = Array.from(new Set(existing.blocks.flatMap((block) =>
+    block.type === BlockType.DRYLAND ? formData.getAll(`exerciseSelection:${block.id}`).map(String) : []
+  )));
+  const validDrylandExercises = await prisma.drylandExercise.findMany({
+    where: { id: { in: selectedDrylandIds } },
+    select: { id: true, defaultSets: true, defaultReps: true, defaultDuration: true }
+  });
+  const validDrylandById = new Map(validDrylandExercises.map((exercise) => [exercise.id, exercise]));
 
   await prisma.$transaction(async (tx) => {
     await tx.trainingSession.update({
@@ -528,16 +564,23 @@ export async function updateTrainingSession(formData: FormData) {
       }
     });
 
+    await tx.sessionBlock.deleteMany({
+      where: { sessionId, id: { notIn: Array.from(includedBlockIds) } }
+    });
+
     for (const block of existing.blocks) {
+      if (!includedBlockIds.has(block.id)) continue;
       const blockTitle = String(formData.get(`blockTitle:${block.id}`) ?? block.title).trim();
       const blockDuration = Number(formData.get(`blockDuration:${block.id}`) ?? block.duration);
       const estimatedVolume = Number(formData.get(`blockVolume:${block.id}`) ?? block.estimatedVolume);
+      const blockDescription = String(formData.get(`blockDescription:${block.id}`) ?? block.description ?? "").trim();
       const assignedIds = formData.getAll(`assign:${block.id}`).map(String).filter((id) => validAthleteIds.has(id));
 
       await tx.sessionBlock.update({
         where: { id: block.id },
         data: {
           title: blockTitle || block.title,
+          description: blockDescription || null,
           duration: Number.isFinite(blockDuration) ? blockDuration : block.duration,
           estimatedVolume: Number.isFinite(estimatedVolume) ? estimatedVolume : block.estimatedVolume
         }
@@ -551,36 +594,47 @@ export async function updateTrainingSession(formData: FormData) {
         });
       }
 
-      for (const exercise of block.drylandExercises) {
-        await tx.drylandBlockExercise.update({
-          where: { blockId_exerciseId: { blockId: exercise.blockId, exerciseId: exercise.exerciseId } },
-          data: {
-            sets: nullableNumber(formData.get(`exerciseSets:${block.id}:${exercise.exerciseId}`)),
-            reps: nullableNumber(formData.get(`exerciseReps:${block.id}:${exercise.exerciseId}`)),
-            duration: nullableNumber(formData.get(`exerciseDuration:${block.id}:${exercise.exerciseId}`)),
-            notes: nullableText(formData.get(`exerciseNotes:${block.id}:${exercise.exerciseId}`))
-          }
-        });
-      }
-
-      for (const section of block.poolTraining?.sections ?? []) {
-        await tx.poolSection.update({
-          where: { id: section.id },
-          data: { label: nullableText(formData.get(`sectionLabel:${section.id}`)) }
+      if (block.type === BlockType.DRYLAND) {
+        const selectedIds = Array.from(new Set(formData.getAll(`exerciseSelection:${block.id}`).map(String)))
+          .filter((id) => validDrylandById.has(id));
+        await tx.drylandBlockExercise.deleteMany({
+          where: { blockId: block.id, exerciseId: { notIn: selectedIds } }
         });
 
-        for (const dive of section.dives) {
-          const repetitions = Number(formData.get(`diveReps:${dive.id}`) ?? dive.repetitions);
-          await tx.poolDive.update({
-            where: { id: dive.id },
-            data: {
-              diveCode: String(formData.get(`diveCode:${dive.id}`) ?? dive.diveCode).trim() || dive.diveCode,
-              diveName: String(formData.get(`diveName:${dive.id}`) ?? dive.diveName).trim() || dive.diveName,
-              repetitions: Number.isFinite(repetitions) ? repetitions : dive.repetitions,
-              notes: nullableText(formData.get(`diveNotes:${dive.id}`))
+        for (const [order, exerciseId] of selectedIds.entries()) {
+          const defaults = validDrylandById.get(exerciseId)!;
+          const existingExercise = block.drylandExercises.find((exercise) => exercise.exerciseId === exerciseId);
+          await tx.drylandBlockExercise.upsert({
+            where: { blockId_exerciseId: { blockId: block.id, exerciseId } },
+            create: {
+              blockId: block.id,
+              exerciseId,
+              sets: defaults.defaultSets,
+              reps: defaults.defaultReps,
+              duration: defaults.defaultDuration,
+              order
+            },
+            update: {
+              sets: existingExercise ? nullableNumber(formData.get(`exerciseSets:${block.id}:${exerciseId}`)) : defaults.defaultSets,
+              reps: existingExercise ? nullableNumber(formData.get(`exerciseReps:${block.id}:${exerciseId}`)) : defaults.defaultReps,
+              duration: existingExercise ? nullableNumber(formData.get(`exerciseDuration:${block.id}:${exerciseId}`)) : defaults.defaultDuration,
+              notes: existingExercise ? nullableText(formData.get(`exerciseNotes:${block.id}:${exerciseId}`)) : null,
+              order
             }
           });
         }
+      }
+
+      if (block.poolTraining) {
+        const rows = parsePoolRows(formData.get(`poolRows:${block.id}`));
+        await tx.poolDive.deleteMany({ where: { poolSection: { poolTrainingId: block.id } } });
+        await tx.poolSection.deleteMany({ where: { poolTrainingId: block.id } });
+        for (const [sectionOrder, row] of rows.entries()) {
+          const section = await tx.poolSection.create({ data: { poolTrainingId: block.id, height: poolHeightFromContext(row.context), label: row.context, order: sectionOrder } });
+          const repetitions = row.repetitions.length === 1 ? row.diveCodes.map(() => row.repetitions[0]) : row.repetitions;
+          await tx.poolDive.createMany({ data: row.diveCodes.map((diveCode, order) => ({ poolSectionId: section.id, diveCode, diveName: diveCode, position: "Libre", repetitions: repetitions[order], order })) });
+        }
+        await tx.sessionBlock.update({ where: { id: block.id }, data: { estimatedVolume: poolRowsVolume(rows) } });
       }
     }
   });
@@ -612,6 +666,7 @@ async function createBlock(
     position: number;
     estimatedVolume: number;
     athleteIds: string[];
+    description?: string;
   }
 ) {
   const block = await tx.sessionBlock.create({
@@ -621,7 +676,8 @@ async function createBlock(
       title: data.title,
       duration: data.duration,
       position: data.position,
-      estimatedVolume: data.estimatedVolume
+      estimatedVolume: data.estimatedVolume,
+      description: data.description?.trim() || null
     }
   });
 
@@ -634,7 +690,7 @@ async function createBlock(
 }
 
 async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInput["poolBlocks"][number], position: number) {
-  const volume = data.sections.reduce((sum, section) => sum + section.dives.reduce((sectionSum, dive) => sectionSum + dive.repetitions, 0), 0);
+  const volume = data.sections.reduce((sum, section) => sum + Math.max(1, countPoolContexts(section.label ?? "")) * section.dives.reduce((sectionSum, dive) => sectionSum + dive.repetitions, 0), 0);
   const block = await createBlock(tx, {
     sessionId,
     type: BlockType.POOL,
@@ -646,9 +702,9 @@ async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInp
   });
 
   await tx.poolTraining.create({ data: { blockId: block.id } });
-  for (const section of data.sections) {
+  for (const [sectionOrder, section] of data.sections.entries()) {
     const createdSection = await tx.poolSection.create({
-      data: { poolTrainingId: block.id, height: section.height, label: section.label }
+      data: { poolTrainingId: block.id, height: section.height, label: section.label, order: sectionOrder }
     });
 
     await tx.poolDive.createMany({
@@ -663,6 +719,33 @@ async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInp
       }))
     });
   }
+}
+
+function parsePoolRows(value: FormDataEntryValue | null): PoolListRow[] {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(String(value ?? "[]"));
+  } catch {
+    throw new Error("La liste de plongeons est illisible.");
+  }
+  const parsed = poolRowsEditSchema.safeParse(payload);
+  if (!parsed.success || parsed.data.some((row) => validatePoolListRow(row).errors.length > 0)) {
+    throw new Error("Chaque ligne piscine doit contenir une hauteur, des plongeons et des repetitions correspondantes.");
+  }
+  return parsed.data;
+}
+
+function poolRowsVolume(rows: PoolListRow[]) {
+  return rows.reduce((sum, row) => sum + validatePoolListRow(row).total, 0);
+}
+
+function poolHeightFromContext(context: string): PoolHeight {
+  const normalized = context.trim().toLowerCase();
+  if (countPoolContexts(context) > 1) return PoolHeight.CUSTOM;
+  if (normalized.startsWith("1m")) return PoolHeight.ONE_METER;
+  if (normalized.startsWith("3m")) return PoolHeight.THREE_METER;
+  if (normalized.includes("plateforme")) return PoolHeight.PLATFORM;
+  return PoolHeight.CUSTOM;
 }
 
 function nullableNumber(value: FormDataEntryValue | null) {
