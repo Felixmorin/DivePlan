@@ -26,7 +26,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
       orderBy: { user: { firstName: "asc" } },
       include: { user: true }
     }),
-    prisma.drylandExercise.findMany({ orderBy: [{ category: "asc" }, { name: "asc" }] })
+    prisma.drylandExercise.findMany({ where: { archivedAt: null }, orderBy: [{ category: "asc" }, { name: "asc" }] })
   ]);
   const uniqueAthletes = athletes.map((athlete) => ({
     id: athlete.id,

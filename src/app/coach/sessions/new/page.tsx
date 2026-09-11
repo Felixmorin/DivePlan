@@ -11,9 +11,9 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewSessionPage({ searchParams }: { searchParams: Promise<{ templateId?: string }> }) {
+export default async function NewSessionPage({ searchParams }: { searchParams: Promise<{ templateId?: string; exerciseId?: string }> }) {
   const { clubId } = await requireCoach();
-  const { templateId } = await searchParams;
+  const { templateId, exerciseId } = await searchParams;
   if (clubId === "dev-club") {
     return (
       <CoachShell active="Seances">
@@ -41,6 +41,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
       select: { id: true, level: true, user: { select: { firstName: true, lastName: true, avatar: true } } }
     }),
     prisma.drylandExercise.findMany({
+      where: { archivedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, equipment: true, tags: true }
     }),
@@ -121,6 +122,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
             })) ?? []
           }))}
           initialTemplate={initialTemplate}
+          initialExerciseId={exerciseId}
           onCreate={createTrainingSession}
           onCreateExercise={createDrylandExercise}
         />

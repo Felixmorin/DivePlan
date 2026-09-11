@@ -186,7 +186,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
       select: { id: true }
     }),
     prisma.drylandExercise.findMany({
-      where: { id: { in: data.drylandBlocks.flatMap((block) => block.exerciseIds) } },
+      where: { id: { in: data.drylandBlocks.flatMap((block) => block.exerciseIds) }, archivedAt: null },
       select: { id: true, defaultSets: true, defaultReps: true, defaultDuration: true }
     })
   ]);
@@ -556,7 +556,7 @@ export async function updateTrainingSession(formData: FormData) {
     block.type === BlockType.DRYLAND ? formData.getAll(`exerciseSelection:${block.id}`).map(String) : []
   )));
   const validDrylandExercises = await prisma.drylandExercise.findMany({
-    where: { id: { in: selectedDrylandIds } },
+    where: { id: { in: selectedDrylandIds }, archivedAt: null },
     select: { id: true, defaultSets: true, defaultReps: true, defaultDuration: true }
   });
   const validDrylandById = new Map(validDrylandExercises.map((exercise) => [exercise.id, exercise]));

@@ -102,13 +102,14 @@ type SessionBuilderProps = {
     category: string;
     payload: SessionTemplatePayload;
   } | null;
+  initialExerciseId?: string;
   onCreate: (input: CreateSessionInput) => Promise<void>;
   onCreateExercise: (input: QuickExerciseInput) => Promise<BuilderExercise>;
 };
 
 const steps = ["Details", "Dryland", "Piscine", "Assignations", "Publication"];
 
-export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvents, poolBlocks, initialTemplate, onCreate, onCreateExercise }: SessionBuilderProps) {
+export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvents, poolBlocks, initialTemplate, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
   const [step, setStep] = useState(0);
   const [isPending, startTransition] = useTransition();
   const [library, setLibrary] = useState(drylandLibrary);
@@ -126,7 +127,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
         exerciseIds: block.drylandExercises.map((item) => item.exerciseId).filter((id) => drylandLibrary.some((exercise) => exercise.id === id)),
         athleteIds: block.athleteIds.filter((id) => athleteIds.includes(id))
       }))
-    : initialTemplate ? [] : [{ id: "dryland-1", title: "Dryland - Activation technique", duration: 22, exerciseIds: drylandLibrary.slice(0, 5).map((exercise) => exercise.id), athleteIds: athleteIds.slice(0, 2) }]);
+    : initialTemplate ? [] : [{ id: "dryland-1", title: "Dryland - Activation technique", duration: 22, exerciseIds: Array.from(new Set([initialExerciseId, ...drylandLibrary.slice(0, 5).map((exercise) => exercise.id)].filter((id): id is string => Boolean(id)))), athleteIds: athleteIds.slice(0, 2) }]);
   const [poolAssignments, setPoolAssignments] = useState(() =>
     Object.fromEntries(activePoolBlocks.map((block, index) => [block.id, (block.athleteIds.length > 0 ? block.athleteIds : defaultPoolAthletes(index, athleteIds)).filter((id) => athleteIds.includes(id))]))
   );
