@@ -88,7 +88,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
         </nav>
       </header>
       <main className="min-w-0 lg:pl-68">
-        <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">{children}</div>
+        <div className="w-full px-3 py-4 sm:px-4 lg:px-5 xl:px-6">{children}</div>
       </main>
     </div>
   );
