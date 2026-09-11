@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import type { UserRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { completeExpiredTrainingSessions } from "@/lib/session-status";
 
 export const getCurrentUser = cache(async () => {
   const session = await auth();
@@ -32,7 +33,7 @@ export const getCurrentUser = cache(async () => {
     };
   }
 
-  return prisma.user.findFirst({
+  const user = await prisma.user.findFirst({
     where: sessionUserId ? { id: sessionUserId } : { email: email! },
     include: {
       club: true,
@@ -40,6 +41,12 @@ export const getCurrentUser = cache(async () => {
       athlete: true
     }
   });
+
+  if (user) {
+    await completeExpiredTrainingSessions();
+  }
+
+  return user;
 });
 
 export async function requireCurrentUser(role?: UserRole) {
