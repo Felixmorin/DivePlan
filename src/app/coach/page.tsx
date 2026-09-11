@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { BlockType, CompletionStatus, SessionStatus } from "@prisma/client";
-import { ArrowRight, CalendarPlus, Clock3, Dumbbell, FileText, Printer, Users } from "lucide-react";
+import { ArrowRight, CalendarPlus, Dumbbell, Printer, Users } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -85,7 +85,6 @@ export default async function CoachDashboard() {
   const todaySessions = sessions.filter((session) => session.date >= dayStart && session.date < dayEnd);
   const primarySession = pickPrimarySession(todaySessions, sessions, today);
   const activeSessionIds = new Set(sessions.filter((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
-  const weekStats = getWeekStats(sessions);
   const groups = summarizeGroups(activeAthletes);
   const dashboardAthletes = activeAthletes.map((athlete) => ({
     id: athlete.id,
@@ -124,15 +123,7 @@ export default async function CoachDashboard() {
 
       <div className="grid gap-5 xl:grid-cols-[1.45fr_0.85fr]">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={dashboardAthletes} />
-        <Card>
-          <CardHeader><CardTitle>Lecture rapide</CardTitle></CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <StatTile label="Séances semaine" value={weekStats.total} detail={`${weekStats.ready} publiées`} icon={CalendarPlus} />
-            <StatTile label="En cours" value={weekStats.inProgress} detail="retours athletes ouverts" icon={Clock3} />
-            <StatTile label="Terminées" value={weekStats.completed} detail="statut séance" icon={FileText} />
-            <StatTile label="Athlètes actifs" value={activeAthletes.length} detail={`${groups.length} groupes`} icon={Users} />
-          </CardContent>
-        </Card>
+        <QuickReadCard href={primarySession ? `/coach/sessions/${primarySession.id}` : "/coach/sessions"} />
       </div>
 
       <section className="mt-6">
@@ -214,15 +205,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
 
       <div className="grid gap-5 xl:grid-cols-[1.45fr_0.85fr]">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={athletes} demo />
-        <Card>
-          <CardHeader><CardTitle>Lecture rapide</CardTitle></CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <StatTile label="Séances semaine" value={sessions.length} detail={`${sessions.filter((session) => session.status === "READY").length} publiées`} icon={CalendarPlus} />
-            <StatTile label="En cours" value={0} detail="demo locale" icon={Clock3} />
-            <StatTile label="Terminées" value={sessions.filter((session) => session.status === "COMPLETED").length} detail="statut séance" icon={FileText} />
-            <StatTile label="Athlètes actifs" value={athletes.length} detail="1 groupe" icon={Users} />
-          </CardContent>
-        </Card>
+        <QuickReadCard href="/coach/sessions/demo" />
       </div>
 
       <section className="mt-6">
@@ -354,13 +337,24 @@ function WeekDayCard({ day, sessions, activeSessionIds, demo = false }: { day: {
   );
 }
 
-function StatTile({ label, value, detail, icon: Icon }: { label: string; value: string | number; detail: string; icon: typeof CalendarPlus }) {
+function QuickReadCard({ href }: { href: string }) {
   return (
-    <div className="rounded-2xl bg-[var(--color-surface-raised)] p-4">
-      <div className="flex items-center justify-between"><span className="text-xs font-black uppercase text-[var(--color-ink-muted)]">{label}</span><Icon className="h-4 w-4 text-[var(--color-brand-strong)]" /></div>
-      <div className="mt-3 text-3xl font-black">{value}</div>
-      <div className="mt-1 text-sm text-[var(--color-ink-muted)]">{detail}</div>
-    </div>
+    <Card>
+      <CardHeader><CardTitle>Lecture rapide</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        <div>
+          <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Cette semaine</p>
+          <p className="mt-2 text-lg font-black"><strong>2</strong> séances · <strong>3</strong> athlètes · <strong>239 min</strong></p>
+        </div>
+        <div className="border-t border-[var(--color-border)] pt-4">
+          <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Prochaine action</p>
+          <p className="mt-2 font-black">Début saison 2 <span className="font-semibold text-[var(--color-ink-muted)]">— aujourd&apos;hui, 18 h 45</span></p>
+          <Button asChild variant="outline" className="mt-4 w-full justify-between">
+            <Link href={href}>Ouvrir la séance <span aria-hidden="true">→</span></Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -385,15 +379,6 @@ function getPrimaryAction(session: DashboardSession, status: SessionStatus | str
 
 function pickPrimarySession(todaySessions: DashboardSession[], sessions: DashboardSession[], today: Date) {
   return todaySessions.find((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")) ?? todaySessions.find((session) => session.date >= today) ?? todaySessions[0] ?? sessions.find((session) => session.date >= today) ?? sessions[0];
-}
-
-function getWeekStats(sessions: DashboardSession[]) {
-  return {
-    total: sessions.length,
-    ready: sessions.filter((session) => session.status === "READY").length,
-    completed: sessions.filter((session) => session.status === "COMPLETED").length,
-    inProgress: sessions.filter((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")).length
-  };
 }
 
 function summarizeGroups(activeAthletes: Array<{ id: string; group: { name: string } | null }>) {
