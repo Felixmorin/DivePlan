@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Activity, BarChart3, CalendarDays, Dumbbell, LayoutDashboard, Library, Settings, Users, Waves } from "lucide-react";
+import { Activity, CalendarDays, Computer, Dumbbell, LayoutDashboard, Library, Settings, Users, Waves } from "lucide-react";
 import { requireCoach } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
 
@@ -10,8 +10,11 @@ const nav = [
   { href: "/coach/sessions", label: "Séances", match: "Seances", icon: Activity },
   { href: "/coach/athletes", label: "Athlètes", match: "Athletes", icon: Users },
   { href: "/coach/groups", label: "Groupes", icon: Dumbbell },
-  { href: "/coach/monitoring", label: "Monitoring", icon: BarChart3 },
   { href: "/coach/library", label: "Bibliothèque", match: "Bibliotheque", icon: Library },
+];
+
+const utilityNav = [
+  { href: "/coach/monitoring", label: "Monitoring", icon: Computer },
   { href: "/coach/settings", label: "Réglages", match: "Reglages", icon: Settings }
 ];
 
@@ -30,18 +33,38 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
             <div className="max-w-40 truncate text-xs font-semibold uppercase text-white/45">{clubName}</div>
           </div>
         </Link>
-        <nav className="space-y-1">
-          {nav.map((item) => {
-            const Icon = item.icon;
-            const isActive = active === item.label || active === item.match;
-            return (
-              <Link key={item.href} href={item.href} style={isActive ? { color: "#ffffff" } : undefined} className={cn("flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-bold transition duration-[var(--duration-fast)] hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive ? "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand)]" : "text-white/62")}>
-                <Icon className={cn("h-4 w-4", isActive && "text-white")} />
-                <span className={cn(isActive && "text-white")}>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <nav className="space-y-1">
+            {nav.map((item) => {
+              const Icon = item.icon;
+              const isActive = active === item.label || active === item.match;
+              return (
+                <Link key={item.href} href={item.href} style={isActive ? { color: "#ffffff" } : undefined} className={cn("flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-bold transition duration-[var(--duration-fast)] hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive ? "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand)]" : "text-white/62")}>
+                  <Icon className={cn("h-4 w-4", isActive && "text-white")} />
+                  <span className={cn(isActive && "text-white")}>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          <nav aria-label="Outils" className="mt-auto flex items-center justify-end gap-2 border-t border-white/10 pt-4">
+            {utilityNav.map((item) => {
+              const Icon = item.icon;
+              const isActive = active === item.label || active === item.match;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-label={item.label}
+                  title={item.label}
+                  style={isActive ? { color: "#ffffff" } : undefined}
+                  className={cn("flex h-8 w-8 items-center justify-center rounded-xl text-white/55 transition duration-[var(--duration-fast)] hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive && "bg-white/12 text-white")}
+                >
+                  <Icon className="h-4 w-4" strokeWidth={2.25} />
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
       </aside>
       <header className="sticky top-0 z-20 border-b border-[var(--color-border)] bg-[var(--color-coach-bg)]/95 px-4 py-3 backdrop-blur lg:hidden">
         <div className="mb-3 flex items-center justify-between">
