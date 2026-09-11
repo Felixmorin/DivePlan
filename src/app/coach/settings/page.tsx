@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { LogOut, Save, Settings, Shield, Waves } from "lucide-react";
-import { signOutCoach, updateClubSettings } from "@/app/coach/settings/actions";
+import { signOutCoach, updateClubSettings, updateCoachAccount } from "@/app/coach/settings/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,9 +73,27 @@ export default async function CoachSettingsPage() {
           <Card>
             <CardHeader className="border-b border-[var(--color-border)] bg-white">
               <CardTitle>Compte coach</CardTitle>
-              <CardDescription>{user.email}</CardDescription>
+              <CardDescription>Modifie les informations utilisées pour te connecter.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 p-5">
+              <form action={updateCoachAccount} className="grid gap-4">
+                <div className="grid gap-2">
+                  <label htmlFor="coach-email" className="text-xs font-black uppercase text-[var(--color-ink-muted)]">Courriel</label>
+                  <Input id="coach-email" name="email" type="email" defaultValue={user.email} autoComplete="email" required maxLength={254} />
+                </div>
+
+                <div className="grid gap-2">
+                  <label htmlFor="coach-username" className="text-xs font-black uppercase text-[var(--color-ink-muted)]">Nom d’utilisateur</label>
+                  <Input id="coach-username" name="username" defaultValue={user.username ?? ""} autoComplete="username" minLength={3} maxLength={30} pattern="[A-Za-z0-9._-]+" placeholder="ex. felix.lavoie" />
+                  <p className="text-xs font-semibold text-[var(--color-ink-muted)]">3 à 30 caractères : lettres, chiffres, points, tirets ou tirets bas.</p>
+                </div>
+
+                <Button type="submit" variant="action">
+                  <Save className="h-4 w-4" />
+                  Enregistrer le compte
+                </Button>
+              </form>
+
               <div className="flex items-center justify-between gap-3 rounded-[var(--radius-ui)] bg-[var(--color-surface-raised)] px-3 py-3">
                 <span className="flex items-center gap-2 text-sm font-black text-[var(--color-ink)]"><Shield className="h-4 w-4" /> Session active</span>
                 <Badge variant="success">Coach</Badge>

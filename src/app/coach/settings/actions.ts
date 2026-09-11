@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { signOut } from "@/auth";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
@@ -29,6 +30,11 @@ function cleanLogo(value: FormDataEntryValue | null) {
   return parsed.toString();
 }
 
+const coachAccountSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Entre une adresse courriel valide.").max(254),
+  username: z.string().trim().toLowerCase().min(3).max(30).regex(/^[a-z0-9._-]+$/).nullable()
+});
+
 export async function updateClubSettings(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const name = cleanText(formData.get("name"));
@@ -56,6 +62,55 @@ export async function updateClubSettings(formData: FormData) {
   revalidatePath("/coach/sessions");
   revalidatePath("/coach/athletes");
   revalidatePath("/coach/groups");
+}
+
+export async function updateCoachAccount(formData: FormData) {
+  const { user } = await requireCoach();
+  const rawUsername = cleanText(formData.get("username"));
+  const parsed = coachAccountSchema.safeParse({
+    email: formData.get("email"),
+    username: rawUsername || null
+  });
+
+  if (!parsed.success) {
+    throw new Error("Le courriel ou le nom d’utilisateur est invalide.");
+  }
+
+  const conflict = await prisma.user.findFirst({
+    where: {
+      id: { not: user.id },
+      OR: [
+        { email: parsed.data.email },
+        ...(parsed.data.username ? [{ username: parsed.data.username }] : [])
+      ]
+    },
+    select: { email: true, username: true }
+  });
+
+  if (conflict?.email === parsed.data.email) {
+    throw new Error("Ce courriel est déjà utilisé par un autre compte.");
+  }
+
+  if (conflict?.username === parsed.data.username) {
+    throw new Error("Ce nom d’utilisateur est déjà utilisé par un autre compte.");
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      email: parsed.data.email,
+      username: parsed.data.username
+    }
+  });
+
+  await trackEvent({
+    type: "coach.account_updated",
+    message: `Compte coach mis à jour: ${parsed.data.email}`,
+    clubId: user.clubId,
+    userId: user.id
+  });
+
+  revalidatePath("/coach/settings");
 }
 
 export async function signOutCoach() {

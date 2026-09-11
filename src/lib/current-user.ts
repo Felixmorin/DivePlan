@@ -9,7 +9,7 @@ export const getCurrentUser = cache(async () => {
   const sessionUserId = session?.user?.id;
   const email = session?.user?.email?.toLowerCase();
 
-  if (!email) {
+  if (!sessionUserId && !email) {
     return null;
   }
 
@@ -19,6 +19,7 @@ export const getCurrentUser = cache(async () => {
       firstName: "Felix",
       lastName: "Lavoie",
       email: "coach@diveplan.local",
+      username: "felix.lavoie",
       role: "COACH" as const,
       passwordHash: null,
       passwordSetAt: null,
@@ -31,8 +32,8 @@ export const getCurrentUser = cache(async () => {
     };
   }
 
-  return prisma.user.findUnique({
-    where: { email },
+  return prisma.user.findFirst({
+    where: sessionUserId ? { id: sessionUserId } : { email: email! },
     include: {
       club: true,
       coach: true,
