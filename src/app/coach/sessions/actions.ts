@@ -14,13 +14,13 @@ import {
   getSessionSnapshot,
   parseSessionTemplatePayload
 } from "@/lib/session-template";
-import { formatMontrealDate, parseMontrealDateTimeInput, parseMontrealSessionDate, startOfMontrealWeek } from "@/lib/timezone";
+import { formatMontrealDate, parseMontrealDateTimeInput, parseMontrealSessionDate, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 
 const sessionInputSchema = z.object({
   title: z.string().min(3),
   date: z.string().min(10),
   groupId: z.string().min(1),
-  duration: z.number().min(15),
+  duration: z.number().int().min(15).max(600),
   focus: z.string().min(3),
   notes: z.string().optional(),
   planningEventId: z.string().optional(),
@@ -41,11 +41,17 @@ const sessionInputSchema = z.object({
     title: z.string().trim().min(1),
     duration: z.number().int().min(1),
     exerciseIds: z.array(z.string()).min(1),
-    athleteIds: z.array(z.string()).min(1)
+    athleteIds: z.array(z.string()).min(1),
+    exerciseOverrides: z.record(z.string(), z.object({
+      sets: z.number().int().min(1).max(20).nullable(),
+      reps: z.number().int().min(1).max(200).nullable(),
+      duration: z.number().int().min(1).max(3600).nullable(),
+      notes: z.string().nullable()
+    })).default({})
   })).default([]),
   poolBlocks: z.array(z.object({
     title: z.string().min(1),
-    duration: z.number().min(1),
+    duration: z.number().int().min(1).max(600),
     athleteIds: z.array(z.string()).default([]),
     sections: z.array(z.object({
       height: z.nativeEnum(PoolHeight),
@@ -131,6 +137,9 @@ export async function createTrainingSession(input: CreateSessionInput) {
     ? await prisma.planningEvent.findFirst({ where: { id: data.planningEventId, clubId, groupId: data.groupId, type: "TRAINING_SCHEDULE" } })
     : null;
   if (data.planningEventId && !planningEvent) throw new Error("Horaire d'entraînement introuvable pour ce groupe.");
+  if (planningEvent && toMontrealDateInputValue(planningEvent.startsAt) !== data.date) {
+    throw new Error("L'horaire sélectionné ne correspond pas à la date de la séance.");
+  }
 
   if (data.templateId) {
     const template = await prisma.sessionTemplate.findFirst({
@@ -182,7 +191,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
   const requestedAthleteIds = Array.from(new Set([...data.drylandBlocks.flatMap((block) => block.athleteIds), ...poolAthleteIds]));
   const [athletes, exercises] = await Promise.all([
     prisma.athlete.findMany({
-      where: { clubId, active: true },
+      where: { clubId, active: true, groupId: data.groupId },
       select: { id: true }
     }),
     prisma.drylandExercise.findMany({
@@ -199,7 +208,10 @@ export async function createTrainingSession(input: CreateSessionInput) {
   const drylandBlocks = data.drylandBlocks.map((block) => ({
     ...block,
     athleteIds: requireValidAthletes(block.athleteIds),
-    exercises: block.exerciseIds.map((id) => exercises.find((exercise) => exercise.id === id)).filter((exercise): exercise is (typeof exercises)[number] => Boolean(exercise))
+    exercises: block.exerciseIds.flatMap((id) => {
+      const exercise = exercises.find((item) => item.id === id);
+      return exercise ? [{ ...exercise, override: block.exerciseOverrides[id] }] : [];
+    })
   }));
   const poolBlocks = data.poolBlocks.map((block) => ({ ...block, athleteIds: requireValidAthletes(block.athleteIds) }));
 
@@ -257,7 +269,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         title: dryland.title,
         duration: dryland.duration,
         position: index + 2,
-        estimatedVolume: dryland.exercises.length * dryland.athleteIds.length * 6,
+        estimatedVolume: dryland.exercises.reduce((sum, exercise) => sum + (exercise.override?.sets ?? exercise.defaultSets ?? 1) * (exercise.override?.reps ?? exercise.defaultReps ?? 1) * dryland.athleteIds.length, 0),
         athleteIds: dryland.athleteIds
       });
 
@@ -265,9 +277,10 @@ export async function createTrainingSession(input: CreateSessionInput) {
         data: dryland.exercises.map((exercise, order) => ({
           blockId: drylandBlock.id,
           exerciseId: exercise.id,
-          sets: exercise.defaultSets,
-          reps: exercise.defaultReps,
-          duration: exercise.defaultDuration,
+          sets: exercise.override?.sets ?? exercise.defaultSets,
+          reps: exercise.override?.reps ?? exercise.defaultReps,
+          duration: exercise.override?.duration ?? exercise.defaultDuration,
+          notes: exercise.override?.notes ?? null,
           order
         }))
       });
@@ -539,7 +552,7 @@ export async function updateTrainingSession(formData: FormData) {
   const date = String(formData.get("date") ?? "").trim();
   const status = String(formData.get("status") ?? existing.status) as SessionStatus;
 
-  if (!title || !focus || !date || !Object.values(SessionStatus).includes(status)) {
+  if (!title || !focus || !date || !Object.values(SessionStatus).includes(status) || !Number.isInteger(duration) || duration < 15 || duration > 600) {
     throw new Error("Details de seance invalides.");
   }
 
@@ -586,6 +599,10 @@ export async function updateTrainingSession(formData: FormData) {
       const blockDescription = String(formData.get(`blockDescription:${block.id}`) ?? block.description ?? "").trim();
       const assignedIds = formData.getAll(`assign:${block.id}`).map(String).filter((id) => validAthleteIds.has(id));
 
+      if (!blockTitle || !Number.isInteger(blockDuration) || blockDuration < 1 || blockDuration > 600 || !Number.isInteger(estimatedVolume) || estimatedVolume < 0 || assignedIds.length === 0) {
+        throw new Error(`Le bloc « ${block.title} » est incomplet.`);
+      }
+
       await tx.sessionBlock.update({
         where: { id: block.id },
         data: {
@@ -607,6 +624,7 @@ export async function updateTrainingSession(formData: FormData) {
       if (block.type === BlockType.DRYLAND) {
         const selectedIds = Array.from(new Set(formData.getAll(`exerciseSelection:${block.id}`).map(String)))
           .filter((id) => validDrylandById.has(id));
+        if (selectedIds.length === 0) throw new Error(`Le bloc dryland « ${block.title} » doit contenir un exercice.`);
         await tx.drylandBlockExercise.deleteMany({
           where: { blockId: block.id, exerciseId: { notIn: selectedIds } }
         });
@@ -637,6 +655,9 @@ export async function updateTrainingSession(formData: FormData) {
 
       if (block.poolTraining) {
         const rows = parsePoolRows(formData.get(`poolRows:${block.id}`));
+        if (rows.length === 0 || rows.some((row) => validatePoolListRow(row).errors.length > 0)) {
+          throw new Error(`Le bloc piscine « ${block.title} » contient une ligne invalide.`);
+        }
         await tx.poolDive.deleteMany({ where: { poolSection: { poolTrainingId: block.id } } });
         await tx.poolSection.deleteMany({ where: { poolTrainingId: block.id } });
         for (const [sectionOrder, row] of rows.entries()) {

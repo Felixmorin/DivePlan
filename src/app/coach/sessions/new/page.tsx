@@ -38,7 +38,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     prisma.athlete.findMany({
       where: { clubId, active: true },
       orderBy: { user: { firstName: "asc" } },
-      select: { id: true, level: true, user: { select: { firstName: true, lastName: true, avatar: true } } }
+      select: { id: true, groupId: true, level: true, user: { select: { firstName: true, lastName: true, avatar: true } } }
     }),
     prisma.drylandExercise.findMany({
       where: { archivedAt: null },
@@ -86,6 +86,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
         <SessionBuilder
           athletes={athletes.map((athlete) => ({
             id: athlete.id,
+            groupId: athlete.groupId,
             firstName: athlete.user.firstName,
             lastName: athlete.user.lastName,
             level: athlete.level,

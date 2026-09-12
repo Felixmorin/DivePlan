@@ -129,7 +129,7 @@ export async function createSessionFromPayload(
   }
 ) {
   const [validAthletes, validExercises] = await Promise.all([
-    tx.athlete.findMany({ where: { clubId: data.clubId }, select: { id: true } }),
+    tx.athlete.findMany({ where: { clubId: data.clubId, active: true, groupId: data.groupId }, select: { id: true } }),
     tx.drylandExercise.findMany({
       where: { id: { in: data.payload.blocks.flatMap((block) => block.drylandExercises.map((item) => item.exerciseId)) } },
       select: { id: true }
