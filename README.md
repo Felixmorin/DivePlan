@@ -1,20 +1,49 @@
 # DivePlan
 
-Application SaaS Next.js pour clubs de plongeon et entraineurs. La V1 livre une experience navigable avec dashboard coach, planning hebdomadaire, builder de seance, assignations flexibles par bloc, vue athlete mobile, player de seance, progression et mode impression.
+DivePlan est une application SaaS pour les clubs de plongeon et leurs entraîneurs. Elle centralise la planification, la création et l’exécution des séances, tout en donnant aux athlètes une vue simple de leur calendrier, de leurs exercices et de leur progression.
 
-## Stack
+La version actuelle est une V1 fonctionnelle orientée pilote club.
 
-- Next.js 16 App Router
-- TypeScript
-- Tailwind CSS
-- shadcn/ui style components
-- PostgreSQL + Prisma ORM
+## Fonctionnalités
+
+### Pour les entraîneurs
+
+- Tableau de bord du club et suivi de l’activité.
+- Planning hebdomadaire et calendrier d’événements : entraînements, compétitions et événements individuels ou de groupe.
+- Création et modification de séances avec blocs piscine et dryland.
+- Assignation flexible d’un bloc à un ou plusieurs athlètes.
+- Bibliothèque d’exercices dryland avec catégories, équipement, séries, répétitions, durée, tags et notes coach.
+- Bibliothèque de séances et templates réutilisables.
+- Gestion des athlètes, groupes et plongeons de compétition.
+- Vue monitoring des séances et de leur état.
+- Impression d’une séance pour utilisation au bord de la piscine.
+
+### Pour les athlètes
+
+- Accueil du jour, calendrier et vue de la semaine.
+- Player de séance avec progression bloc par bloc.
+- Validation des exercices et des plongeons réalisés.
+- Feedback par bloc et commentaire final.
+- Historique de progression et suivi des compétences.
+- Profil et changement de mot de passe à la première connexion.
+
+## Stack technique
+
+- Next.js 16 avec App Router
+- React 19 et TypeScript
+- Tailwind CSS 4 et composants de style shadcn/ui
+- PostgreSQL avec Prisma ORM
 - Auth.js / NextAuth v5 compatible
-- Recharts
-- Lucide Icons
-- React Hook Form + Zod
+- Recharts et Lucide Icons
+- React Hook Form et Zod
 
-## Installation
+## Prérequis
+
+- Node.js compatible avec Next.js 16
+- PostgreSQL accessible depuis l’environnement d’exécution
+- npm
+
+## Installation locale
 
 ```bash
 npm install
@@ -25,59 +54,114 @@ npm run db:seed:pilot
 npm run dev
 ```
 
-Ouvrir `http://localhost:3000`.
+Ouvrir ensuite [http://localhost:3000](http://localhost:3000).
+
+Sous PowerShell, remplacer `cp .env.example .env` par :
+
+```powershell
+Copy-Item .env.example .env
+```
+
+## Variables d’environnement
+
+Les variables suivantes sont définies dans `.env.example` :
+
+| Variable | Utilisation |
+| --- | --- |
+| `DATABASE_URL` | URL de connexion PostgreSQL |
+| `AUTH_SECRET` | Secret de session Auth.js |
+| `AUTH_URL` | URL publique de l’application utilisée par l’authentification |
+| `NEXT_PUBLIC_APP_URL` | URL publique de l’application côté client |
+| `PILOT_ACCESS_CODE` | Code d’accès privé du pilote |
+| `PILOT_SEED_PASSWORD` | Mot de passe du seed pilote ; facultatif |
+| `NEXT_PUBLIC_ENABLE_DEMO_ROUTES` | Active les routes de démonstration lorsqu’il vaut `true` |
+| `CRON_SECRET` | Secret attendu par l’endpoint de clôture automatique |
+
+En développement, l’authentification conserve un compte de démonstration de secours : `coach@diveplan.local` avec le mot de passe `diveplan-demo`.
 
 ## Routes principales
 
-- Coach: `/coach`, `/coach/planning`, `/coach/sessions`, `/coach/sessions/new`, `/coach/athletes`, `/coach/groups`, `/coach/library`, `/coach/templates`
-- Athlete: `/athlete`, `/athlete/week`, `/athlete/progress`, `/athlete/skills`, `/athlete/profile`
+### Entraîneur
 
-Les routes dynamiques `/coach/sessions/[id]`, `/coach/sessions/[id]/edit`, `/coach/sessions/[id]/print` et `/athlete/session/[id]` sont preparees. Les routes demo sont locales et opt-in; elles retournent 404 sauf si `NEXT_PUBLIC_ENABLE_DEMO_ROUTES=true`.
+- `/coach` : tableau de bord
+- `/coach/planning` : planning et calendrier
+- `/coach/sessions` : séances
+- `/coach/sessions/new` : nouvelle séance
+- `/coach/athletes` : athlètes
+- `/coach/groups` : groupes
+- `/coach/library` : bibliothèque dryland
+- `/coach/templates` : templates de séances
+- `/coach/monitoring` : monitoring
+- `/coach/settings` : paramètres
 
-## Modele d'assignation
+Les routes dynamiques de séance sont disponibles via `/coach/sessions/[id]`, `/coach/sessions/[id]/edit` et `/coach/sessions/[id]/print`.
 
-DivePlan ne code jamais les entrainements directement sur l'athlete. Une seance contient des `SessionBlock`, et chaque bloc est relie aux athletes via `SessionBlockAssignment`.
+### Athlète
 
-Cela supporte:
+- `/athlete` : séance du jour
+- `/athlete/calendar` : calendrier
+- `/athlete/week` : semaine
+- `/athlete/session/[id]` : player de séance
+- `/athlete/progress` : progression
+- `/athlete/skills` : compétences
+- `/athlete/profile` : profil
 
-- 1 bloc vers 1 athlete
-- 1 bloc vers plusieurs athletes
-- 1 bloc vers tout un groupe via assignations explicites
-- plusieurs blocs differents dans une meme seance pour des athletes differents
+## Modèle d’assignation
 
-Le seed Club Mustang demontre:
+Une séance n’est pas codée directement sur un athlète. Elle contient des `SessionBlock`, et chaque bloc est relié aux athlètes par `SessionBlockAssignment`.
 
-- Emma + Leo partagent le meme dryland
-- Charles a un dryland individuel
-- Emma a un entrainement piscine different de Charles
-- Juliette + Alice partagent le meme entrainement piscine
-- Les sections 1 m et 3 m vivent dans un seul bloc `POOL`
+Ce modèle permet notamment :
 
-## Scripts
+- d’assigner un bloc à un seul athlète ou à plusieurs athlètes ;
+- de composer une séance commune avec des variantes individuelles ;
+- de garder les sections 1 m et 3 m dans un même bloc piscine ;
+- de suivre séparément les validations et le feedback de chaque athlète.
 
-- `npm run dev`: demarre Next.js
-- `npm run build`: build de production
-- `npm run start`: serveur production
-- `npm run lint`: ESLint
-- `npm run prisma:generate`: genere Prisma Client
-- `npm run prisma:migrate`: applique les migrations
-- `npm run prisma:migrate:deploy`: applique les migrations en production
-- `npm run db:seed:pilot`: prepare un club pilote non destructif
-- `npm run db:seed`: insere les donnees de demonstration en vidant les tables applicatives
+## Données de démonstration
 
-## Deploiement Vercel
+Le seed pilote est non destructif et peut être relancé :
 
-Configurer `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL` et `NEXT_PUBLIC_APP_URL` dans Vercel, puis deployer le projet. Le script `postinstall` genere Prisma Client automatiquement et le script `prebuild` execute `prisma migrate deploy` afin d'appliquer les migrations contre la base PostgreSQL cible avant chaque build de production. La commande `npm run prisma:migrate:deploy` permet aussi de les appliquer manuellement.
+```bash
+npm run db:seed:pilot
+```
 
-## Acces pilote
+Comptes pilotes :
 
-Le seed pilote fournit des comptes prets pour tester les parcours coach et athlete.
+- Entraîneur : `coach.pilote@diveplan.local`
+- Athlètes : `emma.pilote@diveplan.local`, `leo.pilote@diveplan.local`, `mia.pilote@diveplan.local`
+- Mot de passe par défaut : `diveplan-pilot`
 
-- En local, le code par defaut est `diveplan-demo` si `PILOT_ACCESS_CODE` n'est pas defini.
-- En production, definir obligatoirement `PILOT_ACCESS_CODE`.
-- Pendant le pilote, garder `NEXT_PUBLIC_ENABLE_DEMO_ROUTES=false`.
-- Comptes seed pilote utiles: `coach.pilote@diveplan.local`, `emma.pilote@diveplan.local`, `leo.pilote@diveplan.local`, `mia.pilote@diveplan.local`.
-- Mot de passe seed pilote: `diveplan-pilot`, surchargeable avec `PILOT_SEED_PASSWORD`.
-- Le seed demo historique reste disponible avec `npm run db:seed`: `coach@diveplan.local` et `emma@diveplan.local` / `diveplan-demo`.
+Le mot de passe peut être remplacé avec `PILOT_SEED_PASSWORD`. En production, définir également `PILOT_ACCESS_CODE` et laisser `NEXT_PUBLIC_ENABLE_DEMO_ROUTES=false`.
 
-Voir `SELLABLE_CHECKLIST.md` pour le chemin restant vers une version vendable en pilote club.
+Le seed de démonstration historique est disponible avec :
+
+```bash
+npm run db:seed
+```
+
+Attention : ce seed vide les tables applicatives avant de recréer les données de démonstration.
+
+## Scripts npm
+
+```text
+npm run dev                    Démarre le serveur de développement
+npm run build                  Génère le build de production
+npm run start                  Démarre le serveur de production
+npm run lint                   Lance ESLint
+npm run test                   Lance les tests unitaires
+npm run prisma:generate        Génère Prisma Client
+npm run prisma:migrate         Crée/applique une migration en développement
+npm run prisma:migrate:deploy  Applique les migrations en production
+npm run db:seed:pilot          Prépare les données du pilote sans nettoyage destructif
+npm run db:seed                Recrée les données de démonstration
+```
+
+## Déploiement sur Vercel
+
+Configurer `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `NEXT_PUBLIC_APP_URL`, `PILOT_ACCESS_CODE` et `CRON_SECRET` dans Vercel. Le script `postinstall` génère Prisma Client et `prebuild` exécute `prisma migrate deploy` avant le build de production.
+
+Un cron Vercel appelle `/api/cron/complete-sessions` chaque jour à minuit UTC pour clôturer automatiquement les séances arrivées à échéance. L’endpoint exige l’en-tête `Authorization: Bearer <CRON_SECRET>`.
+
+## État du projet
+
+La V1 couvre le parcours principal entraîneur → séance → athlète → progression. Pour les éléments encore nécessaires à une commercialisation plus large, consulter [SELLABLE_CHECKLIST.md](SELLABLE_CHECKLIST.md).
