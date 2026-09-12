@@ -2,14 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, NotebookPen, Play, RotateCcw, Save, Timer, Waves } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, NotebookPen, Play, Plus, RotateCcw, Save, Timer } from "lucide-react";
 import type { CompleteSessionPayload, SaveAthleteProgressPayload } from "@/app/athlete/session/[id]/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { AthleteSessionView } from "@/lib/athlete-session";
 import { formatMontrealTime } from "@/lib/timezone";
@@ -33,6 +32,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
   const router = useRouter();
   const blocks = session.blocks;
   const [current, setCurrent] = useState(0);
+  const [stepIndex, setStepIndex] = useState(0);
   const [started, setStarted] = useState(session.completionStatus === "IN_PROGRESS" || session.completionStatus === "COMPLETED");
   const [now, setNow] = useState(() => Date.now());
   const [reviewing, setReviewing] = useState(session.completionStatus === "COMPLETED");
@@ -69,7 +69,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
         const firstExercise = block.exercises.find((exercise) => exercise.rating || exercise.note);
         const firstDive = block.poolSections.flatMap((section) => section.dives).find((dive) => dive.rating || dive.note);
 
-        return [block.id, { rating: firstExercise?.rating ?? firstDive?.rating ?? "moyen", note: firstExercise?.note ?? firstDive?.note ?? "" }];
+        return [block.id, { rating: firstExercise?.rating ?? firstDive?.rating ?? "", note: firstExercise?.note ?? firstDive?.note ?? "" }];
       })
     )
   );
@@ -79,7 +79,16 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
   const finalFeedbackRef = useRef(finalFeedback);
   const finalFeedbackTouchedRef = useRef(false);
   const block = blocks[current];
-  const feedback = blockFeedback[block.id] ?? { rating: "moyen", note: "" };
+  const blockSteps = useMemo(
+    () => [
+      ...block.exercises.map((exercise) => ({ kind: "exercise" as const, exercise })),
+      ...block.poolSections.map((section) => ({ kind: "pool" as const, section }))
+    ],
+    [block]
+  );
+  const activeStep = blockSteps[stepIndex];
+  const feedback = blockFeedback[block.id] ?? { rating: "", note: "" };
+  const hasFeedback = Boolean(feedback.rating || feedback.note.trim());
   const totalItems = useMemo(() => countSessionItems(blocks), [blocks]);
   const completedItems = countCompletedItems(blocks, exerciseChecks, diveChecks);
   const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : Math.round(((current + 1) / blocks.length) * 100);
@@ -215,10 +224,31 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
     const version = markDirty();
     pulse(`${diveId}-${repIndex}`);
     setDiveChecks((previous) => {
+      const currentChecks = previous[diveId] ?? [];
+      const isAlreadyChecked = currentChecks[repIndex] ?? false;
       const next = {
         ...previous,
-        [diveId]: (previous[diveId] ?? []).map((checked, index) => (index === repIndex ? !checked : checked))
+        [diveId]: currentChecks.map((checked, index) => {
+          if (isAlreadyChecked) return index < repIndex ? checked : false;
+          return index <= repIndex ? true : checked;
+        })
       };
+      diveChecksRef.current = next;
+      void saveProgressForBlock(block, exerciseChecksRef.current, next, blockFeedbackRef.current, version).catch(() => {
+        setDirty(true);
+        if (version === saveVersion.current) setSaveStatus("error");
+        setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
+      });
+      return next;
+    });
+  }
+
+  function addDiveRep(diveId: string) {
+    const version = markDirty();
+    setDiveChecks((previous) => {
+      const currentChecks = previous[diveId] ?? [];
+      const next = { ...previous, [diveId]: [...currentChecks, true] };
+      pulse(`${diveId}-${currentChecks.length}`);
       diveChecksRef.current = next;
       void saveProgressForBlock(block, exerciseChecksRef.current, next, blockFeedbackRef.current, version).catch(() => {
         setDirty(true);
@@ -277,8 +307,17 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
   }
 
   function nextStep() {
+    if (!hasFeedback) return;
+
+    if (stepIndex < blockSteps.length - 1) {
+      setStepIndex(stepIndex + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
     if (current < blocks.length - 1) {
       setCurrent(current + 1);
+      setStepIndex(0);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -292,6 +331,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
       setReviewing(false);
       return;
     }
+    setStepIndex(0);
     setCurrent(Math.max(0, current - 1));
   }
 
@@ -444,52 +484,48 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
         </section>
 
         <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-bg)] p-3">
-          {block.exercises.length > 0 && (
+          {activeStep?.kind === "exercise" && (
             <div className="space-y-3">
-              {block.exercises.map((exercise) => {
+              {[activeStep.exercise].map((exercise) => {
                 const checked = exerciseChecks[exercise.id] ?? false;
                 return (
                   <button key={exercise.id} type="button" onClick={() => toggleExercise(exercise.id)} className={`grid min-h-20 w-full grid-cols-[48px_1fr_auto] items-center gap-3 rounded-2xl border p-3 text-left transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${checked ? "border-[var(--color-success)] bg-[var(--color-success)]/18" : "border-white/10 bg-[var(--color-athlete-panel)]"} ${pulseKey === exercise.id ? "builder-pulse" : ""}`}>
                     <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-athlete-panel-2)] text-white/72"><Dumbbell className="h-5 w-5" /></span>
-                    <span className="min-w-0"><span className="block truncate text-lg font-black">{exercise.name}</span><span className="mt-1 block text-sm font-semibold text-white/60">{exercise.sets} x {exercise.reps ?? `${exercise.duration} sec`}</span></span>
+                    <span className="min-w-0"><span className="block break-words text-lg font-black leading-tight">{exercise.name}</span><span className="mt-1 block text-sm font-semibold text-white/60">{exercise.sets} x {exercise.reps ?? `${exercise.duration} sec`}</span></span>
                     <span className={`flex h-11 w-11 items-center justify-center rounded-full ${checked ? "bg-[var(--color-success)] text-white" : "bg-white/8 text-white/45"}`}>{checked ? <CheckCircle2 className="h-6 w-6" /> : <Circle className="h-5 w-5" />}</span>
                   </button>
                 );
               })}
             </div>
           )}
-          {block.poolSections.length > 0 && (
-            <Tabs defaultValue={block.poolSections[0]?.id}>
-              <TabsList className="grid w-full rounded-2xl bg-[var(--color-athlete-panel-2)]" style={{ gridTemplateColumns: `repeat(${block.poolSections.length}, minmax(0, 1fr))` }}>
-                {block.poolSections.map((section) => <TabsTrigger key={section.id} value={section.id}>{section.label}</TabsTrigger>)}
-              </TabsList>
-              {block.poolSections.map((section) => (
-                <TabsContent key={section.id} value={section.id} className="mt-3 space-y-3">
-                  {section.dives.map((dive) => {
-                    const checks = diveChecks[dive.id] ?? [];
-                    const completed = checks.filter(Boolean).length;
-                    return (
-                      <div key={dive.id} className="rounded-2xl border border-white/10 bg-[var(--color-athlete-panel)] p-4">
-                        <div className="grid grid-cols-[56px_1fr_auto] items-center gap-3">
-                          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-athlete-panel-2)] text-[var(--color-action)]"><Waves className="h-7 w-7" /></span>
-                          <div className="min-w-0"><div className="text-3xl font-black leading-none">{dive.code}</div><div className="mt-1 truncate text-sm font-semibold text-white/68">{dive.name}</div></div>
-                          <div className="text-right"><div className="text-2xl font-black">{completed}/{dive.repetitions}</div><div className="text-xs font-bold uppercase text-white/45">reps</div></div>
-                        </div>
-                        <div className="mt-4 grid grid-cols-5 gap-2">
-                          {checks.map((checked, index) => (
-                            <button key={index} type="button" onClick={() => toggleDiveRep(dive.id, index)} className={`flex h-12 items-center justify-center rounded-2xl border text-sm font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${checked ? "border-[var(--color-success)] bg-[var(--color-success)] text-white" : "border-white/10 bg-[var(--color-athlete-bg)] text-white/62"} ${pulseKey === `${dive.id}-${index}` ? "builder-pulse" : ""}`} aria-label={`Repetition ${index + 1}`}>
-                              {checked ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </TabsContent>
-              ))}
-            </Tabs>
+          {activeStep?.kind === "pool" && (
+            <div className="space-y-3">
+              {activeStep.section.dives.map((dive) => {
+                const checks = diveChecks[dive.id] ?? [];
+                const completed = checks.filter(Boolean).length;
+                return (
+                  <div key={dive.id} className="rounded-2xl border border-white/10 bg-[var(--color-athlete-panel)] p-4">
+                    <div className="grid grid-cols-[64px_1fr_auto] items-center gap-3">
+                      <span className="flex min-h-14 w-16 items-center justify-center rounded-2xl bg-[var(--color-athlete-panel-2)] px-1 text-center text-xs font-black leading-tight text-[var(--color-action)]">{activeStep.section.label}</span>
+                      <div className="min-w-0"><div className="text-3xl font-black leading-none">{dive.code}</div><div className="mt-1 truncate text-sm font-semibold text-white/68">{dive.name}</div></div>
+                      <div className="text-right"><div className="text-2xl font-black">{completed}/{checks.length}</div><div className="text-xs font-bold uppercase text-white/45">reps</div></div>
+                    </div>
+                    <div className="mt-4 grid grid-cols-5 gap-2">
+                      {checks.map((checked, index) => (
+                        <button key={index} type="button" onClick={() => toggleDiveRep(dive.id, index)} className={`flex h-12 items-center justify-center rounded-2xl border text-sm font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${checked ? "border-[var(--color-success)] bg-[var(--color-success)] text-white" : "border-white/10 bg-[var(--color-athlete-bg)] text-white/62"} ${pulseKey === `${dive.id}-${index}` ? "builder-pulse" : ""}`} aria-label={`Repetition ${index + 1}`}>
+                          {checked ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
+                        </button>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => addDiveRep(dive.id)} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-black text-[var(--color-action)] transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+                      <Plus className="h-4 w-4" /> Ajouter une rep
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
-          {block.exercises.length === 0 && block.poolSections.length === 0 && <p className="p-3 text-sm leading-6 text-white/70">Bloc commun. Suis les consignes du coach.</p>}
+          {blockSteps.length === 0 && <p className="p-3 text-sm leading-6 text-white/70">Bloc commun. Suis les consignes du coach.</p>}
         </section>
 
         <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
@@ -497,7 +533,8 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
           <div className="grid grid-cols-4 gap-2">
             {ratings.map((rating) => <Button key={rating} type="button" size="sm" variant="dark" className={feedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFeedback({ rating })}>{rating}</Button>)}
           </div>
-          <Textarea className="mt-3 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note rapide" value={feedback.note} onChange={(event) => updateFeedback({ note: event.target.value })} />
+          <Textarea className="mt-3 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note rapide (facultatif)" value={feedback.note} onChange={(event) => updateFeedback({ note: event.target.value })} />
+          {!hasFeedback && <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">Choisis ton ressenti avant de continuer.</p>}
         </section>
 
         {error && <ErrorBanner message={error} />}
@@ -505,7 +542,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
         <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
           <div className="mx-auto grid max-w-[430px] grid-cols-[1fr_1.35fr] gap-2">
             <Button type="button" variant="outline" className="h-14 bg-transparent text-white" disabled={current === 0} onClick={previousStep}><ChevronLeft className="h-5 w-5" /> Precedent</Button>
-            <Button type="button" variant="action" className="h-14 rounded-2xl" onClick={nextStep}>{current === blocks.length - 1 ? "Finir" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
+            <Button type="button" variant="action" className="h-14 rounded-2xl" disabled={!hasFeedback} onClick={nextStep}>{current === blocks.length - 1 && stepIndex === blockSteps.length - 1 ? "Finir" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
           </div>
         </div>
       </div>
