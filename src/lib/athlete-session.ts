@@ -235,10 +235,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
               id: dive.id,
               code: dive.diveCode,
               name: dive.diveName,
-              repetitions: Math.max(
-                dive.repetitions * Math.max(1, countPoolContexts(section.label ?? poolHeightLabel(section.height))),
-                latestLog?.repetitionsCompleted ?? 0
-              ),
+              repetitions: dive.repetitions * Math.max(1, countPoolContexts(section.label ?? poolHeightLabel(section.height))),
               completedRepetitions: latestLog?.repetitionsCompleted ?? 0,
               rating: latestLog?.rating ?? null,
               note: latestLog?.note ?? null
