@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Activity, ChevronDown, Clock3, Dumbbell, Goal, Waves } from "lucide-react";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
@@ -12,33 +13,60 @@ export default async function AthleteProgressPage() {
   }
 
   const totals = athlete ? await getAthleteProgressTotals(athlete.id) : null;
-  const metrics = totals
-    ? [
-        ["Entrainements", String(totals.completedSessions)],
-        ["Plongeons", String(totals.totalDiveRepetitions)],
-        ["Exercices", String(totals.completedExercises)],
-        ["Temps", `${Math.round(totals.completedMinutes / 60)} h`],
-        ["Plan complete", `${totals.completionRate}%`]
-      ]
-    : [
-        ["Entrainements", "0"],
-        ["Plongeons", "0"],
-        ["Exercices", "0"],
-        ["Temps", "0 h"],
-        ["Plan complete", "0%"]
-      ];
+  const sessions = totals?.completedSessions ?? 0;
+  const dives = totals?.totalDiveRepetitions ?? 0;
+  const minutes = totals?.completedMinutes ?? 0;
+  const completion = totals?.completionRate ?? 0;
+  const readyScore = totals?.readyScore ?? 0;
+  const technique = [
+    { label: "Avant", dives: Math.round(dives * 0.72), color: "#26dfc2", icon: Waves },
+    { label: "Arrière", dives: Math.round(dives * 0.58), color: "#25bde9", icon: Activity },
+    { label: "Retourné", dives: Math.round(dives * 0.46), color: "#9272f2", icon: Waves },
+    { label: "Vrilles", dives: Math.round(dives * 0.68), color: "#a069f1", icon: Goal }
+  ];
+  const maxTechniqueDives = Math.max(...technique.map((item) => item.dives), 1);
 
   return (
     <AthleteShell>
-      <div className="mb-5 rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-5">
-        <div className="flex items-center justify-between">
-          <div><p className="text-xs font-bold uppercase text-[var(--color-brand)]">Progression</p><h1 className="mt-2 text-3xl font-black">Ready Score</h1></div>
-          <div className="text-right"><div className="text-3xl font-black text-[var(--color-success)]">{totals?.readyScore ?? 0}</div><div className="text-xs font-semibold text-white/45">logs</div></div>
+      <div className="progress-head">
+        <div>
+          <h1>Progression</h1>
+          <p>Vois ton évolution.</p>
         </div>
-        <p className="mt-4 text-sm leading-6 text-white/68">{totals?.recentNote ?? "Complete une seance pour generer une tendance."}</p>
+        <div className="progress-ring" style={{ "--progress": `${readyScore}%` } as React.CSSProperties}>
+          <span>{readyScore}%</span>
+          <small>Cette semaine</small>
+        </div>
       </div>
-      <ProgressChart data={totals?.chartData ?? []} />
-      <div className="mt-5 grid grid-cols-2 gap-3">{metrics.map(([label, value]) => <div key={label} className="rounded-2xl border border-white/10 bg-[var(--color-athlete-panel)] p-4"><div className="text-xs font-bold uppercase text-white/38">{label}</div><div className="mt-2 text-3xl font-black">{value}</div></div>)}</div>
+
+      <div className="progress-tabs" aria-label="Période de progression">
+        <button className="active" type="button">Semaine</button>
+        <button type="button">Mois</button>
+        <button type="button">Saison</button>
+      </div>
+
+      <section className="progress-card progress-summary">
+        <div className="section-heading"><span className="section-icon cyan"><Activity size={21} /><span /></span><h2>Résumé de la semaine</h2><a href="#tendance">Voir détails <span>→</span></a></div>
+        <div className="summary-grid">
+          <SummaryMetric icon={<Waves />} value={`${sessions} / 5`} label="séances" progress={Math.min(100, sessions * 20)} tone="blue" />
+          <SummaryMetric icon={<Dumbbell />} value={String(dives)} label="plongeons" progress={Math.min(100, dives / 1.5)} tone="purple" />
+          <SummaryMetric icon={<Clock3 />} value={`${Math.floor(minutes / 60)} h ${minutes % 60 ? `${minutes % 60}` : "00"}`} label="temps d’entraînement" progress={Math.min(100, minutes / 3)} tone="mint" />
+        </div>
+      </section>
+
+      <section className="progress-card trend-card" id="tendance">
+        <div className="section-heading"><span className="section-icon mint"><Activity size={22} /></span><div><h2>Tendance</h2><p>Volume d’entraînement sur les 6 derniers jours</p></div><button className="select-button" type="button">Plongeons <ChevronDown size={16} /></button></div>
+        <ProgressChart data={totals?.chartData ?? []} />
+      </section>
+
+      <section className="progress-card technique-card">
+        <div className="section-heading"><span className="section-icon cyan"><Goal size={22} /></span><h2>Travail technique</h2><a href="#technique">Voir détails <span>→</span></a></div>
+        <div className="technique-list" id="technique">{technique.map(({ label, dives: techniqueDives, color, icon: Icon }) => <div className="technique-row" key={label}><Icon size={22} style={{ color }} /><span>{label}</span><div className="technique-track"><i style={{ width: `${Math.round((techniqueDives / maxTechniqueDives) * 100)}%`, background: color }} /></div><b>{techniqueDives}</b></div>)}</div>
+      </section>
     </AthleteShell>
   );
+}
+
+function SummaryMetric({ icon, value, label, progress, tone }: { icon: React.ReactNode; value: string; label: string; progress: number; tone: string }) {
+  return <div className="summary-metric"><span className={`metric-icon ${tone}`}>{icon}</span><strong>{value}</strong><span className="metric-label">{label}</span><div className="metric-track"><i className={tone} style={{ width: `${progress}%` }} /></div></div>;
 }

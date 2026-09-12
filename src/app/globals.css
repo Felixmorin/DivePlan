@@ -142,6 +142,24 @@ a {
   pointer-events: none;
 }
 
+/* Athlete progress surface */
+.progress-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 1rem .55rem 1.25rem; }
+.progress-head h1 { margin: 0; font-size: 2.05rem; line-height: 1; font-weight: 900; letter-spacing: -.045em; }
+.progress-head p { margin: .55rem 0 0; color: rgba(226, 237, 251, .68); font-size: 1rem; }
+.progress-ring { position: relative; display: grid; width: 4.8rem; height: 4.8rem; place-items: center; border-radius: 999px; background: conic-gradient(#25e0bd var(--progress), #20364b 0); box-shadow: 0 0 24px rgba(37, 224, 189, .1); }
+.progress-ring::before { content: ""; position: absolute; inset: .42rem; border-radius: inherit; background: #06101d; }
+.progress-ring span { position: relative; z-index: 1; font-weight: 900; font-size: 1.08rem; }
+.progress-ring small { position: absolute; top: 5rem; right: -.3rem; width: 6rem; color: rgba(226, 237, 251, .68); font-size: .75rem; text-align: center; }
+.progress-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: .25rem; margin: 0 0 1.15rem; padding: .2rem; border: 1px solid rgba(99, 174, 215, .16); border-radius: 2rem; background: #0b1d2c; }
+.progress-tabs button { min-height: 2.65rem; border: 0; border-radius: 2rem; background: transparent; color: rgba(226, 237, 251, .72); font: inherit; font-size: 1rem; cursor: pointer; }
+.progress-tabs button.active { background: #bdf8f4; color: #071423; font-weight: 800; box-shadow: 0 3px 18px rgba(77, 232, 220, .14); }
+.progress-card { margin-bottom: .85rem; padding: 1.05rem; border: 1px solid rgba(99, 174, 215, .2); border-radius: 1.15rem; background: linear-gradient(145deg, rgba(10, 29, 45, .96), rgba(7, 22, 36, .96)); box-shadow: 0 12px 28px rgba(0,0,0,.12); }
+.section-heading { display: flex; align-items: center; gap: .7rem; min-width: 0; }.section-heading h2 { margin: 0; font-size: 1.12rem; line-height: 1.2; font-weight: 850; letter-spacing: -.02em; }.section-heading p { margin: .25rem 0 0; color: rgba(226, 237, 251, .66); font-size: .9rem; }.section-heading a { margin-left: auto; flex: none; color: #2ee2ed; font-size: .9rem; font-weight: 650; }.section-heading a span { margin-left: .3rem; font-size: 1.35rem; vertical-align: -1px; }
+.section-icon { display: grid; width: 2.15rem; height: 2.15rem; flex: none; place-items: center; color: #25e6e2; }.section-icon.cyan { border-radius: .7rem; background: rgba(17, 224, 221, .1); }.section-icon.mint { color: #25dfb7; }
+.summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .55rem; margin-top: 1rem; }.summary-metric { min-width: 0; padding: .8rem .6rem .7rem; border: 1px solid rgba(99, 174, 215, .15); border-radius: .85rem; background: rgba(13, 37, 57, .8); }.metric-icon { display: block; height: 1.7rem; color: #22d8ef; }.metric-icon svg { width: 1.7rem; height: 1.7rem; }.metric-icon.purple { color: #8871ef; }.metric-icon.mint { color: #26dfbe; }.summary-metric strong { display: block; margin-top: .35rem; font-size: 1.7rem; line-height: 1; font-weight: 900; letter-spacing: -.03em; white-space: nowrap; }.metric-label { display: block; margin-top: .35rem; min-height: 2.3em; color: rgba(226,237,251,.72); font-size: .82rem; line-height: 1.25; }.metric-track, .technique-track { height: .65rem; overflow: hidden; border-radius: 999px; background: #20374a; }.metric-track { margin-top: .65rem; }.metric-track i, .technique-track i { display: block; height: 100%; border-radius: inherit; }.metric-track i.blue { background: linear-gradient(90deg,#19bde9,#4cd4ef); }.metric-track i.purple { background: linear-gradient(90deg,#765be6,#a276fb); }.metric-track i.mint { background: linear-gradient(90deg,#18cfae,#52e6d0); }
+.trend-card .section-heading { align-items: flex-start; }.select-button { display: inline-flex; align-items: center; gap: .4rem; margin-left: auto; padding: .58rem .7rem; border: 1px solid rgba(99,174,215,.2); border-radius: .75rem; background: transparent; color: rgba(226,237,251,.85); font: inherit; font-size: .83rem; }.trend-card .progress-chart { height: 14.8rem; margin: .7rem -.35rem -.3rem; }
+.technique-list { display: grid; gap: .85rem; margin-top: 1rem; }.technique-row { display: grid; grid-template-columns: 1.8rem 5.4rem 1fr 2.5rem; align-items: center; gap: .45rem; color: rgba(236,243,252,.85); font-size: .95rem; }.technique-row b { text-align: right; font-size: .9rem; font-weight: 500; }.technique-track { height: .75rem; }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
