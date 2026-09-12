@@ -253,6 +253,13 @@ function AddPlanningEventPanel({ targets, demo }: { targets: PlanningTarget[]; d
           <Field label="Titre"><Input name="title" placeholder="Ex: Camp technique" disabled={demo} required /></Field>
           <Field label="Date et heure"><Input name="startsAt" type="datetime-local" disabled={demo} required /></Field>
           <Field label="Durée"><Input name="duration" type="number" min="1" placeholder="minutes" disabled={demo} /></Field>
+          <Field label="Répétition">
+            <select name="recurrence" disabled={demo} defaultValue="NONE" className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]">
+              <option value="NONE">Une seule fois</option>
+              <option value="WEEKLY">Chaque semaine</option>
+            </select>
+          </Field>
+          <Field label="Jusqu&apos;au (si répétition)"><Input name="recurrenceUntil" type="date" disabled={demo} /></Field>
           <Field label="Association">
             <select name="target" disabled={demo} className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]">
               <option value="club">Club complet</option>
