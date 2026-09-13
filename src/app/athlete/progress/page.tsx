@@ -16,14 +16,15 @@ export default async function AthleteProgressPage() {
   const sessions = totals?.completedSessions ?? 0;
   const dives = totals?.totalDiveRepetitions ?? 0;
   const minutes = totals?.completedMinutes ?? 0;
-  const completion = totals?.completionRate ?? 0;
   const readyScore = totals?.readyScore ?? 0;
   const technique = [
-    { label: "Avant", dives: Math.round(dives * 0.72), color: "#26dfc2", icon: Waves },
-    { label: "Arrière", dives: Math.round(dives * 0.58), color: "#25bde9", icon: Activity },
-    { label: "Retourné", dives: Math.round(dives * 0.46), color: "#9272f2", icon: Waves },
-    { label: "Vrilles", dives: Math.round(dives * 0.68), color: "#a069f1", icon: Goal }
-  ];
+    { label: "Avant", color: "#26dfc2", icon: Waves },
+    { label: "Arriere", color: "#25bde9", icon: Activity },
+    { label: "Retour", color: "#9272f2", icon: Waves },
+    { label: "Renverse", color: "#a069f1", icon: Waves },
+    { label: "Vrille", color: "#a069f1", icon: Goal },
+    { label: "Equilibre", color: "#26dfc2", icon: Goal }
+  ].map((item) => ({ ...item, dives: totals?.chartData.find((entry) => entry.name === item.label)?.volume ?? 0 }));
   const maxTechniqueDives = Math.max(...technique.map((item) => item.dives), 1);
 
   return (
