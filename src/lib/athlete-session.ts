@@ -67,6 +67,9 @@ export type AthleteProgressTotals = {
   completionRate: number;
   recentNote: string;
   chartData: Array<{ name: string; volume: number }>;
+  weeklyChartData: Array<{ name: string; volume: number }>;
+  monthlyChartData: Array<{ name: string; volume: number }>;
+  skillData: Array<{ name: string; volume: number }>;
   skillCategories: string[];
 };
 
@@ -279,16 +282,27 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     ["Vrille", 0],
     ["Equilibre", 0]
   ]);
+  const dailyTotals = new Map<string, { date: Date; volume: number }>();
 
   for (const log of diveLogs) {
     const label = familyLabels[log.poolDive.diveCode.charAt(0)] ?? "Equilibre";
     chartTotals.set(label, (chartTotals.get(label) ?? 0) + log.repetitionsCompleted);
+
+    const dateKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(log.timestamp);
+    const current = dailyTotals.get(dateKey);
+    dailyTotals.set(dateKey, {
+      date: current?.date ?? log.timestamp,
+      volume: (current?.volume ?? 0) + log.repetitionsCompleted
+    });
   }
 
   const completedMinutes = completedSessions.reduce((sum, completion) => sum + completion.session.duration, 0);
   const totalDiveRepetitions = diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0);
   const completionRate = assignedSessions > 0 ? Math.round((completedSessions.length / assignedSessions) * 100) : 0;
   const readyScore = Math.min(100, Math.round(completionRate * 0.6 + Math.min(totalDiveRepetitions, 120) * 0.25 + Math.min(completedExercises, 20) * 0.5));
+  const dailyData = Array.from(dailyTotals.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
+  const weeklyData = averageByPeriod(dailyData, "week");
+  const monthlyData = averageByPeriod(dailyData, "month");
 
   return {
     readyScore,
@@ -298,9 +312,42 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     completedMinutes,
     completionRate,
     recentNote: completedSessions[0]?.session.focus ?? "Complete une seance pour generer une tendance.",
-    chartData: Array.from(chartTotals, ([name, volume]) => ({ name, volume })),
+    chartData: dailyData
+      .slice(-6)
+      .map(({ date, volume }) => ({
+        name: new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", weekday: "short", day: "numeric", month: "short" }).format(date),
+        volume
+      })),
+    weeklyChartData: weeklyData,
+    monthlyChartData: monthlyData,
+    skillData: Array.from(chartTotals, ([name, volume]) => ({ name, volume })),
     skillCategories: Array.from(new Set(skills.map((skill) => skill.skill.category)))
   };
+}
+
+function averageByPeriod(data: Array<{ date: Date; volume: number }>, period: "week" | "month") {
+  const grouped = new Map<string, { date: Date; volume: number; days: number }>();
+
+  for (const entry of data) {
+    const date = new Date(entry.date);
+    const key = period === "month" ? `${date.getUTCFullYear()}-${date.getUTCMonth()}` : getWeekStart(date);
+    const current = grouped.get(key);
+    grouped.set(key, { date: current?.date ?? date, volume: (current?.volume ?? 0) + entry.volume, days: (current?.days ?? 0) + 1 });
+  }
+
+  return Array.from(grouped.values()).map(({ date, volume, days }) => ({
+    name: period === "month"
+      ? new Intl.DateTimeFormat("fr-CA", { month: "short", year: "numeric" }).format(date)
+      : `Sem. ${new Intl.DateTimeFormat("fr-CA", { day: "numeric", month: "short" }).format(date)}`,
+    volume: Math.round(volume / days)
+  }));
+}
+
+function getWeekStart(date: Date) {
+  const start = new Date(date);
+  const day = start.getUTCDay();
+  start.setUTCDate(start.getUTCDate() - (day === 0 ? 6 : day - 1));
+  return start.toISOString().slice(0, 10);
 }
 
 function poolHeightLabel(height: PoolHeight) {

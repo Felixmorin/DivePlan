@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Activity, ChevronDown, Clock3, Dumbbell, Goal, Waves } from "lucide-react";
+import { Activity, Clock3, Dumbbell, Goal, Waves } from "lucide-react";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
@@ -24,7 +24,7 @@ export default async function AthleteProgressPage() {
     { label: "Renverse", color: "#a069f1", icon: Waves },
     { label: "Vrille", color: "#a069f1", icon: Goal },
     { label: "Equilibre", color: "#26dfc2", icon: Goal }
-  ].map((item) => ({ ...item, dives: totals?.chartData.find((entry) => entry.name === item.label)?.volume ?? 0 }));
+  ].map((item) => ({ ...item, dives: totals?.skillData.find((entry) => entry.name === item.label)?.volume ?? 0 }));
   const maxTechniqueDives = Math.max(...technique.map((item) => item.dives), 1);
 
   return (
@@ -56,8 +56,8 @@ export default async function AthleteProgressPage() {
       </section>
 
       <section className="progress-card trend-card" id="tendance">
-        <div className="section-heading"><span className="section-icon mint"><Activity size={22} /></span><div><h2>Tendance</h2><p>Volume d’entraînement sur les 6 derniers jours</p></div><button className="select-button" type="button">Plongeons <ChevronDown size={16} /></button></div>
-        <ProgressChart data={totals?.chartData ?? []} />
+        <div className="section-heading"><span className="section-icon mint"><Activity size={22} /></span><div><h2>Tendance</h2><p>Volume d’entraînement dans le temps</p></div></div>
+        <ProgressChart data={totals?.chartData ?? []} weeklyData={totals?.weeklyChartData ?? []} monthlyData={totals?.monthlyChartData ?? []} />
       </section>
 
       <section className="progress-card technique-card">
