@@ -17,7 +17,6 @@ export default async function AthleteProgressPage() {
   const sessions = totals?.completedSessions ?? 0;
   const dives = totals?.totalDiveRepetitions ?? 0;
   const minutes = totals?.completedMinutes ?? 0;
-  const readyScore = totals?.readyScore ?? 0;
   const technique = [
     { label: "Avant", color: "#26dfc2", icon: "waves" },
     { label: "Arriere", color: "#25bde9", icon: "activity" },
@@ -34,10 +33,6 @@ export default async function AthleteProgressPage() {
           <h1>Progression</h1>
           <p>Vois ton évolution.</p>
         </div>
-        <div className="progress-ring" style={{ "--progress": `${readyScore}%` } as React.CSSProperties}>
-          <span>{readyScore}%</span>
-          <small>Cette semaine</small>
-        </div>
       </div>
 
       <div className="progress-tabs" aria-label="Période de progression">
@@ -47,7 +42,7 @@ export default async function AthleteProgressPage() {
       </div>
 
       <section className="progress-card progress-summary">
-        <div className="section-heading"><span className="section-icon cyan"><Activity size={21} /><span /></span><h2>Résumé de la semaine</h2><a href="#tendance">Voir détails <span>→</span></a></div>
+        <div className="section-heading"><span className="section-icon cyan"><Activity size={21} /><span /></span><h2>Résumé de la semaine</h2></div>
         <div className="summary-grid">
           <SummaryMetric icon={<Waves />} value={`${sessions} / 5`} label="séances" progress={Math.min(100, sessions * 20)} tone="blue" />
           <SummaryMetric icon={<Dumbbell />} value={String(dives)} label="plongeons" progress={Math.min(100, dives / 1.5)} tone="purple" />

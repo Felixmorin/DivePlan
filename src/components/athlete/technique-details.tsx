@@ -31,7 +31,7 @@ export function TechniqueDetails({ technique, skillDives }: { technique: Techniq
     <>
       <div className="section-heading">
         <span className="section-icon cyan"><Goal size={22} /></span>
-        <h2>Travail technique</h2>
+        <h2>Volume par famille</h2>
         <button className="details-toggle" type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
           {expanded ? "Masquer détails" : "Voir détails"} <ChevronDown className={expanded ? "rotated" : ""} size={17} />
         </button>
