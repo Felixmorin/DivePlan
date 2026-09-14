@@ -30,7 +30,7 @@ type AthleteProfile = {
   recentSessions: Array<{ id: string; title: string; date: Date; status: string; rating?: string | null; note?: string | null }>;
   skills: Array<{ code: string; name: string; status: string; progress: number; trainings: number; repetitions: number }>;
   planningEvents: Array<{ id: string; title: string; type: string; startsAt: Date; location?: string | null }>;
-  competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; name: string; difficulty: number | null }>;
+  competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; difficulty: number | null }>;
 };
 
 export default async function AthleteDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -111,7 +111,6 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       id: dive.id,
       height: dive.height,
       code: dive.diveCode,
-      name: dive.diveName,
       difficulty: dive.difficulty
     }))
   };
@@ -152,9 +151,9 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
           { id: "event-demo", title: "Camp technique", type: "CAMP", startsAt: parseMontrealSessionDate("2026-08-27"), location: "Bassin principal" }
         ],
         competitionDives: [
-          { id: "competition-1", height: "ONE_METER", code: "203C", name: "Arrière, 1½ saut périlleux groupé", difficulty: 2 },
-          { id: "competition-2", height: "ONE_METER", code: "201B", name: "Arrière, saut périlleux carpé", difficulty: 1.6 },
-          { id: "competition-3", height: "THREE_METER", code: "405C", name: "Renversé, 2½ sauts périlleux groupés", difficulty: 3.1 }
+          { id: "competition-1", height: "ONE_METER", code: "203C", difficulty: 2 },
+          { id: "competition-2", height: "ONE_METER", code: "201B", difficulty: 1.6 },
+          { id: "competition-3", height: "THREE_METER", code: "405C", difficulty: 3.1 }
         ]
       }}
       demo
@@ -312,7 +311,6 @@ function CompetitionDiveEditor({ profile, demo }: { profile: AthleteProfile; dem
                   <div key={dive.id} className="flex items-center gap-2 rounded-xl bg-[var(--color-surface-raised)] p-3">
                     <div className="min-w-0 flex-1">
                       <div className="font-black">{dive.code} <span className="ml-1 text-sm font-semibold text-[var(--color-ink-muted)]">{dive.difficulty?.toFixed(1) ?? "—"}</span></div>
-                      <div className="mt-0.5 truncate text-sm text-[var(--color-ink-muted)]">{dive.name}</div>
                     </div>
                     <form action={demo ? undefined : removeCompetitionDive}>
                       <input type="hidden" name="diveId" value={dive.id} />
@@ -332,7 +330,6 @@ function CompetitionDiveEditor({ profile, demo }: { profile: AthleteProfile; dem
                   <input name="diveCode" required maxLength={12} placeholder="Code" aria-label={`Code du plongeon ${height.label}`} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
                   <input name="difficulty" inputMode="decimal" placeholder="DD" aria-label={`Degré de difficulté ${height.label}`} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
                 </div>
-                <input name="diveName" required maxLength={100} placeholder="Nom du plongeon" aria-label={`Nom du plongeon ${height.label}`} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
                 <Button type="submit" disabled={demo} variant="default" className="w-full"><Plus className="h-4 w-4" /> Ajouter</Button>
               </form>
             </section>

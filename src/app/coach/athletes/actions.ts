@@ -43,7 +43,6 @@ const competitionDiveSchema = z.object({
   athleteId: z.string().min(1),
   height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM]),
   diveCode: z.string().trim().min(1).max(12),
-  diveName: z.string().trim().min(1).max(100),
   difficulty: z.string().trim().optional()
 });
 
@@ -304,7 +303,6 @@ export async function addCompetitionDive(formData: FormData) {
     athleteId: formData.get("athleteId"),
     height: formData.get("height"),
     diveCode: formData.get("diveCode"),
-    diveName: formData.get("diveName"),
     difficulty: String(formData.get("difficulty") ?? "")
   });
 
@@ -334,7 +332,7 @@ export async function addCompetitionDive(formData: FormData) {
       athleteId: athlete.id,
       height: parsed.data.height,
       diveCode: parsed.data.diveCode.toUpperCase(),
-      diveName: parsed.data.diveName,
+      diveName: "",
       difficulty,
       position
     }

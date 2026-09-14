@@ -59,10 +59,9 @@ export default async function ProfilePage() {
         <CompetitionList
           dives={athlete.competitionDives.filter((dive) => dive.height !== "CUSTOM").map((dive) => ({
             id: dive.id,
-            height: dive.height,
-            code: dive.diveCode,
-            name: dive.diveName,
-            difficulty: dive.difficulty,
+          height: dive.height,
+          code: dive.diveCode,
+          difficulty: dive.difficulty,
             volume: totals.skillDives
               .filter((trackedDive) => trackedDive.code === dive.diveCode)
               .reduce((sum, trackedDive) => sum + trackedDive.volume, 0)
