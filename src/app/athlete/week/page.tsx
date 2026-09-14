@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Clock3, History } from "lucide-react";
+import { ArrowLeft, Clock3, History } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,12 @@ export default async function AthleteWeekPage() {
   return (
     <AthleteShell>
       <div className="mb-5">
+        <Button asChild variant="ghost" className="mb-5 -ml-3 text-white/65 hover:bg-white/8 hover:text-white">
+          <Link href="/athlete"><ArrowLeft className="h-4 w-4" /> Retour à l’accueil</Link>
+        </Button>
         <p className="text-sm font-black uppercase text-[var(--color-brand)]">Historique</p>
-        <h1 className="mt-2 text-3xl font-black">Tes séances</h1>
+        <h1 className="mt-2 text-3xl font-black">Historique des entraînements</h1>
+        <p className="mt-2 text-sm leading-6 text-white/58">Retrouve toutes tes séances terminées et en cours.</p>
       </div>
       <div className="space-y-3">
         {completions.map((completion) => (

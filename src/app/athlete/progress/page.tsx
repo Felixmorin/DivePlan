@@ -31,7 +31,6 @@ export default async function AthleteProgressPage() {
       <div className="progress-head">
         <div>
           <h1>Progression</h1>
-          <p>Vois ton évolution.</p>
         </div>
       </div>
 

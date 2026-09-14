@@ -145,7 +145,6 @@ export async function getAthleteRecentCompletions(athleteId: string): Promise<At
   const completions = await prisma.athleteSessionCompletion.findMany({
     where: { athleteId },
     orderBy: [{ completedAt: "desc" }, { startedAt: "desc" }],
-    take: 6,
     include: { session: true }
   });
 

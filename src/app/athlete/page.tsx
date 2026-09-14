@@ -64,21 +64,21 @@ export default async function AthleteTodayPage() {
         ) : <EmptyState className="today-empty" title="Aucune séance" description="Reviens quand ton coach aura publié la prochaine séance." />}
       </section>
 
-      <SectionHeading title="Ma semaine" href="/athlete/week" linkLabel="Voir la semaine" />
+      <SectionHeading title="Ma semaine" />
       <section className="week-card" aria-label="Résumé de la semaine">
         <WeekMetric value={`${progressTotals.completedSessions} / 5`} label="séances complétées" tone="blue" progress={Math.min(100, progressTotals.completedSessions / 5 * 100)} />
         <WeekMetric value={`${Math.floor(progressTotals.completedMinutes / 60)} h`} suffix={` / ${Math.ceil(progressTotals.completedMinutes / 60) || 7} h`} label="temps d’entraînement" tone="purple" progress={Math.min(100, progressTotals.completedMinutes / 420 * 100)} />
         <WeekMetric value={progressTotals.totalDiveRepetitions} label="plongeons" tone="mint" progress={Math.min(100, progressTotals.totalDiveRepetitions / 180 * 100)} />
       </section>
 
-      <SectionHeading title="À venir" href="/athlete/calendar" linkLabel="Voir tout" />
+      <SectionHeading title="À venir" href="/athlete/calendar" linkLabel="Voir calendrier" />
       <section className="schedule-card">
         {readySession ? (
           <ScheduleRow date={sessionDateLabel} icon={<Waves />} title={readySession.title} details={`${sessionTime}  ·  ${readySession.duration} min  ·  ${totalVolume || "—"} plongeons`} meta={readySession.focus} href={sessionHref ?? "/athlete"} />
         ) : <EmptyState className="border-0 bg-transparent p-4" title="Rien de prévu" description="Les prochaines séances apparaîtront ici." />}
       </section>
 
-      <SectionHeading title="Dernière séance" href="/athlete/week" linkLabel="Voir le résumé" />
+      <SectionHeading title="Dernière séance" href="/athlete/week" linkLabel="Voir l’historique" />
       <section className="latest-card">
         {latestCompletion ? (
           <ScheduleRow date={latestCompletion.completedAt ? formatMontrealDate(new Date(latestCompletion.completedAt), { weekday: "short", day: "numeric", month: "short" }) : "Récente"} icon={<Dumbbell />} title={latestCompletion.title} details={`${latestCompletion.duration} min  ·  ${latestCompletion.focus}`} meta={latestCompletion.status === "COMPLETED" ? "Séance complétée" : "Séance en cours"} href="/athlete/week" status={latestCompletion.status === "COMPLETED"} />
