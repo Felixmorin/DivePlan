@@ -3,6 +3,7 @@ import type { BlockType, CompletionStatus, PlanningEventType, SessionStatus } fr
 import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, Edit, MapPin, Printer, Trophy, Users, Waves } from "lucide-react";
 import { createPlanningEvent } from "@/app/coach/planning/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
+import { PlanningEventEditor } from "@/components/coach/planning-event-editor";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { athletes as demoAthletes, demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { addMontrealDays, formatMontrealDate, formatMontrealTime, parseMontrealSessionDate, sameMontrealDay, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
+import { addMontrealDays, formatMontrealDate, formatMontrealTime, parseMontrealSessionDate, sameMontrealDay, startOfMontrealWeek, toMontrealDateInputValue, toMontrealDateTimeInputValue } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ type PlanningEvent = {
   duration: number | null;
   location: string | null;
   notes: string | null;
+  groupId: string | null;
+  athleteId: string | null;
   groupName: string | null;
   athleteName: string | null;
 };
@@ -108,6 +111,8 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
     duration: event.duration,
     location: event.location,
     notes: event.notes,
+    groupId: event.groupId,
+    athleteId: event.athleteId,
     groupName: event.group?.name ?? null,
     athleteName: event.athlete ? `${event.athlete.user.firstName} ${event.athlete.user.lastName}` : null
   }));
@@ -140,6 +145,8 @@ function DemoPlanningPage({ period }: { period: PlanningPeriod }) {
       duration: 180,
       location: "Centre aquatique",
       notes: "Liste finale des plongeons a confirmer.",
+      groupId: "provincial",
+      athleteId: null,
       groupName: "Provincial",
       athleteName: null
     },
@@ -151,6 +158,8 @@ function DemoPlanningPage({ period }: { period: PlanningPeriod }) {
       duration: 240,
       location: "Bassin principal",
       notes: null,
+      groupId: "provincial",
+      athleteId: null,
       groupName: "Provincial",
       athleteName: null
     }
@@ -207,7 +216,7 @@ function PlanningView({ period, sessions, events, targets, demo = false }: { per
       {sessions.length === 0 && events.length === 0 ? (
         <EmptyState title={period.mode === "week" ? "Aucune séance cette semaine" : "Aucune séance ce mois-ci"} description="Ajoute une séance pour commencer la planification." action={<Button asChild variant="action"><Link href="/coach/sessions/new">Créer une séance</Link></Button>} />
       ) : period.mode === "month" ? (
-        <MonthCalendar period={period} sessions={sessions} events={events} activeSessionIds={activeSessionIds} demo={demo} />
+        <MonthCalendar period={period} sessions={sessions} events={events} activeSessionIds={activeSessionIds} targets={targets} demo={demo} />
       ) : (
         <div className="grid gap-3 lg:grid-cols-7">
           {weekDays(period.weekStart).map((day) => (
@@ -216,6 +225,7 @@ function PlanningView({ period, sessions, events, targets, demo = false }: { per
               day={day}
               sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))}
               events={events.filter((event) => sameMontrealDay(event.startsAt, day.date))}
+              targets={targets}
               activeSessionIds={activeSessionIds}
               demo={demo}
             />
@@ -284,7 +294,7 @@ function Field({ label, className, children }: { label: string; className?: stri
   return <label className={`block min-w-0 text-xs font-black uppercase text-[var(--color-ink-muted)] ${className ?? ""}`}><span className="mb-1 block">{label}</span>{children}</label>;
 }
 
-function DayColumn({ day, sessions, events, activeSessionIds, demo, compact = false }: { day: { key: number | string; label: string; date: Date }; sessions: PlanningSession[]; events: PlanningEvent[]; activeSessionIds: Set<string>; demo: boolean; compact?: boolean }) {
+function DayColumn({ day, sessions, events, activeSessionIds, targets, demo, compact = false }: { day: { key: number | string; label: string; date: Date }; sessions: PlanningSession[]; events: PlanningEvent[]; activeSessionIds: Set<string>; targets: PlanningTarget[]; demo: boolean; compact?: boolean }) {
   return (
     <Card className={compact ? "min-h-0" : "min-h-0 lg:min-h-96"}>
       <CardContent className="p-4">
@@ -298,7 +308,7 @@ function DayColumn({ day, sessions, events, activeSessionIds, demo, compact = fa
 
         <div className="space-y-3">
           {sessions.map((session) => <PlanningSessionCard key={session.id} session={session} active={activeSessionIds.has(session.id)} demo={demo} />)}
-          {events.map((event) => <PlanningEventCard key={event.id} event={event} />)}
+          {events.map((event) => <PlanningEventCard key={event.id} event={event} targets={targets} />)}
           {sessions.length === 0 && events.length === 0 && (
             <div className="rounded-2xl border border-dashed border-[var(--color-border-strong)] p-4">
               <div className="text-sm font-black text-[var(--color-ink-muted)]">Jour libre</div>
@@ -311,7 +321,7 @@ function DayColumn({ day, sessions, events, activeSessionIds, demo, compact = fa
   );
 }
 
-function MonthCalendar({ period, sessions, events, activeSessionIds, demo }: { period: PlanningPeriod; sessions: PlanningSession[]; events: PlanningEvent[]; activeSessionIds: Set<string>; demo: boolean }) {
+function MonthCalendar({ period, sessions, events, activeSessionIds, targets, demo }: { period: PlanningPeriod; sessions: PlanningSession[]; events: PlanningEvent[]; activeSessionIds: Set<string>; targets: PlanningTarget[]; demo: boolean }) {
   const days = monthCalendarDays(period.rangeStart, period.rangeEnd);
 
   return (
@@ -336,7 +346,7 @@ function MonthCalendar({ period, sessions, events, activeSessionIds, demo }: { p
               </div>
               <div className="space-y-1.5">
                 {daySessions.slice(0, 2).map((session) => <MonthSessionItem key={session.id} session={session} active={activeSessionIds.has(session.id)} demo={demo} />)}
-                {dayEvents.slice(0, 3).map((event) => <MonthEventItem key={event.id} event={event} />)}
+                {dayEvents.slice(0, 3).map((event) => <MonthEventItem key={event.id} event={event} targets={targets} />)}
                 {daySessions.length + dayEvents.length > 5 && <div className="text-[11px] font-black text-[var(--color-ink-muted)]">+{daySessions.length + dayEvents.length - 5}</div>}
               </div>
             </div>
@@ -377,12 +387,13 @@ function PlanningSessionCard({ session, active, demo }: { session: PlanningSessi
   );
 }
 
-function PlanningEventCard({ event }: { event: PlanningEvent }) {
+function PlanningEventCard({ event, targets }: { event: PlanningEvent; targets: PlanningTarget[] }) {
+  const target = event.groupId ? `group:${event.groupId}` : event.athleteId ? `athlete:${event.athleteId}` : "club";
   return (
     <article className={`rounded-2xl border p-3 ${eventTone(event.type)}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2.5 py-1 text-xs font-black"><Trophy className="h-3.5 w-3.5" /> {eventTypeLabel(event.type)}</span>
-        <span className="text-xs font-bold">{formatMontrealTime(event.startsAt)}</span>
+        <div className="flex items-center gap-1"><span className="text-xs font-bold">{formatMontrealTime(event.startsAt)}</span><PlanningEventEditor event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), target }} targets={targets} /></div>
       </div>
       <div className="mt-3 font-black leading-tight">{event.title}</div>
       <div className="mt-2 space-y-1 text-xs font-bold opacity-80">
@@ -405,11 +416,12 @@ function MonthSessionItem({ session, active, demo }: { session: PlanningSession;
   );
 }
 
-function MonthEventItem({ event }: { event: PlanningEvent }) {
+function MonthEventItem({ event, targets }: { event: PlanningEvent; targets: PlanningTarget[] }) {
+  const target = event.groupId ? `group:${event.groupId}` : event.athleteId ? `athlete:${event.athleteId}` : "club";
   return (
     <div className={`rounded-lg border px-2 py-1.5 text-xs font-black leading-tight ${eventTone(event.type)}`}>
-      <span className="block text-[10px] font-bold opacity-70">{formatMontrealTime(event.startsAt)} · {eventTypeLabel(event.type)}</span>
-      {event.title}
+      <div className="flex items-start justify-between gap-1"><span className="block text-[10px] font-bold opacity-70">{formatMontrealTime(event.startsAt)} · {eventTypeLabel(event.type)}</span><PlanningEventEditor compact event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), target }} targets={targets} /></div>
+      <div>{event.title}</div>
     </div>
   );
 }

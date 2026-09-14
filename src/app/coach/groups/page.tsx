@@ -4,6 +4,7 @@ import { CalendarClock, Plus, Save, Users, Waves } from "lucide-react";
 import { createTrainingGroup, assignAthletesToGroup } from "@/app/coach/groups/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatars } from "@/components/coach/athlete-avatars";
+import { DeleteGroupButton } from "@/components/coach/delete-group-button";
 import { StatusPill } from "@/components/training/status-pill";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -166,9 +167,7 @@ export default async function GroupsPage() {
                     ) : <span className="text-sm font-bold text-[var(--color-ink-muted)]">Aucune seance planifiee</span>}
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <Button asChild variant="outline">
-                      <Link href={`/coach/groups/${group.id}`}>Ouvrir</Link>
-                    </Button>
+                    <div className="flex justify-end gap-2"><Button asChild variant="outline"><Link href={`/coach/groups/${group.id}`}>Ouvrir</Link></Button><DeleteGroupButton groupId={group.id} groupName={group.name} disabled={group.weeks.length > 0} /></div>
                   </td>
                 </tr>
                   );
@@ -209,9 +208,7 @@ export default async function GroupsPage() {
                 <GroupMetric icon={<Waves className="h-4 w-4" />} label="Seance" value={nextSession?.title ?? "Aucune"} />
                 <GroupMetric icon={<Users className="h-4 w-4" />} label="Statut" value={watchCount > 0 ? `${watchCount} a surveiller` : "Tous actifs"} />
               </div>
-              <Button asChild className="mt-4 w-full" variant="action">
-                <Link href={`/coach/groups/${group.id}`}>Ouvrir le groupe</Link>
-              </Button>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2"><Button asChild variant="action"><Link href={`/coach/groups/${group.id}`}>Ouvrir le groupe</Link></Button><DeleteGroupButton groupId={group.id} groupName={group.name} disabled={group.weeks.length > 0} /></div>
             </div>
               );
             })}

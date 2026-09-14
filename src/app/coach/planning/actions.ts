@@ -88,6 +88,57 @@ export async function createPlanningEvent(formData: FormData) {
   revalidatePath("/athlete/calendar");
 }
 
+export async function updatePlanningEvent(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const eventId = String(formData.get("eventId") ?? "");
+  const data = planningEventSchema.parse({
+    type: formData.get("type"),
+    title: formData.get("title"),
+    startsAt: formData.get("startsAt"),
+    duration: formData.get("duration") ?? "",
+    location: formData.get("location") ?? "",
+    notes: formData.get("notes") ?? "",
+    target: formData.get("target") ?? "club",
+    recurrence: "NONE",
+    recurrenceUntil: ""
+  });
+  const target = parseTarget(data.target);
+
+  const event = await prisma.planningEvent.findFirst({
+    where: { id: eventId, clubId },
+    select: { id: true }
+  });
+  if (!event) throw new Error("Événement introuvable.");
+
+  if (target.groupId) {
+    const group = await prisma.trainingGroup.findFirst({ where: { id: target.groupId, clubId }, select: { id: true } });
+    if (!group) throw new Error("Groupe introuvable pour ce club.");
+  }
+
+  if (target.athleteId) {
+    const athlete = await prisma.athlete.findFirst({ where: { id: target.athleteId, clubId }, select: { id: true } });
+    if (!athlete) throw new Error("Athlète introuvable pour ce club.");
+  }
+
+  await prisma.planningEvent.update({
+    where: { id: event.id },
+    data: {
+      type: data.type,
+      title: data.title,
+      startsAt: parseMontrealDateTimeInput(data.startsAt),
+      duration: data.duration,
+      location: data.location || null,
+      notes: data.notes || null,
+      groupId: target.groupId ?? null,
+      athleteId: target.athleteId ?? null
+    }
+  });
+
+  revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/athlete/calendar");
+}
+
 function parseTarget(value?: string) {
   if (!value || value === "club") return {};
   if (value.startsWith("group:")) return { groupId: value.slice("group:".length) };

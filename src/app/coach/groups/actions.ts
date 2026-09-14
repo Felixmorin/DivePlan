@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
@@ -87,6 +88,37 @@ export async function assignAthletesToGroup(formData: FormData) {
   });
 
   revalidateGroupPaths(group.id);
+}
+
+export async function deleteTrainingGroup(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const groupId = String(formData.get("groupId") ?? "");
+  const group = await prisma.trainingGroup.findFirst({
+    where: { id: groupId, clubId },
+    select: { id: true, name: true, _count: { select: { weeks: true } } }
+  });
+
+  if (!group) throw new Error("Groupe introuvable.");
+  if (group._count.weeks > 0) {
+    throw new Error("Ce groupe contient des séances planifiées. Supprime ou déplace d’abord ses séances.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.athlete.updateMany({ where: { groupId: group.id }, data: { groupId: null } });
+    await tx.planningEvent.updateMany({ where: { groupId: group.id }, data: { groupId: null } });
+    await tx.trainingGroup.delete({ where: { id: group.id } });
+  });
+
+  await trackEvent({
+    type: "group.deleted",
+    message: `Groupe supprime: ${group.name}`,
+    clubId,
+    userId: user.id,
+    metadata: { groupId: group.id }
+  });
+
+  revalidateGroupPaths(group.id);
+  redirect("/coach/groups");
 }
 
 function revalidateGroupPaths(groupId: string) {
