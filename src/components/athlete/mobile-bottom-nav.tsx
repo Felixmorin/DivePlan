@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/athlete", label: "Accueil", icon: Activity },
-  { href: "/athlete/calendar", label: "Séances", icon: CalendarDays },
+  { href: "/athlete/calendar", label: "Calendrier", icon: CalendarDays },
   { href: "/athlete/progress", label: "Progression", icon: BarChart3 },
   { href: "/athlete/profile", label: "Profil", icon: User }
 ];
