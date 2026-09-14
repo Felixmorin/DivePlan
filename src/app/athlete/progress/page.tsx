@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Activity, Clock3, Dumbbell, Goal, Waves } from "lucide-react";
 import { ProgressChart } from "@/components/athlete/progress-chart";
+import { TechniqueDetails } from "@/components/athlete/technique-details";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 
@@ -25,8 +26,6 @@ export default async function AthleteProgressPage() {
     { label: "Vrille", color: "#a069f1", icon: Goal },
     { label: "Equilibre", color: "#26dfc2", icon: Goal }
   ].map((item) => ({ ...item, dives: totals?.skillData.find((entry) => entry.name === item.label)?.volume ?? 0 }));
-  const maxTechniqueDives = Math.max(...technique.map((item) => item.dives), 1);
-
   return (
     <AthleteShell>
       <div className="progress-head">
@@ -61,8 +60,7 @@ export default async function AthleteProgressPage() {
       </section>
 
       <section className="progress-card technique-card">
-        <div className="section-heading"><span className="section-icon cyan"><Goal size={22} /></span><h2>Travail technique</h2><a href="#technique">Voir détails <span>→</span></a></div>
-        <div className="technique-list" id="technique">{technique.map(({ label, dives: techniqueDives, color, icon: Icon }) => <div className="technique-row" key={label}><Icon size={22} style={{ color }} /><span>{label}</span><div className="technique-track"><i style={{ width: `${Math.round((techniqueDives / maxTechniqueDives) * 100)}%`, background: color }} /></div><b>{techniqueDives}</b></div>)}</div>
+        <TechniqueDetails technique={technique} skillDives={totals?.skillDives ?? []} />
       </section>
     </AthleteShell>
   );

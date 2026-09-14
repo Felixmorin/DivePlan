@@ -1,0 +1,51 @@
+"use client";
+
+import { useState } from "react";
+import { ChevronDown, Goal } from "lucide-react";
+
+type TechniqueItem = {
+  label: string;
+  color: string;
+  icon: typeof Goal;
+  dives: number;
+};
+
+type SkillDive = {
+  category: string;
+  code: string;
+  name: string;
+  volume: number;
+};
+
+export function TechniqueDetails({ technique, skillDives }: { technique: TechniqueItem[]; skillDives: SkillDive[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const divesByCategory = new Map<string, SkillDive[]>();
+
+  for (const dive of skillDives) {
+    divesByCategory.set(dive.category, [...(divesByCategory.get(dive.category) ?? []), dive]);
+  }
+
+  return (
+    <>
+      <div className="section-heading">
+        <span className="section-icon cyan"><Goal size={22} /></span>
+        <h2>Travail technique</h2>
+        <button className="details-toggle" type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
+          {expanded ? "Masquer détails" : "Voir détails"} <ChevronDown className={expanded ? "rotated" : ""} size={17} />
+        </button>
+      </div>
+      <div className="technique-list" id="technique">
+        {technique.map(({ label, dives: techniqueDives, color, icon: Icon }) => (
+          <div className="technique-group" key={label}>
+            <div className="technique-row"><Icon size={22} style={{ color }} /><span>{label}</span><div className="technique-track"><i style={{ width: `${Math.round((techniqueDives / Math.max(...technique.map((item) => item.dives), 1)) * 100)}%`, background: color }} /></div><b>{techniqueDives}</b></div>
+            {expanded && (
+              <div className="technique-dives" aria-label={`Plongeons de la catégorie ${label}`}>
+                {(divesByCategory.get(label) ?? []).length > 0 ? (divesByCategory.get(label) ?? []).map((dive) => <div className="technique-dive" key={`${dive.category}-${dive.code}`}><span><strong>{dive.code}</strong> {dive.name}</span><b>{dive.volume}</b></div>) : <p>Aucun plongeon enregistré</p>}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}

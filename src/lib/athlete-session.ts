@@ -70,6 +70,7 @@ export type AthleteProgressTotals = {
   weeklyChartData: Array<{ name: string; volume: number }>;
   monthlyChartData: Array<{ name: string; volume: number }>;
   skillData: Array<{ name: string; volume: number }>;
+  skillDives: Array<{ category: string; code: string; name: string; volume: number }>;
   skillCategories: string[];
 };
 
@@ -282,11 +283,20 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     ["Vrille", 0],
     ["Equilibre", 0]
   ]);
+  const skillDives = new Map<string, { category: string; code: string; name: string; volume: number }>();
   const dailyTotals = new Map<string, { date: Date; volume: number }>();
 
   for (const log of diveLogs) {
     const label = familyLabels[log.poolDive.diveCode.charAt(0)] ?? "Equilibre";
     chartTotals.set(label, (chartTotals.get(label) ?? 0) + log.repetitionsCompleted);
+    const diveKey = `${label}:${log.poolDive.diveCode}`;
+    const currentDive = skillDives.get(diveKey);
+    skillDives.set(diveKey, {
+      category: label,
+      code: log.poolDive.diveCode,
+      name: log.poolDive.diveName,
+      volume: (currentDive?.volume ?? 0) + log.repetitionsCompleted
+    });
 
     const dateKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(log.timestamp);
     const current = dailyTotals.get(dateKey);
@@ -321,6 +331,7 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     weeklyChartData: weeklyData,
     monthlyChartData: monthlyData,
     skillData: Array.from(chartTotals, ([name, volume]) => ({ name, volume })),
+    skillDives: Array.from(skillDives.values()).sort((a, b) => a.category.localeCompare(b.category) || a.code.localeCompare(b.code)),
     skillCategories: Array.from(new Set(skills.map((skill) => skill.skill.category)))
   };
 }
