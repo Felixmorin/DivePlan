@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Activity, Clock3, Dumbbell, Goal, Waves } from "lucide-react";
+import { Activity, Clock3, Dumbbell, Waves } from "lucide-react";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { TechniqueDetails } from "@/components/athlete/technique-details";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
@@ -19,13 +19,14 @@ export default async function AthleteProgressPage() {
   const minutes = totals?.completedMinutes ?? 0;
   const readyScore = totals?.readyScore ?? 0;
   const technique = [
-    { label: "Avant", color: "#26dfc2", icon: Waves },
-    { label: "Arriere", color: "#25bde9", icon: Activity },
-    { label: "Retour", color: "#9272f2", icon: Waves },
-    { label: "Renverse", color: "#a069f1", icon: Waves },
-    { label: "Vrille", color: "#a069f1", icon: Goal },
-    { label: "Equilibre", color: "#26dfc2", icon: Goal }
-  ].map((item) => ({ ...item, dives: totals?.skillData.find((entry) => entry.name === item.label)?.volume ?? 0 }));
+    { label: "Avant", color: "#26dfc2", icon: "waves" },
+    { label: "Arriere", color: "#25bde9", icon: "activity" },
+    { label: "Retour", color: "#9272f2", icon: "waves" },
+    { label: "Renverse", color: "#a069f1", icon: "waves" },
+    { label: "Vrille", color: "#a069f1", icon: "goal" },
+    { label: "Equilibre", color: "#26dfc2", icon: "goal" }
+  ] as const;
+  const techniqueWithVolumes = technique.map((item) => ({ ...item, dives: totals?.skillData.find((entry) => entry.name === item.label)?.volume ?? 0 }));
   return (
     <AthleteShell>
       <div className="progress-head">
@@ -60,7 +61,7 @@ export default async function AthleteProgressPage() {
       </section>
 
       <section className="progress-card technique-card">
-        <TechniqueDetails technique={technique} skillDives={totals?.skillDives ?? []} />
+        <TechniqueDetails technique={techniqueWithVolumes} skillDives={totals?.skillDives ?? []} />
       </section>
     </AthleteShell>
   );

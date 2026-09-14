@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Goal } from "lucide-react";
+import { Activity, ChevronDown, Goal, Waves } from "lucide-react";
 
 type TechniqueItem = {
   label: string;
   color: string;
-  icon: typeof Goal;
+  icon: "waves" | "activity" | "goal";
   dives: number;
 };
 
@@ -25,6 +25,8 @@ export function TechniqueDetails({ technique, skillDives }: { technique: Techniq
     divesByCategory.set(dive.category, [...(divesByCategory.get(dive.category) ?? []), dive]);
   }
 
+  const iconMap = { waves: Waves, activity: Activity, goal: Goal };
+
   return (
     <>
       <div className="section-heading">
@@ -35,16 +37,17 @@ export function TechniqueDetails({ technique, skillDives }: { technique: Techniq
         </button>
       </div>
       <div className="technique-list" id="technique">
-        {technique.map(({ label, dives: techniqueDives, color, icon: Icon }) => (
-          <div className="technique-group" key={label}>
+        {technique.map(({ label, dives: techniqueDives, color, icon }) => {
+          const Icon = iconMap[icon];
+          return <div className="technique-group" key={label}>
             <div className="technique-row"><Icon size={22} style={{ color }} /><span>{label}</span><div className="technique-track"><i style={{ width: `${Math.round((techniqueDives / Math.max(...technique.map((item) => item.dives), 1)) * 100)}%`, background: color }} /></div><b>{techniqueDives}</b></div>
             {expanded && (
               <div className="technique-dives" aria-label={`Plongeons de la catégorie ${label}`}>
                 {(divesByCategory.get(label) ?? []).length > 0 ? (divesByCategory.get(label) ?? []).map((dive) => <div className="technique-dive" key={`${dive.category}-${dive.code}`}><span><strong>{dive.code}</strong> {dive.name}</span><b>{dive.volume}</b></div>) : <p>Aucun plongeon enregistré</p>}
               </div>
             )}
-          </div>
-        ))}
+          </div>;
+        })}
       </div>
     </>
   );
