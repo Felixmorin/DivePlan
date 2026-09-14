@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, BarChart3, Check, ChevronRight, Clock3, Dumbbell, History, ListChecks, Play, UserRound, Waves } from "lucide-react";
+import { ArrowRight, BarChart3, Check, ChevronRight, Clock3, History, ListChecks, Play, UserRound, Waves } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { Button } from "@/components/ui/button";
@@ -81,7 +81,7 @@ export default async function AthleteTodayPage() {
       <SectionHeading title="Dernière séance" href="/athlete/week" linkLabel="Voir l’historique" />
       <section className="latest-card">
         {latestCompletion ? (
-          <ScheduleRow date={latestCompletion.completedAt ? formatMontrealDate(new Date(latestCompletion.completedAt), { weekday: "short", day: "numeric", month: "short" }) : "Récente"} icon={<Dumbbell />} title={latestCompletion.title} details={`${latestCompletion.duration} min  ·  ${latestCompletion.focus}`} meta={latestCompletion.status === "COMPLETED" ? "Séance complétée" : "Séance en cours"} href="/athlete/week" status={latestCompletion.status === "COMPLETED"} />
+          <ScheduleRow date={latestCompletion.completedAt ? formatMontrealDate(new Date(latestCompletion.completedAt), { weekday: "short", day: "numeric", month: "short" }) : "Récente"} title={latestCompletion.title} details={`${latestCompletion.duration} min  ·  ${latestCompletion.focus}`} meta={latestCompletion.status === "COMPLETED" ? "Séance complétée" : "Séance en cours"} href="/athlete/week" status={latestCompletion.status === "COMPLETED"} />
         ) : <EmptyState className="border-0 bg-transparent p-4" title="Aucun historique" description="Tes séances terminées apparaîtront ici." />}
       </section>
 
@@ -103,8 +103,8 @@ function WeekMetric({ value, suffix, label, tone, progress }: { value: string | 
   return <div className="week-metric"><strong>{value}<small>{suffix}</small></strong><span>{label}</span><i className={`metric-progress ${tone}`} style={{ width: `${progress}%` }} /></div>;
 }
 
-function ScheduleRow({ date, icon, title, details, meta, href, status }: { date: string; icon: React.ReactNode; title: string; details: string; meta: string; href: string; status?: boolean }) {
-  return <Link href={href} className="schedule-row"><span className="schedule-date">{date}</span><span className="schedule-icon">{icon}</span><span className="schedule-copy"><strong>{title}</strong><span>{details}</span><em>{meta}</em></span>{status ? <span className="completed-pill"><Check /> Complétée</span> : <ChevronRight className="row-arrow" />}</Link>;
+function ScheduleRow({ date, icon, title, details, meta, href, status }: { date: string; icon?: React.ReactNode; title: string; details: string; meta: string; href: string; status?: boolean }) {
+  return <Link href={href} className={`schedule-row ${icon ? "" : "schedule-row-no-icon"}`}><span className="schedule-date">{date}</span>{icon && <span className="schedule-icon">{icon}</span>}<span className="schedule-copy"><strong>{title}</strong><span>{details}</span><em>{meta}</em></span>{status ? <span className="completed-pill"><Check /> Complétée</span> : <ChevronRight className="row-arrow" />}</Link>;
 }
 
 function QuickLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {

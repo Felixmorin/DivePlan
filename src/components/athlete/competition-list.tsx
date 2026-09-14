@@ -9,6 +9,7 @@ export type CompetitionDiveItem = {
   code: string;
   name: string;
   difficulty: number | null;
+  volume: number;
 };
 
 const heights = [
@@ -42,10 +43,14 @@ export function CompetitionList({ dives }: { dives: CompetitionDiveItem[] }) {
             {filtered.length > 0 ? (
               <div className="divide-y divide-white/8">
                 {filtered.map((dive, index) => (
-                  <div key={dive.id} className="grid grid-cols-[3.75rem_2.25rem_1fr] items-center gap-2 px-4 py-3.5">
+                  <div key={dive.id} className="grid grid-cols-[3.75rem_2.25rem_minmax(0,1fr)_auto] items-center gap-2 px-4 py-3.5">
                     <span className="text-lg font-black tracking-tight text-white">{dive.code}</span>
                     <span className="text-sm font-semibold text-white/45">{dive.difficulty?.toFixed(1) ?? "—"}</span>
                     <span className="min-w-0 text-sm font-medium leading-5 text-white/65">{dive.name}</span>
+                    <span className="min-w-[3.5rem] text-right" aria-label={`${dive.volume} répétitions effectuées`}>
+                      <strong className="block text-base font-black leading-none text-cyan-200">{dive.volume}</strong>
+                      <span className="mt-1 block text-[11px] font-bold text-white/40">effectués</span>
+                    </span>
                     <span className="sr-only">Plongeon {index + 1}</span>
                   </div>
                 ))}

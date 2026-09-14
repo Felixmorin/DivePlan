@@ -164,6 +164,7 @@ a {
 .metric-progress.blue { background: linear-gradient(90deg,#22bce8,#53d3ed); }.metric-progress.purple { background: linear-gradient(90deg,#845be8,#ad7af7); }.metric-progress.mint { background: linear-gradient(90deg,#20cfae,#4ce2c7); }
 .schedule-card, .latest-card { overflow: hidden; }
 .schedule-row { display: grid; grid-template-columns: 4.4rem 2.2rem minmax(0,1fr) auto; align-items: center; gap: .75rem; min-height: 7rem; padding: .8rem .75rem; border-bottom: 1px solid rgba(99,174,215,.13); }
+.schedule-row-no-icon { grid-template-columns: 4.4rem minmax(0,1fr) auto; }
 .schedule-row:last-child { border-bottom: 0; }
 .schedule-date { display: grid; min-height: 4.2rem; place-items: center; padding: .4rem; border-radius: .75rem; background: rgba(38,64,87,.6); color: rgba(239,247,255,.92); font-size: .8rem; font-weight: 800; text-align: center; line-height: 1.25; }
 .schedule-icon { display: grid; place-items: center; color: #29d8f5; }.schedule-icon svg { width: 1.55rem; height: 1.55rem; }
