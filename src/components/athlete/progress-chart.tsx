@@ -30,7 +30,7 @@ export function ProgressChart({ data, weeklyData = [], monthlyData = [] }: Progr
           <XAxis dataKey="name" stroke="#a3b6ca" fontSize={11} tickLine={false} axisLine={false} />
           <YAxis stroke="#a3b6ca" fontSize={11} tickLine={false} axisLine={false} width={24} />
           <Tooltip cursor={{ fill: "rgba(255,255,255,.05)" }} contentStyle={{ background: "#0a1830", border: "1px solid rgba(255,255,255,.12)", borderRadius: 8, color: "white" }} />
-          <Bar dataKey="volume" fill="#27cce5" radius={[7, 7, 2, 2]}>
+          <Bar dataKey="volume" fill="#ed163d" radius={[7, 7, 2, 2]}>
             <LabelList dataKey="volume" position="top" fill="#e8f2fb" fontSize={12} />
           </Bar>
         </BarChart>

@@ -1,10 +1,11 @@
-import { CalendarDays, Clock3, MapPin, TentTree, Trophy, Users, Waves } from "lucide-react";
+import { CalendarDays, Clock3, List, MapPin, TentTree, Trophy, Users, Waves } from "lucide-react";
+import Link from "next/link";
 import type { PlanningEventType } from "@prisma/client";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAthletePlanningEvents, type AthletePlanningEvent } from "@/lib/athlete-planning";
 import { requireAthlete } from "@/lib/current-user";
-import { formatMontrealDate, formatMontrealTime } from "@/lib/timezone";
+import { addMontrealDays, formatMontrealDate, formatMontrealTime, parseMontrealSessionDate, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -15,18 +16,27 @@ const eventStyles: Record<PlanningEventType, { label: string; icon: typeof Troph
   TRAINING_SCHEDULE: { label: "Horaire", icon: Waves, className: "bg-[var(--color-brand)]/18 text-sky-200" }
 };
 
-export default async function AthleteCalendarPage() {
+export default async function AthleteCalendarPage({ searchParams }: { searchParams: Promise<{ view?: string | string[] }> }) {
   const { athlete, clubId } = await requireAthlete();
   const events = await getAthletePlanningEvents({ athleteId: athlete.id, clubId, groupId: athlete.groupId });
   const monthGroups = groupEventsByMonth(events);
+  const viewParam = searchParams ? await searchParams : {};
+  const calendarView = (Array.isArray(viewParam.view) ? viewParam.view[0] : viewParam.view) === "calendar";
 
   return (
     <AthleteShell>
-      <header className="mb-6">
-        <h1 className="text-3xl font-black">Calendrier</h1>
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black">Calendrier</h1>
+          <p className="mt-1 text-sm font-semibold text-white/52">Tes activités et événements à venir.</p>
+        </div>
+        <div className="flex rounded-full border border-white/10 bg-white/[0.04] p-1" aria-label="Choisir l’affichage du calendrier">
+          <ViewLink href="/athlete/calendar?view=list" active={!calendarView} icon={<List className="h-4 w-4" />}>Liste</ViewLink>
+          <ViewLink href="/athlete/calendar?view=calendar" active={calendarView} icon={<CalendarDays className="h-4 w-4" />}>Calendrier</ViewLink>
+        </div>
       </header>
 
-      <div className="space-y-7">
+      {calendarView ? <MonthCalendar events={events} /> : <div className="space-y-7">
         {monthGroups.map(([month, monthEvents]) => (
           <section key={month} aria-labelledby={`month-${month}`}>
             <h2 id={`month-${month}`} className="mb-3 text-sm font-black uppercase tracking-wide text-white/48">{month}</h2>
@@ -43,9 +53,46 @@ export default async function AthleteCalendarPage() {
             description="Les compétitions, camps et changements d'horaire publiés par ton club apparaîtront ici."
           />
         )}
-      </div>
+      </div>}
     </AthleteShell>
   );
+}
+
+function ViewLink({ href, active, icon, children }: { href: string; active: boolean; icon: React.ReactNode; children: React.ReactNode }) {
+  return <Link href={href} aria-current={active ? "page" : undefined} className={cn("inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-black transition", active ? "bg-[var(--color-club-red)] text-white shadow-[0_5px_16px_rgba(237,22,61,.25)]" : "text-white/55 hover:text-white")}>{icon}{children}</Link>;
+}
+
+function MonthCalendar({ events }: { events: AthletePlanningEvent[] }) {
+  const monthStart = parseMontrealSessionDate(`${toMontrealDateInputValue(new Date()).slice(0, 7)}-01`, "00:00");
+  const monthKey = toMontrealDateInputValue(monthStart).slice(0, 7);
+  const days = Array.from({ length: 42 }, (_, index) => {
+    const date = addMontrealDays(startOfMontrealWeek(monthStart), index);
+    return { date, key: toMontrealDateInputValue(date), inMonth: toMontrealDateInputValue(date).startsWith(monthKey) };
+  });
+  const eventsByDay = new Map<string, AthletePlanningEvent[]>();
+  for (const event of events) {
+    const key = toMontrealDateInputValue(event.startsAt);
+    eventsByDay.set(key, [...(eventsByDay.get(key) ?? []), event]);
+  }
+
+  return <section aria-label="Calendrier mensuel" className="overflow-hidden rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)]">
+    <div className="border-b border-white/10 px-4 py-4"><h2 className="text-xl font-black">{formatMontrealDate(monthStart, { month: "long", year: "numeric" })}</h2></div>
+    <div className="grid grid-cols-7 border-b border-white/10 bg-white/[0.03] text-center text-[10px] font-black uppercase tracking-wide text-white/42">
+      {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => <div key={day} className="py-3">{day}</div>)}
+    </div>
+    <div className="grid grid-cols-7">
+      {days.map(({ date, key, inMonth }) => {
+        const dayEvents = eventsByDay.get(key) ?? [];
+        return <div key={key} className={cn("min-h-24 border-r border-b border-white/8 p-1.5", !inMonth && "bg-black/20 opacity-35")}>
+          <div className={cn("mb-1 text-right text-xs font-black", key === toMontrealDateInputValue(new Date()) && "text-[var(--color-club-red-soft)]")}>{formatMontrealDate(date, { day: "numeric" })}</div>
+          <div className="space-y-1">
+            {dayEvents.slice(0, 3).map((event) => <div key={event.id} title={`${event.title} · ${formatMontrealTime(event.startsAt)}`} className="truncate rounded-md bg-[var(--color-club-red)]/18 px-1 py-1 text-[10px] font-bold leading-tight text-[var(--color-club-red-soft)]">{formatMontrealTime(event.startsAt)} · {event.title}</div>)}
+            {dayEvents.length > 3 && <div className="px-1 text-[10px] font-bold text-white/42">+{dayEvents.length - 3} autre{dayEvents.length - 3 > 1 ? "s" : ""}</div>}
+          </div>
+        </div>;
+      })}
+    </div>
+  </section>;
 }
 
 function EventCard({ event }: { event: AthletePlanningEvent }) {

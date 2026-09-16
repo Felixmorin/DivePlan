@@ -18,12 +18,12 @@ export default async function AthleteProgressPage() {
   const dives = totals?.totalDiveRepetitions ?? 0;
   const minutes = totals?.completedMinutes ?? 0;
   const technique = [
-    { label: "Avant", color: "#26dfc2", icon: "waves" },
-    { label: "Arriere", color: "#25bde9", icon: "activity" },
-    { label: "Retour", color: "#9272f2", icon: "waves" },
-    { label: "Renverse", color: "#a069f1", icon: "waves" },
-    { label: "Vrille", color: "#a069f1", icon: "goal" },
-    { label: "Equilibre", color: "#26dfc2", icon: "goal" }
+    { label: "Avant", color: "#ed163d", icon: "waves" },
+    { label: "Arriere", color: "#ff4b68", icon: "activity" },
+    { label: "Retour", color: "#bd0d2d", icon: "waves" },
+    { label: "Renverse", color: "#ff6b83", icon: "waves" },
+    { label: "Vrille", color: "#bd0d2d", icon: "goal" },
+    { label: "Equilibre", color: "#ed163d", icon: "goal" }
   ] as const;
   const techniqueWithVolumes = technique.map((item) => ({ ...item, dives: totals?.skillData.find((entry) => entry.name === item.label)?.volume ?? 0 }));
   return (

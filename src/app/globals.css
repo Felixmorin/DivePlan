@@ -20,9 +20,13 @@
   --color-success-soft: #dff8ec;
   --color-warning: #f59e0b;
   --color-danger: #dc2626;
-  --color-athlete-bg: #06101d;
-  --color-athlete-panel: #0c1b2c;
-  --color-athlete-panel-2: #10263b;
+  --color-athlete-bg: #050505;
+  --color-athlete-panel: #111111;
+  --color-athlete-panel-2: #1b1b1b;
+  --color-club-red: #ed163d;
+  --color-club-red-dark: #bd0d2d;
+  --color-club-red-soft: #ff4b68;
+  --color-club-white: #ffffff;
   --block-warmup-bg: #e8f6ff;
   --block-warmup-fg: #075985;
   --block-dryland-bg: #fff3dc;
@@ -203,6 +207,27 @@ a {
 .trend-card .section-heading { align-items: flex-start; }.select-button { display: inline-flex; align-items: center; gap: .4rem; margin-left: auto; padding: .58rem .7rem; border: 1px solid rgba(99,174,215,.2); border-radius: .75rem; background: transparent; color: rgba(226,237,251,.85); font: inherit; font-size: .83rem; }.trend-card .progress-chart { height: 14.8rem; margin: .7rem -.35rem -.3rem; }
 .trend-chart-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; margin-top: .75rem; color: rgba(226,237,251,.58); font-size: .8rem; }.trend-chart-toolbar .select-button { margin-left: 0; cursor: pointer; }.trend-chart-toolbar option { background: #0b1d2c; color: white; }
 .technique-list { display: grid; gap: .85rem; margin-top: 1rem; }.technique-group { min-width: 0; }.technique-row { display: grid; grid-template-columns: 1.8rem 5.4rem 1fr 2.5rem; align-items: center; gap: .45rem; color: rgba(236,243,252,.85); font-size: .95rem; }.technique-row b { text-align: right; font-size: .9rem; font-weight: 500; }.technique-track { height: .75rem; }.technique-dives { display: grid; gap: .35rem; margin: .45rem 2.5rem 0 7.65rem; padding: .55rem .7rem; border-left: 2px solid rgba(38,223,194,.35); background: rgba(13,37,57,.52); border-radius: 0 .65rem .65rem 0; }.technique-dive { display: flex; justify-content: space-between; gap: .75rem; color: rgba(226,237,251,.78); font-size: .84rem; }.technique-dive strong { color: #26dfc2; font-weight: 800; }.technique-dive b { color: rgba(226,237,251,.6); font-weight: 700; }.technique-dives p { margin: 0; color: rgba(226,237,251,.52); font-size: .82rem; }
+
+/* Keep the club treatment after the route-specific athlete rules. */
+.athlete-app { background: radial-gradient(circle at 50% -10%, #2b080f 0, var(--color-athlete-bg) 34rem); }
+.athlete-app .today-card { background: radial-gradient(circle at 82% 24%, rgba(237,22,61,.34), transparent 35%), linear-gradient(145deg, #2a0b12, #120609 75%); border-color: rgba(237,22,61,.28); }
+.athlete-app .today-badge { background: rgba(237,22,61,.2); color: var(--color-club-red-soft); }
+.athlete-app .today-cta { background: linear-gradient(90deg, var(--color-club-red-dark), var(--color-club-red)); color: white; box-shadow: 0 8px 24px rgba(237,22,61,.24); }
+.athlete-app .today-card, .athlete-app .week-card, .athlete-app .schedule-card, .athlete-app .latest-card, .athlete-app .progress-card { border-color: rgba(237,22,61,.22); background: linear-gradient(145deg, rgba(24,24,24,.98), rgba(8,8,8,.98)); }
+.athlete-app .section-heading a, .athlete-app .details-toggle, .athlete-app .schedule-icon, .athlete-app .section-icon, .athlete-app .section-icon.mint { color: var(--color-club-red-soft); }
+.athlete-app .metric-progress.blue, .athlete-app .metric-progress.purple, .athlete-app .metric-progress.mint, .athlete-app .metric-track i.blue, .athlete-app .metric-track i.purple, .athlete-app .metric-track i.mint { background: linear-gradient(90deg, var(--color-club-red-dark), var(--color-club-red-soft)); }
+.athlete-app .completed-pill { background: var(--color-club-red); }
+.athlete-app .quick-link { border-color: rgba(237,22,61,.22); background: rgba(20,20,20,.94); }
+.athlete-app .quick-link > span { background: rgba(237,22,61,.14); color: var(--color-club-red-soft); }
+.athlete-app .progress-ring { background: conic-gradient(var(--color-club-red) var(--progress), #2a2a2a 0); box-shadow: 0 0 24px rgba(237,22,61,.18); }
+.athlete-app .progress-tabs button.active { background: var(--color-club-red); color: white; box-shadow: 0 3px 18px rgba(237,22,61,.22); }
+.athlete-app .section-icon.cyan { background: rgba(237,22,61,.12); }
+.athlete-app [class*="border-cyan"], .athlete-app [class*="border-sky"] { border-color: rgba(237,22,61,.24) !important; }
+.athlete-app [class*="bg-cyan-300"], .athlete-app [class*="data-[state=active]:bg-cyan"] { background-color: var(--color-club-red) !important; }
+.athlete-app [class*="data-[state=active]:text-[#06101d]"] { color: white !important; }
+.athlete-app [class*="text-cyan"], .athlete-app [class*="text-sky"] { color: var(--color-club-red-soft) !important; }
+.athlete-app [class*="bg-[#092238]"], .athlete-app [class*="bg-[#0b1e30]"], .athlete-app [class*="bg-[#101927]"], .athlete-app [class*="bg-[#0b1320]"] { background-color: var(--color-athlete-panel) !important; }
+.athlete-app .progress-chart svg .recharts-bar-rectangle path { fill: var(--color-club-red) !important; }
 
 @media (prefers-reduced-motion: reduce) {
   *,

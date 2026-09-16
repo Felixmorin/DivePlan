@@ -546,7 +546,6 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
               })}
             </div>
           )}
-          {blockSteps.length === 0 && <p className="p-3 text-sm leading-6 text-white/70">Bloc commun. Suis les consignes du coach.</p>}
         </section>
 
         <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">

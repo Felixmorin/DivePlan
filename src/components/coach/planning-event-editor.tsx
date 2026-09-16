@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, X } from "lucide-react";
-import { updatePlanningEvent } from "@/app/coach/planning/actions";
+import { Pencil, Trash2, X } from "lucide-react";
+import { deletePlanningEvent, updatePlanningEvent } from "@/app/coach/planning/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -73,6 +73,21 @@ export function PlanningEventEditor({ event, targets, compact = false }: Plannin
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Lieu</span><Input name="location" defaultValue={event.location ?? ""} placeholder="Piscine, ville, bassin..." /></label>
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)] md:col-span-2"><span className="mb-1 block">Notes</span><Textarea name="notes" defaultValue={event.notes ?? ""} placeholder="Détails utiles pour le coach" /></label>
               <div className="flex justify-end gap-2 md:col-span-2"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button><Button type="submit" variant="action">Enregistrer</Button></div>
+            </form>
+
+            <form
+              action={deletePlanningEvent}
+              className="mt-4 flex justify-start border-t border-[var(--color-border)] pt-4"
+              onSubmit={(submitEvent) => {
+                if (!window.confirm(`Supprimer l’événement « ${event.title} » ? Cette action est définitive.`)) {
+                  submitEvent.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="eventId" value={event.id} />
+              <Button type="submit" variant="outline" className="border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-red-50">
+                <Trash2 className="h-4 w-4" /> Supprimer l’événement
+              </Button>
             </form>
           </div>
         </div>

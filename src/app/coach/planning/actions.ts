@@ -139,6 +139,24 @@ export async function updatePlanningEvent(formData: FormData) {
   revalidatePath("/athlete/calendar");
 }
 
+export async function deletePlanningEvent(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const eventId = String(formData.get("eventId") ?? "");
+
+  if (!eventId) throw new Error("Événement introuvable.");
+
+  const deleted = await prisma.planningEvent.deleteMany({
+    where: { id: eventId, clubId }
+  });
+
+  if (deleted.count === 0) throw new Error("Événement introuvable.");
+
+  revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/calendar");
+}
+
 function parseTarget(value?: string) {
   if (!value || value === "club") return {};
   if (value.startsWith("group:")) return { groupId: value.slice("group:".length) };
