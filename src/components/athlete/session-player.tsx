@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, FilePenLine, NotebookPen, Play, Plus, RotateCcw, Save, Timer } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, FilePenLine, NotebookPen, Play, Plus, RotateCcw, Save, Timer } from "lucide-react";
 import type { CompleteSessionPayload, SaveAthleteProgressPayload } from "@/app/athlete/session/[id]/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -47,6 +47,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
   const [pulseKey, setPulseKey] = useState<string | null>(null);
   const [openDiveNote, setOpenDiveNote] = useState<string | null>(null);
   const [diveNoteDraft, setDiveNoteDraft] = useState("");
+  const [expandedPreviewBlocks, setExpandedPreviewBlocks] = useState<Set<string>>(new Set());
   const [isNotePending, startNoteTransition] = useTransition();
   const [diveNotes, setDiveNotes] = useState<Record<string, string>>(() => Object.fromEntries(blocks.flatMap((block) => block.poolSections.flatMap((section) => section.dives.map((dive) => [dive.id, dive.personalNote ?? ""])) )));
   const [finalFeedback, setFinalFeedback] = useState(() => ({
@@ -397,6 +398,18 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
     });
   }
 
+  function togglePreviewBlock(blockId: string) {
+    setExpandedPreviewBlocks((previous) => {
+      const next = new Set(previous);
+      if (next.has(blockId)) {
+        next.delete(blockId);
+      } else {
+        next.add(blockId);
+      }
+      return next;
+    });
+  }
+
   function completeSession() {
     setError(null);
     Object.values(feedbackSaveTimeouts.current).forEach((timeout) => window.clearTimeout(timeout));
@@ -440,10 +453,59 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
             <div className="mb-3 flex items-center gap-2 text-sm font-black"><Eye className="h-4 w-4 text-[var(--color-action)]" /> Aperçu de l’entraînement</div>
             <div className="space-y-3">
               {blocks.map((previewBlock, index) => (
-                <div key={previewBlock.id} className="rounded-2xl bg-[var(--color-athlete-bg)] p-3">
-                  <div className="flex items-center justify-between gap-3"><div className="font-black">{index + 1}. {previewBlock.title}</div><span className="shrink-0 text-xs font-bold text-white/55">{previewBlock.duration} min</span></div>
-                  {previewBlock.description && <p className="mt-2 whitespace-pre-line text-sm leading-5 text-white/62">{previewBlock.description}</p>}
-                  <div className="mt-2 text-xs font-semibold text-white/48">{previewBlock.exercises.length} exercice(s) · {previewBlock.poolSections.reduce((sum, section) => sum + section.dives.length, 0)} plongeon(s)</div>
+                <div key={previewBlock.id} className="overflow-hidden rounded-2xl bg-[var(--color-athlete-bg)]">
+                  <button
+                    type="button"
+                    aria-expanded={expandedPreviewBlocks.has(previewBlock.id)}
+                    aria-controls={`preview-block-${previewBlock.id}`}
+                    onClick={() => togglePreviewBlock(previewBlock.id)}
+                    className="flex min-h-16 w-full items-center justify-between gap-3 p-3 text-left transition hover:bg-white/5 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-black">{index + 1}. {previewBlock.title}</span>
+                      <span className="mt-1 block text-xs font-semibold text-white/48">{previewBlock.exercises.length} exercice(s) · {previewBlock.poolSections.reduce((sum, section) => sum + section.dives.length, 0)} plongeon(s)</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs font-bold text-white/55">{previewBlock.duration} min</span>
+                      <ChevronDown className={`h-5 w-5 text-white/55 transition-transform ${expandedPreviewBlocks.has(previewBlock.id) ? "rotate-180" : ""}`} aria-hidden="true" />
+                    </span>
+                  </button>
+                  {expandedPreviewBlocks.has(previewBlock.id) && (
+                    <div id={`preview-block-${previewBlock.id}`} className="border-t border-white/8 px-3 pb-3 pt-3">
+                      {previewBlock.description && <p className="mb-3 whitespace-pre-line text-sm leading-5 text-white/62">{previewBlock.description}</p>}
+                      {previewBlock.exercises.length > 0 && (
+                        <div className="space-y-2">
+                          {previewBlock.exercises.map((exercise) => (
+                            <div key={exercise.id} className="flex items-start gap-2 rounded-xl border border-white/8 bg-white/5 px-3 py-2">
+                              <Dumbbell className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-action)]" aria-hidden="true" />
+                              <div className="min-w-0">
+                                <div className="font-bold">{exercise.name}</div>
+                                <div className="mt-0.5 text-xs font-semibold text-white/48">{formatExercisePrescription(exercise)}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {previewBlock.poolSections.length > 0 && (
+                        <div className={previewBlock.exercises.length > 0 ? "mt-3 space-y-3" : "space-y-3"}>
+                          {previewBlock.poolSections.map((section) => (
+                            <div key={section.id}>
+                              <div className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-white/45">{section.label}</div>
+                              <div className="space-y-2">
+                                {section.dives.map((dive) => (
+                                  <div key={dive.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/5 px-3 py-2">
+                                    <div className="min-w-0"><span className="font-bold">{dive.code}</span><span className="ml-2 text-sm text-white/68">{dive.name}</span></div>
+                                    <span className="shrink-0 text-xs font-bold text-white/55">{dive.repetitions} rep.</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {previewBlock.exercises.length === 0 && previewBlock.poolSections.length === 0 && <p className="text-sm font-semibold text-white/48">Aucun exercice détaillé pour ce bloc.</p>}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -634,6 +696,16 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
 
 function countSessionItems(blocks: AthleteSessionView["blocks"]) {
   return blocks.reduce((sum, block) => sum + block.exercises.length + block.poolSections.reduce((sectionSum, section) => sectionSum + section.dives.reduce((diveSum, dive) => diveSum + dive.repetitions, 0), 0), 0);
+}
+
+function formatExercisePrescription(exercise: AthleteSessionView["blocks"][number]["exercises"][number]) {
+  const prescription = [
+    exercise.sets !== null ? `${exercise.sets} série${exercise.sets > 1 ? "s" : ""}` : null,
+    exercise.reps !== null ? `${exercise.reps} répétition${exercise.reps > 1 ? "s" : ""}` : null,
+    exercise.duration !== null ? `${exercise.duration} sec` : null
+  ].filter(Boolean);
+
+  return prescription.length > 0 ? prescription.join(" · ") : "Selon les consignes du coach";
 }
 
 function countCompletedItems(blocks: AthleteSessionView["blocks"], exercises: ExerciseChecks, dives: DiveChecks) {
