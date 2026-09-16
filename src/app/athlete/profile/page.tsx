@@ -5,7 +5,7 @@ import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { CompetitionList } from "@/components/athlete/competition-list";
 import { ProfileForm } from "@/components/athlete/profile-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
+import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,10 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const totals = await getAthleteProgressTotals(athlete.id);
+  const [totals, weekSummary] = await Promise.all([
+    getAthleteProgressTotals(athlete.id),
+    getAthleteCurrentWeekSummary(athlete.id)
+  ]);
   const coachName = athlete.group?.coach.user
     ? `${athlete.group.coach.user.firstName} ${athlete.group.coach.user.lastName}`
     : "Équipe d’entraîneurs";
@@ -46,6 +49,11 @@ export default async function ProfilePage() {
         <ProfileStat icon={<Medal className="h-5 w-5" />} label="Séances" value={totals.completedSessions} />
         <ProfileStat icon={<Waves className="h-5 w-5" />} label="Plongeons" value={totals.totalDiveRepetitions} />
         <ProfileStat icon={<span className="text-base font-black">min</span>} label="Entraînement" value={totals.completedMinutes} />
+      </section>
+
+      <section aria-label="Résumé de la semaine" className="mt-3 rounded-[1.2rem] border border-[var(--color-club-red)]/25 bg-[var(--color-athlete-panel)] px-4 py-3">
+        <p className="text-sm font-semibold text-white/58">Cette semaine, du lundi au dimanche</p>
+        <p className="mt-1 text-base font-black"><span className="text-[var(--color-club-red-soft)]">{weekSummary.total}</span> entraînement{weekSummary.total > 1 ? "s" : ""} <span className="font-semibold text-white/55">· {weekSummary.remaining} restant{weekSummary.remaining > 1 ? "s" : ""}</span></p>
       </section>
 
       <section className="mt-7">

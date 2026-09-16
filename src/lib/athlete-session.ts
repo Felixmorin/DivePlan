@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { countPoolContexts } from "@/lib/pool-list";
-import { startOfMontrealDay } from "@/lib/timezone";
+import { addMontrealDays, startOfMontrealDay, startOfMontrealWeek } from "@/lib/timezone";
 
 export type AthleteSessionExercise = {
   id: string;
@@ -333,6 +333,22 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     skillDives: Array.from(skillDives.values()).sort((a, b) => a.category.localeCompare(b.category) || a.code.localeCompare(b.code)),
     skillCategories: Array.from(new Set(skills.map((skill) => skill.skill.category)))
   };
+}
+
+export async function getAthleteCurrentWeekSummary(athleteId: string) {
+  const weekStart = startOfMontrealWeek();
+  const weekEnd = addMontrealDays(weekStart, 7);
+  const sessions = await prisma.trainingSession.findMany({
+    where: {
+      date: { gte: weekStart, lt: weekEnd },
+      status: { not: "DRAFT" },
+      blocks: { some: { assignments: { some: { athleteId } } } }
+    },
+    select: { completions: { where: { athleteId }, select: { status: true } } }
+  });
+  const completed = sessions.filter((session) => session.completions[0]?.status === "COMPLETED").length;
+
+  return { total: sessions.length, completed, remaining: Math.max(0, sessions.length - completed) };
 }
 
 function averageByPeriod(data: Array<{ date: Date; volume: number }>, period: "week" | "month") {
