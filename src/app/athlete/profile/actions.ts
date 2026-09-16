@@ -9,7 +9,8 @@ import { prisma } from "@/lib/prisma";
 const athleteProfileSchema = z.object({
   firstName: z.string().trim().min(1).max(50),
   lastName: z.string().trim().min(1).max(50),
-  avatar: z.union([z.literal(""), z.string().url().max(500)])
+  avatar: z.union([z.literal(""), z.string().regex(/^data:image\/(jpeg|jpg|png|webp);base64,/).max(1_000_000), z.string().url().max(500)]),
+  avatarUrl: z.union([z.literal(""), z.string().url().max(500)])
 });
 
 export async function updateAthleteProfile(formData: FormData) {
@@ -21,7 +22,8 @@ export async function updateAthleteProfile(formData: FormData) {
   const parsed = athleteProfileSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
-    avatar: String(formData.get("avatar") ?? "")
+    avatar: String(formData.get("avatar") || formData.get("avatarUrl") || ""),
+    avatarUrl: String(formData.get("avatarUrl") ?? "")
   });
 
   if (!parsed.success) {

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Clock3, Eye, FileText, MoreHorizontal, Plus, Printer, Send, Trash2, Users, Waves } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Clock3, Eye, FileText, MoreHorizontal, Plus, Printer, Send, Trash2, Users, Waves } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -336,6 +336,16 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     })();
   }
 
+  function movePoolBlock(blockId: string, direction: -1 | 1) {
+    setActivePoolBlocks((current) => moveItem(current, current.findIndex((block) => block.id === blockId), direction));
+    pulse(blockId);
+  }
+
+  function moveDrylandBlock(blockId: string, direction: -1 | 1) {
+    setDrylandBlocks((current) => moveItem(current, current.findIndex((block) => block.id === blockId), direction));
+    pulse(blockId);
+  }
+
   return (
     <div className="pb-24 lg:pb-0">
       <Stepper current={step} onStepChange={(nextStep) => { void advanceTo(nextStep); }} />
@@ -364,6 +374,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
               onUpdateBlock={updateDrylandBlock}
               onAddBlock={addDrylandBlock}
               onRemoveBlock={(blockId) => setDrylandBlocks((current) => current.filter((block) => block.id !== blockId))}
+              onMoveBlock={moveDrylandBlock}
               onCreateExercise={addExercise}
             />
           )}
@@ -376,6 +387,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
               onAssignPoolBlock={assignPoolBlock}
               onAddPoolBlock={addPoolBlock}
               onRemovePoolBlock={removePoolBlock}
+              onMoveBlock={movePoolBlock}
               onUpdatePoolBlock={updatePoolBlock}
               onUpdatePoolRows={updatePoolRows}
             />
@@ -394,7 +406,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
           {step === 4 && (
             <PublicationStep
               title={watched.title ?? ""}
-              focus={watched.focus ?? ""}
               date={watched.date ?? ""}
               totalDuration={totalDuration}
               totalVolume={totalVolume}
@@ -470,7 +481,6 @@ function DetailsStep({ form, selectedGroupId, selectedDate, groups, planningEven
           <span className="mt-1 block text-xs font-semibold normal-case text-[var(--color-ink-muted)]">L’horaire reste affiché dans le planning; la séance sera ouverte depuis ce même élément.</span>
         </Field>
         <Field label="Duree totale"><Input type="number" placeholder="Duree" {...form.register("duration", { valueAsNumber: true })} /></Field>
-        <Field label="Focus principal" className="md:col-span-2"><Input placeholder="Focus principal" {...form.register("focus")} /></Field>
         <Field label="Notes coach" className="md:col-span-2"><Textarea placeholder="Notes coach" {...form.register("notes")} /></Field>
         {Object.values(form.formState.errors).length > 0 && <div className="md:col-span-2 rounded-2xl bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">Certains champs requis sont incomplets.</div>}
         <EditableOptionalBlock label="Échauffement dynamique" block={warmup} onChange={onWarmupChange} />
@@ -506,6 +516,7 @@ function DrylandStep(props: {
   onUpdateBlock: (blockId: string, update: Partial<Omit<BuilderDrylandBlock, "id">>) => void;
   onAddBlock: () => void;
   onRemoveBlock: (blockId: string) => void;
+  onMoveBlock: (blockId: string, direction: -1 | 1) => void;
   onCreateExercise: (input: QuickExerciseInput) => Promise<void>;
 }) {
   return (
@@ -542,7 +553,7 @@ function DrylandStep(props: {
         );
         return (
           <div key={block.id} className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-            <BlockCard type="dryland" title={block.title || `Dryland ${blockIndex + 1}`} duration={block.duration} assigned={block.athleteIds} athletes={props.athletes} state={selectedExercises.length > 0 ? "Pret" : "A completer"} flash={props.flashBlock === block.id}>
+            <BlockCard type="dryland" title={block.title || `Dryland ${blockIndex + 1}`} duration={block.duration} assigned={block.athleteIds} athletes={props.athletes} state={selectedExercises.length > 0 ? "Pret" : "A completer"} flash={props.flashBlock === block.id} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < props.blocks.length - 1} onMoveUp={() => props.onMoveBlock(block.id, -1)} onMoveDown={() => props.onMoveBlock(block.id, 1)}>
               <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_130px_auto]">
                 <Input aria-label={`Nom du bloc dryland ${blockIndex + 1}`} value={block.title} placeholder={`Dryland ${blockIndex + 1}`} onChange={(event) => props.onUpdateBlock(block.id, { title: event.target.value })} />
                 <Input aria-label={`Durée du bloc dryland ${blockIndex + 1}`} type="number" min="1" value={block.duration} onChange={(event) => props.onUpdateBlock(block.id, { duration: Number(event.target.value) })} />
@@ -633,34 +644,19 @@ function QuickPoolBlockForm({ onAdd }: { onAdd: (block: BuilderPoolBlock) => voi
     const form = event.currentTarget;
     const data = new FormData(form);
     const title = String(data.get("title") ?? "").trim();
-    const diveCode = String(data.get("diveCode") ?? "").trim().toUpperCase();
-    const diveName = String(data.get("diveName") ?? "").trim();
     const duration = Number(data.get("duration"));
-    const repetitions = Number(data.get("repetitions"));
 
-    if (title.length < 2 || !diveCode || !diveName || !Number.isInteger(duration) || duration < 1 || !Number.isInteger(repetitions) || repetitions < 1) {
-      setError("Complete le nom du bloc, le plongeon, la duree et les repetitions.");
+    if (title.length < 2 || !Number.isInteger(duration) || duration < 1) {
+      setError("Complete le nom du bloc et la duree.");
       return;
     }
 
-    const height = String(data.get("height")) as BuilderPoolSection["height"];
     onAdd({
       id: `custom-pool-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       title,
       duration,
       athleteIds: [],
-      sections: [{
-        height,
-        label: String(data.get("sectionLabel") ?? "").trim() || null,
-        dives: [{
-          diveCode,
-          diveName,
-          position: String(data.get("position") ?? "Libre").trim() || "Libre",
-          repetitions,
-          notes: null,
-          order: 0
-        }]
-      }]
+      sections: []
     });
     setError(null);
     form.reset();
@@ -669,29 +665,18 @@ function QuickPoolBlockForm({ onAdd }: { onAdd: (block: BuilderPoolBlock) => voi
   return (
     <form onSubmit={submit} className="rounded-[var(--radius-panel)] border border-[var(--block-pool-fg)]/25 bg-[var(--block-pool-bg)]/50 p-4">
       <div className="mb-1 flex items-center gap-2 text-lg font-black text-[var(--block-pool-fg)]"><Plus className="h-5 w-5" /> Creer un bloc piscine personnalise</div>
-      <p className="mb-4 text-sm font-semibold text-[var(--color-ink-muted)]">Commence avec un premier plongeon. Tu pourras ensuite en ajouter autant que necessaire.</p>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <p className="mb-4 text-sm font-semibold text-[var(--color-ink-muted)]">Le bloc est créé vide. Tu pourras ajouter ses lignes de plongeons ensuite.</p>
+      <div className="grid gap-3 md:grid-cols-2">
         <Input name="title" placeholder="Nom du bloc" required />
         <Input name="duration" type="number" min="1" defaultValue="30" placeholder="Duree (min)" required />
-        <select name="height" defaultValue="ONE_METER" className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]">
-          <option value="ONE_METER">1 metre</option>
-          <option value="THREE_METER">3 metres</option>
-          <option value="PLATFORM">Plateforme</option>
-          <option value="CUSTOM">Autre section</option>
-        </select>
-        <Input name="sectionLabel" placeholder="Nom de section (optionnel)" />
-        <Input name="diveCode" placeholder="Code (ex. 101B)" required />
-        <Input name="diveName" placeholder="Nom du plongeon" required />
-        <Input name="position" placeholder="Position" defaultValue="Libre" required />
-        <Input name="repetitions" type="number" min="1" defaultValue="3" placeholder="Repetitions" required />
       </div>
-      <Button type="submit" variant="action" className="mt-3"><Plus className="h-4 w-4" /> Ajouter le bloc</Button>
+      <Button type="submit" variant="action" className="mt-3"><Plus className="h-4 w-4" /> Ajouter le bloc vide</Button>
       {error && <div className="mt-3 rounded-xl bg-[var(--color-danger)]/10 p-3 text-sm font-semibold text-[var(--color-danger)]">{error}</div>}
     </form>
   );
 }
 
-function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignPoolBlock, onAddPoolBlock, onRemovePoolBlock, onUpdatePoolBlock, onUpdatePoolRows }: {
+function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignPoolBlock, onAddPoolBlock, onRemovePoolBlock, onMoveBlock, onUpdatePoolBlock, onUpdatePoolRows }: {
   athletes: BuilderAthlete[];
   poolBlocks: BuilderPoolBlock[];
   poolAssignments: Record<string, string[]>;
@@ -699,6 +684,7 @@ function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignP
   onAssignPoolBlock: (blockId: string) => (ids: string[]) => void;
   onAddPoolBlock: (block: BuilderPoolBlock) => void;
   onRemovePoolBlock: (blockId: string) => void;
+  onMoveBlock: (blockId: string, direction: -1 | 1) => void;
   onUpdatePoolBlock: (blockId: string, update: Partial<Pick<BuilderPoolBlock, "title" | "duration">>) => void;
   onUpdatePoolRows: (blockId: string, rows: PoolListRow[]) => void;
 }) {
@@ -706,7 +692,7 @@ function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignP
     <div className="space-y-5">
       <QuickPoolBlockForm onAdd={onAddPoolBlock} />
       {poolBlocks.map((block) => (
-        <PoolBlock key={block.id} block={block} assigned={poolAssignments[block.id] ?? []} athletes={athletes} flash={flashBlock === block.id} onAssign={onAssignPoolBlock(block.id)} onRemove={() => onRemovePoolBlock(block.id)} onUpdate={(update) => onUpdatePoolBlock(block.id, update)} onRowsChange={(rows) => onUpdatePoolRows(block.id, rows)} />
+        <PoolBlock key={block.id} block={block} blockIndex={poolBlocks.indexOf(block)} blockCount={poolBlocks.length} assigned={poolAssignments[block.id] ?? []} athletes={athletes} flash={flashBlock === block.id} onAssign={onAssignPoolBlock(block.id)} onRemove={() => onRemovePoolBlock(block.id)} onMove={(direction) => onMoveBlock(block.id, direction)} onUpdate={(update) => onUpdatePoolBlock(block.id, update)} onRowsChange={(rows) => onUpdatePoolRows(block.id, rows)} />
       ))}
       {poolBlocks.length === 0 && (
         <Card>
@@ -719,10 +705,10 @@ function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignP
   );
 }
 
-function PoolBlock({ block, assigned, athletes, flash, onAssign, onRemove, onUpdate, onRowsChange }: { block: BuilderPoolBlock; assigned: string[]; athletes: BuilderAthlete[]; flash: boolean; onAssign: (ids: string[]) => void; onRemove: () => void; onUpdate: (update: Partial<Pick<BuilderPoolBlock, "title" | "duration">>) => void; onRowsChange: (rows: PoolListRow[]) => void }) {
+function PoolBlock({ block, blockIndex, blockCount, assigned, athletes, flash, onAssign, onRemove, onMove, onUpdate, onRowsChange }: { block: BuilderPoolBlock; blockIndex: number; blockCount: number; assigned: string[]; athletes: BuilderAthlete[]; flash: boolean; onAssign: (ids: string[]) => void; onRemove: () => void; onMove: (direction: -1 | 1) => void; onUpdate: (update: Partial<Pick<BuilderPoolBlock, "title" | "duration">>) => void; onRowsChange: (rows: PoolListRow[]) => void }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <BlockCard type="pool" title={block.title || "Piscine"} duration={block.duration} assigned={assigned} athletes={athletes} state={poolBlockIsValid(block) ? "Personnalisable" : "A completer"} flash={flash}>
+      <BlockCard type="pool" title={block.title || "Piscine"} duration={block.duration} assigned={assigned} athletes={athletes} state={poolBlockIsValid(block) ? "Personnalisable" : "A completer"} flash={flash} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < blockCount - 1} onMoveUp={() => onMove(-1)} onMoveDown={() => onMove(1)}>
         <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_130px]">
           <Input aria-label={`Nom du bloc piscine ${block.title}`} value={block.title} placeholder="Nom du bloc piscine" onChange={(event) => onUpdate({ title: event.target.value })} />
           <Input aria-label={`Durée du bloc piscine ${block.title}`} type="number" min="1" value={block.duration} onChange={(event) => onUpdate({ duration: Number(event.target.value) })} />
@@ -766,7 +752,7 @@ function AssignmentsStep(props: { athletes: BuilderAthlete[]; drylandBlocks: Bui
   );
 }
 
-function PublicationStep({ title, focus, date, totalDuration, totalVolume, unassignedBlocks, selectedExercises, athleteCount }: { title: string; focus: string; date: string; totalDuration: number; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number }) {
+function PublicationStep({ title, date, totalDuration, totalVolume, unassignedBlocks, selectedExercises, athleteCount }: { title: string; date: string; totalDuration: number; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number }) {
   return (
     <Card>
       <CardHeader><CardTitle>Publication</CardTitle></CardHeader>
@@ -774,7 +760,7 @@ function PublicationStep({ title, focus, date, totalDuration, totalVolume, unass
         <div className="rounded-[var(--radius-panel)] border border-[var(--color-navy)] bg-[var(--color-navy)] p-5 text-white">
           <StatusPill status="READY" />
           <h2 className="mt-4 text-3xl font-black leading-none text-white">{title || "Nouvelle seance"}</h2>
-          <p className="mt-3 text-sm leading-6 text-white/68">{date || "Date a definir"} - {focus || "Focus a definir"}</p>
+          <p className="mt-3 text-sm leading-6 text-white/68">{date || "Date a definir"}</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-4">
             <DarkMetric label="Duree" value={`${totalDuration || 0} min`} />
             <DarkMetric label="Athletes" value={athleteCount} />
@@ -822,7 +808,10 @@ function SummaryPanel(props: { title: string; date: string; duration: number; bl
   );
 }
 
-function BlockCard({ type, title, duration, assigned, athletes, state, flash, children }: { type: "dryland" | "pool"; title: string; duration: number; assigned: string[]; athletes: BuilderAthlete[]; state: string; flash?: boolean; children: React.ReactNode }) {
+function BlockCard({ type, title, duration, assigned, athletes, state, flash, canMoveUp, canMoveDown, onMoveUp, onMoveDown, children }: { type: "dryland" | "pool"; title: string; duration: number; assigned: string[]; athletes: BuilderAthlete[]; state: string; flash?: boolean; canMoveUp?: boolean; canMoveDown?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; children: React.ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const contentId = useId();
+
   return (
     <Card className={cn("overflow-hidden", flash && "builder-pulse")}>
       <div className={cn("h-2", type === "dryland" ? "bg-[var(--block-dryland-fg)]" : "bg-[var(--block-pool-fg)]")} />
@@ -839,6 +828,20 @@ function BlockCard({ type, title, duration, assigned, athletes, state, flash, ch
           </div>
           <div className="flex items-center gap-2">
             <AthleteAvatarGroup ids={assigned} athletes={athletes} limit={5} />
+            {(onMoveUp || onMoveDown) && <div className="flex items-center gap-1">
+              <button type="button" aria-label={`Monter le bloc ${title}`} disabled={!canMoveUp} onClick={onMoveUp} className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand-strong)] disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowUp className="h-5 w-5" /></button>
+              <button type="button" aria-label={`Descendre le bloc ${title}`} disabled={!canMoveDown} onClick={onMoveDown} className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand-strong)] disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowDown className="h-5 w-5" /></button>
+            </div>}
+            <button
+              type="button"
+              aria-expanded={!collapsed}
+              aria-controls={contentId}
+              aria-label={`${collapsed ? "Ouvrir" : "Réduire"} le bloc ${title}`}
+              onClick={() => setCollapsed((value) => !value)}
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"
+            >
+              {collapsed ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
+            </button>
             <details className="relative">
               <summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-[var(--color-border)] bg-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><MoreHorizontal className="h-4 w-4" /></summary>
               <div className="absolute right-0 z-10 mt-2 w-52 rounded-2xl border border-[var(--color-border)] bg-white p-3 text-sm font-semibold text-[var(--color-ink-muted)] shadow-[var(--shadow-soft)]">Les actions de duplication et suppression ne sont pas connectees au backend actuel.</div>
@@ -847,7 +850,7 @@ function BlockCard({ type, title, duration, assigned, athletes, state, flash, ch
         </div>
         {assigned.length === 0 && <WarningText>Ce bloc n&apos;est assigne a personne.</WarningText>}
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent id={contentId} className={collapsed ? "hidden" : undefined}>{children}</CardContent>
     </Card>
   );
 }
@@ -885,6 +888,14 @@ function poolBlocksFromTemplate(blocks: SessionTemplatePayload["blocks"]): Build
       dives: section.dives
     })) ?? []
   }));
+}
+
+function moveItem<T>(items: T[], index: number, direction: -1 | 1) {
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= items.length) return items;
+  const next = [...items];
+  [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+  return next;
 }
 
 function createEmptyPoolBlock(athleteIds: string[]): BuilderPoolBlock {

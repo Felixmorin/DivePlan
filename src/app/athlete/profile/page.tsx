@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { Building2, ChevronRight, Edit3, LogOut, Medal, UserRound, Waves } from "lucide-react";
-import { signOutAthlete, updateAthleteProfile } from "@/app/athlete/profile/actions";
+import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { CompetitionList } from "@/components/athlete/competition-list";
+import { ProfileForm } from "@/components/athlete/profile-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 
 export const dynamic = "force-dynamic";
@@ -78,14 +78,7 @@ export default async function ProfilePage() {
               <span className="flex-1">Modifier mon profil</span>
               <ChevronRight className="h-5 w-5 text-white/45 transition group-open:rotate-90" />
             </summary>
-            <form action={updateAthleteProfile} className="space-y-3 border-t border-white/8 bg-black/10 p-4">
-              <div className="grid grid-cols-2 gap-3">
-                <ProfileField label="Prénom" name="firstName" defaultValue={athlete.user.firstName} />
-                <ProfileField label="Nom" name="lastName" defaultValue={athlete.user.lastName} />
-              </div>
-              <ProfileField label="Adresse de la photo" name="avatar" defaultValue={athlete.user.avatar ?? ""} type="url" />
-              <Button type="submit" className="w-full">Enregistrer</Button>
-            </form>
+            <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} avatar={athlete.user.avatar} />
           </details>
           <form action={signOutAthlete}>
             <button type="submit" className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-base font-semibold text-rose-300 transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
@@ -111,14 +104,5 @@ function ProfileStat({ icon, label, value }: { icon: React.ReactNode; label: str
       <div className="mt-1 text-2xl font-black text-white">{value}</div>
       <div className="mt-0.5 text-[11px] font-semibold text-white/50">{label}</div>
     </div>
-  );
-}
-
-function ProfileField({ label, name, defaultValue, type = "text" }: { label: string; name: string; defaultValue: string; type?: string }) {
-  return (
-    <label className="block text-sm font-bold text-white/65">
-      {label}
-      <input type={type} name={name} defaultValue={defaultValue} required={type !== "url"} className="mt-1.5 min-h-11 w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 text-base text-white outline-none transition placeholder:text-white/25 focus:border-cyan-300/60 focus:shadow-[var(--focus-ring)]" />
-    </label>
   );
 }

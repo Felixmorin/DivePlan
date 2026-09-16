@@ -5,7 +5,8 @@ import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { getAssignedReadySession, getAthleteProgressTotals, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
+import { getAssignedReadySession, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
+import { getAthleteWeekPlanningEvents } from "@/lib/athlete-planning";
 import { formatMontrealDate, formatMontrealTime } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
 
@@ -15,11 +16,14 @@ export default async function AthleteTodayPage() {
   const athlete = await getCurrentAthlete();
   if (!athlete) redirect("/login");
 
-  const [readySession, progressTotals, recentCompletions] = await Promise.all([
+  const [readySession, recentCompletions, weekEvents] = await Promise.all([
     getAssignedReadySession(athlete.id),
-    getAthleteProgressTotals(athlete.id),
-    getAthleteRecentCompletions(athlete.id)
+    getAthleteRecentCompletions(athlete.id),
+    getAthleteWeekPlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId })
   ]);
+
+  const plannedMinutes = weekEvents.reduce((total, event) => total + (event.duration ?? 0), 0);
+  const plannedTrainingSessions = weekEvents.filter((event) => event.type === "TRAINING_SCHEDULE").length;
 
   const sessionDate = readySession ? new Date(readySession.date) : null;
   const sessionHref = readySession ? `/athlete/session/${readySession.id}` : null;
@@ -66,9 +70,9 @@ export default async function AthleteTodayPage() {
 
       <SectionHeading title="Ma semaine" />
       <section className="week-card" aria-label="Résumé de la semaine">
-        <WeekMetric value={`${progressTotals.completedSessions} / 5`} label="séances complétées" tone="blue" progress={Math.min(100, progressTotals.completedSessions / 5 * 100)} />
-        <WeekMetric value={`${Math.floor(progressTotals.completedMinutes / 60)} h`} suffix={` / ${Math.ceil(progressTotals.completedMinutes / 60) || 7} h`} label="temps d’entraînement" tone="purple" progress={Math.min(100, progressTotals.completedMinutes / 420 * 100)} />
-        <WeekMetric value={progressTotals.totalDiveRepetitions} label="plongeons" tone="mint" progress={Math.min(100, progressTotals.totalDiveRepetitions / 180 * 100)} />
+        <WeekMetric value={weekEvents.length} label="activités planifiées" tone="blue" progress={weekEvents.length > 0 ? 100 : 0} />
+        <WeekMetric value={`${Math.floor(plannedMinutes / 60)} h`} suffix={plannedMinutes % 60 ? ` ${plannedMinutes % 60} min` : undefined} label="temps au calendrier" tone="purple" progress={plannedMinutes > 0 ? 100 : 0} />
+        <WeekMetric value={plannedTrainingSessions} label="séances prévues" tone="mint" progress={plannedTrainingSessions > 0 ? 100 : 0} />
       </section>
 
       <SectionHeading title="À venir" href="/athlete/calendar" linkLabel="Voir calendrier" />

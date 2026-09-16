@@ -21,7 +21,7 @@ const sessionInputSchema = z.object({
   date: z.string().min(10),
   groupId: z.string().min(1),
   duration: z.number().int().min(15).max(600),
-  focus: z.string().min(3),
+  focus: z.string().trim().min(1).max(200).default("Entraînement"),
   notes: z.string().optional(),
   planningEventId: z.string().optional(),
   templateId: z.string().optional(),

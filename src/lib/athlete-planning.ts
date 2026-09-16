@@ -1,6 +1,6 @@
 import type { PlanningEventType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { addMontrealDays, startOfMontrealDay } from "@/lib/timezone";
+import { addMontrealDays, startOfMontrealDay, startOfMontrealWeek } from "@/lib/timezone";
 
 export type AthletePlanningEvent = {
   id: string;
@@ -22,8 +22,35 @@ export async function getAthletePlanningEvents({
   clubId: string;
   groupId: string | null;
 }): Promise<AthletePlanningEvent[]> {
-  const rangeStart = startOfMontrealDay();
-  const rangeEnd = addMontrealDays(rangeStart, 183);
+  return findAthletePlanningEvents({ athleteId, clubId, groupId, rangeStart: startOfMontrealDay(), rangeEnd: addMontrealDays(startOfMontrealDay(), 183) });
+}
+
+export async function getAthleteWeekPlanningEvents({
+  athleteId,
+  clubId,
+  groupId
+}: {
+  athleteId: string;
+  clubId: string;
+  groupId: string | null;
+}): Promise<AthletePlanningEvent[]> {
+  const rangeStart = startOfMontrealWeek();
+  return findAthletePlanningEvents({ athleteId, clubId, groupId, rangeStart, rangeEnd: addMontrealDays(rangeStart, 7) });
+}
+
+async function findAthletePlanningEvents({
+  athleteId,
+  clubId,
+  groupId,
+  rangeStart,
+  rangeEnd
+}: {
+  athleteId: string;
+  clubId: string;
+  groupId: string | null;
+  rangeStart: Date;
+  rangeEnd: Date;
+}): Promise<AthletePlanningEvent[]> {
   const audienceFilters = [
     { athleteId },
     ...(groupId ? [{ groupId }] : []),
