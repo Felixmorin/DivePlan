@@ -90,6 +90,13 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
   const hasFeedback = Boolean(feedback.rating || feedback.note.trim());
   const totalItems = useMemo(() => countSessionItems(blocks), [blocks]);
   const completedItems = countCompletedItems(blocks, exerciseChecks, diveChecks);
+  const poolDives = useMemo(
+    () => blocks.flatMap((sessionBlock) => sessionBlock.poolSections.flatMap((section) => section.dives.map((dive) => ({ ...dive, sectionLabel: section.label })))),
+    [blocks]
+  );
+  const plannedPoolReps = poolDives.reduce((sum, dive) => sum + dive.repetitions, 0);
+  const completedPoolReps = poolDives.reduce((sum, dive) => sum + (diveChecks[dive.id] ?? []).filter(Boolean).length, 0);
+  const hasPoolDives = poolDives.length > 0;
   const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : Math.round(((current + 1) / blocks.length) * 100);
   const blockRemaining = countBlockRemaining(block, exerciseChecks, diveChecks);
   const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
@@ -446,9 +453,31 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete }: 
           <div className="grid grid-cols-3 gap-2">
             <StartStat label="Duree" value={`${session.duration} min`} />
             <StartStat label="Blocs" value={`${completedBlocks}/${blocks.length}`} />
-            <StartStat label="Actions" value={`${completedItems}/${totalItems}`} />
+            <StartStat label="Plongeons" value={`${completedPoolReps}/${plannedPoolReps}`} />
           </div>
           <SaveIndicator status={saveStatus} />
+          {hasPoolDives && (
+            <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="text-sm font-black text-white/72">Récapitulatif des plongeons</div>
+                <div className="text-sm font-black text-[var(--color-action)]">{completedPoolReps}/{plannedPoolReps}</div>
+              </div>
+              <div className="space-y-2">
+                {poolDives.map((dive) => {
+                  const completed = (diveChecks[dive.id] ?? []).filter(Boolean).length;
+                  return (
+                    <div key={dive.id} className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--color-athlete-bg)] px-3 py-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-black">{dive.code} · {dive.name}</div>
+                        <div className="mt-1 text-xs font-semibold text-white/45">{dive.sectionLabel}</div>
+                      </div>
+                      <div className="shrink-0 text-right text-lg font-black">{completed}/{dive.repetitions}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
           <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-black"><NotebookPen className="h-4 w-4 text-[var(--color-action)]" /> Ressenti final</div>
             <div className="grid grid-cols-2 gap-2">
