@@ -123,6 +123,7 @@ model Athlete {
   assignments      SessionBlockAssignment[]
   completions      AthleteSessionCompletion[]
   diveLogs         AthleteDiveLog[]
+  diveNotes        AthleteDiveNote[]
   exerciseLogs     AthleteExerciseLog[]
   skills           AthleteSkill[]
   planningEvents   PlanningEvent[]
@@ -313,6 +314,7 @@ model PoolDive {
   order         Int
   poolSection   PoolSection      @relation(fields: [poolSectionId], references: [id], onDelete: Cascade)
   logs          AthleteDiveLog[]
+  athleteNotes  AthleteDiveNote[]
 }
 
 model SessionTemplate {
@@ -382,6 +384,19 @@ model AthleteDiveLog {
   poolDive             PoolDive        @relation(fields: [poolDiveId], references: [id], onDelete: Cascade)
 
   @@unique([athleteId, sessionId, poolDiveId])
+}
+
+model AthleteDiveNote {
+  athleteId  String
+  poolDiveId String
+  note       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  athlete    Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  poolDive   PoolDive @relation(fields: [poolDiveId], references: [id], onDelete: Cascade)
+
+  @@id([athleteId, poolDiveId])
+  @@index([poolDiveId])
 }
 
 model AthleteExerciseLog {

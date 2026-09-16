@@ -6,10 +6,49 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentAthlete } from "@/lib/athlete-session";
 import { getAssignedSessionBlocks, persistAthleteProgress, type AthleteProgressPayload } from "@/lib/athlete-progress";
 import { isSessionStartAvailable, SESSION_NOT_STARTED_MESSAGE } from "@/lib/session-availability";
+import { z } from "zod";
 
 export type CompleteSessionPayload = AthleteProgressPayload;
 
 export type SaveAthleteProgressPayload = CompleteSessionPayload;
+
+const diveNoteSchema = z.object({
+  poolDiveId: z.string().min(1),
+  note: z.string().trim().max(2000)
+});
+
+export async function saveAthleteDiveNote(sessionId: string, poolDiveId: string, note: string) {
+  const athlete = await getCurrentAthlete();
+
+  if (!athlete) {
+    throw new Error("Aucun athlete actif trouve.");
+  }
+
+  const data = diveNoteSchema.parse({ poolDiveId, note });
+  const dive = await prisma.poolDive.findFirst({
+    where: {
+      id: data.poolDiveId,
+      poolSection: { poolTraining: { block: { assignments: { some: { athleteId: athlete.id } } } } }
+    },
+    select: { id: true }
+  });
+
+  if (!dive) {
+    throw new Error("Ce plongeon n'est pas accessible a l'athlete courant.");
+  }
+
+  if (!data.note) {
+    await prisma.athleteDiveNote.deleteMany({ where: { athleteId: athlete.id, poolDiveId: data.poolDiveId } });
+  } else {
+    await prisma.athleteDiveNote.upsert({
+      where: { athleteId_poolDiveId: { athleteId: athlete.id, poolDiveId: data.poolDiveId } },
+      create: { athleteId: athlete.id, poolDiveId: data.poolDiveId, note: data.note },
+      update: { note: data.note }
+    });
+  }
+
+  revalidatePath(`/athlete/session/${sessionId}`);
+}
 
 export async function startAthleteSession(sessionId: string) {
   const athlete = await getCurrentAthlete();

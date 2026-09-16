@@ -24,6 +24,7 @@ export type AthleteSessionDive = {
   name: string;
   repetitions: number;
   completedRepetitions: number;
+  personalNote: string | null;
   rating: string | null;
   note: string | null;
 };
@@ -177,7 +178,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
             include: {
               sections: {
                 orderBy: { order: "asc" },
-                include: { dives: { orderBy: { order: "asc" }, include: { logs: { where: { athleteId, sessionId } } } } }
+                include: { dives: { orderBy: { order: "asc" }, include: { logs: { where: { athleteId, sessionId } }, athleteNotes: { where: { athleteId } } } } }
               }
             }
           }
@@ -240,6 +241,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
               name: dive.diveName,
               repetitions: dive.repetitions * Math.max(1, countPoolContexts(section.label ?? poolHeightLabel(section.height))),
               completedRepetitions: latestLog?.repetitionsCompleted ?? 0,
+              personalNote: dive.athleteNotes[0]?.note ?? null,
               rating: latestLog?.rating ?? null,
               note: latestLog?.note ?? null
             };
