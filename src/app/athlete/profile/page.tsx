@@ -59,7 +59,7 @@ export default async function ProfilePage() {
       </Link>
 
       <section aria-label="Résumé de la semaine" className="mt-3 rounded-[1.2rem] border border-[var(--color-club-red)]/25 bg-[var(--color-athlete-panel)] px-4 py-3">
-        <p className="text-sm font-semibold text-white/58">Cette semaine, du lundi au dimanche</p>
+        <p className="text-sm font-semibold text-white/58">Cette semaine,</p>
         <p className="mt-1 text-base font-black"><span className="text-[var(--color-club-red-soft)]">{weekSummary.total}</span> entraînement{weekSummary.total > 1 ? "s" : ""} <span className="font-semibold text-white/55">· {weekSummary.remaining} restant{weekSummary.remaining > 1 ? "s" : ""}</span></p>
       </section>
 

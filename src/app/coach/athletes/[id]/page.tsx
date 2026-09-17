@@ -220,14 +220,14 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
           skillData: [
             { name: "Avant", volume: 31 },
             { name: "Arriere", volume: 18 },
-            { name: "Retour", volume: 12 },
-            { name: "Renverse", volume: 8 },
+            { name: "Renverse", volume: 12 },
+            { name: "Retourne", volume: 8 },
             { name: "Vrille", volume: 0 },
             { name: "Equilibre", volume: 0 }
           ],
           skillDives: [
             { category: "Arriere", code: "201B", name: "Arriere carpe", height: "ONE_METER", volume: 18 },
-            { category: "Retour", code: "301C", name: "Retour groupe", height: "THREE_METER", volume: 12 },
+            { category: "Renverse", code: "301C", name: "Retour groupe", height: "THREE_METER", volume: 12 },
             { category: "Avant", code: "101C", name: "Avant groupe", height: "ONE_METER", volume: 31 }
           ]
         }
@@ -392,8 +392,8 @@ function DiveNotesCard({ notes }: { notes: AthleteProfile["diveNotes"] }) {
 const progressTechnique = [
   { label: "Avant", color: "#ed163d", icon: "waves" },
   { label: "Arriere", color: "#ff4b68", icon: "activity" },
-  { label: "Retour", color: "#bd0d2d", icon: "waves" },
-  { label: "Renverse", color: "#ff6b83", icon: "waves" },
+  { label: "Renverse", color: "#bd0d2d", icon: "waves" },
+  { label: "Retourne", color: "#ff6b83", icon: "waves" },
   { label: "Vrille", color: "#bd0d2d", icon: "goal" },
   { label: "Equilibre", color: "#ed163d", icon: "goal" }
 ] as const;

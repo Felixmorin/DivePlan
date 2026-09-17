@@ -46,7 +46,6 @@ export default async function AthleteTodayPage() {
       <header className="athlete-header">
         <div>
           <h1>Salut {athlete.user.firstName} <span aria-hidden="true">👋</span></h1>
-          <p>Ton entraînement est prêt.</p>
         </div>
       </header>
 
@@ -101,8 +100,7 @@ export default async function AthleteTodayPage() {
 
       <SectionHeading title="Accès rapides" />
       <div className="quick-links">
-        <QuickLink href="/athlete/progress" icon={<BarChart3 />} label="Mes objectifs" />
-        <QuickLink href="/athlete/skills" icon={<Waves />} label="Mes plongeons" />
+        <QuickLink href="/athlete/progress" icon={<BarChart3 />} label="Ma progression" />
         <QuickLink href="/athlete/profile" icon={<UserRound />} label="Mon profil" />
       </div>
     </AthleteShell>

@@ -15,9 +15,18 @@ export default async function LibraryPage() {
     prisma.sessionTemplate.findMany({ where: { clubId }, orderBy: [{ favorite: "desc" }, { name: "asc" }] })
   ]);
   const exercises = rawExercises.map((exercise) => { const lastUsed = exercise.blockExercises.filter((item) => item.block.session.week.clubId === clubId).map((item) => item.block.session.date).sort((a, b) => b.getTime() - a.getTime())[0]; return { ...exercise, lastUsed: lastUsed?.toISOString() ?? null }; });
-  const dives = rawDives.map((dive) => ({ code: dive.diveCode, name: dive.diveName, heights: [dive.poolSection.height === "ONE_METER" ? "1 m" : dive.poolSection.height === "THREE_METER" ? "3 m" : "Autre"], family: familyForDive(dive.position) }));
+  const dives = rawDives.map((dive) => ({ code: dive.diveCode, name: dive.diveName, heights: [dive.poolSection.height === "ONE_METER" ? "1 m" : dive.poolSection.height === "THREE_METER" ? "3 m" : "Autre"], family: familyForDive(dive.diveCode, dive.position) }));
   const templates = rawTemplates.map((template) => ({ id: template.id, name: template.name, category: template.category, favorite: template.favorite, blocks: sessionTemplatePayloadSchema.safeParse(template.payload).success ? sessionTemplatePayloadSchema.parse(template.payload).blocks.length : 0 }));
   return <CoachShell active="Bibliotheque"><LibraryClient exercises={exercises} dives={dives} templates={templates} /></CoachShell>;
 }
 
-function familyForDive(position: string) { const value = position.toLowerCase(); if (value.includes("arrière") || value.includes("arriere")) return "Arrière"; if (value.includes("renvers")) return "Renversé"; if (value.includes("retourn")) return "Retourné"; if (value.includes("vrill")) return "Vrille"; return "Avant"; }
+function familyForDive(code: string, position: string) {
+  const familyByCode: Record<string, string> = { "1": "Avant", "2": "Arrière", "3": "Renversé", "4": "Retourné", "5": "Vrille" };
+  if (familyByCode[code.charAt(0)]) return familyByCode[code.charAt(0)];
+  const value = position.toLowerCase();
+  if (value.includes("arrière") || value.includes("arriere")) return "Arrière";
+  if (value.includes("renvers")) return "Renversé";
+  if (value.includes("retourn")) return "Retourné";
+  if (value.includes("vrill")) return "Vrille";
+  return "Avant";
+}

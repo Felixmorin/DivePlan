@@ -20,8 +20,8 @@ export default async function AthleteProgressPage() {
   const technique = [
     { label: "Avant", color: "#ed163d", icon: "waves" },
     { label: "Arriere", color: "#ff4b68", icon: "activity" },
-    { label: "Retour", color: "#bd0d2d", icon: "waves" },
-    { label: "Renverse", color: "#ff6b83", icon: "waves" },
+    { label: "Renverse", color: "#bd0d2d", icon: "waves" },
+    { label: "Retourne", color: "#ff6b83", icon: "waves" },
     { label: "Vrille", color: "#bd0d2d", icon: "goal" },
     { label: "Equilibre", color: "#ed163d", icon: "goal" }
   ] as const;
@@ -31,16 +31,6 @@ export default async function AthleteProgressPage() {
       <div className="progress-head">
         <div>
           <h1>Progression</h1>
-        </div>
-        <div className="progress-head-actions" aria-label="Récaps à venir">
-          <button type="button" className="progress-recap-button" disabled title="Bientôt disponible">
-            <span>Recap semaine</span>
-            <small>alpha</small>
-          </button>
-          <button type="button" className="progress-recap-button" disabled title="Bientôt disponible">
-            <span>Recap mois</span>
-            <small>alpha</small>
-          </button>
         </div>
       </div>
 

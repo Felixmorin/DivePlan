@@ -102,7 +102,7 @@ function MonthCalendar({ events }: { events: AthletePlanningEvent[] }) {
       })}
     </div>
   </section>
-  <section aria-labelledby="month-agenda-title" className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4 shadow-[0_14px_35px_rgba(0,0,0,0.18)]"><div className="mb-3 flex items-end justify-between gap-3"><div><p className="text-[11px] font-black uppercase tracking-[0.16em] text-white/42">À retenir</p><h2 id="month-agenda-title" className="mt-1 text-lg font-black">Détail des événements</h2></div><span className="text-xs font-semibold text-white/45">Lisible sur mobile</span></div>{monthEvents.length > 0 ? <div className="space-y-2.5">{monthEvents.map((event) => <CalendarEventRow key={event.id} event={event} />)}</div> : <p className="rounded-xl border border-dashed border-white/12 px-3 py-4 text-sm font-semibold text-white/55">Aucun événement ce mois-ci.</p>}</section>
+  <section aria-labelledby="month-agenda-title" className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4 shadow-[0_14px_35px_rgba(0,0,0,0.18)]"><div className="mb-3 flex items-end justify-between gap-3"><div><p className="text-[11px] font-black uppercase tracking-[0.16em] text-white/42">À retenir</p><h2 id="month-agenda-title" className="mt-1 text-lg font-black">Détail des événements</h2></div></div>{monthEvents.length > 0 ? <div className="space-y-2.5">{monthEvents.map((event) => <CalendarEventRow key={event.id} event={event} />)}</div> : <p className="rounded-xl border border-dashed border-white/12 px-3 py-4 text-sm font-semibold text-white/55">Aucun événement ce mois-ci.</p>}</section>
   </div>;
 }
 

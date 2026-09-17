@@ -296,15 +296,15 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
   const familyLabels: Record<string, string> = {
     "1": "Avant",
     "2": "Arriere",
-    "3": "Retour",
-    "4": "Renverse",
+    "3": "Renverse",
+    "4": "Retourne",
     "5": "Vrille"
   };
   const chartTotals = new Map<string, number>([
     ["Avant", 0],
     ["Arriere", 0],
-    ["Retour", 0],
     ["Renverse", 0],
+    ["Retourne", 0],
     ["Vrille", 0],
     ["Equilibre", 0]
   ]);
