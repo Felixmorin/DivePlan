@@ -14,7 +14,7 @@ import type { AthleteSessionView } from "@/lib/athlete-session";
 import { formatMontrealTime } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
 
-const ratings = ["dur", "moyen", "bon", "excellent"];
+const ratings = ["dur", "moyen", "bon", "excellent", "N/A"];
 
 type SessionPlayerProps = {
   session: AthleteSessionView;
