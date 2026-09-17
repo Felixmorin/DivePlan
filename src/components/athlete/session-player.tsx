@@ -493,7 +493,6 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
                       <span className="mt-1 block text-xs font-semibold text-white/48">{previewBlock.exercises.length} exercice(s) · {previewBlock.poolSections.reduce((sum, section) => sum + section.dives.length, 0)} plongeon(s)</span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
-                      <span className="text-xs font-bold text-white/55">Durée mesurée à l’entraînement</span>
                       <ChevronDown className={`h-5 w-5 text-white/55 transition-transform ${expandedPreviewBlocks.has(previewBlock.id) ? "rotate-180" : ""}`} aria-hidden="true" />
                     </span>
                   </button>
