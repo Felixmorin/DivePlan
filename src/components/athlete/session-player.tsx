@@ -634,7 +634,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
                       <span className="flex min-h-14 w-16 items-center justify-center rounded-2xl bg-[var(--color-athlete-panel-2)] px-1 text-center text-xs font-black leading-tight text-[var(--color-action)]">{activeStep.section.label}</span>
                       <div className="min-w-0"><div className="text-3xl font-black leading-none">{dive.code}</div><div className="mt-1 truncate text-sm font-semibold text-white/68">{dive.name}</div></div>
                       <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${diveNotes[dive.id] ? "text-[var(--color-action)]" : "text-white/45"}`} aria-label={diveNotes[dive.id] ? `Modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}>
+                        <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${diveNotes[dive.id] ? "text-[#60a5fa]" : "text-white/45"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}>
                           <FilePenLine className="h-5 w-5" />
                         </button>
                         <div className="text-right"><div className="text-2xl font-black">{completed}/{checks.length}</div><div className="text-xs font-bold uppercase text-white/45">reps</div></div>

@@ -34,6 +34,7 @@ type AthleteProfile = {
   skills: Array<{ code: string; name: string; status: string; progress: number; trainings: number; repetitions: number }>;
   planningEvents: Array<{ id: string; title: string; type: string; startsAt: Date; location?: string | null }>;
   competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; difficulty: number | null }>;
+  diveNotes: Array<{ id: string; code: string; name: string; height: string; note: string; updatedAt: Date; sessionId: string; sessionTitle: string; sessionDate: Date }>;
   progress: Pick<AthleteProgressTotals, "chartData" | "weeklyChartData" | "monthlyChartData" | "skillData" | "skillDives">;
 };
 
@@ -55,6 +56,27 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
         include: { session: true }
       },
       diveLogs: { where: { session: { week: { clubId } } }, include: { poolDive: true, session: true } },
+      diveNotes: {
+        where: { poolDive: { poolSection: { poolTraining: { block: { session: { week: { clubId } } } } } } },
+        orderBy: { updatedAt: "desc" },
+        select: {
+          poolDiveId: true,
+          note: true,
+          updatedAt: true,
+          poolDive: {
+            select: {
+              diveCode: true,
+              diveName: true,
+              poolSection: {
+                select: {
+                  height: true,
+                  poolTraining: { select: { block: { select: { session: { select: { id: true, title: true, date: true } } } } } }
+                }
+              }
+            }
+          }
+        }
+      },
       skills: { include: { skill: true }, orderBy: { progress: "desc" } },
       planningEvents: { where: { startsAt: { gte: startOfMontrealDay() } }, orderBy: { startsAt: "asc" }, take: 6 },
       competitionDives: { orderBy: [{ height: "asc" }, { position: "asc" }, { createdAt: "asc" }] }
@@ -118,6 +140,17 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       code: dive.diveCode,
       difficulty: dive.difficulty
     })),
+    diveNotes: athlete.diveNotes.map((item) => ({
+      id: item.poolDiveId,
+      code: item.poolDive.diveCode,
+      name: item.poolDive.diveName,
+      height: item.poolDive.poolSection.height,
+      note: item.note,
+      updatedAt: item.updatedAt,
+      sessionId: item.poolDive.poolSection.poolTraining.block.session.id,
+      sessionTitle: item.poolDive.poolSection.poolTraining.block.session.title,
+      sessionDate: item.poolDive.poolSection.poolTraining.block.session.date
+    })),
     progress
   };
 
@@ -161,6 +194,7 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
           { id: "competition-2", height: "ONE_METER", code: "201B", difficulty: 1.6 },
           { id: "competition-3", height: "THREE_METER", code: "405C", difficulty: 3.1 }
         ],
+        diveNotes: [],
         progress: {
           chartData: [
             { name: "18 août", volume: 22 },
@@ -255,6 +289,8 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
 
       <CompetitionDiveEditor profile={profile} demo={demo} />
 
+      <DiveNotesCard notes={profile.diveNotes} />
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card>
           <CardHeader><CardTitle>Historique récent</CardTitle></CardHeader>
@@ -310,6 +346,32 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
         </div>
       </div>
     </CoachShell>
+  );
+}
+
+function DiveNotesCard({ notes }: { notes: AthleteProfile["diveNotes"] }) {
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle>Commentaires sur les plongeons</CardTitle>
+        <p className="text-sm leading-6 text-[var(--color-ink-muted)]">Les notes personnelles laissées par l’athlète, regroupées par plongeon.</p>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {notes.map((item) => (
+          <div key={item.id} className="rounded-[var(--radius-ui)] border border-[var(--color-border)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="font-black">{item.code} <span className="font-semibold text-[var(--color-ink-muted)]">· {item.name}</span></div>
+                <div className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{item.height.replace("_", " ")} · {item.sessionTitle} · {formatMontrealDate(item.sessionDate, { weekday: "short", day: "2-digit", month: "short" })}</div>
+              </div>
+              <div className="text-xs font-bold text-[var(--color-ink-muted)]">Modifiée le {formatMontrealDate(item.updatedAt)}</div>
+            </div>
+            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[var(--color-ink)]">{item.note}</p>
+          </div>
+        ))}
+        {notes.length === 0 && <p className="text-sm font-semibold text-[var(--color-ink-muted)]">Aucun commentaire de plongeon pour l’instant.</p>}
+      </CardContent>
+    </Card>
   );
 }
 
