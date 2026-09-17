@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAssignedReadySession, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
 import { getAthleteWeekPlanningEvents } from "@/lib/athlete-planning";
-import { formatMontrealDate, formatMontrealTime } from "@/lib/timezone";
+import { addMontrealDays, formatMontrealDate, formatMontrealTime, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +24,12 @@ export default async function AthleteTodayPage() {
 
   const plannedMinutes = weekEvents.reduce((total, event) => total + (event.duration ?? 0), 0);
   const plannedTrainingSessions = weekEvents.filter((event) => event.type === "TRAINING_SCHEDULE").length;
+  const todayKey = toMontrealDateInputValue(new Date());
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = addMontrealDays(startOfMontrealWeek(), index);
+    const key = toMontrealDateInputValue(date);
+    return { date, key, events: weekEvents.filter((event) => toMontrealDateInputValue(event.startsAt) === key) };
+  });
 
   const sessionDate = readySession ? new Date(readySession.date) : null;
   const sessionHref = readySession ? `/athlete/session/${readySession.id}` : null;
@@ -70,9 +76,14 @@ export default async function AthleteTodayPage() {
 
       <SectionHeading title="Ma semaine" />
       <section className="week-card" aria-label="Résumé de la semaine">
-        <WeekMetric value={weekEvents.length} label="activités planifiées" tone="blue" progress={weekEvents.length > 0 ? 100 : 0} />
-        <WeekMetric value={`${Math.floor(plannedMinutes / 60)} h`} suffix={plannedMinutes % 60 ? ` ${plannedMinutes % 60} min` : undefined} label="temps au calendrier" tone="purple" progress={plannedMinutes > 0 ? 100 : 0} />
-        <WeekMetric value={plannedTrainingSessions} label="séances prévues" tone="mint" progress={plannedTrainingSessions > 0 ? 100 : 0} />
+        <div className="week-metrics">
+          <WeekMetric value={weekEvents.length} label="activités planifiées" tone="blue" progress={weekEvents.length > 0 ? 100 : 0} />
+          <WeekMetric value={`${Math.floor(plannedMinutes / 60)} h`} suffix={plannedMinutes % 60 ? ` ${plannedMinutes % 60} min` : undefined} label="temps au calendrier" tone="purple" progress={plannedMinutes > 0 ? 100 : 0} />
+          <WeekMetric value={plannedTrainingSessions} label="séances prévues" tone="mint" progress={plannedTrainingSessions > 0 ? 100 : 0} />
+        </div>
+        <div className="week-days" aria-label="Activités du lundi au dimanche">
+          {weekDays.map(({ date, key, events }) => <WeekDay key={key} date={date} eventCount={events.length} isToday={key === todayKey} />)}
+        </div>
       </section>
 
       <SectionHeading title="À venir" href="/athlete/calendar" linkLabel="Voir calendrier" />
@@ -105,6 +116,15 @@ function SectionHeading({ title, href, linkLabel }: { title: string; href?: stri
 
 function WeekMetric({ value, suffix, label, tone, progress }: { value: string | number; suffix?: string; label: string; tone: "blue" | "purple" | "mint"; progress: number }) {
   return <div className="week-metric"><strong>{value}<small>{suffix}</small></strong><span>{label}</span><i className={`metric-progress ${tone}`} style={{ width: `${progress}%` }} /></div>;
+}
+
+function WeekDay({ date, eventCount, isToday }: { date: Date; eventCount: number; isToday: boolean }) {
+  return <div className={`week-day ${isToday ? "is-today" : ""}`}>
+    <span>{formatMontrealDate(date, { weekday: "short" }).replace(/\.$/, "")}</span>
+    <strong>{formatMontrealDate(date, { day: "numeric" })}</strong>
+    <i className={eventCount > 0 ? "has-events" : ""} aria-hidden="true" />
+    <small>{eventCount > 0 ? `${eventCount} act.` : "Repos"}</small>
+  </div>;
 }
 
 function ScheduleRow({ date, icon, title, details, meta, href, status }: { date: string; icon?: React.ReactNode; title: string; details: string; meta: string; href: string; status?: boolean }) {
