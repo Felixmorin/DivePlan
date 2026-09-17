@@ -92,10 +92,12 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 grid gap-3 md:grid-cols-4">
+          <div className="mb-4 grid gap-3 md:grid-cols-6">
             <ResultSummaryTile label="Athletes termines" value={`${resultSummary.completedAthletes}/${resultSummary.totalAthletes}`} tone={resultSummary.completedAthletes === resultSummary.totalAthletes && resultSummary.totalAthletes > 0 ? "success" : "neutral"} />
-            <ResultSummaryTile label="Realisation moyenne" value={`${resultSummary.averageProgress}%`} tone={resultSummary.averageProgress >= 85 ? "success" : resultSummary.hasResults ? "warning" : "neutral"} />
-            <ResultSummaryTile label="Reps realisees" value={`${resultSummary.actualReps}/${resultSummary.plannedReps}`} tone="neutral" />
+            <ResultSummaryTile label="Reps dryland" value={`${resultSummary.actualDrylandReps}/${resultSummary.plannedDrylandReps}`} tone="neutral" />
+            <ResultSummaryTile label="Reps piscine" value={`${resultSummary.actualPoolReps}/${resultSummary.plannedPoolReps}`} tone="neutral" />
+            <ResultSummaryTile label="Progression dryland" value={`${resultSummary.drylandProgress}%`} tone={progressTone(resultSummary.drylandProgress, resultSummary.hasResults)} />
+            <ResultSummaryTile label="Progression piscine" value={`${resultSummary.poolProgress}%`} tone={progressTone(resultSummary.poolProgress, resultSummary.hasResults)} />
             <ResultSummaryTile label="A revoir" value={resultSummary.needsAttention} tone={resultSummary.needsAttention > 0 ? "warning" : "success"} />
           </div>
           <div className="space-y-3">
@@ -105,14 +107,15 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   <div>
                     <div className="font-black">{athlete.name}</div>
                     <div className="mt-1 text-sm text-[var(--color-ink-muted)]">
-                      {athlete.completedExercises}/{athlete.plannedExercises} exercices completes · {athlete.actualReps}/{athlete.plannedReps} reps realisees
+                      {athlete.completedExercises}/{athlete.plannedExercises} exercices completes · {athlete.actualDrylandReps}/{athlete.plannedDrylandReps} reps dryland · {athlete.actualPoolReps}/{athlete.plannedPoolReps} reps piscine
                     </div>
                   </div>
                   <StatusPill status={athlete.status} />
                 </div>
-                <div className="mt-3 grid gap-2 md:grid-cols-4">
+                <div className="mt-3 grid gap-2 md:grid-cols-5">
                   <ComparisonMetric label="Exercices" value={`${athlete.completedExercises}/${athlete.plannedExercises}`} />
-                  <ComparisonMetric label="Reps" value={`${athlete.actualReps}/${athlete.plannedReps}`} />
+                  <ComparisonMetric label="Dryland" value={`${athlete.actualDrylandReps}/${athlete.plannedDrylandReps}`} />
+                  <ComparisonMetric label="Piscine" value={`${athlete.actualPoolReps}/${athlete.plannedPoolReps}`} />
                   <ComparisonMetric label="Rating" value={athlete.rating} />
                   <ComparisonMetric label="Progression" value={`${athlete.progress}%`} />
                 </div>
@@ -196,6 +199,10 @@ function ResultSummaryTile({ label, value, tone }: { label: string; value: strin
   );
 }
 
+function progressTone(progress: number, hasResults: boolean): "success" | "warning" | "neutral" {
+  return progress >= 85 ? "success" : hasResults ? "warning" : "neutral";
+}
+
 type CoachSession = Awaited<ReturnType<typeof getCoachSession>>;
 
 function buildAthleteComparisons(session: CoachSession) {
@@ -207,8 +214,10 @@ function buildAthleteComparisons(session: CoachSession) {
       status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED";
       plannedExercises: number;
       completedExercises: number;
-      plannedReps: number;
-      actualReps: number;
+      plannedDrylandReps: number;
+      actualDrylandReps: number;
+      plannedPoolReps: number;
+      actualPoolReps: number;
       ratings: string[];
       notes: Array<{ key: string; label: string; text: string }>;
       exerciseRepPlan: Map<string, number>;
@@ -225,8 +234,10 @@ function buildAthleteComparisons(session: CoachSession) {
       status: "NOT_STARTED" as const,
       plannedExercises: 0,
       completedExercises: 0,
-      plannedReps: 0,
-      actualReps: 0,
+      plannedDrylandReps: 0,
+      actualDrylandReps: 0,
+      plannedPoolReps: 0,
+      actualPoolReps: 0,
       ratings: [] as string[],
       notes: [] as Array<{ key: string; label: string; text: string }>,
       exerciseRepPlan: new Map<string, number>()
@@ -237,12 +248,16 @@ function buildAthleteComparisons(session: CoachSession) {
 
   for (const block of session.blocks) {
     const exerciseReps = block.drylandExercises.reduce((sum, item) => sum + plannedExerciseReps(item.sets, item.reps), 0);
-    const poolReps = block.poolTraining?.sections.reduce((sectionSum, section) => sectionSum + section.dives.reduce((diveSum, dive) => diveSum + dive.repetitions, 0), 0) ?? 0;
+    const poolReps = block.poolTraining?.sections.reduce(
+      (sectionSum, section) => Math.max(1, countPoolContexts(section.label ?? section.height)) * section.dives.reduce((diveSum, dive) => diveSum + dive.repetitions, 0) + sectionSum,
+      0
+    ) ?? 0;
 
     for (const assignment of block.assignments) {
       const athlete = ensureAthlete(assignment.athlete);
       athlete.plannedExercises += block.drylandExercises.length;
-      athlete.plannedReps += exerciseReps + poolReps;
+      athlete.plannedDrylandReps += exerciseReps;
+      athlete.plannedPoolReps += poolReps;
 
       for (const item of block.drylandExercises) {
         athlete.exerciseRepPlan.set(item.exerciseId, (athlete.exerciseRepPlan.get(item.exerciseId) ?? 0) + plannedExerciseReps(item.sets, item.reps));
@@ -261,7 +276,7 @@ function buildAthleteComparisons(session: CoachSession) {
     const athlete = ensureAthlete(log.athlete);
     if (log.completed) {
       athlete.completedExercises += 1;
-      athlete.actualReps += athlete.exerciseRepPlan.get(log.exerciseId) ?? 0;
+      athlete.actualDrylandReps += athlete.exerciseRepPlan.get(log.exerciseId) ?? 0;
     }
     if (log.rating) athlete.ratings.push(log.rating);
     if (log.note) athlete.notes.push({ key: `exercise-${log.id}`, label: log.exercise.name, text: log.note });
@@ -269,14 +284,16 @@ function buildAthleteComparisons(session: CoachSession) {
 
   for (const log of session.diveLogs) {
     const athlete = ensureAthlete(log.athlete);
-    athlete.actualReps += log.repetitionsCompleted;
+    athlete.actualPoolReps += log.repetitionsCompleted;
     if (log.rating) athlete.ratings.push(log.rating);
     if (log.note) athlete.notes.push({ key: `dive-${log.id}`, label: `${log.poolDive.diveCode} ${log.poolDive.diveName}`, text: log.note });
   }
 
   return Array.from(athletes.values())
     .map((athlete) => {
-      const progress = athlete.plannedReps > 0 ? Math.round((athlete.actualReps / athlete.plannedReps) * 100) : 0;
+      const plannedReps = athlete.plannedDrylandReps + athlete.plannedPoolReps;
+      const actualReps = athlete.actualDrylandReps + athlete.actualPoolReps;
+      const progress = plannedReps > 0 ? Math.round((actualReps / plannedReps) * 100) : 0;
 
       return {
         id: athlete.id,
@@ -284,8 +301,10 @@ function buildAthleteComparisons(session: CoachSession) {
         status: athlete.status,
         plannedExercises: athlete.plannedExercises,
         completedExercises: athlete.completedExercises,
-        plannedReps: athlete.plannedReps,
-        actualReps: athlete.actualReps,
+        plannedDrylandReps: athlete.plannedDrylandReps,
+        actualDrylandReps: athlete.actualDrylandReps,
+        plannedPoolReps: athlete.plannedPoolReps,
+        actualPoolReps: athlete.actualPoolReps,
         rating: mostFrequent(athlete.ratings) ?? "Aucun",
         notes: athlete.notes,
         progress: Math.min(100, progress)
@@ -297,13 +316,16 @@ function buildAthleteComparisons(session: CoachSession) {
 function summarizeResults(athletes: ReturnType<typeof buildAthleteComparisons>) {
   const totalAthletes = athletes.length;
   const completedAthletes = athletes.filter((athlete) => athlete.status === "COMPLETED").length;
-  const plannedReps = athletes.reduce((sum, athlete) => sum + athlete.plannedReps, 0);
-  const actualReps = athletes.reduce((sum, athlete) => sum + athlete.actualReps, 0);
-  const hasResults = athletes.some((athlete) => athlete.actualReps > 0 || athlete.completedExercises > 0 || athlete.status !== "NOT_STARTED");
-  const averageProgress = totalAthletes > 0 ? Math.round(athletes.reduce((sum, athlete) => sum + athlete.progress, 0) / totalAthletes) : 0;
+  const plannedDrylandReps = athletes.reduce((sum, athlete) => sum + athlete.plannedDrylandReps, 0);
+  const actualDrylandReps = athletes.reduce((sum, athlete) => sum + athlete.actualDrylandReps, 0);
+  const plannedPoolReps = athletes.reduce((sum, athlete) => sum + athlete.plannedPoolReps, 0);
+  const actualPoolReps = athletes.reduce((sum, athlete) => sum + athlete.actualPoolReps, 0);
+  const hasResults = athletes.some((athlete) => athlete.actualDrylandReps > 0 || athlete.actualPoolReps > 0 || athlete.completedExercises > 0 || athlete.status !== "NOT_STARTED");
+  const drylandProgress = plannedDrylandReps > 0 ? Math.min(100, Math.round((actualDrylandReps / plannedDrylandReps) * 100)) : 0;
+  const poolProgress = plannedPoolReps > 0 ? Math.min(100, Math.round((actualPoolReps / plannedPoolReps) * 100)) : 0;
   const needsAttention = athletes.filter((athlete) => athlete.status !== "COMPLETED" || athlete.progress < 80).length;
 
-  return { totalAthletes, completedAthletes, plannedReps, actualReps, hasResults, averageProgress, needsAttention };
+  return { totalAthletes, completedAthletes, plannedDrylandReps, actualDrylandReps, plannedPoolReps, actualPoolReps, drylandProgress, poolProgress, hasResults, needsAttention };
 }
 
 function plannedExerciseReps(sets: number | null, reps: number | null) {
