@@ -552,7 +552,7 @@ function DrylandStep(props: {
           </div>
         );
         return (
-          <div key={block.id} className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div key={block.id} className="block-layout grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
             <BlockCard type="dryland" title={block.title || `Dryland ${blockIndex + 1}`} duration={block.duration} assigned={block.athleteIds} athletes={props.athletes} state={selectedExercises.length > 0 ? "Pret" : "A completer"} flash={props.flashBlock === block.id} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < props.blocks.length - 1} onMoveUp={() => props.onMoveBlock(block.id, -1)} onMoveDown={() => props.onMoveBlock(block.id, 1)}>
               <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_130px_auto]">
                 <Input aria-label={`Nom du bloc dryland ${blockIndex + 1}`} value={block.title} placeholder={`Dryland ${blockIndex + 1}`} onChange={(event) => props.onUpdateBlock(block.id, { title: event.target.value })} />
@@ -572,7 +572,7 @@ function DrylandStep(props: {
               </div>
               {selectedExercises.length === 0 && <WarningText>Ajoute au moins un exercice à ce bloc.</WarningText>}
             </BlockCard>
-            <AssignmentSelector selected={block.athleteIds} onChange={(ids) => props.onUpdateBlock(block.id, { athleteIds: ids })} athletes={props.athletes} />
+            <div className="block-assignment"><AssignmentSelector selected={block.athleteIds} onChange={(ids) => props.onUpdateBlock(block.id, { athleteIds: ids })} athletes={props.athletes} /></div>
           </div>
         );
       })}
@@ -707,7 +707,7 @@ function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignP
 
 function PoolBlock({ block, blockIndex, blockCount, assigned, athletes, flash, onAssign, onRemove, onMove, onUpdate, onRowsChange }: { block: BuilderPoolBlock; blockIndex: number; blockCount: number; assigned: string[]; athletes: BuilderAthlete[]; flash: boolean; onAssign: (ids: string[]) => void; onRemove: () => void; onMove: (direction: -1 | 1) => void; onUpdate: (update: Partial<Pick<BuilderPoolBlock, "title" | "duration">>) => void; onRowsChange: (rows: PoolListRow[]) => void }) {
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="block-layout grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <BlockCard type="pool" title={block.title || "Piscine"} duration={block.duration} assigned={assigned} athletes={athletes} state={poolBlockIsValid(block) ? "Personnalisable" : "A completer"} flash={flash} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < blockCount - 1} onMoveUp={() => onMove(-1)} onMoveDown={() => onMove(1)}>
         <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_130px]">
           <Input aria-label={`Nom du bloc piscine ${block.title}`} value={block.title} placeholder="Nom du bloc piscine" onChange={(event) => onUpdate({ title: event.target.value })} />
@@ -718,7 +718,7 @@ function PoolBlock({ block, blockIndex, blockCount, assigned, athletes, flash, o
         </label>
         <PoolListTable rows={poolSectionsToRows(block.sections)} onChange={onRowsChange} />
       </BlockCard>
-      <AssignmentSelector selected={assigned} onChange={onAssign} athletes={athletes} />
+      <div className="block-assignment"><AssignmentSelector selected={assigned} onChange={onAssign} athletes={athletes} /></div>
     </div>
   );
 }
@@ -813,7 +813,7 @@ function BlockCard({ type, title, duration, assigned, athletes, state, flash, ca
   const contentId = useId();
 
   return (
-    <Card className={cn("overflow-hidden", flash && "builder-pulse")}>
+    <Card className={cn("block-card overflow-hidden", flash && "builder-pulse")}>
       <div className={cn("h-2", type === "dryland" ? "bg-[var(--block-dryland-fg)]" : "bg-[var(--block-pool-fg)]")} />
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-4">
