@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, ChevronRight, Edit3, LogOut, Medal, UserRound, Waves } from "lucide-react";
+import { Building2, ChevronRight, Edit3, LogOut, Medal, Star, UserRound, Waves } from "lucide-react";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { CompetitionList } from "@/components/athlete/competition-list";
@@ -50,6 +51,12 @@ export default async function ProfilePage() {
         <ProfileStat icon={<Waves className="h-5 w-5" />} label="Plongeons" value={totals.totalDiveRepetitions} />
         <ProfileStat icon={<span className="text-base font-black">min</span>} label="Entraînement" value={totals.completedMinutes} />
       </section>
+
+      <Link href="/athlete/profile/golden-reps" className="mt-4 flex min-h-16 items-center gap-3 rounded-[1.2rem] border border-amber-300/25 bg-gradient-to-r from-amber-400/15 to-transparent px-4 transition hover:border-amber-300/50 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400 text-[#281500]"><Star className="h-5 w-5 fill-current" /></span>
+        <span className="flex-1"><span className="block text-base font-black">Golden rep</span><span className="block text-sm font-medium text-white/55">Retrouve tes plongeons marquants</span></span>
+        <ChevronRight className="h-5 w-5 text-amber-200/70" />
+      </Link>
 
       <section aria-label="Résumé de la semaine" className="mt-3 rounded-[1.2rem] border border-[var(--color-club-red)]/25 bg-[var(--color-athlete-panel)] px-4 py-3">
         <p className="text-sm font-semibold text-white/58">Cette semaine, du lundi au dimanche</p>

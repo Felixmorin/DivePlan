@@ -27,7 +27,8 @@ type SessionPlayerProps = {
 };
 
 type PageFeedback = Record<string, { rating: string; note: string }>;
-type DiveChecks = Record<string, boolean[]>;
+type DiveRepState = 0 | 1 | 2;
+type DiveChecks = Record<string, DiveRepState[]>;
 type ExerciseChecks = Record<string, boolean>;
 type SaveStatus = "saved" | "saving" | "error";
 
@@ -66,7 +67,7 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
         block.poolSections.flatMap((section) =>
           section.dives.map((dive) => [
             dive.id,
-            Array.from({ length: Math.max(dive.repetitions, dive.completedRepetitions) }, (_, index) => index < dive.completedRepetitions)
+            Array.from({ length: Math.max(dive.repetitions, dive.completedRepetitions) }, (_, index) => index < dive.goldenRepetitions ? 2 : index < dive.completedRepetitions ? 1 : 0)
           ])
         )
       )
@@ -106,7 +107,7 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
     [blocks]
   );
   const plannedPoolReps = poolDives.reduce((sum, dive) => sum + dive.repetitions, 0);
-  const completedPoolReps = poolDives.reduce((sum, dive) => sum + (diveChecks[dive.id] ?? []).filter(Boolean).length, 0);
+  const completedPoolReps = poolDives.reduce((sum, dive) => sum + (diveChecks[dive.id] ?? []).filter((state) => state > 0).length, 0);
   const hasPoolDives = poolDives.length > 0;
   const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : Math.round(((current + 1) / blocks.length) * 100);
   const blockRemaining = countBlockRemaining(block, exerciseChecks, diveChecks);
@@ -257,12 +258,13 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
     pulse(`${diveId}-${repIndex}`);
     setDiveChecks((previous) => {
       const currentChecks = previous[diveId] ?? [];
-      const isAlreadyChecked = currentChecks[repIndex] ?? false;
+      const currentState = currentChecks[repIndex] ?? 0;
       const next = {
         ...previous,
         [diveId]: currentChecks.map((checked, index) => {
-          if (isAlreadyChecked) return index < repIndex ? checked : false;
-          return index <= repIndex ? true : checked;
+          if (currentState === 0) return index <= repIndex && checked === 0 ? 1 : checked;
+          if (index === repIndex) return currentState === 1 ? 2 : 0;
+          return currentState === 2 && index > repIndex ? 0 : checked;
         })
       };
       diveChecksRef.current = next;
@@ -279,7 +281,7 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
     const version = markDirty();
     setDiveChecks((previous) => {
       const currentChecks = previous[diveId] ?? [];
-      const next = { ...previous, [diveId]: [...currentChecks, true] };
+      const next = { ...previous, [diveId]: [...currentChecks, 1 as DiveRepState] };
       pulse(`${diveId}-${currentChecks.length}`);
       diveChecksRef.current = next;
       void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, pageFeedbackRef.current, version).catch(() => {
@@ -568,7 +570,7 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
               </div>
               <div className="space-y-2">
                 {poolDives.map((dive) => {
-                  const completed = (diveChecks[dive.id] ?? []).filter(Boolean).length;
+                  const completed = (diveChecks[dive.id] ?? []).filter((state) => state > 0).length;
                   return (
                     <div key={dive.id} className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--color-athlete-bg)] px-3 py-3">
                       <div className="min-w-0">
@@ -651,7 +653,8 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
             <div className="space-y-3">
               {activeStep.section.dives.map((dive) => {
                 const checks = diveChecks[dive.id] ?? [];
-                const completed = checks.filter(Boolean).length;
+                const completed = checks.filter((state) => state > 0).length;
+                const golden = checks.filter((state) => state === 2).length;
                 return (
                   <div key={dive.id} className="rounded-2xl border border-white/10 bg-[var(--color-athlete-panel)] p-4">
                     <div className="grid grid-cols-[64px_1fr_auto] items-center gap-3">
@@ -661,7 +664,7 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
                         <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${diveNotes[dive.id] ? "text-[#60a5fa]" : "text-white/45"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}>
                           <FilePenLine className="h-5 w-5" />
                         </button>
-                        <div className="text-right"><div className="text-2xl font-black">{completed}/{checks.length}</div><div className="text-xs font-bold uppercase text-white/45">reps</div></div>
+                        <div className="text-right"><div className="text-2xl font-black">{completed}/{checks.length}</div><div className="text-xs font-bold uppercase text-white/45">reps{golden > 0 ? ` · ${golden} gold` : ""}</div></div>
                       </div>
                     </div>
                     {openDiveNote === dive.id && (
@@ -675,9 +678,9 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
                       </div>
                     )}
                     <div className="mt-4 grid grid-cols-5 gap-2">
-                      {checks.map((checked, index) => (
-                        <button key={index} type="button" onClick={() => toggleDiveRep(dive.id, index)} className={`flex h-12 items-center justify-center rounded-2xl border text-sm font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${checked ? "border-[var(--color-success)] bg-[var(--color-success)] text-white" : "border-white/10 bg-[var(--color-athlete-bg)] text-white/62"} ${pulseKey === `${dive.id}-${index}` ? "builder-pulse" : ""}`} aria-label={`Repetition ${index + 1}`}>
-                          {checked ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
+                      {checks.map((state, index) => (
+                        <button key={index} type="button" onClick={() => toggleDiveRep(dive.id, index)} className={`flex h-12 items-center justify-center rounded-2xl border text-sm font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${state === 2 ? "border-amber-300 bg-amber-400 text-[#281500]" : state === 1 ? "border-[var(--color-success)] bg-[var(--color-success)] text-white" : "border-white/10 bg-[var(--color-athlete-bg)] text-white/62"} ${pulseKey === `${dive.id}-${index}` ? "builder-pulse" : ""}`} aria-label={`Repetition ${index + 1}${state === 2 ? ", golden" : state === 1 ? ", complétée" : ""}`}>
+                          {state === 2 ? "★" : state === 1 ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
                         </button>
                       ))}
                     </div>
@@ -733,7 +736,7 @@ function formatExercisePrescription(exercise: AthleteSessionView["blocks"][numbe
 }
 
 function countCompletedItems(blocks: AthleteSessionView["blocks"], exercises: ExerciseChecks, dives: DiveChecks) {
-  return blocks.reduce((sum, block) => sum + block.exercises.filter((exercise) => exercises[exercise.id]).length + block.poolSections.reduce((sectionSum, section) => sectionSum + section.dives.reduce((diveSum, dive) => diveSum + (dives[dive.id] ?? []).filter(Boolean).length, 0), 0), 0);
+  return blocks.reduce((sum, block) => sum + block.exercises.filter((exercise) => exercises[exercise.id]).length + block.poolSections.reduce((sectionSum, section) => sectionSum + section.dives.reduce((diveSum, dive) => diveSum + (dives[dive.id] ?? []).filter((state) => state > 0).length, 0), 0), 0);
 }
 
 function countBlockRemaining(block: AthleteSessionView["blocks"][number], exercises: ExerciseChecks, dives: DiveChecks) {
@@ -767,7 +770,8 @@ function buildBlockProgressPayload(
     })),
     dives: section ? section.dives.map((dive) => ({
         poolDiveId: dive.id,
-        repetitionsCompleted: (dives[dive.id] ?? []).filter(Boolean).length,
+        repetitionsCompleted: (dives[dive.id] ?? []).filter((state) => state > 0).length,
+        goldenRepetitions: (dives[dive.id] ?? []).filter((state) => state === 2).length,
         rating: feedback.rating,
         note: feedback.note
       })) : []
@@ -804,7 +808,8 @@ function buildSessionProgressPayload(
 
           return {
             poolDiveId: dive.id,
-            repetitionsCompleted: (dives[dive.id] ?? []).filter(Boolean).length,
+            repetitionsCompleted: (dives[dive.id] ?? []).filter((state) => state > 0).length,
+            goldenRepetitions: (dives[dive.id] ?? []).filter((state) => state === 2).length,
             rating: feedback.rating,
             note: feedback.note
           };

@@ -16,6 +16,7 @@ export type AthleteProgressPayload = {
   dives: Array<{
     poolDiveId: string;
     repetitionsCompleted: number;
+    goldenRepetitions: number;
     rating: string | null;
     note: string | null;
   }>;
@@ -90,6 +91,7 @@ export async function persistAthleteProgress(
       sessionId: payload.sessionId,
       poolDiveId: dive.poolDiveId,
       repetitionsCompleted: Math.max(0, Math.min(dive.repetitionsCompleted, repetitionsByDiveId.get(dive.poolDiveId) ?? 0)),
+      goldenRepetitions: Math.max(0, Math.min(dive.goldenRepetitions, dive.repetitionsCompleted, repetitionsByDiveId.get(dive.poolDiveId) ?? 0)),
       rating: normalizeText(dive.rating) ?? "moyen",
       note: normalizeText(dive.note)
     }));
@@ -125,6 +127,7 @@ export async function persistAthleteProgress(
         create: dive,
         update: {
           repetitionsCompleted: dive.repetitionsCompleted,
+          goldenRepetitions: dive.goldenRepetitions,
           rating: dive.rating,
           note: dive.note,
           timestamp: new Date()

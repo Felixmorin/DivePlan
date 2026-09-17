@@ -1,0 +1,1 @@
+ALTER TABLE "AthleteDiveLog" ADD COLUMN "goldenRepetitions" INTEGER NOT NULL DEFAULT 0;

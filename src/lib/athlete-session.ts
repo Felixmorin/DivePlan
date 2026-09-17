@@ -24,6 +24,7 @@ export type AthleteSessionDive = {
   name: string;
   repetitions: number;
   completedRepetitions: number;
+  goldenRepetitions: number;
   personalNote: string | null;
   rating: string | null;
   note: string | null;
@@ -75,6 +76,13 @@ export type AthleteProgressTotals = {
   skillData: Array<{ name: string; volume: number }>;
   skillDives: Array<{ category: string; code: string; name: string; height: PoolHeight; volume: number }>;
   skillCategories: string[];
+};
+
+export type AthleteGoldenRep = {
+  code: string;
+  name: string;
+  height: PoolHeight;
+  count: number;
 };
 
 export type AthleteRecentCompletion = {
@@ -256,6 +264,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
               name: dive.diveName,
               repetitions: dive.repetitions * Math.max(1, countPoolContexts(section.label ?? poolHeightLabel(section.height))),
               completedRepetitions: latestLog?.repetitionsCompleted ?? 0,
+              goldenRepetitions: latestLog?.goldenRepetitions ?? 0,
               personalNote: dive.athleteNotes[0]?.note ?? null,
               rating: latestLog?.rating ?? null,
               note: latestLog?.note ?? null
@@ -352,6 +361,28 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     skillDives: Array.from(skillDives.values()).sort((a, b) => a.category.localeCompare(b.category) || a.code.localeCompare(b.code) || a.height.localeCompare(b.height)),
     skillCategories: Array.from(new Set(skills.map((skill) => skill.skill.category)))
   };
+}
+
+export async function getAthleteGoldenReps(athleteId: string): Promise<AthleteGoldenRep[]> {
+  const logs = await prisma.athleteDiveLog.findMany({
+    where: { athleteId, goldenRepetitions: { gt: 0 } },
+    include: { poolDive: { include: { poolSection: { select: { height: true } } } } }
+  });
+  const totals = new Map<string, AthleteGoldenRep>();
+
+  for (const log of logs) {
+    const height = log.poolDive.poolSection.height;
+    const key = `${height}:${log.poolDive.diveCode}`;
+    const current = totals.get(key);
+    totals.set(key, {
+      code: log.poolDive.diveCode,
+      name: log.poolDive.diveName,
+      height,
+      count: (current?.count ?? 0) + log.goldenRepetitions
+    });
+  }
+
+  return Array.from(totals.values()).sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
 }
 
 export async function getAthleteCurrentWeekSummary(athleteId: string): Promise<AthleteCurrentWeekSummary> {
