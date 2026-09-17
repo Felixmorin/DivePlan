@@ -8,7 +8,7 @@ import { StatusPill } from "@/components/training/status-pill";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getCoachSession } from "@/lib/coach-session";
+import { getAthleteAverageRepsByTraining, getCoachSession } from "@/lib/coach-session";
 import { formatMontrealDate } from "@/lib/timezone";
 import { countPoolContexts } from "@/lib/pool-list";
 
@@ -26,11 +26,12 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     }))
   );
   const uniqueAthletes = Array.from(new Map(athletes.map((athlete) => [athlete.id, athlete])).values());
+  const athleteAverageReps = await getAthleteAverageRepsByTraining(uniqueAthletes.map((athlete) => athlete.id), session.id);
   const hasStarted =
     session.completions.some((completion) => completion.startedAt || completion.status !== "NOT_STARTED") ||
     session.diveLogs.length > 0 ||
     session.exerciseLogs.length > 0;
-  const athleteComparisons = buildAthleteComparisons(session);
+  const athleteComparisons = buildAthleteComparisons(session, athleteAverageReps);
   const resultSummary = summarizeResults(athleteComparisons);
 
   return (
@@ -116,6 +117,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   <ComparisonMetric label="Exercices" value={`${athlete.completedExercises}/${athlete.plannedExercises}`} />
                   <ComparisonMetric label="Dryland" value={`${athlete.actualDrylandReps}/${athlete.plannedDrylandReps}`} />
                   <ComparisonMetric label="Piscine" value={`${athlete.actualPoolReps}/${athlete.plannedPoolReps}`} />
+                  <ComparisonMetric label="Moy. / entraînement" value={`${athlete.averageRepsPerTraining} reps`} />
                   <ComparisonMetric label="Rating" value={athlete.rating} />
                   <ComparisonMetric label="Progression" value={`${athlete.progress}%`} />
                 </div>
@@ -205,7 +207,7 @@ function progressTone(progress: number, hasResults: boolean): "success" | "warni
 
 type CoachSession = Awaited<ReturnType<typeof getCoachSession>>;
 
-function buildAthleteComparisons(session: CoachSession) {
+function buildAthleteComparisons(session: CoachSession, athleteAverageReps: Map<string, number>) {
   const athletes = new Map<
     string,
     {
@@ -218,6 +220,7 @@ function buildAthleteComparisons(session: CoachSession) {
       actualDrylandReps: number;
       plannedPoolReps: number;
       actualPoolReps: number;
+      averageRepsPerTraining: number;
       ratings: string[];
       notes: Array<{ key: string; label: string; text: string }>;
       exerciseRepPlan: Map<string, number>;
@@ -238,6 +241,7 @@ function buildAthleteComparisons(session: CoachSession) {
       actualDrylandReps: 0,
       plannedPoolReps: 0,
       actualPoolReps: 0,
+      averageRepsPerTraining: 0,
       ratings: [] as string[],
       notes: [] as Array<{ key: string; label: string; text: string }>,
       exerciseRepPlan: new Map<string, number>()
@@ -305,6 +309,7 @@ function buildAthleteComparisons(session: CoachSession) {
         actualDrylandReps: athlete.actualDrylandReps,
         plannedPoolReps: athlete.plannedPoolReps,
         actualPoolReps: athlete.actualPoolReps,
+        averageRepsPerTraining: athleteAverageReps.get(athlete.id) ?? 0,
         rating: mostFrequent(athlete.ratings) ?? "Aucun",
         notes: athlete.notes,
         progress: Math.min(100, progress)

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Plus, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves, X } from "lucide-react";
 import { addCompetitionDive, deleteAthlete, removeCompetitionDive } from "@/app/coach/athletes/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
+import { ProgressChart } from "@/components/athlete/progress-chart";
+import { TechniqueDetails } from "@/components/athlete/technique-details";
 import { StatusPill } from "@/components/training/status-pill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { getAthleteProgressTotals, type AthleteProgressTotals } from "@/lib/athlete-session";
 import { formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +34,7 @@ type AthleteProfile = {
   skills: Array<{ code: string; name: string; status: string; progress: number; trainings: number; repetitions: number }>;
   planningEvents: Array<{ id: string; title: string; type: string; startsAt: Date; location?: string | null }>;
   competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; difficulty: number | null }>;
+  progress: Pick<AthleteProgressTotals, "chartData" | "weeklyChartData" | "monthlyChartData" | "skillData" | "skillDives">;
 };
 
 export default async function AthleteDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -71,6 +75,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     orderBy: { date: "asc" },
     select: { id: true, title: true, date: true, status: true }
   });
+  const progress = await getAthleteProgressTotals(athlete.id);
 
   const profile: AthleteProfile = {
     id: athlete.id,
@@ -112,7 +117,8 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       height: dive.height,
       code: dive.diveCode,
       difficulty: dive.difficulty
-    }))
+    })),
+    progress
   };
 
   return <AthleteDetail profile={profile} />;
@@ -154,7 +160,30 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
           { id: "competition-1", height: "ONE_METER", code: "203C", difficulty: 2 },
           { id: "competition-2", height: "ONE_METER", code: "201B", difficulty: 1.6 },
           { id: "competition-3", height: "THREE_METER", code: "405C", difficulty: 3.1 }
-        ]
+        ],
+        progress: {
+          chartData: [
+            { name: "18 août", volume: 22 },
+            { name: "20 août", volume: 31 },
+            { name: "22 août", volume: 27 },
+            { name: "25 août", volume: 36 }
+          ],
+          weeklyChartData: [{ name: "Sem. 18 août", volume: 29 }],
+          monthlyChartData: [{ name: "août 2026", volume: 29 }],
+          skillData: [
+            { name: "Avant", volume: 31 },
+            { name: "Arriere", volume: 18 },
+            { name: "Retour", volume: 12 },
+            { name: "Renverse", volume: 8 },
+            { name: "Vrille", volume: 0 },
+            { name: "Equilibre", volume: 0 }
+          ],
+          skillDives: [
+            { category: "Arriere", code: "201B", name: "Arriere carpe", volume: 18 },
+            { category: "Retour", code: "301C", name: "Retour groupe", volume: 12 },
+            { category: "Avant", code: "101C", name: "Avant groupe", volume: 31 }
+          ]
+        }
       }}
       demo
     />
@@ -222,6 +251,8 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
         <DiveIqCard icon={<Sparkles className="h-5 w-5" />} label="Suggestion" value={diveIq.suggestion} detail="À remplacer par DiveIQ quand l'intégration sera disponible." />
       </div>
 
+      <AthleteProgress profile={profile} />
+
       <CompetitionDiveEditor profile={profile} demo={demo} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -279,6 +310,34 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
         </div>
       </div>
     </CoachShell>
+  );
+}
+
+const progressTechnique = [
+  { label: "Avant", color: "#ed163d", icon: "waves" },
+  { label: "Arriere", color: "#ff4b68", icon: "activity" },
+  { label: "Retour", color: "#bd0d2d", icon: "waves" },
+  { label: "Renverse", color: "#ff6b83", icon: "waves" },
+  { label: "Vrille", color: "#bd0d2d", icon: "goal" },
+  { label: "Equilibre", color: "#ed163d", icon: "goal" }
+] as const;
+
+function AthleteProgress({ profile }: { profile: AthleteProfile }) {
+  const technique = progressTechnique.map((item) => ({
+    ...item,
+    dives: profile.progress.skillData.find((entry) => entry.name === item.label)?.volume ?? 0
+  }));
+
+  return (
+    <div className="mb-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,.9fr)]">
+      <Card>
+        <CardHeader><CardTitle>Tendance</CardTitle><p className="text-sm leading-6 text-[var(--color-ink-muted)]">Volume d’entraînement dans le temps</p></CardHeader>
+        <CardContent><ProgressChart data={profile.progress.chartData} weeklyData={profile.progress.weeklyChartData} monthlyData={profile.progress.monthlyChartData} /></CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-5"><TechniqueDetails technique={technique} skillDives={profile.progress.skillDives} /></CardContent>
+      </Card>
+    </div>
   );
 }
 
