@@ -86,6 +86,15 @@ export function sameMontrealDay(left: Date, right: Date) {
   return leftParts.year === rightParts.year && leftParts.month === rightParts.month && leftParts.day === rightParts.day;
 }
 
+export function daysUntilMontrealDate(date: Date | string, from = new Date()) {
+  const toUtcDay = (value: Date | string) => {
+    const [year, month, day] = toMontrealDateInputValue(toDate(value)).split("-").map(Number);
+    return Date.UTC(year, month - 1, day);
+  };
+
+  return Math.max(0, Math.round((toUtcDay(date) - toUtcDay(from)) / 86_400_000));
+}
+
 function montrealWeekday(date: Date) {
   const value = date.toLocaleDateString("en-CA", { timeZone: APP_TIME_ZONE, weekday: "short" });
   return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(value) + 1 || 7;

@@ -121,6 +121,33 @@ export async function saveAthleteProgress(payload: SaveAthleteProgressPayload) {
   revalidatePath(`/athlete/session/${payload.sessionId}`);
 }
 
+export async function openAthleteBlock(sessionId: string, blockId: string) {
+  const athlete = await getCurrentAthlete();
+  if (!athlete) throw new Error("Aucun athlete actif trouve.");
+
+  const block = await prisma.sessionBlock.findFirst({
+    where: { id: blockId, sessionId, assignments: { some: { athleteId: athlete.id } } },
+    select: { id: true }
+  });
+  if (!block) throw new Error("Ce bloc n'est pas accessible a l'athlete courant.");
+
+  await prisma.athleteBlockTiming.upsert({
+    where: { athleteId_blockId: { athleteId: athlete.id, blockId } },
+    create: { athleteId: athlete.id, blockId, openedAt: new Date() },
+    update: {}
+  });
+}
+
+export async function closeAthleteBlock(sessionId: string, blockId: string) {
+  const athlete = await getCurrentAthlete();
+  if (!athlete) throw new Error("Aucun athlete actif trouve.");
+
+  await prisma.athleteBlockTiming.updateMany({
+    where: { athleteId: athlete.id, blockId, block: { sessionId } },
+    data: { closedAt: new Date() }
+  });
+}
+
 export async function completeAthleteSession(payload: CompleteSessionPayload) {
   const athlete = await getCurrentAthlete();
 
@@ -137,19 +164,24 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   await assertSessionStartAvailable(payload.sessionId);
 
   await persistAthleteProgress(payload, athlete.id, assignedBlocks, async (tx) => {
+    const completedAt = new Date();
+    await tx.athleteBlockTiming.updateMany({
+      where: { athleteId: athlete.id, block: { sessionId: payload.sessionId }, closedAt: null },
+      data: { closedAt: completedAt }
+    });
     await tx.athleteSessionCompletion.upsert({
       where: { athleteId_sessionId: { athleteId: athlete.id, sessionId: payload.sessionId } },
       create: {
         athleteId: athlete.id,
         sessionId: payload.sessionId,
         startedAt: new Date(),
-        completedAt: new Date(),
+        completedAt,
         status: "COMPLETED",
         rating: payload.sessionFeedback?.rating?.trim() || null,
         note: payload.sessionFeedback?.note?.trim() || null
       },
       update: {
-        completedAt: new Date(),
+        completedAt,
         status: "COMPLETED",
         rating: payload.sessionFeedback?.rating?.trim() || null,
         note: payload.sessionFeedback?.note?.trim() || null

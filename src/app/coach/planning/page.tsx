@@ -35,6 +35,7 @@ type PlanningEvent = {
   type: PlanningEventType | string;
   title: string;
   startsAt: Date;
+  endsAt: Date | null;
   duration: number | null;
   location: string | null;
   notes: string | null;
@@ -108,6 +109,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
     type: event.type,
     title: event.title,
     startsAt: event.startsAt,
+    endsAt: event.endsAt,
     duration: event.duration,
     location: event.location,
     notes: event.notes,
@@ -142,6 +144,7 @@ function DemoPlanningPage({ period }: { period: PlanningPeriod }) {
       type: "COMPETITION",
       title: "Invitation provinciale",
       startsAt: addMontrealDays(period.weekStart, 4),
+      endsAt: addMontrealDays(period.weekStart, 5),
       duration: 180,
       location: "Centre aquatique",
       notes: "Liste finale des plongeons a confirmer.",
@@ -155,6 +158,7 @@ function DemoPlanningPage({ period }: { period: PlanningPeriod }) {
       type: "CAMP",
       title: "Camp technique",
       startsAt: addMontrealDays(period.weekStart, 2),
+      endsAt: null,
       duration: 240,
       location: "Bassin principal",
       notes: null,
@@ -262,6 +266,7 @@ function AddPlanningEventPanel({ targets, demo }: { targets: PlanningTarget[]; d
           </Field>
           <Field label="Titre"><Input name="title" placeholder="Ex: Camp technique" disabled={demo} required /></Field>
           <Field label="Date et heure"><Input name="startsAt" type="datetime-local" disabled={demo} required /></Field>
+          <Field label="Fin (compétition)"><Input name="endsAt" type="datetime-local" disabled={demo} /></Field>
           <Field label="Durée"><Input name="duration" type="number" min="1" placeholder="minutes" disabled={demo} /></Field>
           <Field label="Répétition">
             <select name="recurrence" disabled={demo} defaultValue="NONE" className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]">
@@ -393,7 +398,7 @@ function PlanningEventCard({ event, targets }: { event: PlanningEvent; targets: 
     <article className={`rounded-2xl border p-3 ${eventTone(event.type)}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2.5 py-1 text-xs font-black"><Trophy className="h-3.5 w-3.5" /> {eventTypeLabel(event.type)}</span>
-        <div className="flex items-center gap-1"><span className="text-xs font-bold">{formatMontrealTime(event.startsAt)}</span><PlanningEventEditor event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), target }} targets={targets} /></div>
+        <div className="flex items-center gap-1"><span className="text-xs font-bold">{formatMontrealTime(event.startsAt)}</span><PlanningEventEditor event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), endsAt: event.endsAt ? toMontrealDateTimeInputValue(event.endsAt) : "", target }} targets={targets} /></div>
       </div>
       <div className="mt-3 font-black leading-tight">{event.title}</div>
       <div className="mt-2 space-y-1 text-xs font-bold opacity-80">
@@ -420,7 +425,7 @@ function MonthEventItem({ event, targets }: { event: PlanningEvent; targets: Pla
   const target = event.groupId ? `group:${event.groupId}` : event.athleteId ? `athlete:${event.athleteId}` : "club";
   return (
     <div className={`rounded-lg border px-2 py-1.5 text-xs font-black leading-tight ${eventTone(event.type)}`}>
-      <div className="flex items-start justify-between gap-1"><span className="block text-[10px] font-bold opacity-70">{formatMontrealTime(event.startsAt)} · {eventTypeLabel(event.type)}</span><PlanningEventEditor compact event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), target }} targets={targets} /></div>
+      <div className="flex items-start justify-between gap-1"><span className="block text-[10px] font-bold opacity-70">{formatMontrealTime(event.startsAt)} · {eventTypeLabel(event.type)}</span><PlanningEventEditor compact event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), endsAt: event.endsAt ? toMontrealDateTimeInputValue(event.endsAt) : "", target }} targets={targets} /></div>
       <div>{event.title}</div>
     </div>
   );

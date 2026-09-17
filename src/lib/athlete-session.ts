@@ -35,6 +35,8 @@ export type AthleteSessionBlock = {
   description: string | null;
   type: "WARMUP" | "DRYLAND" | "POOL" | "COOLDOWN" | "CUSTOM";
   duration: number;
+  openedAt: string | null;
+  closedAt: string | null;
   volume: number;
   exercises: AthleteSessionExercise[];
   poolSections: Array<{
@@ -131,6 +133,7 @@ export async function getAssignedReadySession(athleteId: string) {
       blocks: {
         where: { assignments: { some: { athleteId } } },
         include: {
+          athleteTimings: { where: { athleteId } },
           drylandExercises: {
             orderBy: { order: "asc" },
             include: { exercise: true }
@@ -179,6 +182,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
       blocks: {
         where: { assignments: { some: { athleteId } } },
         include: {
+          athleteTimings: { where: { athleteId } },
           drylandExercises: {
             orderBy: { order: "asc" },
             include: { exercise: { include: { logs: { where: { athleteId, sessionId } } } } }
@@ -219,6 +223,8 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
       description: block.description,
       type: block.type,
       duration: block.duration,
+      openedAt: block.athleteTimings[0]?.openedAt.toISOString() ?? null,
+      closedAt: block.athleteTimings[0]?.closedAt?.toISOString() ?? null,
       volume: block.estimatedVolume,
       exercises: block.drylandExercises.map((blockExercise) => {
         const latestLog = blockExercise.exercise.logs.at(-1);

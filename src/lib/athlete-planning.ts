@@ -7,6 +7,7 @@ export type AthletePlanningEvent = {
   title: string;
   type: PlanningEventType;
   startsAt: Date;
+  endsAt: Date | null;
   duration: number | null;
   location: string | null;
   audience: "athlete" | "group" | "club";
@@ -72,6 +73,7 @@ async function findAthletePlanningEvents({
     title: event.title,
     type: event.type,
     startsAt: event.startsAt,
+    endsAt: event.endsAt,
     duration: event.duration,
     location: event.location,
     audience: event.athleteId === athleteId ? "athlete" : event.groupId ? "group" : "club",

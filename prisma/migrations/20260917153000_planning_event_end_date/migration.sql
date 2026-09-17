@@ -1,0 +1,1 @@
+ALTER TABLE "PlanningEvent" ADD COLUMN "endsAt" TIMESTAMP(3);

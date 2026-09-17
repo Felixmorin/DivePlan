@@ -11,6 +11,7 @@ const planningEventSchema = z.object({
   type: z.nativeEnum(PlanningEventType),
   title: z.string().trim().min(3, "Le titre est requis."),
   startsAt: z.string().min(16, "La date et l'heure sont requises."),
+  endsAt: z.string().min(16).optional().or(z.literal("")),
   duration: z.coerce.number().int().min(1).max(10080).optional().or(z.literal("").transform(() => undefined)),
   location: z.string().trim().optional(),
   notes: z.string().trim().optional(),
@@ -18,6 +19,12 @@ const planningEventSchema = z.object({
   recurrence: z.enum(["NONE", "WEEKLY"]).default("NONE"),
   recurrenceUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "La date de fin est invalide.").optional().or(z.literal(""))
 }).superRefine((data, context) => {
+  if (data.type === PlanningEventType.COMPETITION && !data.endsAt) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["endsAt"], message: "La date de fin est requise pour une compétition." });
+  }
+  if (data.endsAt && parseMontrealDateTimeInput(data.endsAt) < parseMontrealDateTimeInput(data.startsAt)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["endsAt"], message: "La date de fin doit être après le début." });
+  }
   if (data.type !== PlanningEventType.TRAINING_SCHEDULE || data.recurrence === "NONE") return;
   if (!data.recurrenceUntil) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["recurrenceUntil"], message: "Choisis une date de fin pour la répétition." });
@@ -40,6 +47,7 @@ export async function createPlanningEvent(formData: FormData) {
     type: formData.get("type"),
     title: formData.get("title"),
     startsAt: formData.get("startsAt"),
+    endsAt: formData.get("endsAt") ?? "",
     duration: formData.get("duration") ?? "",
     location: formData.get("location") ?? "",
     notes: formData.get("notes") ?? "",
@@ -77,6 +85,7 @@ export async function createPlanningEvent(formData: FormData) {
       type: data.type,
       title: data.title,
       startsAt,
+      endsAt: data.type === PlanningEventType.COMPETITION && data.endsAt ? parseMontrealDateTimeInput(data.endsAt) : null,
       duration: data.duration,
       location: data.location || null,
       notes: data.notes || null
@@ -95,6 +104,7 @@ export async function updatePlanningEvent(formData: FormData) {
     type: formData.get("type"),
     title: formData.get("title"),
     startsAt: formData.get("startsAt"),
+    endsAt: formData.get("endsAt") ?? "",
     duration: formData.get("duration") ?? "",
     location: formData.get("location") ?? "",
     notes: formData.get("notes") ?? "",
@@ -126,6 +136,7 @@ export async function updatePlanningEvent(formData: FormData) {
       type: data.type,
       title: data.title,
       startsAt: parseMontrealDateTimeInput(data.startsAt),
+      endsAt: data.type === PlanningEventType.COMPETITION && data.endsAt ? parseMontrealDateTimeInput(data.endsAt) : null,
       duration: data.duration,
       location: data.location || null,
       notes: data.notes || null,

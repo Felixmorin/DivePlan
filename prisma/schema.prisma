@@ -125,6 +125,7 @@ model Athlete {
   diveLogs         AthleteDiveLog[]
   diveNotes        AthleteDiveNote[]
   exerciseLogs     AthleteExerciseLog[]
+  blockTimings     AthleteBlockTiming[]
   skills           AthleteSkill[]
   planningEvents   PlanningEvent[]
   competitionDives CompetitionDive[]
@@ -174,6 +175,7 @@ model PlanningEvent {
   type      PlanningEventType
   title     String
   startsAt  DateTime
+  endsAt    DateTime?
   duration  Int?
   location  String?
   notes     String?
@@ -232,8 +234,21 @@ model SessionBlock {
   estimatedVolume  Int                      @default(0)
   session          TrainingSession          @relation(fields: [sessionId], references: [id])
   assignments      SessionBlockAssignment[]
+  athleteTimings   AthleteBlockTiming[]
   drylandExercises DrylandBlockExercise[]
   poolTraining     PoolTraining?
+}
+
+model AthleteBlockTiming {
+  athleteId  String
+  blockId    String
+  openedAt   DateTime
+  closedAt   DateTime?
+  athlete    Athlete     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  block      SessionBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  @@id([athleteId, blockId])
+  @@index([blockId, openedAt])
 }
 
 model SessionBlockAssignment {

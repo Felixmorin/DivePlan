@@ -14,7 +14,7 @@ import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { getAthleteProgressTotals, type AthleteProgressTotals } from "@/lib/athlete-session";
-import { formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
+import { daysUntilMontrealDate, formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,8 @@ type AthleteProfile = {
   nextSession?: { id: string; title: string; date: Date; status: string };
   recentSessions: Array<{ id: string; title: string; date: Date; status: string; rating?: string | null; note?: string | null }>;
   skills: Array<{ code: string; name: string; status: string; progress: number; trainings: number; repetitions: number }>;
-  planningEvents: Array<{ id: string; title: string; type: string; startsAt: Date; location?: string | null }>;
+  planningEvents: Array<{ id: string; title: string; type: string; startsAt: Date; endsAt: Date | null; location?: string | null }>;
+  nextCompetition?: { title: string; startsAt: Date; endsAt: Date | null };
   competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; difficulty: number | null }>;
   diveNotes: Array<{ id: string; code: string; name: string; height: string; note: string; updatedAt: Date; sessionId: string; sessionTitle: string; sessionDate: Date }>;
   progress: Pick<AthleteProgressTotals, "chartData" | "weeklyChartData" | "monthlyChartData" | "skillData" | "skillDives">;
@@ -97,6 +98,16 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     orderBy: { date: "asc" },
     select: { id: true, title: true, date: true, status: true }
   });
+  const nextCompetition = await prisma.planningEvent.findFirst({
+    where: {
+      clubId,
+      type: "COMPETITION",
+      startsAt: { gte: startOfMontrealDay() },
+      OR: [{ athleteId: athlete.id }, ...(athlete.groupId ? [{ groupId: athlete.groupId }] : []), { athleteId: null, groupId: null }]
+    },
+    orderBy: { startsAt: "asc" },
+    select: { title: true, startsAt: true, endsAt: true }
+  });
   const progress = await getAthleteProgressTotals(athlete.id);
 
   const profile: AthleteProfile = {
@@ -132,8 +143,10 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       title: event.title,
       type: event.type,
       startsAt: event.startsAt,
+      endsAt: event.endsAt,
       location: event.location
     })),
+    nextCompetition: nextCompetition ?? undefined,
     competitionDives: athlete.competitionDives.map((dive) => ({
       id: dive.id,
       height: dive.height,
@@ -187,7 +200,7 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
           { code: "101C", name: "Avant groupe", status: "MASTERED", progress: 92, trainings: 16, repetitions: 70 }
         ],
         planningEvents: [
-          { id: "event-demo", title: "Camp technique", type: "CAMP", startsAt: parseMontrealSessionDate("2026-08-27"), location: "Bassin principal" }
+          { id: "event-demo", title: "Camp technique", type: "CAMP", startsAt: parseMontrealSessionDate("2026-08-27"), endsAt: null, location: "Bassin principal" }
         ],
         competitionDives: [
           { id: "competition-1", height: "ONE_METER", code: "203C", difficulty: 2 },
@@ -275,6 +288,7 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
             <Metric icon={<Dumbbell className="h-4 w-4" />} label="Séances complétées" value={profile.completedSessions} />
             <Metric icon={<Waves className="h-4 w-4" />} label="Volume réalisé" value={`${profile.volume} reps`} />
             <Metric icon={<CalendarClock className="h-4 w-4" />} label="Naissance" value={profile.birthDate ? formatMontrealDate(profile.birthDate) : "Non indiquée"} />
+            <Metric icon={<Trophy className="h-4 w-4" />} label="Prochaine compétition" value={profile.nextCompetition ? `${daysUntilMontrealDate(profile.nextCompetition.startsAt)} jour${daysUntilMontrealDate(profile.nextCompetition.startsAt) > 1 ? "s" : ""}` : "Aucune prévue"} />
           </CardContent>
         </Card>
       </div>
@@ -338,7 +352,7 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
                 <LinkedItem icon={<Target className="h-4 w-4" />} title={profile.nextSession.title} detail={`${formatMontrealDate(profile.nextSession.date)} · séance`} />
               )}
               {profile.planningEvents.map((event) => (
-                <LinkedItem key={event.id} icon={<Trophy className="h-4 w-4" />} title={event.title} detail={`${formatMontrealDate(event.startsAt)} · ${event.type}${event.location ? ` · ${event.location}` : ""}`} />
+                <LinkedItem key={event.id} icon={<Trophy className="h-4 w-4" />} title={event.title} detail={`${event.endsAt ? `Du ${formatMontrealDate(event.startsAt)} au ${formatMontrealDate(event.endsAt)}` : formatMontrealDate(event.startsAt)} · ${event.type}${event.location ? ` · ${event.location}` : ""}`} />
               ))}
               {!profile.nextSession && profile.planningEvents.length === 0 && <p className="text-sm font-semibold text-[var(--color-ink-muted)]">Aucun événement à venir lié à cet athlète.</p>}
             </CardContent>

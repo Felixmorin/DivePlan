@@ -5,7 +5,7 @@ import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAthletePlanningEvents, type AthletePlanningEvent } from "@/lib/athlete-planning";
 import { requireAthlete } from "@/lib/current-user";
-import { addMontrealDays, formatMontrealDate, formatMontrealTime, parseMontrealSessionDate, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
+import { addMontrealDays, daysUntilMontrealDate, formatMontrealDate, formatMontrealTime, parseMontrealSessionDate, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +20,7 @@ export default async function AthleteCalendarPage({ searchParams }: { searchPara
   const { athlete, clubId } = await requireAthlete();
   const events = await getAthletePlanningEvents({ athleteId: athlete.id, clubId, groupId: athlete.groupId });
   const monthGroups = groupEventsByMonth(events);
+  const nextCompetition = events.find((event) => event.type === "COMPETITION");
   const viewParam = searchParams ? await searchParams : {};
   const calendarView = (Array.isArray(viewParam.view) ? viewParam.view[0] : viewParam.view) === "calendar";
 
@@ -34,6 +35,7 @@ export default async function AthleteCalendarPage({ searchParams }: { searchPara
           <ViewLink href="/athlete/calendar?view=list" active={!calendarView} icon={<List className="h-4 w-4" />}>Liste</ViewLink>
           <ViewLink href="/athlete/calendar?view=calendar" active={calendarView} icon={<CalendarDays className="h-4 w-4" />}>Calendrier</ViewLink>
         </div>
+        {nextCompetition && <div className="w-full rounded-[var(--radius-panel)] border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm font-bold text-amber-100"><Trophy className="mr-2 inline h-4 w-4" />Prochaine compétition : <span className="font-black">{daysUntilMontrealDate(nextCompetition.startsAt)} jour{daysUntilMontrealDate(nextCompetition.startsAt) > 1 ? "s" : ""}</span> · {nextCompetition.title}</div>}
       </header>
 
       {calendarView ? <MonthCalendar events={events} /> : <div className="space-y-7">
@@ -71,8 +73,11 @@ function MonthCalendar({ events }: { events: AthletePlanningEvent[] }) {
   });
   const eventsByDay = new Map<string, AthletePlanningEvent[]>();
   for (const event of events) {
-    const key = toMontrealDateInputValue(event.startsAt);
-    eventsByDay.set(key, [...(eventsByDay.get(key) ?? []), event]);
+    const end = event.endsAt ?? event.startsAt;
+    for (let date = event.startsAt; date <= end; date = addMontrealDays(date, 1)) {
+      const key = toMontrealDateInputValue(date);
+      eventsByDay.set(key, [...(eventsByDay.get(key) ?? []), event]);
+    }
   }
 
   return <section aria-label="Calendrier mensuel" className="overflow-hidden rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)]">
@@ -116,7 +121,7 @@ function EventCard({ event }: { event: AthletePlanningEvent }) {
           </div>
           <h3 className="mt-3 text-xl font-black leading-tight">{event.title}</h3>
           <div className="mt-3 space-y-1.5 text-sm font-semibold text-white/58">
-            <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 shrink-0" /> {formatMontrealDate(event.startsAt, { weekday: "long", day: "numeric", month: "long" })}</div>
+            <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 shrink-0" /> {event.endsAt ? `Du ${formatMontrealDate(event.startsAt, { weekday: "long", day: "numeric", month: "long" })} au ${formatMontrealDate(event.endsAt, { weekday: "long", day: "numeric", month: "long" })}` : formatMontrealDate(event.startsAt, { weekday: "long", day: "numeric", month: "long" })}</div>
             <div className="flex items-center gap-2"><MapPin className="h-4 w-4 shrink-0" /> {event.location || "Lieu à confirmer"}</div>
             {event.duration && <div className="flex items-center gap-2"><Clock3 className="h-4 w-4 shrink-0" /> {formatDuration(event.duration)}</div>}
           </div>

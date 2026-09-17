@@ -15,6 +15,7 @@ type PlanningEventEditorProps = {
     type: string;
     title: string;
     startsAt: string;
+    endsAt: string;
     duration: number | null;
     location: string | null;
     notes: string | null;
@@ -63,6 +64,7 @@ export function PlanningEventEditor({ event, targets, compact = false }: Plannin
               </label>
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Titre</span><Input name="title" defaultValue={event.title} required /></label>
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Date et heure</span><Input name="startsAt" type="datetime-local" defaultValue={event.startsAt} required /></label>
+              <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Fin (compétition)</span><Input name="endsAt" type="datetime-local" defaultValue={event.endsAt} /></label>
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Durée</span><Input name="duration" type="number" min="1" defaultValue={event.duration ?? ""} placeholder="minutes" /></label>
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Association</span>
                 <select name="target" defaultValue={event.target} className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold">

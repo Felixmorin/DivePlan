@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, FilePenLine, NotebookPen, Play, Plus, RotateCcw, Save, Timer } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, FilePenLine, NotebookPen, Play, Plus, RotateCcw, Save } from "lucide-react";
 import type { CompleteSessionPayload, SaveAthleteProgressPayload } from "@/app/athlete/session/[id]/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -19,6 +19,8 @@ const ratings = ["dur", "moyen", "bon", "excellent"];
 type SessionPlayerProps = {
   session: AthleteSessionView;
   onStart: (sessionId: string) => Promise<void>;
+  onOpenBlock: (sessionId: string, blockId: string) => Promise<void>;
+  onCloseBlock: (sessionId: string, blockId: string) => Promise<void>;
   onSaveProgress: (payload: SaveAthleteProgressPayload) => Promise<void>;
   onComplete: (payload: CompleteSessionPayload) => Promise<void>;
   onSaveDiveNote: (sessionId: string, poolDiveId: string, note: string) => Promise<void>;
@@ -29,12 +31,13 @@ type DiveChecks = Record<string, boolean[]>;
 type ExerciseChecks = Record<string, boolean>;
 type SaveStatus = "saved" | "saving" | "error";
 
-export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, onSaveDiveNote }: SessionPlayerProps) {
+export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onSaveProgress, onComplete, onSaveDiveNote }: SessionPlayerProps) {
   const router = useRouter();
   const blocks = session.blocks;
   const [current, setCurrent] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
   const [started, setStarted] = useState(session.completionStatus === "IN_PROGRESS" || session.completionStatus === "COMPLETED");
+  const [blockTimings, setBlockTimings] = useState(() => Object.fromEntries(blocks.map((item) => [item.id, { openedAt: item.openedAt, closedAt: item.closedAt }])));
   const [now, setNow] = useState(() => Date.now());
   const [reviewing, setReviewing] = useState(session.completionStatus === "COMPLETED");
   const [isPending, startTransition] = useTransition();
@@ -109,6 +112,20 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
   const blockRemaining = countBlockRemaining(block, exerciseChecks, diveChecks);
   const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
   const canStart = isSessionStartAvailable(session.date, new Date(now));
+  const activeTiming = blockTimings[block.id];
+
+  useEffect(() => {
+    if (!started || reviewing || activeTiming?.openedAt) return;
+    const openedAt = new Date().toISOString();
+    setBlockTimings((previous) => ({ ...previous, [block.id]: { openedAt, closedAt: null } }));
+    void onOpenBlock(session.id, block.id).catch(() => setError("Le début du bloc n'a pas pu être enregistré."));
+  }, [activeTiming?.openedAt, block.id, onOpenBlock, reviewing, session.id, started]);
+
+  useEffect(() => {
+    if (!started || reviewing) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [reviewing, started]);
 
   useEffect(() => {
     if (started || canStart) return;
@@ -349,12 +366,14 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
     }
 
     if (current < blocks.length - 1) {
+      closeBlock(block.id);
       setCurrent(current + 1);
       setStepIndex(0);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
+    closeBlock(block.id);
     setReviewing(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -377,6 +396,13 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
     setCurrent(current - 1);
     setStepIndex(previousBlock.poolSections.length > 0 ? previousBlock.poolSections.length - 1 : 0);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeBlock(blockId: string) {
+    if (blockTimings[blockId]?.closedAt) return;
+    const closedAt = new Date().toISOString();
+    setBlockTimings((previous) => ({ ...previous, [blockId]: { ...previous[blockId], closedAt } }));
+    void onCloseBlock(session.id, blockId).catch(() => setError("La fin du bloc n'a pas pu être enregistrée."));
   }
 
   function openDiveNoteEditor(dive: AthleteSessionView["blocks"][number]["poolSections"][number]["dives"][number]) {
@@ -435,8 +461,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
             <Badge className="bg-white text-[var(--color-navy)]">{formatMontrealTime(session.date)}</Badge>
             <h1 className="mt-5 text-4xl font-black leading-none">{session.title}</h1>
             <p className="mt-3 text-sm font-semibold leading-6 text-white/68">{session.focus}</p>
-            <div className="mt-5 grid grid-cols-3 gap-2">
-              <StartStat label="Duree" value={`${session.duration} min`} />
+            <div className="mt-5 grid grid-cols-2 gap-2">
               <StartStat label="Blocs" value={blocks.length} />
               <StartStat label="Groupe" value={session.group} />
             </div>
@@ -466,7 +491,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
                       <span className="mt-1 block text-xs font-semibold text-white/48">{previewBlock.exercises.length} exercice(s) · {previewBlock.poolSections.reduce((sum, section) => sum + section.dives.length, 0)} plongeon(s)</span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
-                      <span className="text-xs font-bold text-white/55">{previewBlock.duration} min</span>
+                      <span className="text-xs font-bold text-white/55">Durée mesurée à l’entraînement</span>
                       <ChevronDown className={`h-5 w-5 text-white/55 transition-transform ${expandedPreviewBlocks.has(previewBlock.id) ? "rotate-180" : ""}`} aria-hidden="true" />
                     </span>
                   </button>
@@ -530,8 +555,7 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
             <h1 className="mt-5 text-3xl font-black leading-none">Séance terminée</h1>
             <p className="mt-3 text-sm leading-6 text-white/68">Verifie ton ressenti et enregistre la completion definitivement.</p>
           </section>
-          <div className="grid grid-cols-3 gap-2">
-            <StartStat label="Duree" value={`${session.duration} min`} />
+          <div className="grid grid-cols-2 gap-2">
             <StartStat label="Blocs" value={`${completedBlocks}/${blocks.length}`} />
             <StartStat label="Plongeons" value={`${completedPoolReps}/${plannedPoolReps}`} />
           </div>
@@ -596,15 +620,15 @@ export function SessionPlayer({ session, onStart, onSaveProgress, onComplete, on
         <section className="rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
           <div className="flex items-center justify-between gap-3">
             <BlockTypeBadge type={block.type} />
-            <span className="inline-flex items-center gap-1 text-sm font-bold text-white/55"><Timer className="h-4 w-4" /> {block.duration} min</span>
           </div>
           <h1 className="mt-5 text-4xl font-black leading-none">{block.title}</h1>
           {block.description && <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6 text-white/78">{block.description}</p>}
           <p className="mt-3 text-sm font-semibold leading-6 text-white/68">{session.focus}</p>
           {session.notes && <div className="mt-4 rounded-2xl bg-[var(--color-athlete-bg)] p-3 text-sm leading-6 text-white/70">{session.notes}</div>}
           <div className="mt-5 rounded-2xl bg-white/8 p-4">
-            <div className="text-xs font-bold uppercase text-white/38">Restant dans ce bloc</div>
+            <div className="text-xs font-bold uppercase text-white/38">Progression du bloc</div>
             <div className="mt-1 text-3xl font-black">{blockRemaining}</div>
+            <div className="mt-1 text-sm font-semibold text-white/48">élément{blockRemaining === 1 ? "" : "s"} restant{blockRemaining === 1 ? "" : "s"}</div>
           </div>
         </section>
 
