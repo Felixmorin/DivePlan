@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Activity, CalendarDays, Computer, Dumbbell, LayoutDashboard, Library, Settings, Users, Waves } from "lucide-react";
+import { Activity, CalendarDays, Computer, Dumbbell, LayoutDashboard, Library, LogOut, Settings, Users, Waves } from "lucide-react";
+import { signOutCoach } from "@/app/coach/settings/actions";
 import { requireCoach } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
 
@@ -86,6 +87,29 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
             );
           })}
         </nav>
+        <div className="mt-2 flex items-center gap-1 border-t border-[var(--color-border)] pt-2">
+          {utilityNav.map((item) => {
+            const Icon = item.icon;
+            const isActive = active === item.label || active === item.match;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-label={item.label}
+                className={cn("flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 text-xs font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive ? "bg-[var(--color-navy)] text-white" : "text-[var(--color-ink-muted)] hover:bg-white")}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+          <form action={signOutCoach} className="ml-auto shrink-0">
+            <button type="submit" className="flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-black text-[var(--color-ink-muted)] transition duration-[var(--duration-fast)] hover:bg-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+              <LogOut className="h-4 w-4" />
+              <span>Déconnexion</span>
+            </button>
+          </form>
+        </div>
       </header>
       <main className="min-w-0 lg:pl-68">
         <div className="w-full px-3 py-4 sm:px-4 lg:px-5 xl:px-6">{children}</div>
