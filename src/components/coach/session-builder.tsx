@@ -145,13 +145,13 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   const templateWarmup = templateBlocks.find((block) => block.type === "WARMUP");
   const templateCooldown = templateBlocks.find((block) => block.type === "COOLDOWN");
   const [warmup, setWarmup] = useState({
-    enabled: Boolean(templateWarmup ?? !initialTemplate),
+    enabled: false,
     title: templateWarmup?.title ?? "Echauffement dynamique",
     duration: templateWarmup?.duration ?? 12,
     description: templateWarmup?.description ?? ""
   });
   const [cooldown, setCooldown] = useState({
-    enabled: Boolean(templateCooldown ?? !initialTemplate),
+    enabled: false,
     title: templateCooldown?.title ?? "Retour au calme",
     duration: templateCooldown?.duration ?? 8,
     description: templateCooldown?.description ?? ""
@@ -190,8 +190,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
           if (draft.drylandBlocks) setDrylandBlocks(draft.drylandBlocks);
           if (draft.poolBlocks) setActivePoolBlocks(draft.poolBlocks);
           if (draft.poolAssignments) setPoolAssignments(draft.poolAssignments);
-          if (draft.warmup) setWarmup(draft.warmup);
-          if (draft.cooldown) setCooldown(draft.cooldown);
+          if (draft.warmup) setWarmup({ ...draft.warmup, enabled: false });
+          if (draft.cooldown) setCooldown({ ...draft.cooldown, enabled: false });
           restoredDraft.current = true;
         });
       } else restoredDraft.current = true;
@@ -328,8 +328,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
         try {
           await onCreate({
             ...values,
-            warmup,
-            cooldown,
+            warmup: { ...warmup, enabled: false },
+            cooldown: { ...cooldown, enabled: false },
             drylandBlocks: effectiveDrylandBlocks.map(({ title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides }) => ({ title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides })),
             poolBlocks: activePoolBlocks.map((block) => ({
               title: block.title,
@@ -372,7 +372,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
-          {step === 0 && <DetailsStep form={form} selectedGroupId={watched.groupId ?? ""} selectedDate={watched.date ?? ""} groups={groups} planningEvents={planningEvents} warmup={warmup} cooldown={cooldown} onWarmupChange={setWarmup} onCooldownChange={setCooldown} />}
+          {step === 0 && <DetailsStep form={form} selectedGroupId={watched.groupId ?? ""} selectedDate={watched.date ?? ""} groups={groups} planningEvents={planningEvents} />}
           {step === 1 && (
             <DrylandStep
               exercises={library}
@@ -430,13 +430,13 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
           title={watched.title ?? "Nouvelle seance"}
           date={watched.date ?? ""}
           duration={totalDuration}
-          blockCount={activePoolBlocks.length + drylandBlocks.length + Number(warmup.enabled) + Number(cooldown.enabled)}
+          blockCount={activePoolBlocks.length + drylandBlocks.length}
           athleteCount={allAssignedIds.length}
           unassignedCount={unassignedBlocks.length}
           totalVolume={totalVolume}
           isPending={isPending}
           canPublish={
-            visibleAthletes.length > 0 && groups.length > 0 && totalDuration >= 15 && (warmup.enabled || cooldown.enabled || drylandBlocks.length > 0 || activePoolBlocks.length > 0) && drylandBlocks.every((block) => block.title.trim().length > 0 && Number.isInteger(block.duration) && block.duration > 0 && block.exerciseIds.length > 0 && block.athleteIds.length > 0) && activePoolBlocks.every(poolBlockIsValid) && poolAssignmentValues.every((ids) => ids.length > 0)
+            visibleAthletes.length > 0 && groups.length > 0 && totalDuration >= 15 && (drylandBlocks.length > 0 || activePoolBlocks.length > 0) && drylandBlocks.every((block) => block.title.trim().length > 0 && Number.isInteger(block.duration) && block.duration > 0 && block.exerciseIds.length > 0 && block.athleteIds.length > 0) && activePoolBlocks.every(poolBlockIsValid) && poolAssignmentValues.every((ids) => ids.length > 0)
           }
           onPublish={publishSession}
         />
@@ -471,7 +471,7 @@ function Stepper({ current, onStepChange }: { current: number; onStepChange: (st
 
 type OptionalBlock = { enabled: boolean; title: string; duration: number; description: string };
 
-function DetailsStep({ form, selectedGroupId, selectedDate, groups, planningEvents, warmup, cooldown, onWarmupChange, onCooldownChange }: { form: ReturnType<typeof useForm<FormValues>>; selectedGroupId: string; selectedDate: string; groups: BuilderGroup[]; planningEvents: BuilderPlanningEvent[]; warmup: OptionalBlock; cooldown: OptionalBlock; onWarmupChange: (block: OptionalBlock) => void; onCooldownChange: (block: OptionalBlock) => void }) {
+function DetailsStep({ form, selectedGroupId, selectedDate, groups, planningEvents }: { form: ReturnType<typeof useForm<FormValues>>; selectedGroupId: string; selectedDate: string; groups: BuilderGroup[]; planningEvents: BuilderPlanningEvent[] }) {
   return (
     <Card>
       <CardHeader><CardTitle>Details de la seance</CardTitle></CardHeader>
@@ -493,26 +493,8 @@ function DetailsStep({ form, selectedGroupId, selectedDate, groups, planningEven
         <Field label="Duree totale"><Input type="number" placeholder="Duree" {...form.register("duration", { valueAsNumber: true })} /></Field>
         <Field label="Notes coach" className="md:col-span-2"><Textarea placeholder="Notes coach" {...form.register("notes")} /></Field>
         {Object.values(form.formState.errors).length > 0 && <div className="md:col-span-2 rounded-2xl bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">Certains champs requis sont incomplets.</div>}
-        <EditableOptionalBlock label="Échauffement dynamique" block={warmup} onChange={onWarmupChange} />
-        <EditableOptionalBlock label="Retour au calme" block={cooldown} onChange={onCooldownChange} />
       </CardContent>
     </Card>
-  );
-}
-
-function EditableOptionalBlock({ label, block, onChange }: { label: string; block: OptionalBlock; onChange: (block: OptionalBlock) => void }) {
-  return (
-    <div className={cn("rounded-2xl border p-4 md:col-span-2", block.enabled ? "border-[var(--color-brand)]/35 bg-[var(--color-brand)]/5" : "border-[var(--color-border)] bg-[var(--color-surface-raised)] opacity-70")}>
-      <label className="flex items-center gap-3 font-black text-[var(--color-ink)]">
-        <input type="checkbox" checked={block.enabled} onChange={(event) => onChange({ ...block, enabled: event.target.checked })} />
-        Inclure le bloc « {label} »
-      </label>
-      <div className="mt-3 grid gap-3 md:grid-cols-[1fr_130px]">
-        <Input aria-label={`Nom du bloc ${label}`} value={block.title} disabled={!block.enabled} onChange={(event) => onChange({ ...block, title: event.target.value })} />
-        <Input aria-label={`Durée du bloc ${label}`} type="number" min="1" value={block.duration} disabled={!block.enabled} onChange={(event) => onChange({ ...block, duration: Number(event.target.value) })} />
-        <Textarea className="md:col-span-2" aria-label={`Contenu du bloc ${label}`} placeholder="Mouvements, étirements et consignes…" value={block.description} disabled={!block.enabled} onChange={(event) => onChange({ ...block, description: event.target.value })} />
-      </div>
-    </div>
   );
 }
 

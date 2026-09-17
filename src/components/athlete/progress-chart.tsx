@@ -25,7 +25,7 @@ export function ProgressChart({ data, weeklyData = [], monthlyData = [] }: Progr
       </div>
       <div className="progress-chart">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData}>
+        <BarChart data={chartData} margin={{ top: 18, right: 4, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="rgba(137,190,220,.12)" vertical={false} />
           <XAxis dataKey="name" stroke="#a3b6ca" fontSize={11} tickLine={false} axisLine={false} />
           <YAxis stroke="#a3b6ca" fontSize={11} tickLine={false} axisLine={false} width={24} />
