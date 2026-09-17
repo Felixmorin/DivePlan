@@ -5,7 +5,7 @@ import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { getAssignedReadySession, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
+import { getAssignedReadySession, getAthleteCurrentWeekSummary, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
 import { getAthleteWeekPlanningEvents } from "@/lib/athlete-planning";
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
@@ -16,14 +16,13 @@ export default async function AthleteTodayPage() {
   const athlete = await getCurrentAthlete();
   if (!athlete) redirect("/login");
 
-  const [readySession, recentCompletions, weekEvents] = await Promise.all([
+  const [readySession, recentCompletions, weekEvents, weekSummary] = await Promise.all([
     getAssignedReadySession(athlete.id),
     getAthleteRecentCompletions(athlete.id),
-    getAthleteWeekPlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId })
+    getAthleteWeekPlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId }),
+    getAthleteCurrentWeekSummary(athlete.id)
   ]);
 
-  const plannedMinutes = weekEvents.reduce((total, event) => total + (event.duration ?? 0), 0);
-  const plannedTrainingSessions = weekEvents.filter((event) => event.type === "TRAINING_SCHEDULE").length;
   const todayKey = toMontrealDateInputValue(new Date());
   const weekDays = Array.from({ length: 7 }, (_, index) => {
     const date = addMontrealDays(startOfMontrealWeek(), index);
@@ -77,9 +76,9 @@ export default async function AthleteTodayPage() {
       <SectionHeading title="Ma semaine" />
       <section className="week-card" aria-label="Résumé de la semaine">
         <div className="week-metrics">
-          <WeekMetric value={weekEvents.length} label="activités planifiées" tone="blue" progress={weekEvents.length > 0 ? 100 : 0} />
-          <WeekMetric value={`${Math.floor(plannedMinutes / 60)} h`} suffix={plannedMinutes % 60 ? ` ${plannedMinutes % 60} min` : undefined} label="temps au calendrier" tone="purple" progress={plannedMinutes > 0 ? 100 : 0} />
-          <WeekMetric value={plannedTrainingSessions} label="séances prévues" tone="mint" progress={plannedTrainingSessions > 0 ? 100 : 0} />
+          <WeekMetric value={`${weekSummary.completed}/${weekSummary.total}`} label="séances complétées" tone="blue" progress={weekSummary.total > 0 ? (weekSummary.completed / weekSummary.total) * 100 : 0} />
+          <WeekMetric value={`${formatMinutes(weekSummary.completedMinutes)}/${formatMinutes(weekSummary.plannedMinutes)}`} label="temps complété / planifié" tone="purple" progress={weekSummary.plannedMinutes > 0 ? (weekSummary.completedMinutes / weekSummary.plannedMinutes) * 100 : 0} />
+          <WeekMetric value={weekSummary.volume} label="volume total cette semaine" tone="mint" progress={weekSummary.volume > 0 ? 100 : 0} />
         </div>
         <div className="week-days" aria-label="Activités du lundi au dimanche">
           {weekDays.map(({ date, key, events }) => <WeekDay key={key} date={date} eventCount={events.length} isToday={key === todayKey} />)}
@@ -125,6 +124,10 @@ function WeekDay({ date, eventCount, isToday }: { date: Date; eventCount: number
     <i className={eventCount > 0 ? "has-events" : ""} aria-hidden="true" />
     <small>{eventCount > 0 ? `${eventCount} act.` : "Repos"}</small>
   </div>;
+}
+
+function formatMinutes(minutes: number) {
+  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
 }
 
 function ScheduleRow({ date, icon, title, details, meta, href, status }: { date: string; icon?: React.ReactNode; title: string; details: string; meta: string; href: string; status?: boolean }) {

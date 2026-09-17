@@ -84,6 +84,15 @@ export type AthleteRecentCompletion = {
   status: string;
 };
 
+export type AthleteCurrentWeekSummary = {
+  total: number;
+  completed: number;
+  remaining: number;
+  plannedMinutes: number;
+  completedMinutes: number;
+  volume: number;
+};
+
 export async function getCurrentAthlete() {
   const user = await getCurrentUser();
 
@@ -337,7 +346,7 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
   };
 }
 
-export async function getAthleteCurrentWeekSummary(athleteId: string) {
+export async function getAthleteCurrentWeekSummary(athleteId: string): Promise<AthleteCurrentWeekSummary> {
   const weekStart = startOfMontrealWeek();
   const weekEnd = addMontrealDays(weekStart, 7);
   const sessions = await prisma.trainingSession.findMany({
@@ -346,11 +355,26 @@ export async function getAthleteCurrentWeekSummary(athleteId: string) {
       status: { not: "DRAFT" },
       blocks: { some: { assignments: { some: { athleteId } } } }
     },
-    select: { completions: { where: { athleteId }, select: { status: true } } }
+    select: {
+      date: true,
+      duration: true,
+      completions: { where: { athleteId }, select: { status: true } },
+      diveLogs: { where: { athleteId }, select: { repetitionsCompleted: true } }
+    }
   });
   const completed = sessions.filter((session) => session.completions[0]?.status === "COMPLETED").length;
+  const completedSessions = sessions.filter((session) => session.completions[0]?.status === "COMPLETED");
 
-  return { total: sessions.length, completed, remaining: Math.max(0, sessions.length - completed) };
+  return {
+    total: sessions.length,
+    completed,
+    remaining: Math.max(0, sessions.length - completed),
+    plannedMinutes: sessions.reduce((sum, session) => sum + session.duration, 0),
+    completedMinutes: completedSessions.reduce((sum, session) => sum + session.duration, 0),
+    volume: sessions
+      .filter((session) => session.date <= new Date())
+      .reduce((sum, session) => sum + session.diveLogs.reduce((sessionSum, log) => sessionSum + log.repetitionsCompleted, 0), 0)
+  };
 }
 
 function averageByPeriod(data: Array<{ date: Date; volume: number }>, period: "week" | "month") {
