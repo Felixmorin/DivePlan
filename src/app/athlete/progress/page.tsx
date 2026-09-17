@@ -34,12 +34,6 @@ export default async function AthleteProgressPage() {
         </div>
       </div>
 
-      <div className="progress-tabs" aria-label="Période de progression">
-        <button className="active" type="button">Semaine</button>
-        <button type="button">Mois</button>
-        <button type="button">Saison</button>
-      </div>
-
       <section className="progress-card progress-summary">
         <div className="section-heading"><span className="section-icon cyan"><Activity size={21} /><span /></span><h2>Résumé de la semaine</h2></div>
         <div className="summary-grid">

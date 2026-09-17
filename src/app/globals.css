@@ -211,9 +211,6 @@ a {
 .progress-ring::before { content: ""; position: absolute; inset: .42rem; border-radius: inherit; background: #06101d; }
 .progress-ring span { position: relative; z-index: 1; font-weight: 900; font-size: 1.08rem; }
 .progress-ring small { position: absolute; top: 5rem; right: -.3rem; width: 6rem; color: rgba(226, 237, 251, .68); font-size: .75rem; text-align: center; }
-.progress-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: .25rem; margin: 0 0 1.15rem; padding: .2rem; border: 1px solid rgba(99, 174, 215, .16); border-radius: 2rem; background: #0b1d2c; }
-.progress-tabs button { min-height: 2.65rem; border: 0; border-radius: 2rem; background: transparent; color: rgba(226, 237, 251, .72); font: inherit; font-size: 1rem; cursor: pointer; }
-.progress-tabs button.active { background: #bdf8f4; color: #071423; font-weight: 800; box-shadow: 0 3px 18px rgba(77, 232, 220, .14); }
 .progress-card { margin-bottom: .85rem; padding: 1.05rem; border: 1px solid rgba(99, 174, 215, .2); border-radius: 1.15rem; background: linear-gradient(145deg, rgba(10, 29, 45, .96), rgba(7, 22, 36, .96)); box-shadow: 0 12px 28px rgba(0,0,0,.12); }
 .progress-card > .section-heading { margin: 0; }
 .section-heading { display: flex; align-items: center; gap: .7rem; min-width: 0; }.section-heading h2 { margin: 0; font-size: 1.12rem; line-height: 1.2; font-weight: 850; letter-spacing: -.02em; }.section-heading p { margin: .25rem 0 0; color: rgba(226, 237, 251, .66); font-size: .9rem; }.section-heading a { margin-left: auto; flex: none; color: #2ee2ed; font-size: .9rem; font-weight: 650; }.section-heading a span { margin-left: .3rem; font-size: 1.35rem; vertical-align: -1px; }
@@ -236,7 +233,6 @@ a {
 .athlete-app .quick-link { border-color: rgba(237,22,61,.22); background: rgba(20,20,20,.94); }
 .athlete-app .quick-link > span { background: rgba(237,22,61,.14); color: var(--color-club-red-soft); }
 .athlete-app .progress-ring { background: conic-gradient(var(--color-club-red) var(--progress), #2a2a2a 0); box-shadow: 0 0 24px rgba(237,22,61,.18); }
-.athlete-app .progress-tabs button.active { background: var(--color-club-red); color: white; box-shadow: 0 3px 18px rgba(237,22,61,.22); }
 .athlete-app .section-icon.cyan { background: rgba(237,22,61,.12); }
 .athlete-app [class*="border-cyan"], .athlete-app [class*="border-sky"] { border-color: rgba(237,22,61,.24) !important; }
 .athlete-app [class*="bg-cyan-300"], .athlete-app [class*="data-[state=active]:bg-cyan"] { background-color: var(--color-club-red) !important; }

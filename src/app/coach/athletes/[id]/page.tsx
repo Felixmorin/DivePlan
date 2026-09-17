@@ -14,7 +14,7 @@ import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { getAthleteProgressTotals, type AthleteProgressTotals } from "@/lib/athlete-session";
-import { daysUntilMontrealDate, formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
+import { formatMontrealCountdown, formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -226,9 +226,9 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
             { name: "Equilibre", volume: 0 }
           ],
           skillDives: [
-            { category: "Arriere", code: "201B", name: "Arriere carpe", volume: 18 },
-            { category: "Retour", code: "301C", name: "Retour groupe", volume: 12 },
-            { category: "Avant", code: "101C", name: "Avant groupe", volume: 31 }
+            { category: "Arriere", code: "201B", name: "Arriere carpe", height: "ONE_METER", volume: 18 },
+            { category: "Retour", code: "301C", name: "Retour groupe", height: "THREE_METER", volume: 12 },
+            { category: "Avant", code: "101C", name: "Avant groupe", height: "ONE_METER", volume: 31 }
           ]
         }
       }}
@@ -288,7 +288,7 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
             <Metric icon={<Dumbbell className="h-4 w-4" />} label="Séances complétées" value={profile.completedSessions} />
             <Metric icon={<Waves className="h-4 w-4" />} label="Volume réalisé" value={`${profile.volume} reps`} />
             <Metric icon={<CalendarClock className="h-4 w-4" />} label="Naissance" value={profile.birthDate ? formatMontrealDate(profile.birthDate) : "Non indiquée"} />
-            <Metric icon={<Trophy className="h-4 w-4" />} label="Prochaine compétition" value={profile.nextCompetition ? `${daysUntilMontrealDate(profile.nextCompetition.startsAt)} jour${daysUntilMontrealDate(profile.nextCompetition.startsAt) > 1 ? "s" : ""}` : "Aucune prévue"} />
+            <Metric icon={<Trophy className="h-4 w-4" />} label="Prochaine compétition" value={profile.nextCompetition ? formatMontrealCountdown(profile.nextCompetition.startsAt) : "Aucune prévue"} />
           </CardContent>
         </Card>
       </div>

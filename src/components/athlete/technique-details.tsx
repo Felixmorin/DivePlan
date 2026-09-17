@@ -14,6 +14,7 @@ type SkillDive = {
   category: string;
   code: string;
   name: string;
+  height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
   volume: number;
 };
 
@@ -43,7 +44,7 @@ export function TechniqueDetails({ technique, skillDives }: { technique: Techniq
             <div className="technique-row"><Icon size={22} style={{ color }} /><span>{label}</span><div className="technique-track"><i style={{ width: `${Math.round((techniqueDives / Math.max(...technique.map((item) => item.dives), 1)) * 100)}%`, background: color }} /></div><b>{techniqueDives}</b></div>
             {expanded && (
               <div className="technique-dives" aria-label={`Plongeons de la catégorie ${label}`}>
-                {(divesByCategory.get(label) ?? []).length > 0 ? (divesByCategory.get(label) ?? []).map((dive) => <div className="technique-dive" key={`${dive.category}-${dive.code}`}><span><strong>{dive.code}</strong> {dive.name}</span><b>{dive.volume}</b></div>) : <p>Aucun plongeon enregistré</p>}
+                {(divesByCategory.get(label) ?? []).length > 0 ? (divesByCategory.get(label) ?? []).map((dive) => <div className="technique-dive" key={`${dive.height}-${dive.category}-${dive.code}`}><span><strong>{dive.code}</strong> {dive.name} <small>· {heightLabel(dive.height)}</small></span><b>{dive.volume}</b></div>) : <p>Aucun plongeon enregistré</p>}
               </div>
             )}
           </div>;
@@ -51,4 +52,8 @@ export function TechniqueDetails({ technique, skillDives }: { technique: Techniq
       </div>
     </>
   );
+}
+
+function heightLabel(height: SkillDive["height"]) {
+  return height === "ONE_METER" ? "1 m" : height === "THREE_METER" ? "3 m" : height === "PLATFORM" ? "Tremplin" : "Autre";
 }

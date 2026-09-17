@@ -27,6 +27,7 @@ type PlanningEventEditorProps = {
 
 export function PlanningEventEditor({ event, targets, compact = false }: PlanningEventEditorProps) {
   const [open, setOpen] = useState(false);
+  const [eventType, setEventType] = useState(event.type);
 
   return (
     <>
@@ -56,7 +57,7 @@ export function PlanningEventEditor({ event, targets, compact = false }: Plannin
             <form action={updatePlanningEvent} className="grid gap-4 md:grid-cols-2" onSubmit={() => setOpen(false)}>
               <input type="hidden" name="eventId" value={event.id} />
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Type</span>
-                <select name="type" defaultValue={event.type} className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold">
+                <select name="type" value={eventType} onChange={(change) => setEventType(change.target.value)} className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold">
                   <option value="TRAINING_SCHEDULE">Horaire entraînement</option>
                   <option value="COMPETITION">Compétition</option>
                   <option value="CAMP">Camp</option>
@@ -64,7 +65,7 @@ export function PlanningEventEditor({ event, targets, compact = false }: Plannin
               </label>
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Titre</span><Input name="title" defaultValue={event.title} required /></label>
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Date et heure</span><Input name="startsAt" type="datetime-local" defaultValue={event.startsAt} required /></label>
-              <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Fin (compétition)</span><Input name="endsAt" type="datetime-local" defaultValue={event.endsAt} /></label>
+              {eventType === "COMPETITION" && <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Fin (compétition)</span><Input name="endsAt" type="datetime-local" defaultValue={event.endsAt} required /></label>}
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Durée</span><Input name="duration" type="number" min="1" defaultValue={event.duration ?? ""} placeholder="minutes" /></label>
               <label className="text-xs font-black uppercase text-[var(--color-ink-muted)]"><span className="mb-1 block">Association</span>
                 <select name="target" defaultValue={event.target} className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold">

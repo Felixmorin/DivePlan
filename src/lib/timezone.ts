@@ -95,6 +95,20 @@ export function daysUntilMontrealDate(date: Date | string, from = new Date()) {
   return Math.max(0, Math.round((toUtcDay(date) - toUtcDay(from)) / 86_400_000));
 }
 
+export function formatMontrealCountdown(date: Date | string, from = new Date()) {
+  const target = toMontrealDateInputValue(toDate(date)).split("-").map(Number);
+  const current = toMontrealDateInputValue(from).split("-").map(Number);
+  const targetDay = Date.UTC(target[0], target[1] - 1, target[2]);
+  let months = (target[0] - current[0]) * 12 + target[1] - current[1];
+  const daysInMonth = new Date(Date.UTC(current[0], current[1] + months, 0)).getUTCDate();
+  const anchor = Date.UTC(current[0], current[1] - 1 + months, Math.min(current[2], daysInMonth));
+  if (anchor > targetDay) months -= 1;
+  const adjustedDaysInMonth = new Date(Date.UTC(current[0], current[1] + months, 0)).getUTCDate();
+  const adjustedAnchor = Date.UTC(current[0], current[1] - 1 + months, Math.min(current[2], adjustedDaysInMonth));
+  const days = Math.max(0, Math.round((targetDay - adjustedAnchor) / 86_400_000));
+  return `${months} mois et ${days} jour${days === 1 ? "" : "s"}`;
+}
+
 function montrealWeekday(date: Date) {
   const value = date.toLocaleDateString("en-CA", { timeZone: APP_TIME_ZONE, weekday: "short" });
   return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(value) + 1 || 7;

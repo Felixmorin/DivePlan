@@ -71,7 +71,7 @@ export default async function ProfilePage() {
           code: dive.diveCode,
           difficulty: dive.difficulty,
             volume: totals.skillDives
-              .filter((trackedDive) => trackedDive.code === dive.diveCode)
+              .filter((trackedDive) => trackedDive.code === dive.diveCode && trackedDive.height === dive.height)
               .reduce((sum, trackedDive) => sum + trackedDive.volume, 0)
           }))}
         />
