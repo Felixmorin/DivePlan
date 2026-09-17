@@ -32,6 +32,16 @@ export default async function AthleteProgressPage() {
         <div>
           <h1>Progression</h1>
         </div>
+        <div className="progress-head-actions" aria-label="Récaps à venir">
+          <button type="button" className="progress-recap-button" disabled title="Bientôt disponible">
+            <span>Recap semaine</span>
+            <small>alpha</small>
+          </button>
+          <button type="button" className="progress-recap-button" disabled title="Bientôt disponible">
+            <span>Recap mois</span>
+            <small>alpha</small>
+          </button>
+        </div>
       </div>
 
       <section className="progress-card progress-summary">
