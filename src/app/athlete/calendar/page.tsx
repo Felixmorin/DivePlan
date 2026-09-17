@@ -29,7 +29,6 @@ export default async function AthleteCalendarPage({ searchParams }: { searchPara
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black">Calendrier</h1>
-          <p className="mt-1 text-sm font-semibold text-white/52">Tes activités et événements à venir.</p>
         </div>
         <div className="flex rounded-full border border-white/10 bg-white/[0.04] p-1" aria-label="Choisir l’affichage du calendrier">
           <ViewLink href="/athlete/calendar?view=list" active={!calendarView} icon={<List className="h-4 w-4" />}>Liste</ViewLink>

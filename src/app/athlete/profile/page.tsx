@@ -28,7 +28,6 @@ export default async function ProfilePage() {
     <AthleteShell>
       <header className="mb-5 pt-2">
         <h1 className="text-[2rem] font-black leading-none tracking-tight">Profil</h1>
-        <p className="mt-2 text-base text-white/55">Ton parcours, ta progression, ta passion.</p>
       </header>
 
       <section className="profile-hero relative overflow-hidden rounded-[1.4rem] border border-cyan-300/25 bg-[#092238] p-5 shadow-[0_20px_55px_rgba(0,0,0,0.3)]">
@@ -54,7 +53,7 @@ export default async function ProfilePage() {
 
       <Link href="/athlete/profile/golden-reps" className="mt-4 flex min-h-16 items-center gap-3 rounded-[1.2rem] border border-amber-300/25 bg-gradient-to-r from-amber-400/15 to-transparent px-4 transition hover:border-amber-300/50 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400 text-[#281500]"><Star className="h-5 w-5 fill-current" /></span>
-        <span className="flex-1"><span className="block text-base font-black">Golden rep</span><span className="block text-sm font-medium text-white/55">Retrouve tes plongeons marquants</span></span>
+        <span className="flex-1"><span className="block text-base font-black">Golden rep</span></span>
         <ChevronRight className="h-5 w-5 text-amber-200/70" />
       </Link>
 
@@ -66,7 +65,6 @@ export default async function ProfilePage() {
       <section className="mt-7">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300/75">Programme officiel</p>
             <h2 className="mt-1 text-xl font-black">Ma liste de compétition</h2>
           </div>
           <span className="text-xs font-bold text-white/35">{athlete.competitionDives.length} plongeons</span>
