@@ -22,6 +22,7 @@ test("accepte les contextes multiples avec annotations", () => {
 
 test("signale les repetitions invalides ou non alignees", () => {
   assert.match(parseQuickPoolLine("3m: 101A, 201B", "2, x").errors.join(" "), /nombre entier/);
+  assert.match(parseQuickPoolLine("3m: 101A, 201B", "2, 0").errors.join(" "), /au moins 1/);
   assert.match(parseQuickPoolLine("3m: 101A, 201B, 301C", "2, 3").errors.join(" "), /exactement 3/);
 });
 

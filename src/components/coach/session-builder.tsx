@@ -312,6 +312,16 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   }
 
   function publishSession() {
+    const invalidPoolBlock = activePoolBlocks.find((block) => block.sections.length === 0 || poolSectionsToRows(block.sections).some((row) => validatePoolListRow(row).errors.length > 0));
+
+    if (invalidPoolBlock) {
+      const invalidRow = poolSectionsToRows(invalidPoolBlock.sections).find((row) => validatePoolListRow(row).errors.length > 0);
+      const message = invalidRow ? validatePoolListRow(invalidRow).errors[0] : "Ajoute au moins une ligne de plongeons valide.";
+      setPublishError(`Le bloc piscine « ${invalidPoolBlock.title || "Piscine"} » doit être corrigé : ${message}`);
+      setStep(2);
+      return;
+    }
+
     void form.handleSubmit((values) => {
       setPublishError(null);
       startTransition(async () => {

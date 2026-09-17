@@ -42,7 +42,7 @@ export function validatePoolListRow(row: PoolListRow): PoolListRowValidation {
   const heightCount = countPoolContexts(row.context);
   if (heightCount === 0) errors.push("Indique au moins une hauteur ou un contexte avant les deux-points.");
   if (row.diveCodes.length === 0 || row.diveCodes.some((code) => !code.trim())) errors.push("Ajoute au moins un plongeon non vide.");
-  if (row.repetitions.some((value) => !Number.isInteger(value) || value < 0)) errors.push("Chaque repetition doit etre un nombre entier positif ou zero.");
+  if (row.repetitions.some((value) => !Number.isInteger(value) || value < 1)) errors.push("Chaque repetition doit etre un nombre entier d'au moins 1.");
   if (row.repetitions.length !== 1 && row.repetitions.length !== row.diveCodes.length) {
     errors.push(`Indique une repetition commune ou exactement ${row.diveCodes.length} repetitions.`);
   }
