@@ -163,10 +163,11 @@ a {
 .section-heading a { display: inline-flex; align-items: center; gap: .25rem; color: #39d7ff; font-size: .9rem; font-weight: 700; }
 .section-heading a svg { width: 1.1rem; }
 .week-card { overflow: hidden; }
-.week-metrics { display: grid; grid-template-columns: repeat(3, 1fr); }
-.week-metric { min-width: 0; padding: 1.1rem .75rem 1rem; border-right: 1px solid rgba(99,174,215,.12); }
+.week-metrics { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.35fr) minmax(0, .8fr); }
+.week-metric { min-width: 0; overflow: hidden; padding: 1.1rem .75rem 1rem; border-right: 1px solid rgba(99,174,215,.12); }
 .week-metric:last-child { border-right: 0; }
-.week-metric strong { display: block; font-size: 1.75rem; line-height: 1; font-weight: 900; letter-spacing: -.04em; white-space: nowrap; }
+.week-metric strong { display: block; overflow: hidden; font-size: clamp(1.2rem, 5vw, 1.75rem); line-height: 1; font-weight: 900; letter-spacing: -.04em; white-space: nowrap; text-overflow: ellipsis; }
+.week-metric-ratio strong { font-size: clamp(1.05rem, 4.7vw, 1.45rem); letter-spacing: -.06em; text-overflow: clip; }
 .week-metric strong small { color: rgba(226,237,251,.66); font-size: 1rem; font-weight: 700; letter-spacing: 0; }
 .week-metric > span { display: block; min-height: 2.4em; margin-top: .38rem; color: rgba(226,237,251,.7); font-size: .82rem; line-height: 1.25; }
 .metric-progress { display: block; height: .68rem; max-width: 100%; margin-top: .7rem; border-radius: 999px; background: #2a4053; box-shadow: inset 0 0 0 1px rgba(255,255,255,.03); }

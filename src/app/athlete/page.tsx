@@ -114,7 +114,8 @@ function SectionHeading({ title, href, linkLabel }: { title: string; href?: stri
 }
 
 function WeekMetric({ value, suffix, label, tone, progress }: { value: string | number; suffix?: string; label: string; tone: "blue" | "purple" | "mint"; progress: number }) {
-  return <div className="week-metric"><strong>{value}<small>{suffix}</small></strong><span>{label}</span><i className={`metric-progress ${tone}`} style={{ width: `${progress}%` }} /></div>;
+  const isRatio = typeof value === "string" && value.includes("/");
+  return <div className={`week-metric ${isRatio ? "week-metric-ratio" : ""}`}><strong>{value}<small>{suffix}</small></strong><span>{label}</span><i className={`metric-progress ${tone}`} style={{ width: `${progress}%` }} /></div>;
 }
 
 function WeekDay({ date, eventCount, isToday }: { date: Date; eventCount: number; isToday: boolean }) {
