@@ -14,7 +14,8 @@ import type { AthleteSessionView } from "@/lib/athlete-session";
 import { formatMontrealTime } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
 
-const ratings = ["dur", "moyen", "bon", "excellent", "N/A"];
+const blockRatings = ["dur", "moyen", "bon", "excellent", "N/A"];
+const finalRatings = ["dur", "moyen", "bon", "excellent"];
 
 type SessionPlayerProps = {
   session: AthleteSessionView;
@@ -594,7 +595,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
           <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-black"><NotebookPen className="h-4 w-4 text-[var(--color-action)]" /> Ressenti final</div>
             <div className="grid grid-cols-2 gap-2">
-              {ratings.map((rating) => (
+              {finalRatings.map((rating) => (
                 <Button key={rating} type="button" variant="dark" className={finalFeedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFinalFeedback({ rating })}>{rating}</Button>
               ))}
             </div>
@@ -709,7 +710,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
           <div className="mb-3 text-sm font-black text-white/72">Ressenti du bloc</div>
           <div className="grid grid-cols-4 gap-2">
-            {ratings.map((rating) => <Button key={rating} type="button" size="sm" variant="dark" className={feedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFeedback({ rating })}>{rating}</Button>)}
+            {blockRatings.map((rating) => <Button key={rating} type="button" size="sm" variant="dark" className={feedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFeedback({ rating })}>{rating}</Button>)}
           </div>
           <Textarea className="mt-3 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note rapide (facultatif)" value={feedback.note} onChange={(event) => updateFeedback({ note: event.target.value })} />
           {!hasFeedback && <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">Choisis ton ressenti avant de continuer.</p>}
