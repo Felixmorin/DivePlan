@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
 import { deleteTrainingSession, duplicateTrainingSession, markTrainingSessionNotDone, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
+import { PoolProgressRefresh, PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
@@ -65,6 +66,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           </form>
         </div>
       </div>
+      <PoolProgressRefresh enabled={session.status === "READY"} />
       {hasStarted && (
         <div className="mb-4 flex items-start gap-2 rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -175,7 +177,18 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               <CardContent>
                 {block.description && <p className="mb-4 whitespace-pre-line text-sm leading-6 text-[var(--color-ink-muted)]">{block.description}</p>}
                 {block.drylandExercises.length > 0 && <div className="grid gap-2 md:grid-cols-3">{block.drylandExercises.map((item) => <div key={item.exerciseId} className="rounded-2xl bg-[var(--color-surface-raised)] p-3"><div className="font-bold">{item.exercise.name}</div><div className="text-sm text-[var(--color-ink-muted)]">{item.sets ?? 1} x {item.reps ?? `${item.duration ?? 30} sec`}</div></div>)}</div>}
-                {block.poolTraining && <div className="overflow-x-auto rounded-2xl border border-[var(--color-border)]"><table className="w-full min-w-[620px] text-sm"><thead className="bg-[var(--color-navy)] text-left text-white"><tr><th className="p-3">Hauteur(s)</th><th className="p-3">Plongeons</th><th className="p-3">Repetitions</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{block.poolTraining.sections.map((section) => { const multiplier = Math.max(1, countPoolContexts(section.label ?? "")); return <tr key={section.id} className="border-t border-[var(--color-border)]"><td className="p-3 font-black">{section.label ?? section.height}</td><td className="p-3 font-bold">{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td className="p-3">{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="p-3 text-right font-black">{multiplier * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)}</td></tr>; })}</tbody><tfoot className="border-t-2 border-[var(--color-navy)] bg-[var(--color-surface-raised)] font-black"><tr><td className="p-3" colSpan={3}>Total general</td><td className="p-3 text-right">{block.estimatedVolume}</td></tr></tfoot></table></div>}
+                {block.poolTraining && <>
+                  <div className="overflow-x-auto rounded-2xl border border-[var(--color-border)]"><table className="w-full min-w-[620px] text-sm"><thead className="bg-[var(--color-navy)] text-left text-white"><tr><th className="p-3">Hauteur(s)</th><th className="p-3">Plongeons</th><th className="p-3">Repetitions</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{block.poolTraining.sections.map((section) => { const multiplier = Math.max(1, countPoolContexts(section.label ?? "")); return <tr key={section.id} className="border-t border-[var(--color-border)]"><td className="p-3 font-black">{section.label ?? section.height}</td><td className="p-3 font-bold">{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td className="p-3">{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="p-3 text-right font-black">{multiplier * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)}</td></tr>; })}</tbody><tfoot className="border-t-2 border-[var(--color-navy)] bg-[var(--color-surface-raised)] font-black"><tr><td className="p-3" colSpan={3}>Total general</td><td className="p-3 text-right">{block.estimatedVolume}</td></tr></tfoot></table></div>
+                  {block.poolTraining.sections.map((section) => (
+                    <PoolProgressTracker
+                      key={`progress-${section.id}`}
+                      sectionLabel={section.label ?? section.height}
+                      athletes={block.assignments.map(({ athlete }) => ({ id: athlete.id, firstName: athlete.user.firstName, lastName: athlete.user.lastName }))}
+                      dives={section.dives.map(({ id, diveCode, repetitions }) => ({ id, diveCode, repetitions }))}
+                      logs={session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted }) => ({ athleteId, poolDiveId, repetitionsCompleted }))}
+                    />
+                  ))}
+                </>}
                 <p className="mt-4 text-sm text-[var(--color-ink-muted)]">
                   Athletes:{" "}
                   {block.assignments.map((assignment, index) => (

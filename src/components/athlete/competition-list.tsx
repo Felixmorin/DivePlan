@@ -18,12 +18,15 @@ const heights = [
 ] as const;
 
 export function CompetitionList({ dives }: { dives: CompetitionDiveItem[] }) {
-  const firstHeight = heights.find((height) => dives.some((dive) => dive.height === height.value))?.value ?? "ONE_METER";
+  const availableHeights = heights.filter(
+    (height) => height.value !== "PLATFORM" || dives.some((dive) => dive.height === "PLATFORM")
+  );
+  const firstHeight = availableHeights.find((height) => dives.some((dive) => dive.height === height.value))?.value ?? "ONE_METER";
 
   return (
     <Tabs defaultValue={firstHeight} className="w-full">
-      <TabsList aria-label="Choisir une hauteur" className="grid w-full grid-cols-3 gap-2 bg-transparent p-0">
-        {heights.map((height) => (
+      <TabsList aria-label="Choisir une hauteur" className={`grid w-full ${availableHeights.length === 2 ? "grid-cols-2" : "grid-cols-3"} gap-2 bg-transparent p-0`}>
+        {availableHeights.map((height) => (
           <TabsTrigger
             key={height.value}
             value={height.value}
@@ -34,7 +37,7 @@ export function CompetitionList({ dives }: { dives: CompetitionDiveItem[] }) {
         ))}
       </TabsList>
 
-      {heights.map((height) => {
+      {availableHeights.map((height) => {
         const filtered = dives.filter((dive) => dive.height === height.value);
 
         return (
