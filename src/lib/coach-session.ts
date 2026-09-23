@@ -12,6 +12,7 @@ export async function getCoachSession(sessionId: string) {
     include: {
       week: { include: { group: true } },
       completions: { include: { athlete: { include: { user: true } } } },
+      absences: { select: { athleteId: true } },
       diveLogs: { include: { athlete: { include: { user: true } }, poolDive: true } },
       exerciseLogs: { include: { athlete: { include: { user: true } }, exercise: true } },
       blocks: {

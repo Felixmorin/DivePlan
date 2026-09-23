@@ -40,6 +40,7 @@ type AthleteProfile = {
   diveNotes: Array<{ id: string; code: string; name: string; height: string; note: string; updatedAt: Date; sessionId: string; sessionTitle: string; sessionDate: Date }>;
   progress: Pick<AthleteProgressTotals, "chartData" | "weeklyChartData" | "monthlyChartData" | "skillData" | "skillDives">;
   previewStats: AthleteSessionPreviewStats;
+  attendance: { seasonLabel: string; absent: number; total: number; rate: number; months: Array<{ label: string; absent: number; total: number; rate: number }> };
 };
 
 export default async function AthleteDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -129,6 +130,22 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     getAthleteProgressTotals(athlete.id),
     getAthleteSessionPreviewStats(athlete.userId)
   ]);
+  const today = startOfMontrealDay();
+  const seasonStartYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
+  const seasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-01`);
+  const attendanceSessions = await prisma.trainingSession.findMany({ where: { week: { clubId }, status: { not: "NOT_DONE" }, date: { gte: seasonStart, lte: today }, blocks: { some: { assignments: { some: { athleteId: athlete.id } } } } }, select: { id: true, date: true } });
+  const attendanceAbsences = await prisma.athleteSessionAbsence.findMany({ where: { athleteId: athlete.id, sessionId: { in: attendanceSessions.map((session) => session.id) } }, select: { sessionId: true } });
+  const absenceIds = new Set(attendanceAbsences.map((absence) => absence.sessionId));
+  const monthCount = (today.getMonth() - 8 + 12) % 12 + 1;
+  const attendanceMonths = Array.from({ length: monthCount }, (_, index) => {
+    const monthOffset = 8 + index;
+    const year = seasonStartYear + Math.floor(monthOffset / 12);
+    const month = monthOffset % 12;
+    const sessions = attendanceSessions.filter((session) => session.date.getFullYear() === year && session.date.getMonth() === month);
+    const absent = sessions.filter((session) => absenceIds.has(session.id)).length;
+    const total = sessions.length;
+    return { label: new Intl.DateTimeFormat("fr-CA", { month: "long" }).format(new Date(year, month, 1)), absent, total, rate: total ? Math.round(absent / total * 100) : 0 };
+  });
 
   const profile: AthleteProfile = {
     id: athlete.id,
@@ -206,7 +223,8 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       sessionDate: item.poolDive.poolSection.poolTraining.block.session.date
     })),
     progress,
-    previewStats
+    previewStats,
+    attendance: { seasonLabel: `${seasonStartYear}-${seasonStartYear + 1}`, absent: attendanceAbsences.length, total: attendanceSessions.length, rate: attendanceSessions.length ? Math.round(attendanceAbsences.length / attendanceSessions.length * 100) : 0, months: attendanceMonths }
   };
 
   return <AthleteDetail profile={profile} />;
@@ -273,7 +291,8 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
             { category: "Avant", code: "101C", name: "Avant groupe", height: "ONE_METER", volume: 31 }
           ]
         },
-        previewStats: { total: 4, today: 1, days: Array.from({ length: 7 }, (_, index) => ({ date: parseMontrealSessionDate(`2026-08-${String(18 + index).padStart(2, "0")}`), count: index === 1 ? 1 : index === 3 ? 2 : 0 })) }
+        previewStats: { total: 4, today: 1, days: Array.from({ length: 7 }, (_, index) => ({ date: parseMontrealSessionDate(`2026-08-${String(18 + index).padStart(2, "0")}`), count: index === 1 ? 1 : index === 3 ? 2 : 0 })) },
+        attendance: { seasonLabel: "2026-2027", absent: 1, total: 8, rate: 13, months: [] }
       }}
       demo
     />
@@ -344,6 +363,8 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
 
       <PreviewStatsCard stats={profile.previewStats} />
 
+      <AttendanceCard attendance={profile.attendance} />
+
       <AthleteProgress profile={profile} />
 
       <CompetitionDiveEditor profile={profile} demo={demo} />
@@ -407,6 +428,16 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
       </div>
     </CoachShell>
   );
+}
+
+function AttendanceCard({ attendance }: { attendance: AthleteProfile["attendance"] }) {
+  return <Card className="mb-6">
+    <CardHeader><CardTitle>Absences · saison {attendance.seasonLabel}</CardTitle><p className="text-sm text-[var(--color-ink-muted)]">{attendance.absent} absence{attendance.absent === 1 ? "" : "s"} sur {attendance.total} entraînements planifiés · {attendance.rate}%</p></CardHeader>
+    <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      {attendance.months.map((month) => <div key={month.label} className="flex items-center justify-between rounded-xl bg-[var(--color-surface-raised)] p-3"><span className="font-bold capitalize">{month.label}</span><span className="text-sm font-semibold text-[var(--color-ink-muted)]">{month.absent}/{month.total} · {month.rate}%</span></div>)}
+      {attendance.months.length === 0 && <p className="text-sm text-[var(--color-ink-muted)]">Aucun entraînement terminé dans la saison.</p>}
+    </CardContent>
+  </Card>;
 }
 
 function PreviewStatsCard({ stats }: { stats: AthleteSessionPreviewStats }) {

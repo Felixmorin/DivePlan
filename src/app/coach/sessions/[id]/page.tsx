@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
-import { deleteTrainingSession, duplicateTrainingSession, markTrainingSessionNotDone, saveSessionAsTemplate } from "@/app/coach/sessions/actions";
+import { deleteTrainingSession, duplicateTrainingSession, markTrainingSessionNotDone, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -80,6 +80,21 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             <input name="category" defaultValue={session.week.group.name} className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]" required />
             <Button type="submit" variant="action"><Save className="h-4 w-4" /> Sauver le modele</Button>
           </form>
+        </CardContent>
+      </Card>
+      <Card className="mb-4">
+        <CardHeader><CardTitle>Présences</CardTitle><p className="text-sm text-[var(--color-ink-muted)]">Coche les athlètes absents à cette séance.</p></CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {uniqueAthletes.map((athlete) => {
+            const absent = session.absences.some((absence) => absence.athleteId === athlete.id);
+            return <form key={athlete.id} action={setAthleteSessionAbsence} className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] p-3">
+              <span className="font-bold">{athlete.firstName} {athlete.lastName}</span>
+              <input type="hidden" name="sessionId" value={session.id} />
+              <input type="hidden" name="athleteId" value={athlete.id} />
+              <div className="flex items-center gap-2"><label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="absent" defaultChecked={absent} /> Absent</label><Button type="submit" size="sm" variant="outline">Enregistrer</Button></div>
+            </form>;
+          })}
+          {uniqueAthletes.length === 0 && <p className="text-sm text-[var(--color-ink-muted)]">Aucun athlète assigné à cette séance.</p>}
         </CardContent>
       </Card>
       <Card className="mb-4">

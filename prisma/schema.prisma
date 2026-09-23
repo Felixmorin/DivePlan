@@ -122,6 +122,7 @@ model Athlete {
   group            TrainingGroup?             @relation(fields: [groupId], references: [id])
   assignments      SessionBlockAssignment[]
   completions      AthleteSessionCompletion[]
+  absences         AthleteSessionAbsence[]
   diveLogs         AthleteDiveLog[]
   diveNotes        AthleteDiveNote[]
   exerciseLogs     AthleteExerciseLog[]
@@ -217,6 +218,7 @@ model TrainingSession {
   coach           Coach                      @relation(fields: [coachId], references: [id])
   blocks          SessionBlock[]
   completions     AthleteSessionCompletion[]
+  absences        AthleteSessionAbsence[]
   diveLogs        AthleteDiveLog[]
   exerciseLogs    AthleteExerciseLog[]
   templates       SessionTemplate[]
@@ -383,6 +385,17 @@ model AthleteSessionCompletion {
   session     TrainingSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@id([athleteId, sessionId])
+}
+
+model AthleteSessionAbsence {
+  athleteId String
+  sessionId String
+  createdAt DateTime @default(now())
+  athlete   Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  session   TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([athleteId, sessionId])
+  @@index([sessionId])
 }
 
 model AthleteDiveLog {

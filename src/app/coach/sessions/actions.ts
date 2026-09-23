@@ -451,6 +451,31 @@ export async function markTrainingSessionNotDone(formData: FormData) {
   revalidatePath(`/coach/sessions/${session.id}`);
 }
 
+export async function setAthleteSessionAbsence(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const athleteId = String(formData.get("athleteId") ?? "");
+  const absent = formData.get("absent") === "on";
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, week: { clubId }, blocks: { some: { assignments: { some: { athleteId } } } } },
+    select: { id: true }
+  });
+  if (!session) throw new Error("Séance ou athlète introuvable.");
+
+  if (absent) {
+    await prisma.athleteSessionAbsence.upsert({
+      where: { athleteId_sessionId: { athleteId, sessionId } },
+      create: { athleteId, sessionId },
+      update: {}
+    });
+  } else {
+    await prisma.athleteSessionAbsence.deleteMany({ where: { athleteId, sessionId } });
+  }
+
+  revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath(`/coach/athletes/${athleteId}`);
+}
+
 export async function deleteTrainingSession(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
