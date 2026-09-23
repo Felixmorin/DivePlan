@@ -32,7 +32,7 @@ type AthleteProfile = {
   volume: number;
   completedSessions: number;
   nextSession?: { id: string; title: string; date: Date; status: string };
-  recentSessions: Array<{ id: string; title: string; date: Date; status: string; rating?: string | null; note?: string | null; blocks: Array<{ id: string; title: string; planned: number; actual: number }> }>;
+  recentSessions: Array<{ id: string; title: string; date: Date; status: string; rating?: string | null; note?: string | null; poolPlanned: number; poolActual: number; blocks: Array<{ id: string; title: string; planned: number; actual: number }> }>;
   skills: Array<{ code: string; name: string; status: string; progress: number; trainings: number; repetitions: number }>;
   planningEvents: Array<{ id: string; title: string; type: string; startsAt: Date; endsAt: Date | null; location?: string | null }>;
   nextCompetition?: { title: string; startsAt: Date; endsAt: Date | null };
@@ -149,6 +149,13 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       status: completion.status,
       rating: completion.rating,
       note: completion.note,
+      poolPlanned: completion.session.blocks
+        .filter((block) => block.assignments.some((assignment) => assignment.athleteId === athlete.id))
+        .flatMap((block) => block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.repetitions * Math.max(1, countPoolContexts(section.label ?? section.height))) ?? []) ?? [])
+        .reduce((sum, reps) => sum + reps, 0),
+      poolActual: athlete.diveLogs
+        .filter((log) => log.sessionId === completion.sessionId)
+        .reduce((sum, log) => sum + log.repetitionsCompleted, 0),
       blocks: completion.session.blocks
         .filter((block) => block.assignments.some((assignment) => assignment.athleteId === athlete.id))
         .map((block) => {
@@ -226,8 +233,8 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
         completedSessions: 6,
         nextSession: { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), status: "READY" },
         recentSessions: [
-          { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), status: "COMPLETED", rating: "Stable", note: "Placeholder demo.", blocks: [{ id: "demo-block", title: "Bassin · technique", planned: 12, actual: athlete.recentVolume }] },
-          { id: "demo-2", title: "Dryland power", date: parseMontrealSessionDate("2026-08-22"), status: "COMPLETED", rating: "Bon effort", note: null, blocks: [{ id: "demo-block-2", title: "Préparation physique", planned: 72, actual: 60 }] }
+          { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), status: "COMPLETED", rating: "Stable", note: "Placeholder demo.", poolPlanned: 12, poolActual: athlete.recentVolume, blocks: [{ id: "demo-block", title: "Bassin · technique", planned: 12, actual: athlete.recentVolume }] },
+          { id: "demo-2", title: "Dryland power", date: parseMontrealSessionDate("2026-08-22"), status: "COMPLETED", rating: "Bon effort", note: null, poolPlanned: 0, poolActual: 0, blocks: [{ id: "demo-block-2", title: "Préparation physique", planned: 72, actual: 60 }] }
         ],
         skills: [
           { code: "201B", name: "Arriere carpe", status: "DEVELOPING", progress: 68, trainings: 8, repetitions: 31 },
@@ -354,7 +361,7 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
                     <div className="font-black text-[var(--color-ink)]">{session.title}</div>
                     <div className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{formatMontrealDate(session.date, { weekday: "short", day: "2-digit", month: "short" })}</div>
                   </div>
-                  <div className="flex items-center gap-2"><StatusPill status={session.status} /><Button asChild size="sm" variant="outline"><Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`}>Ouvrir</Link></Button></div>
+                  <div className="flex flex-wrap items-center justify-end gap-2"><StatusPill status={session.status} />{session.poolPlanned > 0 && <span className="rounded-full bg-[var(--block-pool-bg)] px-3 py-1.5 text-xs font-black text-[var(--block-pool-fg)]">Piscine · {session.poolActual} / {session.poolPlanned} reps</span>}<Button asChild size="sm" variant="outline"><Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`}>Ouvrir</Link></Button></div>
                 </div>
                 {(session.rating || session.note) && <p className="mt-3 text-sm leading-6 text-[var(--color-ink-muted)]">{session.rating ?? "Sans rating"}{session.note ? ` · ${session.note}` : ""}</p>}
                 {session.blocks.length > 0 && <details className="group mt-3 rounded-xl bg-[var(--color-surface-raised)] px-3 py-2"><summary className="cursor-pointer list-none text-sm font-bold text-[var(--color-brand-strong)] marker:hidden">Afficher détails séance</summary><div className="mt-3 space-y-2">{session.blocks.map((block) => <div key={block.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm"><span className="font-bold">{block.title}</span><span className="font-black text-[var(--color-ink-muted)]">{block.actual} / {block.planned} reps réalisées</span></div>)}</div></details>}
