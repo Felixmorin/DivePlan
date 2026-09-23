@@ -558,7 +558,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     return (
       <AthleteShell hideNav>
         <div className="space-y-4">
-          <button type="button" onClick={previousStep} className="flex min-h-11 items-center gap-2 rounded-xl px-1 text-sm font-bold text-white/62 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ChevronLeft className="h-4 w-4" /> Retour aux blocs</button>
+          <button type="button" onClick={leaveSession} className="flex min-h-11 items-center gap-2 rounded-xl px-1 text-sm font-bold text-white/62 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowLeft className="h-4 w-4" /> Quitter</button>
           <section className="builder-pulse rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 text-center shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-success)] text-white"><CheckCircle2 className="h-8 w-8" /></div>
             <h1 className="mt-5 text-3xl font-black leading-none">Séance terminée</h1>

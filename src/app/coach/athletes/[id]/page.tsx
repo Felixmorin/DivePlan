@@ -14,6 +14,7 @@ import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { getAthleteProgressTotals, type AthleteProgressTotals } from "@/lib/athlete-session";
+import { countPoolContexts } from "@/lib/pool-list";
 import { getAthleteSessionPreviewStats, type AthleteSessionPreviewStats } from "@/lib/monitoring";
 import { formatMontrealCountdown, formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
@@ -31,7 +32,7 @@ type AthleteProfile = {
   volume: number;
   completedSessions: number;
   nextSession?: { id: string; title: string; date: Date; status: string };
-  recentSessions: Array<{ id: string; title: string; date: Date; status: string; rating?: string | null; note?: string | null }>;
+  recentSessions: Array<{ id: string; title: string; date: Date; status: string; rating?: string | null; note?: string | null; blocks: Array<{ id: string; title: string; planned: number; actual: number }> }>;
   skills: Array<{ code: string; name: string; status: string; progress: number; trainings: number; repetitions: number }>;
   planningEvents: Array<{ id: string; title: string; type: string; startsAt: Date; endsAt: Date | null; location?: string | null }>;
   nextCompetition?: { title: string; startsAt: Date; endsAt: Date | null };
@@ -56,9 +57,23 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       completions: {
         orderBy: [{ completedAt: "desc" }, { startedAt: "desc" }],
         take: 8,
-        include: { session: true }
+        include: {
+          session: {
+            include: {
+              blocks: {
+                orderBy: { position: "asc" },
+                include: {
+                  assignments: { select: { athleteId: true } },
+                  drylandExercises: true,
+                  poolTraining: { include: { sections: { include: { dives: true } } } }
+                }
+              }
+            }
+          }
+        }
       },
       diveLogs: { where: { session: { week: { clubId } } }, include: { poolDive: true, session: true } },
+      exerciseLogs: { where: { session: { week: { clubId } } }, select: { sessionId: true, exerciseId: true, completed: true } },
       diveNotes: {
         where: { poolDive: { poolSection: { poolTraining: { block: { session: { week: { clubId } } } } } } },
         orderBy: { updatedAt: "desc" },
@@ -133,7 +148,21 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       date: completion.session.date,
       status: completion.status,
       rating: completion.rating,
-      note: completion.note
+      note: completion.note,
+      blocks: completion.session.blocks
+        .filter((block) => block.assignments.some((assignment) => assignment.athleteId === athlete.id))
+        .map((block) => {
+          const dives = block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => ({
+            ...dive,
+            plannedRepetitions: dive.repetitions * Math.max(1, countPoolContexts(section.label ?? section.height))
+          }))) ?? [];
+          const exercises = block.drylandExercises;
+          const planned = dives.reduce((sum, dive) => sum + dive.plannedRepetitions, 0)
+            + exercises.reduce((sum, item) => sum + (item.sets ?? 1) * (item.reps ?? 0), 0);
+          const actual = dives.reduce((sum, dive) => sum + (athlete.diveLogs.find((log) => log.sessionId === completion.sessionId && log.poolDiveId === dive.id)?.repetitionsCompleted ?? 0), 0)
+            + exercises.reduce((sum, item) => sum + (athlete.exerciseLogs.find((log) => log.sessionId === completion.sessionId && log.exerciseId === item.exerciseId)?.completed ? (item.sets ?? 1) * (item.reps ?? 0) : 0), 0);
+          return { id: block.id, title: block.title, planned, actual };
+        })
     })),
     skills: athlete.skills.map((item) => ({
       code: item.skill.code,
@@ -197,8 +226,8 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
         completedSessions: 6,
         nextSession: { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), status: "READY" },
         recentSessions: [
-          { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), status: "COMPLETED", rating: "Stable", note: "Placeholder demo." },
-          { id: "demo-2", title: "Dryland power", date: parseMontrealSessionDate("2026-08-22"), status: "COMPLETED", rating: "Bon effort", note: null }
+          { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), status: "COMPLETED", rating: "Stable", note: "Placeholder demo.", blocks: [{ id: "demo-block", title: "Bassin · technique", planned: 12, actual: athlete.recentVolume }] },
+          { id: "demo-2", title: "Dryland power", date: parseMontrealSessionDate("2026-08-22"), status: "COMPLETED", rating: "Bon effort", note: null, blocks: [{ id: "demo-block-2", title: "Préparation physique", planned: 72, actual: 60 }] }
         ],
         skills: [
           { code: "201B", name: "Arriere carpe", status: "DEVELOPING", progress: 68, trainings: 8, repetitions: 31 },
@@ -328,6 +357,7 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
                   <StatusPill status={session.status} />
                 </div>
                 {(session.rating || session.note) && <p className="mt-3 text-sm leading-6 text-[var(--color-ink-muted)]">{session.rating ?? "Sans rating"}{session.note ? ` · ${session.note}` : ""}</p>}
+                {session.blocks.length > 0 && <div className="mt-3 space-y-2">{session.blocks.map((block) => <div key={block.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--color-surface-raised)] px-3 py-2 text-sm"><span className="font-bold">{block.title}</span><span className="font-black text-[var(--color-ink-muted)]">{block.actual} / {block.planned} reps réalisées</span></div>)}</div>}
               </Link>
             ))}
             {profile.recentSessions.length === 0 && <p className="text-sm font-semibold text-[var(--color-ink-muted)]">Aucun historique enregistré.</p>}
