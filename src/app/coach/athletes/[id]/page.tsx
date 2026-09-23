@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, Plus, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves, X } from "lucide-react";
-import { addCompetitionDive, deleteAthlete, removeCompetitionDive } from "@/app/coach/athletes/actions";
+import { addCompetitionDive, deleteAthlete, removeCompetitionDive, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { TechniqueDetails } from "@/components/athlete/technique-details";
@@ -485,7 +485,7 @@ function AthleteProgress({ profile }: { profile: AthleteProfile }) {
         <CardContent><ProgressChart data={profile.progress.chartData} weeklyData={profile.progress.weeklyChartData} monthlyData={profile.progress.monthlyChartData} /></CardContent>
       </Card>
       <Card>
-        <CardContent className="p-5"><TechniqueDetails technique={technique} skillDives={profile.progress.skillDives} /></CardContent>
+        <CardContent className="p-5"><TechniqueDetails technique={technique} skillDives={profile.progress.skillDives} athleteId={profile.id} updateFamilyAction={updateAthleteDiveFamily} /></CardContent>
       </Card>
     </div>
   );

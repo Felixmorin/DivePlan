@@ -18,7 +18,12 @@ type SkillDive = {
   volume: number;
 };
 
-export function TechniqueDetails({ technique, skillDives }: { technique: TechniqueItem[]; skillDives: SkillDive[] }) {
+export function TechniqueDetails({ technique, skillDives, athleteId, updateFamilyAction }: {
+  technique: TechniqueItem[];
+  skillDives: SkillDive[];
+  athleteId?: string;
+  updateFamilyAction?: (formData: FormData) => void | Promise<void>;
+}) {
   const [expanded, setExpanded] = useState(false);
   const divesByCategory = new Map<string, SkillDive[]>();
 
@@ -44,7 +49,7 @@ export function TechniqueDetails({ technique, skillDives }: { technique: Techniq
             <div className="technique-row"><Icon size={22} style={{ color }} /><span>{label}</span><div className="technique-track"><i style={{ width: `${Math.round((techniqueDives / Math.max(...technique.map((item) => item.dives), 1)) * 100)}%`, background: color }} /></div><b>{techniqueDives}</b></div>
             {expanded && (
               <div className="technique-dives" aria-label={`Plongeons de la catégorie ${label}`}>
-                {(divesByCategory.get(label) ?? []).length > 0 ? (divesByCategory.get(label) ?? []).map((dive) => <div className="technique-dive" key={`${dive.height}-${dive.category}-${dive.code}`}><span><strong>{dive.code}</strong> {dive.name} <small>· {heightLabel(dive.height)}</small></span><b>{dive.volume}</b></div>) : <p>Aucun plongeon enregistré</p>}
+                {(divesByCategory.get(label) ?? []).length > 0 ? (divesByCategory.get(label) ?? []).map((dive) => <div className="technique-dive" key={`${dive.height}-${dive.category}-${dive.code}`}><span><strong>{dive.code}</strong> {dive.name} <small>· {heightLabel(dive.height)}</small></span><b>{dive.volume}</b>{athleteId && updateFamilyAction && <form action={updateFamilyAction} className="flex items-center gap-2"><input type="hidden" name="athleteId" value={athleteId} /><input type="hidden" name="diveCode" value={dive.code} /><input type="hidden" name="height" value={dive.height} /><label className="sr-only" htmlFor={`family-${athleteId}-${dive.height}-${dive.code}`}>Famille du plongeon {dive.code}</label><select id={`family-${athleteId}-${dive.height}-${dive.code}`} name="family" defaultValue={dive.category} className="rounded-lg border border-[var(--color-border)] bg-white px-2 py-1 text-xs font-bold">{["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"].map((family) => <option key={family} value={family}>{family}</option>)}</select><button type="submit" className="rounded-lg bg-[var(--color-brand)] px-2 py-1 text-xs font-black text-white">Corriger</button></form>}</div>) : <p>Aucun plongeon enregistré</p>}
               </div>
             )}
           </div>;

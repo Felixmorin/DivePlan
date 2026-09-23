@@ -317,7 +317,7 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
   const dailyTotals = new Map<string, { date: Date; volume: number }>();
 
   for (const log of diveLogs) {
-    const label = familyLabels[log.poolDive.diveCode.charAt(0)] ?? "Equilibre";
+    const label = log.familyOverride ?? familyLabels[log.poolDive.diveCode.charAt(0)] ?? "Equilibre";
     chartTotals.set(label, (chartTotals.get(label) ?? 0) + log.repetitionsCompleted);
     const height = log.poolDive.poolSection.height;
     const diveKey = `${height}:${label}:${log.poolDive.diveCode}`;

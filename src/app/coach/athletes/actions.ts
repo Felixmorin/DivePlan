@@ -46,6 +46,13 @@ const competitionDiveSchema = z.object({
   difficulty: z.string().trim().optional()
 });
 
+const athleteDiveFamilySchema = z.object({
+  athleteId: z.string().min(1),
+  diveCode: z.string().trim().min(1).max(12),
+  height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM, PoolHeight.CUSTOM]),
+  family: z.enum(["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"])
+});
+
 type CsvAthlete = {
   firstName: string;
   lastName: string;
@@ -357,6 +364,42 @@ export async function removeCompetitionDive(formData: FormData) {
   await prisma.competitionDive.delete({ where: { id: dive.id } });
   revalidatePath(`/coach/athletes/${dive.athleteId}`);
   revalidatePath("/athlete/profile");
+}
+
+export async function updateAthleteDiveFamily(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const parsed = athleteDiveFamilySchema.safeParse({
+    athleteId: formData.get("athleteId"),
+    diveCode: formData.get("diveCode"),
+    height: formData.get("height"),
+    family: formData.get("family")
+  });
+
+  if (!parsed.success) {
+    throw new Error("Les informations du plongeon sont invalides.");
+  }
+
+  const athlete = await prisma.athlete.findFirst({
+    where: { id: parsed.data.athleteId, clubId },
+    select: { id: true }
+  });
+  if (!athlete) {
+    throw new Error("Athlète introuvable.");
+  }
+
+  await prisma.athleteDiveLog.updateMany({
+    where: {
+      athleteId: athlete.id,
+      poolDive: {
+        diveCode: parsed.data.diveCode,
+        poolSection: { height: parsed.data.height }
+      }
+    },
+    data: { familyOverride: parsed.data.family }
+  });
+
+  revalidatePath(`/coach/athletes/${athlete.id}`);
+  revalidatePath("/athlete/progress");
 }
 
 export async function deleteAthlete(formData: FormData) {
