@@ -348,17 +348,17 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
           <CardHeader><CardTitle>Historique récent</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {profile.recentSessions.map((session) => (
-              <Link key={`${session.id}-${session.date.toISOString()}`} href={demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`} className="block rounded-[var(--radius-ui)] border border-[var(--color-border)] p-4 transition hover:border-[var(--color-brand)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+              <div key={`${session.id}-${session.date.toISOString()}`} className="rounded-[var(--radius-ui)] border border-[var(--color-border)] p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="font-black text-[var(--color-ink)]">{session.title}</div>
                     <div className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{formatMontrealDate(session.date, { weekday: "short", day: "2-digit", month: "short" })}</div>
                   </div>
-                  <StatusPill status={session.status} />
+                  <div className="flex items-center gap-2"><StatusPill status={session.status} /><Button asChild size="sm" variant="outline"><Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`}>Ouvrir</Link></Button></div>
                 </div>
                 {(session.rating || session.note) && <p className="mt-3 text-sm leading-6 text-[var(--color-ink-muted)]">{session.rating ?? "Sans rating"}{session.note ? ` · ${session.note}` : ""}</p>}
-                {session.blocks.length > 0 && <div className="mt-3 space-y-2">{session.blocks.map((block) => <div key={block.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--color-surface-raised)] px-3 py-2 text-sm"><span className="font-bold">{block.title}</span><span className="font-black text-[var(--color-ink-muted)]">{block.actual} / {block.planned} reps réalisées</span></div>)}</div>}
-              </Link>
+                {session.blocks.length > 0 && <details className="group mt-3 rounded-xl bg-[var(--color-surface-raised)] px-3 py-2"><summary className="cursor-pointer list-none text-sm font-bold text-[var(--color-brand-strong)] marker:hidden">Afficher détails séance</summary><div className="mt-3 space-y-2">{session.blocks.map((block) => <div key={block.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm"><span className="font-bold">{block.title}</span><span className="font-black text-[var(--color-ink-muted)]">{block.actual} / {block.planned} reps réalisées</span></div>)}</div></details>}
+              </div>
             ))}
             {profile.recentSessions.length === 0 && <p className="text-sm font-semibold text-[var(--color-ink-muted)]">Aucun historique enregistré.</p>}
           </CardContent>
