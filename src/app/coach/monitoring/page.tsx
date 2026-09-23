@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
+import { ATHLETE_SESSION_PREVIEW_EVENT } from "@/lib/monitoring";
 import { formatMontrealDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -22,13 +23,13 @@ export default async function MonitoringPage() {
     return (
       <CoachShell active="Monitoring">
         <PageHeader description="Mode demo local sans PostgreSQL." />
-        <MonitoringStats events={events.length} failedLogins={0} completedSessions={0} />
+        <MonitoringStats events={events.length} previewViews={1} failedLogins={0} completedSessions={0} />
         <EventJournal events={events} />
       </CoachShell>
     );
   }
 
-  const [events, failedLogins, completedSessions] = await Promise.all([
+  const [events, failedLogins, completedSessions, previewViews] = await Promise.all([
     prisma.appEvent.findMany({
       where: { OR: [{ clubId }, { clubId: null }] },
       orderBy: { createdAt: "desc" },
@@ -36,13 +37,14 @@ export default async function MonitoringPage() {
       include: { user: true }
     }),
     prisma.appEvent.count({ where: { clubId, type: "auth.failed", createdAt: { gte: sinceHours(24) } } }),
-    prisma.athleteSessionCompletion.count({ where: { status: "COMPLETED", session: { week: { clubId } }, completedAt: { gte: sinceHours(24) } } })
+    prisma.athleteSessionCompletion.count({ where: { status: "COMPLETED", session: { week: { clubId } }, completedAt: { gte: sinceHours(24) } } }),
+    prisma.appEvent.count({ where: { clubId, type: ATHLETE_SESSION_PREVIEW_EVENT, createdAt: { gte: sinceHours(24) } } })
   ]);
 
   return (
     <CoachShell active="Monitoring">
       <PageHeader description="Evenements produit et signaux de support visibles pour le role connecte." />
-      <MonitoringStats events={events.length} failedLogins={failedLogins} completedSessions={completedSessions} />
+      <MonitoringStats events={events.length} previewViews={previewViews} failedLogins={failedLogins} completedSessions={completedSessions} />
       <EventJournal
         events={events.map((event) => ({
           id: event.id,
@@ -66,10 +68,11 @@ function PageHeader({ description }: { description: string }) {
   );
 }
 
-function MonitoringStats({ events, failedLogins, completedSessions }: { events: number; failedLogins: number; completedSessions: number }) {
+function MonitoringStats({ events, previewViews, failedLogins, completedSessions }: { events: number; previewViews: number; failedLogins: number; completedSessions: number }) {
   return (
-    <div className="mb-6 grid gap-4 md:grid-cols-3">
+    <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <MetricCard icon={<Activity className="h-5 w-5" />} label="Evenements" value={events} detail="recents" />
+      <MetricCard icon={<Activity className="h-5 w-5" />} label="Aperçus athlètes" value={previewViews} detail="24 dernières heures" />
       <MetricCard icon={<AlertTriangle className="h-5 w-5" />} label="Connexions refusees" value={failedLogins} detail="24 dernieres heures" tone="warning" />
       <MetricCard icon={<CheckCircle2 className="h-5 w-5" />} label="Seances completees" value={completedSessions} detail="24 dernieres heures" tone="success" />
     </div>

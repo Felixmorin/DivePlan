@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { trackEvent } from "@/lib/monitoring";
+import { ATHLETE_SESSION_PREVIEW_EVENT, trackEvent } from "@/lib/monitoring";
 import { prisma } from "@/lib/prisma";
 import { getCurrentAthlete } from "@/lib/athlete-session";
 import { getAssignedSessionBlocks, persistAthleteProgress, type AthleteProgressPayload } from "@/lib/athlete-progress";
@@ -119,6 +119,34 @@ export async function saveAthleteProgress(payload: SaveAthleteProgressPayload) {
   revalidatePath("/athlete");
   revalidatePath("/athlete/progress");
   revalidatePath(`/athlete/session/${payload.sessionId}`);
+}
+
+export async function recordAthleteSessionPreview(sessionId: string) {
+  const athlete = await getCurrentAthlete();
+
+  if (!athlete) {
+    throw new Error("Aucun athlete actif trouve.");
+  }
+
+  const session = await prisma.trainingSession.findFirst({
+    where: {
+      id: sessionId,
+      blocks: { some: { assignments: { some: { athleteId: athlete.id } } } }
+    },
+    select: { title: true }
+  });
+
+  if (!session) {
+    throw new Error("Cette seance n'est pas assignee a l'athlete courant.");
+  }
+
+  await trackEvent({
+    type: ATHLETE_SESSION_PREVIEW_EVENT,
+    message: `${athlete.user.firstName} ${athlete.user.lastName} a consulte l'apercu de la seance "${session.title}"`,
+    clubId: athlete.clubId,
+    userId: athlete.userId,
+    metadata: { sessionId, sessionTitle: session.title }
+  });
 }
 
 export async function openAthleteBlock(sessionId: string, blockId: string) {

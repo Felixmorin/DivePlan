@@ -19,6 +19,7 @@ const ratings = ["dur", "moyen", "bon", "excellent", "N/A"];
 type SessionPlayerProps = {
   session: AthleteSessionView;
   onStart: (sessionId: string) => Promise<void>;
+  onPreview: (sessionId: string) => Promise<void>;
   onOpenBlock: (sessionId: string, blockId: string) => Promise<void>;
   onCloseBlock: (sessionId: string, blockId: string) => Promise<void>;
   onSaveProgress: (payload: SaveAthleteProgressPayload) => Promise<void>;
@@ -32,7 +33,7 @@ type DiveChecks = Record<string, DiveRepState[]>;
 type ExerciseChecks = Record<string, boolean>;
 type SaveStatus = "saved" | "saving" | "error";
 
-export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onSaveProgress, onComplete, onSaveDiveNote }: SessionPlayerProps) {
+export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onCloseBlock, onSaveProgress, onComplete, onSaveDiveNote }: SessionPlayerProps) {
   const router = useRouter();
   const blocks = session.blocks;
   const [current, setCurrent] = useState(0);
@@ -54,6 +55,7 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
   const [expandedPreviewBlocks, setExpandedPreviewBlocks] = useState<Set<string>>(new Set());
   const [isNotePending, startNoteTransition] = useTransition();
   const [diveNotes, setDiveNotes] = useState<Record<string, string>>(() => Object.fromEntries(blocks.flatMap((block) => block.poolSections.flatMap((section) => section.dives.map((dive) => [dive.id, dive.personalNote ?? ""])) )));
+  const previewTracked = useRef(false);
   const [finalFeedback, setFinalFeedback] = useState(() => ({
     rating: session.finalRating ?? "moyen",
     note: session.finalNote ?? ""
@@ -114,6 +116,12 @@ export function SessionPlayer({ session, onStart, onOpenBlock, onCloseBlock, onS
   const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
   const canStart = isSessionStartAvailable(session.date, new Date(now));
   const activeTiming = blockTimings[block.id];
+
+  useEffect(() => {
+    if (started || previewTracked.current) return;
+    previewTracked.current = true;
+    void onPreview(session.id).catch(() => undefined);
+  }, [onPreview, session.id, started]);
 
   useEffect(() => {
     if (!started || reviewing || activeTiming?.openedAt) return;

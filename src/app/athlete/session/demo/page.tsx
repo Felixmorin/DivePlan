@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { SessionPlayer } from "@/components/athlete/session-player";
 import { getAssignedReadySession, getAthleteSession, getCurrentAthlete } from "@/lib/athlete-session";
 import { demoRoutesEnabled } from "@/lib/demo-routes";
-import { closeAthleteBlock, completeAthleteSession, openAthleteBlock, saveAthleteDiveNote, saveAthleteProgress, startAthleteSession } from "../[id]/actions";
+import { closeAthleteBlock, completeAthleteSession, openAthleteBlock, recordAthleteSessionPreview, saveAthleteDiveNote, saveAthleteProgress, startAthleteSession } from "../[id]/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -24,5 +24,5 @@ export default async function AthleteSessionDemoPage() {
     notFound();
   }
 
-  return <SessionPlayer session={session} onStart={startAthleteSession} onOpenBlock={openAthleteBlock} onCloseBlock={closeAthleteBlock} onSaveProgress={saveAthleteProgress} onComplete={completeAthleteSession} onSaveDiveNote={saveAthleteDiveNote} />;
+  return <SessionPlayer session={session} onStart={startAthleteSession} onPreview={recordAthleteSessionPreview} onOpenBlock={openAthleteBlock} onCloseBlock={closeAthleteBlock} onSaveProgress={saveAthleteProgress} onComplete={completeAthleteSession} onSaveDiveNote={saveAthleteDiveNote} />;
 }
