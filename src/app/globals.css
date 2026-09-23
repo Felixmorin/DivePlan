@@ -222,6 +222,7 @@ a {
 .technique-list { display: grid; gap: .85rem; margin-top: 1rem; }.technique-group { min-width: 0; }.technique-row { display: grid; grid-template-columns: 1.8rem 5.4rem 1fr 2.5rem; align-items: center; gap: .45rem; color: rgba(236,243,252,.85); font-size: .95rem; }.technique-row b { text-align: right; font-size: .9rem; font-weight: 500; }.technique-track { height: .75rem; }.technique-dives { display: grid; gap: .35rem; margin: .45rem 2.5rem 0 7.65rem; padding: .55rem .7rem; border-left: 2px solid rgba(38,223,194,.35); background: rgba(13,37,57,.52); border-radius: 0 .65rem .65rem 0; }.technique-dive { display: flex; justify-content: space-between; gap: .75rem; color: rgba(226,237,251,.78); font-size: .84rem; }.technique-dive strong { color: #26dfc2; font-weight: 800; }.technique-dive b { color: rgba(226,237,251,.6); font-weight: 700; }.technique-dives p { margin: 0; color: rgba(226,237,251,.52); font-size: .82rem; }
 
 /* The coach athlete profile uses light cards, unlike the dark athlete app. */
+.coach-athlete-progress .progress-chart { height: 14.8rem; margin: .7rem -.35rem -.3rem; }
 .coach-athlete-progress .trend-chart-toolbar { color: var(--color-ink-muted); }
 .coach-athlete-progress .trend-chart-toolbar .select-button { border-color: var(--color-border); color: var(--color-ink); background: var(--color-surface); }
 .coach-athlete-progress .trend-chart-toolbar option { background: var(--color-surface); color: var(--color-ink); }
