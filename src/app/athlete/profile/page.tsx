@@ -1,14 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, ChevronRight, Edit3, Eye, LogOut, Medal, Star, UserRound, Waves } from "lucide-react";
+import { Building2, ChevronRight, Edit3, LogOut, Medal, Star, UserRound, Waves } from "lucide-react";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { CompetitionList } from "@/components/athlete/competition-list";
 import { ProfileForm } from "@/components/athlete/profile-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
-import { getAthleteSessionPreviewStats } from "@/lib/monitoring";
-import { formatMontrealDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +16,9 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const [totals, weekSummary, previewStats] = await Promise.all([
+  const [totals, weekSummary] = await Promise.all([
     getAthleteProgressTotals(athlete.id),
-    getAthleteCurrentWeekSummary(athlete.id),
-    getAthleteSessionPreviewStats(athlete.userId)
+    getAthleteCurrentWeekSummary(athlete.id)
   ]);
   const coachName = athlete.group?.coach.user
     ? `${athlete.group.coach.user.firstName} ${athlete.group.coach.user.lastName}`
@@ -63,28 +60,6 @@ export default async function ProfilePage() {
       <section aria-label="Résumé de la semaine" className="mt-3 rounded-[1.2rem] border border-[var(--color-club-red)]/25 bg-[var(--color-athlete-panel)] px-4 py-3">
         <p className="text-sm font-semibold text-white/58">Cette semaine,</p>
         <p className="mt-1 text-base font-black"><span className="text-[var(--color-club-red-soft)]">{weekSummary.total}</span> entraînement{weekSummary.total > 1 ? "s" : ""} <span className="font-semibold text-white/55">· {weekSummary.remaining} restant{weekSummary.remaining > 1 ? "s" : ""}</span></p>
-      </section>
-
-      <section aria-label="Consultations des aperçus" className="mt-3 rounded-[1.2rem] border border-cyan-300/20 bg-[#0b1e30] px-4 py-4">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-300/15 text-cyan-200"><Eye className="h-5 w-5" /></span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="font-black">Aperçus consultés</h2>
-              <span className="text-2xl font-black text-cyan-200">{previewStats.total}</span>
-            </div>
-            <p className="mt-0.5 text-xs font-semibold text-white/50">Cette semaine · {previewStats.today} aujourd’hui</p>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-7 gap-1.5" aria-label="Consultations par jour cette semaine">
-          {previewStats.days.map((day) => (
-            <div key={day.date.toISOString()} className="text-center">
-              <div className="text-[10px] font-black uppercase text-white/40">{formatMontrealDate(day.date, { weekday: "short" }).replace(".", "")}</div>
-              <div className="mt-1 text-xs font-bold text-white/60">{formatMontrealDate(day.date, { day: "numeric" })}</div>
-              <div className={`mx-auto mt-2 flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black ${day.count > 0 ? "bg-cyan-300 text-[#062033]" : "bg-white/8 text-white/35"}`}>{day.count}</div>
-            </div>
-          ))}
-        </div>
       </section>
 
       <section className="mt-7">

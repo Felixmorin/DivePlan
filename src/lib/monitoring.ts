@@ -27,7 +27,13 @@ export async function trackEvent(input: TrackEventInput) {
 
 export const ATHLETE_SESSION_PREVIEW_EVENT = "session.previewed";
 
-export async function getAthleteSessionPreviewStats(userId: string) {
+export type AthleteSessionPreviewStats = {
+  total: number;
+  today: number;
+  days: Array<{ date: Date; count: number }>;
+};
+
+export async function getAthleteSessionPreviewStats(userId: string): Promise<AthleteSessionPreviewStats> {
   const weekStart = startOfMontrealWeek();
   const events = await prisma.appEvent.findMany({
     where: {

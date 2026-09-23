@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Plus, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves, X } from "lucide-react";
+import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, Plus, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves, X } from "lucide-react";
 import { addCompetitionDive, deleteAthlete, removeCompetitionDive } from "@/app/coach/athletes/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { ProgressChart } from "@/components/athlete/progress-chart";
@@ -14,6 +14,7 @@ import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { getAthleteProgressTotals, type AthleteProgressTotals } from "@/lib/athlete-session";
+import { getAthleteSessionPreviewStats, type AthleteSessionPreviewStats } from "@/lib/monitoring";
 import { formatMontrealCountdown, formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ type AthleteProfile = {
   competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; difficulty: number | null }>;
   diveNotes: Array<{ id: string; code: string; name: string; height: string; note: string; updatedAt: Date; sessionId: string; sessionTitle: string; sessionDate: Date }>;
   progress: Pick<AthleteProgressTotals, "chartData" | "weeklyChartData" | "monthlyChartData" | "skillData" | "skillDives">;
+  previewStats: AthleteSessionPreviewStats;
 };
 
 export default async function AthleteDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -108,7 +110,10 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     orderBy: { startsAt: "asc" },
     select: { title: true, startsAt: true, endsAt: true }
   });
-  const progress = await getAthleteProgressTotals(athlete.id);
+  const [progress, previewStats] = await Promise.all([
+    getAthleteProgressTotals(athlete.id),
+    getAthleteSessionPreviewStats(athlete.userId)
+  ]);
 
   const profile: AthleteProfile = {
     id: athlete.id,
@@ -164,7 +169,8 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       sessionTitle: item.poolDive.poolSection.poolTraining.block.session.title,
       sessionDate: item.poolDive.poolSection.poolTraining.block.session.date
     })),
-    progress
+    progress,
+    previewStats
   };
 
   return <AthleteDetail profile={profile} />;
@@ -230,7 +236,8 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
             { category: "Renverse", code: "301C", name: "Retour groupe", height: "THREE_METER", volume: 12 },
             { category: "Avant", code: "101C", name: "Avant groupe", height: "ONE_METER", volume: 31 }
           ]
-        }
+        },
+        previewStats: { total: 4, today: 1, days: Array.from({ length: 7 }, (_, index) => ({ date: parseMontrealSessionDate(`2026-08-${String(18 + index).padStart(2, "0")}`), count: index === 1 ? 1 : index === 3 ? 2 : 0 })) }
       }}
       demo
     />
@@ -299,6 +306,8 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
         <DiveIqCard icon={<Sparkles className="h-5 w-5" />} label="Suggestion" value={diveIq.suggestion} detail="À remplacer par DiveIQ quand l'intégration sera disponible." />
       </div>
 
+      <PreviewStatsCard stats={profile.previewStats} />
+
       <AthleteProgress profile={profile} />
 
       <CompetitionDiveEditor profile={profile} demo={demo} />
@@ -360,6 +369,34 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
         </div>
       </div>
     </CoachShell>
+  );
+}
+
+function PreviewStatsCard({ stats }: { stats: AthleteSessionPreviewStats }) {
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2"><Eye className="h-5 w-5 text-[var(--color-brand-strong)]" /> Aperçus des entraînements</CardTitle>
+            <p className="mt-1 text-sm leading-6 text-[var(--color-ink-muted)]">Consultations de cet athlète pendant la semaine en cours.</p>
+          </div>
+          <div className="text-right"><div className="text-3xl font-black">{stats.total}</div><div className="text-xs font-bold text-[var(--color-ink-muted)]">cette semaine</div></div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-4 rounded-xl bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-bold text-[var(--color-ink-muted)]">{stats.today} consultation{stats.today > 1 ? "s" : ""} aujourd’hui</div>
+        <div className="grid grid-cols-7 gap-2" aria-label="Consultations d’aperçu par jour">
+          {stats.days.map((day) => (
+            <div key={day.date.toISOString()} className="text-center">
+              <div className="text-[10px] font-black uppercase text-[var(--color-ink-muted)]">{formatMontrealDate(day.date, { weekday: "short" }).replace(".", "")}</div>
+              <div className="mt-1 text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealDate(day.date, { day: "numeric" })}</div>
+              <div className={`mx-auto mt-2 flex h-9 w-9 items-center justify-center rounded-lg text-sm font-black ${day.count > 0 ? "bg-[var(--color-brand)] text-white" : "bg-[var(--color-surface-raised)] text-[var(--color-ink-muted)]"}`}>{day.count}</div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
