@@ -30,6 +30,7 @@ type AthleteRow = {
   lastActivity?: string;
   volume: number;
   completedSessions: number;
+  averageVolume: number | null;
 };
 
 type AthleteGroup = {
@@ -96,7 +97,10 @@ export default async function AthletesPage() {
       nextSession: nextByAthlete.get(athlete.id),
       lastActivity: lastCompletion?.session.title,
       volume: athlete.diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0),
-      completedSessions: athlete.completions.length
+      completedSessions: athlete.completions.length,
+      averageVolume: athlete.completions.length > 0
+        ? athlete.diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0) / athlete.completions.length
+        : null
     };
   });
 
@@ -121,7 +125,8 @@ function DemoAthletesPage() {
     nextSession: { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), status: "READY" },
     lastActivity: athlete.lastSession,
     volume: athlete.recentVolume,
-    completedSessions: 0
+    completedSessions: 0,
+    averageVolume: null
   }));
 
   return (
@@ -197,10 +202,10 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
               <tr>
                 <th className="px-5 py-3">Athlete</th>
                 <th className="px-4 py-3">Groupe</th>
-                <th className="px-4 py-3">Statut</th>
                 <th className="px-4 py-3">Prochaine seance</th>
                 <th className="px-4 py-3">Activite</th>
                 <th className="px-5 py-3 text-right">Volume</th>
+                <th className="px-5 py-3 text-right">Volume moyen / entraînement</th>
                 <th className="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -209,10 +214,10 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
                 <tr key={row.id} className="transition duration-[var(--duration-fast)] hover:bg-[var(--color-surface-raised)]">
                   <td className="px-5 py-4"><Identity row={row} /></td>
                   <td className="px-4 py-4"><Badge variant="outline">{row.groupName}</Badge></td>
-                  <td className="px-4 py-4"><Badge variant={row.active ? "success" : "outline"}>{row.active ? "Actif" : "Inactif"}</Badge></td>
                   <td className="px-4 py-4"><NextSession nextSession={row.nextSession} demo={demo} /></td>
                   <td className="px-4 py-4"><ActivitySummary row={row} /></td>
                   <td className="px-5 py-4 text-right text-lg font-black">{row.volume}</td>
+                  <td className="px-5 py-4 text-right text-lg font-black">{row.averageVolume === null ? "—" : row.averageVolume.toFixed(1)}</td>
                   <td className="px-5 py-4 text-right"><DeleteAthleteButton athleteId={row.id} demo={demo} /></td>
                 </tr>
               ))}

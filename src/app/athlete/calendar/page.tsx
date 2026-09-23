@@ -1,4 +1,4 @@
-import { CalendarDays, Clock3, List, MapPin, TentTree, Trophy, Users, Waves } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, List, MapPin, TentTree, Trophy, Users, Waves } from "lucide-react";
 import Link from "next/link";
 import type { PlanningEventType } from "@prisma/client";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
@@ -16,13 +16,23 @@ const eventStyles: Record<PlanningEventType, { label: string; icon: typeof Troph
   TRAINING_SCHEDULE: { label: "Horaire", icon: Waves, className: "bg-[var(--color-brand)]/18 text-sky-200" }
 };
 
-export default async function AthleteCalendarPage({ searchParams }: { searchParams: Promise<{ view?: string | string[] }> }) {
+export default async function AthleteCalendarPage({ searchParams }: { searchParams: Promise<{ view?: string | string[]; month?: string | string[] }> }) {
   const { athlete, clubId } = await requireAthlete();
-  const events = await getAthletePlanningEvents({ athleteId: athlete.id, clubId, groupId: athlete.groupId });
-  const monthGroups = groupEventsByMonth(events);
-  const nextCompetition = events.find((event) => event.type === "COMPETITION");
   const viewParam = searchParams ? await searchParams : {};
   const calendarView = (Array.isArray(viewParam.view) ? viewParam.view[0] : viewParam.view) === "calendar";
+  const requestedMonth = Array.isArray(viewParam.month) ? viewParam.month[0] : viewParam.month;
+  const monthKey = getValidMonthKey(requestedMonth);
+  const monthStart = parseMontrealSessionDate(`${monthKey}-01`, "00:00");
+  const calendarGridStart = startOfMontrealWeek(monthStart);
+  const calendarGridEnd = addMontrealDays(calendarGridStart, 42);
+  const events = calendarView
+    ? await getAthletePlanningEvents({ athleteId: athlete.id, clubId, groupId: athlete.groupId, rangeStart: calendarGridStart, rangeEnd: calendarGridEnd, includeOverlapping: true })
+    : await getAthletePlanningEvents({ athleteId: athlete.id, clubId, groupId: athlete.groupId });
+  const countdownEvents = calendarView
+    ? await getAthletePlanningEvents({ athleteId: athlete.id, clubId, groupId: athlete.groupId })
+    : events;
+  const monthGroups = groupEventsByMonth(events);
+  const nextCompetition = countdownEvents.find((event) => event.type === "COMPETITION" && event.startsAt >= new Date());
 
   return (
     <AthleteShell>
@@ -37,7 +47,7 @@ export default async function AthleteCalendarPage({ searchParams }: { searchPara
         {nextCompetition && <div className="w-full rounded-[var(--radius-panel)] border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm font-bold text-amber-100"><Trophy className="mr-2 inline h-4 w-4" />Prochaine compétition : <span className="font-black">{formatMontrealCountdown(nextCompetition.startsAt)}</span> · {nextCompetition.title}</div>}
       </header>
 
-      {calendarView ? <MonthCalendar events={events} /> : <div className="space-y-7">
+      {calendarView ? <MonthCalendar events={events} monthKey={monthKey} /> : <div className="space-y-7">
         {monthGroups.map(([month, monthEvents]) => (
           <section key={month} aria-labelledby={`month-${month}`}>
             <h2 id={`month-${month}`} className="mb-3 text-sm font-black uppercase tracking-wide text-white/48">{month}</h2>
@@ -63,9 +73,9 @@ function ViewLink({ href, active, icon, children }: { href: string; active: bool
   return <Link href={href} aria-current={active ? "page" : undefined} className={cn("inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-black transition", active ? "bg-[var(--color-club-red)] text-white shadow-[0_5px_16px_rgba(237,22,61,.25)]" : "text-white/55 hover:text-white")}>{icon}{children}</Link>;
 }
 
-function MonthCalendar({ events }: { events: AthletePlanningEvent[] }) {
-  const monthStart = parseMontrealSessionDate(`${toMontrealDateInputValue(new Date()).slice(0, 7)}-01`, "00:00");
-  const monthKey = toMontrealDateInputValue(monthStart).slice(0, 7);
+function MonthCalendar({ events, monthKey }: { events: AthletePlanningEvent[]; monthKey: string }) {
+  const monthStart = parseMontrealSessionDate(`${monthKey}-01`, "00:00");
+  const monthEnd = addMontrealDays(monthStart, daysInMonth(monthStart));
   const todayKey = toMontrealDateInputValue(new Date());
   const days = Array.from({ length: 42 }, (_, index) => {
     const date = addMontrealDays(startOfMontrealWeek(monthStart), index);
@@ -80,11 +90,11 @@ function MonthCalendar({ events }: { events: AthletePlanningEvent[] }) {
     }
   }
 
-  const monthEvents = events.filter((event) => toMontrealDateInputValue(event.startsAt).startsWith(monthKey));
+  const monthEvents = events.filter((event) => event.startsAt < monthEnd && (event.endsAt === null || event.endsAt >= monthStart));
 
   return <div className="space-y-4">
   <section aria-label="Calendrier mensuel" className="overflow-hidden rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] shadow-[0_14px_35px_rgba(0,0,0,0.18)]">
-    <div className="flex items-center justify-between border-b border-white/10 px-4 py-4"><div><p className="text-[11px] font-black uppercase tracking-[0.16em] text-white/42">Aperçu du mois</p><h2 className="mt-1 text-xl font-black capitalize">{formatMontrealDate(monthStart, { month: "long", year: "numeric" })}</h2></div><span className="rounded-full bg-[var(--color-club-red)]/14 px-3 py-1.5 text-xs font-black text-[var(--color-club-red-soft)]">{monthEvents.length} événement{monthEvents.length > 1 ? "s" : ""}</span></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-4"><div><p className="text-[11px] font-black uppercase tracking-[0.16em] text-white/42">Aperçu du mois</p><h2 className="mt-1 text-xl font-black capitalize">{formatMontrealDate(monthStart, { month: "long", year: "numeric" })}</h2></div><div className="flex items-center gap-2"><MonthNavigationLink monthKey={shiftMonthKey(monthKey, -1)} label="Mois précédent" icon={<ChevronLeft className="h-4 w-4" />} /><span className="rounded-full bg-[var(--color-club-red)]/14 px-3 py-1.5 text-xs font-black text-[var(--color-club-red-soft)]">{monthEvents.length} événement{monthEvents.length > 1 ? "s" : ""}</span><MonthNavigationLink monthKey={shiftMonthKey(monthKey, 1)} label="Mois suivant" icon={<ChevronRight className="h-4 w-4" />} /></div></div>
     <div className="grid grid-cols-7 border-b border-white/10 bg-white/[0.03] text-center text-[10px] font-black uppercase tracking-wide text-white/52">
       {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => <div key={day} className="py-3">{day}</div>)}
     </div>
@@ -103,6 +113,26 @@ function MonthCalendar({ events }: { events: AthletePlanningEvent[] }) {
   </section>
   <section aria-labelledby="month-agenda-title" className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4 shadow-[0_14px_35px_rgba(0,0,0,0.18)]"><div className="mb-3 flex items-end justify-between gap-3"><div><p className="text-[11px] font-black uppercase tracking-[0.16em] text-white/42">À retenir</p><h2 id="month-agenda-title" className="mt-1 text-lg font-black">Détail des événements</h2></div></div>{monthEvents.length > 0 ? <div className="space-y-2.5">{monthEvents.map((event) => <CalendarEventRow key={event.id} event={event} />)}</div> : <p className="rounded-xl border border-dashed border-white/12 px-3 py-4 text-sm font-semibold text-white/55">Aucun événement ce mois-ci.</p>}</section>
   </div>;
+}
+
+function MonthNavigationLink({ monthKey, label, icon }: { monthKey: string; label: string; icon: React.ReactNode }) {
+  return <Link href={`/athlete/calendar?view=calendar&month=${monthKey}`} aria-label={label} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 text-white/65 transition hover:border-white/20 hover:bg-white/8 hover:text-white">{icon}</Link>;
+}
+
+function getValidMonthKey(value: string | undefined) {
+  if (value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return value;
+  return toMontrealDateInputValue(new Date()).slice(0, 7);
+}
+
+function shiftMonthKey(monthKey: string, offset: number) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1 + offset, 1));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function daysInMonth(date: Date) {
+  const [year, month] = toMontrealDateInputValue(date).slice(0, 7).split("-").map(Number);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
 function CalendarEventRow({ event }: { event: AthletePlanningEvent }) {

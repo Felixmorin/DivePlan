@@ -17,13 +17,19 @@ export type AthletePlanningEvent = {
 export async function getAthletePlanningEvents({
   athleteId,
   clubId,
-  groupId
+  groupId,
+  rangeStart = startOfMontrealDay(),
+  rangeEnd = addMontrealDays(startOfMontrealDay(), 183),
+  includeOverlapping = false
 }: {
   athleteId: string;
   clubId: string;
   groupId: string | null;
+  rangeStart?: Date;
+  rangeEnd?: Date;
+  includeOverlapping?: boolean;
 }): Promise<AthletePlanningEvent[]> {
-  return findAthletePlanningEvents({ athleteId, clubId, groupId, rangeStart: startOfMontrealDay(), rangeEnd: addMontrealDays(startOfMontrealDay(), 183) });
+  return findAthletePlanningEvents({ athleteId, clubId, groupId, rangeStart, rangeEnd, includeOverlapping });
 }
 
 export async function getAthleteWeekPlanningEvents({
@@ -44,13 +50,15 @@ async function findAthletePlanningEvents({
   clubId,
   groupId,
   rangeStart,
-  rangeEnd
+  rangeEnd,
+  includeOverlapping = false
 }: {
   athleteId: string;
   clubId: string;
   groupId: string | null;
   rangeStart: Date;
   rangeEnd: Date;
+  includeOverlapping?: boolean;
 }): Promise<AthletePlanningEvent[]> {
   const audienceFilters = [
     { athleteId },
@@ -61,8 +69,13 @@ async function findAthletePlanningEvents({
   const events = await prisma.planningEvent.findMany({
     where: {
       clubId,
-      startsAt: { gte: rangeStart, lt: rangeEnd },
-      OR: audienceFilters
+      ...(includeOverlapping
+        ? {
+            startsAt: { lt: rangeEnd },
+            OR: [{ endsAt: null }, { endsAt: { gte: rangeStart } }]
+          }
+        : { startsAt: { gte: rangeStart, lt: rangeEnd } }),
+      AND: [{ OR: audienceFilters }]
     },
     orderBy: { startsAt: "asc" },
     include: { group: { select: { name: true } } }
