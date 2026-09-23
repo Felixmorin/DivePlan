@@ -14,9 +14,9 @@ export default async function AthleteProgressPage() {
   }
 
   const totals = athlete ? await getAthleteProgressTotals(athlete.id) : null;
-  const sessions = totals?.completedSessions ?? 0;
-  const dives = totals?.totalDiveRepetitions ?? 0;
-  const minutes = totals?.completedMinutes ?? 0;
+  const sessions = totals?.thisWeekSessions ?? 0;
+  const dives = totals?.thisWeekDiveRepetitions ?? 0;
+  const minutes = totals?.thisWeekMinutes ?? 0;
   const technique = [
     { label: "Avant", color: "#ed163d", icon: "waves" },
     { label: "Arriere", color: "#ff4b68", icon: "activity" },

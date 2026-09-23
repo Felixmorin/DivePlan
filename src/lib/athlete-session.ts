@@ -68,6 +68,9 @@ export type AthleteProgressTotals = {
   totalDiveRepetitions: number;
   completedExercises: number;
   completedMinutes: number;
+  thisWeekSessions: number;
+  thisWeekDiveRepetitions: number;
+  thisWeekMinutes: number;
   completionRate: number;
   recentNote: string;
   chartData: Array<{ name: string; volume: number }>;
@@ -276,6 +279,8 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
 }
 
 export async function getAthleteProgressTotals(athleteId: string): Promise<AthleteProgressTotals> {
+  const weekStart = startOfMontrealWeek();
+  const weekEnd = addMontrealDays(weekStart, 7);
   const [completedSessions, assignedSessions, diveLogs, completedExercises, skills] = await Promise.all([
     prisma.athleteSessionCompletion.findMany({
       where: { athleteId, status: "COMPLETED" },
@@ -335,6 +340,11 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
 
   const completedMinutes = completedSessions.reduce((sum, completion) => sum + completion.session.duration, 0);
   const totalDiveRepetitions = diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0);
+  const thisWeekSessions = completedSessions.filter((completion) => {
+    const completedAt = completion.completedAt;
+    return completedAt !== null && completedAt >= weekStart && completedAt < weekEnd;
+  });
+  const thisWeekDiveLogs = diveLogs.filter((log) => log.timestamp >= weekStart && log.timestamp < weekEnd);
   const completionRate = assignedSessions > 0 ? Math.round((completedSessions.length / assignedSessions) * 100) : 0;
   const readyScore = Math.min(100, Math.round(completionRate * 0.6 + Math.min(totalDiveRepetitions, 120) * 0.25 + Math.min(completedExercises, 20) * 0.5));
   const dailyData = Array.from(dailyTotals.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -347,6 +357,9 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     totalDiveRepetitions,
     completedExercises,
     completedMinutes,
+    thisWeekSessions: thisWeekSessions.length,
+    thisWeekDiveRepetitions: thisWeekDiveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0),
+    thisWeekMinutes: thisWeekSessions.reduce((sum, completion) => sum + completion.session.duration, 0),
     completionRate,
     recentNote: completedSessions[0]?.session.focus ?? "Complete une seance pour generer une tendance.",
     chartData: dailyData
