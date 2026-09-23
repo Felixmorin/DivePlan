@@ -221,6 +221,20 @@ a {
 .trend-chart-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; margin-top: .75rem; color: rgba(226,237,251,.58); font-size: .8rem; }.trend-chart-toolbar .select-button { margin-left: 0; cursor: pointer; }.trend-chart-toolbar option { background: #0b1d2c; color: white; }
 .technique-list { display: grid; gap: .85rem; margin-top: 1rem; }.technique-group { min-width: 0; }.technique-row { display: grid; grid-template-columns: 1.8rem 5.4rem 1fr 2.5rem; align-items: center; gap: .45rem; color: rgba(236,243,252,.85); font-size: .95rem; }.technique-row b { text-align: right; font-size: .9rem; font-weight: 500; }.technique-track { height: .75rem; }.technique-dives { display: grid; gap: .35rem; margin: .45rem 2.5rem 0 7.65rem; padding: .55rem .7rem; border-left: 2px solid rgba(38,223,194,.35); background: rgba(13,37,57,.52); border-radius: 0 .65rem .65rem 0; }.technique-dive { display: flex; justify-content: space-between; gap: .75rem; color: rgba(226,237,251,.78); font-size: .84rem; }.technique-dive strong { color: #26dfc2; font-weight: 800; }.technique-dive b { color: rgba(226,237,251,.6); font-weight: 700; }.technique-dives p { margin: 0; color: rgba(226,237,251,.52); font-size: .82rem; }
 
+/* The coach athlete profile uses light cards, unlike the dark athlete app. */
+.coach-athlete-progress .trend-chart-toolbar { color: var(--color-ink-muted); }
+.coach-athlete-progress .trend-chart-toolbar .select-button { border-color: var(--color-border); color: var(--color-ink); background: var(--color-surface); }
+.coach-athlete-progress .trend-chart-toolbar option { background: var(--color-surface); color: var(--color-ink); }
+.coach-athlete-progress .technique-row,
+.coach-athlete-progress .technique-dive { color: var(--color-ink-muted); }
+.coach-athlete-progress .technique-dive strong { color: var(--color-brand-strong); }
+.coach-athlete-progress .technique-dive b { color: var(--color-ink); }
+.coach-athlete-progress .technique-dives p { color: var(--color-ink-muted); }
+.coach-athlete-progress .progress-chart .recharts-cartesian-axis-tick text,
+.coach-athlete-progress .progress-chart .recharts-label-list text { fill: var(--color-ink-muted); }
+.coach-athlete-progress .progress-chart .recharts-cartesian-axis line,
+.coach-athlete-progress .progress-chart .recharts-cartesian-axis path { stroke: var(--color-border-strong); }
+
 /* Keep the club treatment after the route-specific athlete rules. */
 .athlete-app { background: radial-gradient(circle at 50% -10%, #2b080f 0, var(--color-athlete-bg) 34rem); }
 .athlete-app .today-card { background: radial-gradient(circle at 82% 24%, rgba(237,22,61,.34), transparent 35%), linear-gradient(145deg, #2a0b12, #120609 75%); border-color: rgba(237,22,61,.28); }

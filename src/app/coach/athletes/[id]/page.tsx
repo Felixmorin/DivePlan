@@ -472,7 +472,7 @@ function AthleteProgress({ profile }: { profile: AthleteProfile }) {
   }));
 
   return (
-    <div className="mb-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,.9fr)]">
+    <div className="coach-athlete-progress mb-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,.9fr)]">
       <Card>
         <CardHeader><CardTitle>Tendance</CardTitle><p className="text-sm leading-6 text-[var(--color-ink-muted)]">Volume d’entraînement dans le temps</p></CardHeader>
         <CardContent><ProgressChart data={profile.progress.chartData} weeklyData={profile.progress.weeklyChartData} monthlyData={profile.progress.monthlyChartData} /></CardContent>
