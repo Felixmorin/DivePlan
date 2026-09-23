@@ -96,6 +96,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
                 key={item.href}
                 href={item.href}
                 aria-label={item.label}
+                style={isActive ? { color: "#ffffff" } : undefined}
                 className={cn("flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3 text-xs font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive ? "bg-[var(--color-navy)] text-white" : "text-[var(--color-ink-muted)] hover:bg-white")}
               >
                 <Icon className="h-4 w-4" />
