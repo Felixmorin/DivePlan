@@ -16,7 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { getAthleteProgressTotals, type AthleteProgressTotals } from "@/lib/athlete-session";
 import { countPoolContexts } from "@/lib/pool-list";
 import { getAthleteSessionPreviewStats, type AthleteSessionPreviewStats } from "@/lib/monitoring";
-import { formatMontrealCountdown, formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
+import { addMontrealDays, formatMontrealCountdown, formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -132,8 +132,8 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
   ]);
   const today = startOfMontrealDay();
   const seasonStartYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
-  const seasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-01`);
-  const attendanceSessions = await prisma.trainingSession.findMany({ where: { week: { clubId }, status: { not: "NOT_DONE" }, date: { gte: seasonStart, lte: today }, blocks: { some: { assignments: { some: { athleteId: athlete.id } } } } }, select: { id: true, date: true } });
+  const seasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00");
+  const attendanceSessions = await prisma.trainingSession.findMany({ where: { week: { clubId }, status: { not: "NOT_DONE" }, date: { gte: seasonStart, lt: addMontrealDays(today, 1) }, blocks: { some: { assignments: { some: { athleteId: athlete.id } } } } }, select: { id: true, date: true } });
   const attendanceAbsences = await prisma.athleteSessionAbsence.findMany({ where: { athleteId: athlete.id, sessionId: { in: attendanceSessions.map((session) => session.id) } }, select: { sessionId: true } });
   const absenceIds = new Set(attendanceAbsences.map((absence) => absence.sessionId));
   const monthCount = (today.getMonth() - 8 + 12) % 12 + 1;

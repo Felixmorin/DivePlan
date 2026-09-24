@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
-import { deleteTrainingSession, duplicateTrainingSession, markTrainingSessionNotDone, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
+import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolProgressRefresh, PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
 import { CoachShell } from "@/components/coach/coach-shell";
@@ -130,6 +130,13 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   </div>
                   <StatusPill status={athlete.status} />
                 </div>
+                {athlete.status !== "COMPLETED" && (
+                  <form action={markAthleteSessionCompleted} className="mt-3">
+                    <input type="hidden" name="sessionId" value={session.id} />
+                    <input type="hidden" name="athleteId" value={athlete.id} />
+                    <Button type="submit" size="sm" variant="outline"><CheckCircle2 className="h-4 w-4" /> Marquer comme terminée</Button>
+                  </form>
+                )}
                 <div className="mt-3 grid gap-2 md:grid-cols-5">
                   <ComparisonMetric label="Exercices" value={`${athlete.completedExercises}/${athlete.plannedExercises}`} />
                   <ComparisonMetric label="Dryland" value={`${athlete.actualDrylandReps}/${athlete.plannedDrylandReps}`} />
