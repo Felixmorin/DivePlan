@@ -53,23 +53,6 @@ export async function getAthleteAverageRepsByTraining(athleteIds: string[], excl
       athleteId: true,
       session: {
         select: {
-          blocks: {
-            select: {
-              assignments: { select: { athleteId: true } },
-              drylandExercises: { select: { exerciseId: true, sets: true, reps: true } },
-              poolTraining: {
-                select: {
-                  sections: {
-                    select: { dives: { select: { repetitions: true } } }
-                  }
-                }
-              }
-            }
-          },
-          exerciseLogs: {
-            where: { athleteId: { in: athleteIds }, completed: true },
-            select: { athleteId: true, exerciseId: true }
-          },
           diveLogs: {
             where: { athleteId: { in: athleteIds } },
             select: { athleteId: true, repetitionsCompleted: true }
@@ -83,24 +66,11 @@ export async function getAthleteAverageRepsByTraining(athleteIds: string[], excl
 
   for (const completion of completions) {
     const athleteId = completion.athleteId;
-    const exerciseReps = new Map<string, number>();
-
-    for (const block of completion.session.blocks) {
-      if (!block.assignments.some((assignment) => assignment.athleteId === athleteId)) continue;
-
-      for (const item of block.drylandExercises) {
-        exerciseReps.set(item.exerciseId, (exerciseReps.get(item.exerciseId) ?? 0) + (item.sets ?? 1) * (item.reps ?? 0));
-      }
-    }
-
-    const drylandReps = completion.session.exerciseLogs
-      .filter((log) => log.athleteId === athleteId)
-      .reduce((sum, log) => sum + (exerciseReps.get(log.exerciseId) ?? 0), 0);
     const poolReps = completion.session.diveLogs
       .filter((log) => log.athleteId === athleteId)
       .reduce((sum, log) => sum + log.repetitionsCompleted, 0);
     const current = totals.get(athleteId) ?? { reps: 0, trainings: 0 };
-    totals.set(athleteId, { reps: current.reps + drylandReps + poolReps, trainings: current.trainings + 1 });
+    totals.set(athleteId, { reps: current.reps + poolReps, trainings: current.trainings + 1 });
   }
 
   return new Map(Array.from(totals, ([athleteId, total]) => [athleteId, Math.round(total.reps / total.trainings)]));

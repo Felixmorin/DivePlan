@@ -134,7 +134,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   <ComparisonMetric label="Exercices" value={`${athlete.completedExercises}/${athlete.plannedExercises}`} />
                   <ComparisonMetric label="Dryland" value={`${athlete.actualDrylandReps}/${athlete.plannedDrylandReps}`} />
                   <ComparisonMetric label="Piscine" value={`${athlete.actualPoolReps}/${athlete.plannedPoolReps}`} />
-                  <ComparisonMetric label="Moy. / entraînement" value={`${athlete.averageRepsPerTraining} reps`} />
+                  <ComparisonMetric label="Moy. volume piscine / entraînement" value={`${athlete.averageRepsPerTraining} reps`} />
                   <ComparisonMetric label="Rating" value={athlete.rating} />
                   <ComparisonMetric label="Progression" value={`${athlete.progress}%`} />
                 </div>
