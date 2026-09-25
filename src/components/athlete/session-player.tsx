@@ -14,8 +14,8 @@ import type { AthleteSessionView } from "@/lib/athlete-session";
 import { formatMontrealTime } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
 
-const blockRatings = ["dur", "moyen", "bon", "excellent"];
-const finalRatings = ["dur", "moyen", "bon", "excellent"];
+const blockRatings = ["Pas bien", "Difficile", "Moyen", "Bien", "Très bien"];
+const finalRatings = ["Pas bien", "Difficile", "Moyen", "Bien", "Très bien"];
 
 type SessionPlayerProps = {
   session: AthleteSessionView;
@@ -59,7 +59,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const [diveNotes, setDiveNotes] = useState<Record<string, string>>(() => Object.fromEntries(blocks.flatMap((block) => block.poolSections.flatMap((section) => section.dives.map((dive) => [dive.id, dive.personalNote ?? ""])) )));
   const previewTracked = useRef(false);
   const [finalFeedback, setFinalFeedback] = useState(() => ({
-    rating: session.finalRating ?? "moyen",
+    rating: session.finalRating ?? "Moyen",
     note: session.finalNote ?? ""
   }));
   const [exerciseChecks, setExerciseChecks] = useState<ExerciseChecks>(() =>
@@ -307,7 +307,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   function markDiveSkipped(diveId: string) {
     const version = markDirty();
     setDiveChecks((previous) => {
-      const next = { ...previous, [diveId]: (previous[diveId] ?? []).map(() => 0) };
+      const next: DiveChecks = { ...previous, [diveId]: (previous[diveId] ?? []).map((): DiveRepState => 0) };
       diveChecksRef.current = next;
       void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, pageFeedbackRef.current, version).catch(() => {
         setDirty(true);
@@ -617,7 +617,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
           )}
           <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-black"><NotebookPen className="h-4 w-4 text-[var(--color-action)]" /> Ressenti final</div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {finalRatings.map((rating) => (
                 <Button key={rating} type="button" variant="dark" className={finalFeedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFinalFeedback({ rating })}>{rating}</Button>
               ))}
@@ -761,7 +761,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
 
         <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
           <div className="mb-3 text-sm font-black text-white/72">Ressenti du bloc</div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {blockRatings.map((rating) => <Button key={rating} type="button" size="sm" variant="dark" className={feedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFeedback({ rating })}>{rating}</Button>)}
           </div>
           <Textarea className="mt-3 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note rapide (facultatif)" value={feedback.note} onChange={(event) => updateFeedback({ note: event.target.value })} />
@@ -817,7 +817,7 @@ function buildBlockProgressPayload(
   dives: DiveChecks,
   feedbackByPage: PageFeedback
 ): SaveAthleteProgressPayload {
-  const feedback = feedbackByPage[pageFeedbackKey(block.id, pageIndex)] ?? { rating: "moyen", note: "" };
+  const feedback = feedbackByPage[pageFeedbackKey(block.id, pageIndex)] ?? { rating: "Moyen", note: "" };
   const section = block.poolSections[pageIndex];
 
   return {
@@ -851,7 +851,7 @@ function buildSessionProgressPayload(
     sessionFeedback,
     exercises: blocks.flatMap((block) =>
       block.poolSections.length > 0 ? [] : block.exercises.map((exercise) => {
-        const feedback = feedbackByPage[pageFeedbackKey(block.id, 0)] ?? { rating: "moyen", note: "" };
+        const feedback = feedbackByPage[pageFeedbackKey(block.id, 0)] ?? { rating: "Moyen", note: "" };
 
         return {
           exerciseId: exercise.id,
@@ -864,7 +864,7 @@ function buildSessionProgressPayload(
     dives: blocks.flatMap((block) =>
       block.poolSections.flatMap((section, pageIndex) =>
         section.dives.map((dive) => {
-          const feedback = feedbackByPage[pageFeedbackKey(block.id, pageIndex)] ?? { rating: "moyen", note: "" };
+          const feedback = feedbackByPage[pageFeedbackKey(block.id, pageIndex)] ?? { rating: "Moyen", note: "" };
 
           return {
             poolDiveId: dive.id,
