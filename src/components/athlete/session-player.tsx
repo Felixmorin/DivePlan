@@ -14,7 +14,7 @@ import type { AthleteSessionView } from "@/lib/athlete-session";
 import { formatMontrealTime } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
 
-const blockRatings = ["dur", "moyen", "bon", "excellent", "N/A"];
+const blockRatings = ["dur", "moyen", "bon", "excellent"];
 const finalRatings = ["dur", "moyen", "bon", "excellent"];
 
 type SessionPlayerProps = {
@@ -104,6 +104,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const isLastBlockStep = !isPoolBlock || stepIndex === blockSteps.length - 1;
   const feedback = pageFeedback[pageFeedbackKey(block.id, stepIndex)] ?? { rating: "", note: "" };
   const hasFeedback = Boolean(feedback.rating || feedback.note.trim());
+  const hasZeroRepDive = activeStep?.kind === "pool" && activeStep.section.dives.some((dive) => (diveChecks[dive.id] ?? []).filter((state) => state > 0).length === 0);
   const totalItems = useMemo(() => countSessionItems(blocks), [blocks]);
   const completedItems = countCompletedItems(blocks, exerciseChecks, diveChecks);
   const poolDives = useMemo(
@@ -303,6 +304,20 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     });
   }
 
+  function markDiveSkipped(diveId: string) {
+    const version = markDirty();
+    setDiveChecks((previous) => {
+      const next = { ...previous, [diveId]: (previous[diveId] ?? []).map(() => 0) };
+      diveChecksRef.current = next;
+      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, pageFeedbackRef.current, version).catch(() => {
+        setDirty(true);
+        if (version === saveVersion.current) setSaveStatus("error");
+        setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
+      });
+      return next;
+    });
+  }
+
   function removeDiveRep(diveId: string, plannedRepetitions: number) {
     const version = markDirty();
     setDiveChecks((previous) => {
@@ -385,6 +400,13 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       return;
     }
 
+    closeBlock(block.id);
+    setReviewing(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function finishTraining() {
+    if (!hasFeedback) return;
     closeBlock(block.id);
     setReviewing(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -722,6 +744,9 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                     <button type="button" onClick={() => addDiveRep(dive.id)} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-black text-[var(--color-action)] transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
                       <Plus className="h-4 w-4" /> Ajouter une rep
                     </button>
+                    <button type="button" onClick={() => markDiveSkipped(dive.id)} aria-pressed={completed === 0} className={`ml-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-black transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${completed === 0 ? "text-[var(--color-action)]" : "text-white/62"}`}>
+                      0 rep
+                    </button>
                     {checks.length > dive.repetitions && (
                       <button type="button" onClick={() => removeDiveRep(dive.id, dive.repetitions)} className="ml-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-black text-white/62 transition hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
                         Retirer une rep
@@ -748,7 +773,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
           <div className="mx-auto grid max-w-[430px] grid-cols-[1fr_1.35fr] gap-2">
             <Button type="button" variant="outline" className="h-14 bg-transparent text-white" disabled={current === 0 && stepIndex === 0} onClick={previousStep}><ChevronLeft className="h-5 w-5" /> Precedent</Button>
-            <Button type="button" variant="action" className="h-14 rounded-2xl" disabled={!hasFeedback} onClick={nextStep}>{current === blocks.length - 1 && isLastBlockStep ? "Finir" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
+            <Button type="button" variant="action" className="h-14 rounded-2xl" disabled={!hasFeedback} onClick={hasZeroRepDive ? finishTraining : nextStep}>{hasZeroRepDive || (current === blocks.length - 1 && isLastBlockStep) ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
           </div>
         </div>
       </div>
