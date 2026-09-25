@@ -9,7 +9,7 @@ import { StatusPill } from "@/components/training/status-pill";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAthleteAverageRepsByTraining, getCoachSession } from "@/lib/coach-session";
+import { getAthleteAverageGoldenRepsByTraining, getAthleteAverageRepsByTraining, getCoachSession } from "@/lib/coach-session";
 import { formatMontrealDate } from "@/lib/timezone";
 import { countPoolContexts } from "@/lib/pool-list";
 
@@ -28,14 +28,13 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   );
   const uniqueAthletes = Array.from(new Map(athletes.map((athlete) => [athlete.id, athlete])).values());
   const athleteAverageReps = await getAthleteAverageRepsByTraining(uniqueAthletes.map((athlete) => athlete.id), session.id);
+  const athleteAverageGoldenReps = await getAthleteAverageGoldenRepsByTraining(uniqueAthletes.map((athlete) => athlete.id), session.id);
   const hasStarted =
     session.completions.some((completion) => completion.startedAt || completion.status !== "NOT_STARTED") ||
     session.diveLogs.length > 0 ||
     session.exerciseLogs.length > 0;
   const athleteComparisons = buildAthleteComparisons(session, athleteAverageReps);
   const resultSummary = summarizeResults(athleteComparisons);
-  const goldenRepCount = session.diveLogs.reduce((sum, log) => sum + log.goldenRepetitions, 0);
-  const averageGoldenReps = uniqueAthletes.length > 0 ? (goldenRepCount / uniqueAthletes.length).toFixed(1) : "0.0";
   const firstPoolSectionId = session.blocks.flatMap((block) => block.poolTraining?.sections ?? [])[0]?.id;
 
   return (
@@ -122,15 +121,13 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 grid gap-3 md:grid-cols-8">
+          <div className="mb-4 grid gap-3 md:grid-cols-6">
             <ResultSummaryTile label="Athletes termines" value={`${resultSummary.completedAthletes}/${resultSummary.totalAthletes}`} tone={resultSummary.completedAthletes === resultSummary.totalAthletes && resultSummary.totalAthletes > 0 ? "success" : "neutral"} />
             <ResultSummaryTile label="Reps dryland" value={`${resultSummary.actualDrylandReps}/${resultSummary.plannedDrylandReps}`} tone="neutral" />
             <ResultSummaryTile label="Reps piscine" value={`${resultSummary.actualPoolReps}/${resultSummary.plannedPoolReps}`} tone="neutral" />
             <ResultSummaryTile label="Progression dryland" value={`${resultSummary.drylandProgress}%`} tone={progressTone(resultSummary.drylandProgress, resultSummary.hasResults)} />
             <ResultSummaryTile label="Progression piscine" value={`${resultSummary.poolProgress}%`} tone={progressTone(resultSummary.poolProgress, resultSummary.hasResults)} />
             <ResultSummaryTile label="A revoir" value={resultSummary.needsAttention} tone={resultSummary.needsAttention > 0 ? "warning" : "success"} />
-            <ResultSummaryTile label="Golden reps" value={goldenRepCount} tone="neutral" />
-            <ResultSummaryTile label="Moy. golden / athlète" value={averageGoldenReps} tone="neutral" />
           </div>
           <div className="space-y-3">
             {athleteComparisons.map((athlete) => (
@@ -158,6 +155,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   <ComparisonMetric label="Moy. volume piscine / entraînement" value={`${athlete.averageRepsPerTraining} reps`} />
                   <ComparisonMetric label="Rating" value={athlete.rating} />
                   <ComparisonMetric label="Progression" value={`${athlete.progress}%`} />
+                  <ComparisonMetric label="Golden reps" value={session.diveLogs.filter((log) => log.athleteId === athlete.id).reduce((sum, log) => sum + log.goldenRepetitions, 0)} />
+                  <ComparisonMetric label="Moy. golden / entraînement" value={athleteAverageGoldenReps.get(athlete.id) ?? 0} />
                 </div>
                 {athlete.notes.length > 0 ? (
                   <details className="mt-3 rounded-2xl bg-[var(--color-surface-raised)] p-3">
@@ -214,20 +213,6 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                     />
                   ))}
                 </>}
-                <details className="mt-4 rounded-2xl border border-[var(--color-border)] px-3 py-2">
-                  <summary className="cursor-pointer text-sm font-bold text-[var(--color-ink-muted)]">Athletes ({assignedIds.length})</summary>
-                  <p className="pt-2 text-sm text-[var(--color-ink-muted)]">
-                  Athletes:{" "}
-                  {block.assignments.map((assignment, index) => (
-                    <span key={assignment.athleteId}>
-                      {index > 0 && ", "}
-                      <Link href={`/coach/athletes/${assignment.athleteId}`} className="font-black text-[var(--color-ink)] hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
-                        {assignment.athlete.user.firstName} {assignment.athlete.user.lastName}
-                      </Link>
-                    </span>
-                  ))}
-                  </p>
-                </details>
               </CardContent>
             </Card>
           );

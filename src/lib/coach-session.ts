@@ -75,3 +75,33 @@ export async function getAthleteAverageRepsByTraining(athleteIds: string[], excl
 
   return new Map(Array.from(totals, ([athleteId, total]) => [athleteId, Math.round(total.reps / total.trainings)]));
 }
+
+export async function getAthleteAverageGoldenRepsByTraining(athleteIds: string[], excludedSessionId: string) {
+  if (athleteIds.length === 0) return new Map<string, number>();
+
+  const completions = await prisma.athleteSessionCompletion.findMany({
+    where: { athleteId: { in: athleteIds }, sessionId: { not: excludedSessionId }, status: "COMPLETED" },
+    select: {
+      athleteId: true,
+      session: {
+        select: {
+          diveLogs: {
+            where: { athleteId: { in: athleteIds } },
+            select: { athleteId: true, goldenRepetitions: true }
+          }
+        }
+      }
+    }
+  });
+
+  const totals = new Map<string, { reps: number; trainings: number }>();
+  for (const completion of completions) {
+    const reps = completion.session.diveLogs
+      .filter((log) => log.athleteId === completion.athleteId)
+      .reduce((sum, log) => sum + log.goldenRepetitions, 0);
+    const current = totals.get(completion.athleteId) ?? { reps: 0, trainings: 0 };
+    totals.set(completion.athleteId, { reps: current.reps + reps, trainings: current.trainings + 1 });
+  }
+
+  return new Map(Array.from(totals, ([athleteId, total]) => [athleteId, Number((total.reps / total.trainings).toFixed(1))]));
+}
