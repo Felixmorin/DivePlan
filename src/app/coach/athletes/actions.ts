@@ -355,6 +355,24 @@ export async function addCompetitionDive(formData: FormData) {
   revalidatePath("/athlete/profile");
 }
 
+export async function updateCompetitionDiveDifficulty(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const diveId = String(formData.get("diveId") ?? "");
+  const rawDifficulty = String(formData.get("difficulty") ?? "").trim().replace(",", ".");
+  const difficulty = rawDifficulty === "" ? null : Number(rawDifficulty);
+  if (!diveId || (difficulty !== null && (!Number.isFinite(difficulty) || difficulty < 0 || difficulty > 10))) {
+    throw new Error("Le degré de difficulté doit être compris entre 0 et 10.");
+  }
+  const dive = await prisma.competitionDive.findFirst({
+    where: { id: diveId, athlete: { clubId } },
+    select: { id: true, athleteId: true }
+  });
+  if (!dive) throw new Error("Plongeon introuvable.");
+  await prisma.competitionDive.update({ where: { id: dive.id }, data: { difficulty } });
+  revalidatePath(`/coach/athletes/${dive.athleteId}`);
+  revalidatePath("/athlete/profile");
+}
+
 export async function removeCompetitionDive(formData: FormData) {
   const { clubId } = await requireCoach();
   const diveId = String(formData.get("diveId") ?? "");

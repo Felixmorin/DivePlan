@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, X } from "lucide-react";
-import { addCompetitionDive, removeCompetitionDive, reorderCompetitionDives } from "@/app/coach/athletes/actions";
+import { addCompetitionDive, removeCompetitionDive, reorderCompetitionDives, updateCompetitionDiveDifficulty } from "@/app/coach/athletes/actions";
+import { worldAquaticsDifficulty } from "@/lib/world-aquatics-dd";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,6 +95,12 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
                     <span className="w-5 shrink-0 text-xs font-bold text-[var(--color-ink-muted)]">{index + 1}.</span>
                     <div className="min-w-0 flex-1">
                       <div className="font-black">{dive.code} <span className="ml-1 text-sm font-semibold text-[var(--color-ink-muted)]">{dive.difficulty?.toFixed(1) ?? "—"}</span></div>
+                      {!demo && <form action={updateCompetitionDiveDifficulty} className="mt-2 flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+                        <input type="hidden" name="diveId" value={dive.id} />
+                        <label className="sr-only" htmlFor={`dd-${dive.id}`}>Modifier le DD de {dive.code}</label>
+                        <input id={`dd-${dive.id}`} name="difficulty" inputMode="decimal" placeholder="DD" defaultValue={dive.difficulty?.toFixed(1) ?? ""} className="min-h-9 w-20 rounded-lg border border-[var(--color-border)] bg-white px-2 text-sm outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
+                        <Button type="submit" size="sm" variant="outline" disabled={pending}>Enregistrer DD</Button>
+                      </form>}
                     </div>
                     {!demo && <div className="flex shrink-0 items-center">
                       <Button type="button" variant="ghost" size="icon" disabled={pending || index === 0} aria-label={`Monter ${dive.code}`} onClick={() => saveOrder(height.value, items, dive.id, items[index - 1]?.id ?? dive.id)}>
@@ -118,9 +125,17 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
                 <input type="hidden" name="athleteId" value={athleteId} />
                 <input type="hidden" name="height" value={height.value} />
                 <div className="grid grid-cols-[1fr_5rem] gap-2">
-                  <input name="diveCode" required maxLength={12} placeholder="Code" aria-label={`Code du plongeon ${height.label}`} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
+                  <input name="diveCode" required maxLength={12} placeholder="Code" aria-label={`Code du plongeon ${height.label}`} onChange={(event) => {
+                    const form = event.currentTarget.form;
+                    const difficultyInput = form?.elements.namedItem("difficulty");
+                    if (difficultyInput instanceof HTMLInputElement) {
+                      const value = worldAquaticsDifficulty(event.currentTarget.value, height.value);
+                      difficultyInput.value = value === null ? "" : value.toFixed(1);
+                    }
+                  }} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
                   <input name="difficulty" inputMode="decimal" placeholder="DD" aria-label={`Degré de difficulté ${height.label}`} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
                 </div>
+                <p className="text-xs text-[var(--color-ink-muted)]">DD World Aquatics proposé automatiquement pour les codes reconnus; modifiable au besoin.</p>
                 <Button type="submit" disabled={demo || pending} variant="default" className="w-full"><Plus className="h-4 w-4" /> Ajouter</Button>
               </form>
             </section>
