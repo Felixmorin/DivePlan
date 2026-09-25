@@ -28,7 +28,7 @@ export function SessionCard({ title, focus, href, printHref, status, group, dura
           <Link href={href} className="mt-3 block text-lg font-black leading-tight text-[var(--color-ink)] hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
             {title}
           </Link>
-          {focus && <p className="mt-1 text-sm leading-6 text-[var(--color-ink-muted)]">{group ? `${group} - ` : ""}{focus}</p>}
+          {(group || focus) && <p className="mt-1 text-sm leading-6 text-[var(--color-ink-muted)]">{[group, focus].filter(Boolean).join(" - ")}</p>}
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline" size="sm"><Link href={href}>Ouvrir</Link></Button>

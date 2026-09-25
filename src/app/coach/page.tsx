@@ -289,7 +289,7 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false }: { sess
           <span className="text-sm font-bold text-white/55">{formatMontrealTime(session.date)}</span>
         </div>
         <h2 className="mt-5 max-w-2xl text-4xl font-black leading-none text-white md:text-5xl">{session.title}</h2>
-        <p className="mt-3 max-w-xl text-sm leading-6 text-white/68">{session.groupName} - {session.focus}</p>
+        <p className="mt-3 max-w-xl text-sm leading-6 text-white/68">{[session.groupName, session.focus].filter(Boolean).join(" - ")}</p>
         <div className="mt-6 grid gap-3 sm:grid-cols-4">
           <DarkMetric label="Duree" value={`${session.duration} min`} />
           <DarkMetric label="Athletes" value={assignedIds.length} />
@@ -334,7 +334,7 @@ function WeekDayCard({ day, sessions, schedules, activeSessionIds, demo = false 
               <div key={session.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3">
                 <StatusPill status={String(status)} />
                 <Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`} className="mt-2 block font-black leading-tight hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{session.title}</Link>
-                <p className="mt-1 line-clamp-2 text-sm text-[var(--color-ink-muted)]">{session.focus}</p>
+                {session.focus && <p className="mt-1 line-clamp-2 text-sm text-[var(--color-ink-muted)]">{session.focus}</p>}
                 <div className="mt-3 flex flex-wrap gap-1.5">{uniqueBlockTypes(session.blocks).map((type) => <BlockTypeBadge key={String(type)} type={String(type)} className="px-2" />)}</div>
               </div>
             );

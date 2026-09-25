@@ -46,6 +46,12 @@ const competitionDiveSchema = z.object({
   difficulty: z.string().trim().optional()
 });
 
+const competitionDiveOrderSchema = z.object({
+  athleteId: z.string().min(1),
+  height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM]),
+  diveIds: z.array(z.string().min(1)).max(50)
+});
+
 const athleteDiveFamilySchema = z.object({
   athleteId: z.string().min(1),
   diveCode: z.string().trim().min(1).max(12),
@@ -363,6 +369,41 @@ export async function removeCompetitionDive(formData: FormData) {
 
   await prisma.competitionDive.delete({ where: { id: dive.id } });
   revalidatePath(`/coach/athletes/${dive.athleteId}`);
+  revalidatePath("/athlete/profile");
+}
+
+export async function reorderCompetitionDives(formData: FormData) {
+  const { clubId } = await requireCoach();
+  let diveIds: unknown;
+  try {
+    diveIds = JSON.parse(String(formData.get("diveIds") ?? ""));
+  } catch {
+    throw new Error("L’ordre des plongeons est invalide.");
+  }
+
+  const parsed = competitionDiveOrderSchema.safeParse({
+    athleteId: formData.get("athleteId"),
+    height: formData.get("height"),
+    diveIds
+  });
+  if (!parsed.success || new Set(parsed.data.diveIds).size !== parsed.data.diveIds.length) {
+    throw new Error("L’ordre des plongeons est invalide.");
+  }
+
+  const { athleteId, height, diveIds: orderedIds } = parsed.data;
+  const currentDives = await prisma.competitionDive.findMany({
+    where: { athleteId, height, athlete: { clubId } },
+    select: { id: true }
+  });
+  if (currentDives.length !== orderedIds.length || currentDives.some(({ id }) => !orderedIds.includes(id))) {
+    throw new Error("La liste des plongeons a changé. Recharge la page et réessaie.");
+  }
+
+  await prisma.$transaction(orderedIds.map((id, position) =>
+    prisma.competitionDive.update({ where: { id }, data: { position } })
+  ));
+
+  revalidatePath(`/coach/athletes/${athleteId}`);
   revalidatePath("/athlete/profile");
 }
 

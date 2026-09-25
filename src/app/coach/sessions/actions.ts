@@ -14,14 +14,15 @@ import {
   getSessionSnapshot,
   parseSessionTemplatePayload
 } from "@/lib/session-template";
-import { formatMontrealDate, parseMontrealDateTimeInput, parseMontrealSessionDate, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
+import { formatMontrealDate, parseMontrealDateTimeInput, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 
 const sessionInputSchema = z.object({
   title: z.string().min(3),
   date: z.string().min(10),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   groupId: z.string().min(1),
   duration: z.number().int().min(15).max(600),
-  focus: z.string().trim().min(1).max(200).default("Entraînement"),
+  focus: z.string().trim().max(200).default(""),
   notes: z.string().optional(),
   planningEventId: z.string().optional(),
   templateId: z.string().optional(),
@@ -124,7 +125,6 @@ export async function createDrylandExercise(input: QuickExerciseInput) {
 export async function createTrainingSession(input: CreateSessionInput) {
   const { user, coach, clubId } = await requireCoach();
   const data = sessionInputSchema.parse(input);
-  const sessionDate = parseMontrealSessionDate(data.date);
   const group = await prisma.trainingGroup.findFirst({
     where: { id: data.groupId, clubId }
   });
@@ -140,6 +140,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
   if (planningEvent && toMontrealDateInputValue(planningEvent.startsAt) !== data.date) {
     throw new Error("L'horaire sélectionné ne correspond pas à la date de la séance.");
   }
+  const sessionDate = planningEvent?.startsAt ?? parseMontrealDateTimeInput(`${data.date}T${data.time}`);
 
   if (data.templateId) {
     const template = await prisma.sessionTemplate.findFirst({
@@ -603,12 +604,12 @@ export async function updateTrainingSession(formData: FormData) {
   }
 
   const title = String(formData.get("title") ?? "").trim();
-  const focus = String(formData.get("focus") ?? "").trim();
+  const focus = String(formData.get("focus") ?? existing.focus).trim();
   const duration = Number(formData.get("duration") ?? existing.duration);
   const date = String(formData.get("date") ?? "").trim();
   const status = String(formData.get("status") ?? existing.status) as SessionStatus;
 
-  if (!title || !focus || !date || !Object.values(SessionStatus).includes(status) || !Number.isInteger(duration) || duration < 15 || duration > 600) {
+  if (!title || !date || !Object.values(SessionStatus).includes(status) || !Number.isInteger(duration) || duration < 15 || duration > 600) {
     throw new Error("Details de seance invalides.");
   }
 

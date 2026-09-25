@@ -34,7 +34,7 @@ export default async function AthleteWeekPage() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h2 className="truncate text-xl font-black">{completion.title}</h2>
-                <p className="mt-1 text-sm leading-6 text-white/62">{completion.focus}</p>
+                {completion.focus && <p className="mt-1 text-sm leading-6 text-white/62">{completion.focus}</p>}
               </div>
               <StatusPill status={completion.status} />
             </div>

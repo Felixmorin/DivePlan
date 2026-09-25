@@ -471,7 +471,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
           <section className="rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
             <Badge className="bg-white text-[var(--color-navy)]">{formatMontrealTime(session.date)}</Badge>
             <h1 className="mt-5 text-4xl font-black leading-none">{session.title}</h1>
-            <p className="mt-3 text-sm font-semibold leading-6 text-white/68">{session.focus}</p>
+            {session.focus && <p className="mt-3 text-sm font-semibold leading-6 text-white/68">{session.focus}</p>}
             <div className="mt-5 grid grid-cols-2 gap-2">
               <StartStat label="Blocs" value={blocks.length} />
               <StartStat label="Groupe" value={session.group} />
@@ -633,7 +633,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
           </div>
           <h1 className="mt-5 text-4xl font-black leading-none">{block.title}</h1>
           {block.description && <p className="mt-3 whitespace-pre-line text-sm font-semibold leading-6 text-white/78">{block.description}</p>}
-          <p className="mt-3 text-sm font-semibold leading-6 text-white/68">{session.focus}</p>
+          {session.focus && <p className="mt-3 text-sm font-semibold leading-6 text-white/68">{session.focus}</p>}
           {session.notes && <div className="mt-4 rounded-2xl bg-[var(--color-athlete-bg)] p-3 text-sm leading-6 text-white/70">{session.notes}</div>}
           <div className="mt-5 rounded-2xl bg-white/8 p-4">
             <div className="text-xs font-bold uppercase text-white/38">Progression du bloc</div>

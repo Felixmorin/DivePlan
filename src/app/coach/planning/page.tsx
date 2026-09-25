@@ -328,7 +328,7 @@ function PlanningSessionCard({ session, active, demo }: { session: PlanningSessi
         <span className="text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealTime(session.date)}</span>
       </div>
       <Link href={href} className="mt-3 block font-black leading-tight hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{session.title}</Link>
-      <p className="mt-1 text-sm leading-5 text-[var(--color-ink-muted)]">{session.focus}</p>
+      {session.focus && <p className="mt-1 text-sm leading-5 text-[var(--color-ink-muted)]">{session.focus}</p>}
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs font-bold text-[var(--color-ink-muted)]">
         <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {session.duration}</span>
         <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {athleteCount}</span>

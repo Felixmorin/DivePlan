@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Clock3, Eye, FileText, MoreHorizontal, Plus, Printer, Send, Trash2, Users, Waves } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Eye, FileText, MoreHorizontal, Plus, Printer, Send, Trash2, Users, Waves } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -19,14 +19,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { SessionTemplatePayload } from "@/lib/session-template";
 import { countPoolContexts, validatePoolListRow, type PoolListRow } from "@/lib/pool-list";
-import { toMontrealDateInputValue } from "@/lib/timezone";
+import { toMontrealDateInputValue, toMontrealDateTimeInputValue } from "@/lib/timezone";
 
 const schema = z.object({
   title: z.string().min(3, "Nom requis"),
   date: z.string().min(10, "Date requise"),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Heure requise"),
   groupId: z.string().min(1, "Groupe requis"),
-  duration: z.number().min(15, "Minimum 15 minutes"),
-  focus: z.string().min(3, "Focus requis"),
   notes: z.string().optional()
   ,planningEventId: z.string().optional()
 });
@@ -162,9 +161,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     defaultValues: {
       title: initialTemplate?.payload.title ?? "Arriere + ouverture",
       date: toMontrealDateInputValue(),
+      time: "",
       groupId: initialGroupId,
-      duration: initialTemplate?.payload.duration ?? 90,
-      focus: initialTemplate?.payload.focus ?? "203C, 201B, entrees propres",
       notes: initialTemplate?.payload.notes ?? "Priorite aux entrees propres."
       ,planningEventId: ""
     }
@@ -208,6 +206,13 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
       form.setValue("planningEventId", "");
     }
   }, [form, planningEvents, watched.date, watched.groupId, watched.planningEventId]);
+  useEffect(() => {
+    const selectedEvent = planningEvents.find((event) => event.id === watched.planningEventId);
+    if (selectedEvent) {
+      const time = toMontrealDateTimeInputValue(selectedEvent.startsAt).slice(11, 16);
+      form.setValue("time", time, { shouldValidate: true });
+    }
+  }, [form, planningEvents, watched.planningEventId]);
   const selectedDrylandExercises = useMemo(() => effectiveDrylandBlocks.reduce((sum, block) => sum + block.exerciseIds.length, 0), [effectiveDrylandBlocks]);
   const poolAssignmentValues = activePoolBlocks.map((block) => effectivePoolAssignments[block.id] ?? []);
   const allAssignedIds = uniqueIds([...effectiveDrylandBlocks.flatMap((block) => block.athleteIds), ...poolAssignmentValues.flat()]);
@@ -215,7 +220,9 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     ...effectiveDrylandBlocks.map((block) => block.athleteIds.length === 0 ? block.title : null),
     ...activePoolBlocks.map((block) => ((poolAssignments[block.id] ?? []).length === 0 ? block.title : null))
   ].filter(Boolean);
-  const totalDuration = Number(watched.duration ?? 0);
+  const totalDuration = Math.min(600, Math.max(15,
+    effectiveDrylandBlocks.reduce((sum, block) => sum + block.duration, 0) + activePoolBlocks.reduce((sum, block) => sum + block.duration, 0)
+  ));
   const poolVolume = activePoolBlocks.reduce((sum, block) => sum + block.sections.reduce((sectionSum, section) => sectionSum + sectionVolume(section), 0), 0);
   const dryVolume = effectiveDrylandBlocks.reduce((sum, block) => sum + block.exerciseIds.reduce((blockSum, exerciseId) => {
     const exercise = library.find((item) => item.id === exerciseId);
@@ -328,6 +335,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
         try {
           await onCreate({
             ...values,
+            focus: "",
+            duration: totalDuration,
             warmup: { ...warmup, enabled: false },
             cooldown: { ...cooldown, enabled: false },
             drylandBlocks: effectiveDrylandBlocks.map(({ title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides }) => ({ title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides })),
@@ -372,7 +381,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
-          {step === 0 && <DetailsStep form={form} selectedGroupId={watched.groupId ?? ""} selectedDate={watched.date ?? ""} groups={groups} planningEvents={planningEvents} />}
+          {step === 0 && <DetailsStep form={form} selectedGroupId={watched.groupId ?? ""} selectedDate={watched.date ?? ""} selectedPlanningEventId={watched.planningEventId ?? ""} selectedTime={watched.time ?? ""} groups={groups} planningEvents={planningEvents} />}
           {step === 1 && (
             <DrylandStep
               exercises={library}
@@ -417,7 +426,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
             <PublicationStep
               title={watched.title ?? ""}
               date={watched.date ?? ""}
-              totalDuration={totalDuration}
+              time={watched.time ?? ""}
               totalVolume={totalVolume}
               unassignedBlocks={unassignedBlocks.length}
               selectedExercises={selectedDrylandExercises}
@@ -429,14 +438,13 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
         <SummaryPanel
           title={watched.title ?? "Nouvelle seance"}
           date={watched.date ?? ""}
-          duration={totalDuration}
           blockCount={activePoolBlocks.length + drylandBlocks.length}
           athleteCount={allAssignedIds.length}
           unassignedCount={unassignedBlocks.length}
           totalVolume={totalVolume}
           isPending={isPending}
           canPublish={
-            visibleAthletes.length > 0 && groups.length > 0 && totalDuration >= 15 && (drylandBlocks.length > 0 || activePoolBlocks.length > 0) && drylandBlocks.every((block) => block.title.trim().length > 0 && Number.isInteger(block.duration) && block.duration > 0 && block.exerciseIds.length > 0 && block.athleteIds.length > 0) && activePoolBlocks.every(poolBlockIsValid) && poolAssignmentValues.every((ids) => ids.length > 0)
+            visibleAthletes.length > 0 && groups.length > 0 && Boolean(watched.time) && (drylandBlocks.length > 0 || activePoolBlocks.length > 0) && drylandBlocks.every((block) => block.title.trim().length > 0 && Number.isInteger(block.duration) && block.duration > 0 && block.exerciseIds.length > 0 && block.athleteIds.length > 0) && activePoolBlocks.every(poolBlockIsValid) && poolAssignmentValues.every((ids) => ids.length > 0)
           }
           onPublish={publishSession}
         />
@@ -471,13 +479,14 @@ function Stepper({ current, onStepChange }: { current: number; onStepChange: (st
 
 type OptionalBlock = { enabled: boolean; title: string; duration: number; description: string };
 
-function DetailsStep({ form, selectedGroupId, selectedDate, groups, planningEvents }: { form: ReturnType<typeof useForm<FormValues>>; selectedGroupId: string; selectedDate: string; groups: BuilderGroup[]; planningEvents: BuilderPlanningEvent[] }) {
+function DetailsStep({ form, selectedGroupId, selectedDate, selectedPlanningEventId, selectedTime, groups, planningEvents }: { form: ReturnType<typeof useForm<FormValues>>; selectedGroupId: string; selectedDate: string; selectedPlanningEventId: string; selectedTime: string; groups: BuilderGroup[]; planningEvents: BuilderPlanningEvent[] }) {
   return (
     <Card>
       <CardHeader><CardTitle>Details de la seance</CardTitle></CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2">
         <Field label="Nom"><Input placeholder="Nom" {...form.register("title")} /></Field>
         <Field label="Date"><Input type="date" {...form.register("date")} /></Field>
+        <Field label="Heure">{selectedPlanningEventId ? <><Input type="time" value={selectedTime} disabled /><input type="hidden" {...form.register("time")} /></> : <Input type="time" required {...form.register("time")} />}<span className="mt-1 block text-xs font-semibold normal-case text-[var(--color-ink-muted)]">{selectedPlanningEventId ? "Heure reprise de l’horaire sélectionné." : "Choisis l’heure de début de la séance."}</span></Field>
         <Field label="Groupe">
           <select className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]" {...form.register("groupId")}>
             {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
@@ -490,7 +499,6 @@ function DetailsStep({ form, selectedGroupId, selectedDate, groups, planningEven
           </select>
           <span className="mt-1 block text-xs font-semibold normal-case text-[var(--color-ink-muted)]">L’horaire reste affiché dans le planning; la séance sera ouverte depuis ce même élément.</span>
         </Field>
-        <Field label="Duree totale"><Input type="number" placeholder="Duree" {...form.register("duration", { valueAsNumber: true })} /></Field>
         <Field label="Notes coach" className="md:col-span-2"><Textarea placeholder="Notes coach" {...form.register("notes")} /></Field>
         {Object.values(form.formState.errors).length > 0 && <div className="md:col-span-2 rounded-2xl bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">Certains champs requis sont incomplets.</div>}
       </CardContent>
@@ -545,10 +553,9 @@ function DrylandStep(props: {
         );
         return (
           <div key={block.id} className="block-layout grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-            <BlockCard type="dryland" title={block.title || `Dryland ${blockIndex + 1}`} duration={block.duration} assigned={block.athleteIds} athletes={props.athletes} state={selectedExercises.length > 0 ? "Pret" : "A completer"} flash={props.flashBlock === block.id} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < props.blocks.length - 1} onMoveUp={() => props.onMoveBlock(block.id, -1)} onMoveDown={() => props.onMoveBlock(block.id, 1)}>
-              <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_130px_auto]">
+            <BlockCard type="dryland" title={block.title || `Dryland ${blockIndex + 1}`} assigned={block.athleteIds} athletes={props.athletes} state={selectedExercises.length > 0 ? "Pret" : "A completer"} flash={props.flashBlock === block.id} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < props.blocks.length - 1} onMoveUp={() => props.onMoveBlock(block.id, -1)} onMoveDown={() => props.onMoveBlock(block.id, 1)}>
+              <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_auto]">
                 <Input aria-label={`Nom du bloc dryland ${blockIndex + 1}`} value={block.title} placeholder={`Dryland ${blockIndex + 1}`} onChange={(event) => props.onUpdateBlock(block.id, { title: event.target.value })} />
-                <Input aria-label={`Durée du bloc dryland ${blockIndex + 1}`} type="number" min="1" value={block.duration} onChange={(event) => props.onUpdateBlock(block.id, { duration: Number(event.target.value) })} />
                 <Button type="button" variant="outline" aria-label={`Supprimer ${block.title}`} onClick={() => props.onRemoveBlock(block.id)}><Trash2 className="h-4 w-4" /> Supprimer</Button>
               </div>
               <div className="mb-4 rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">Choisis et ordonne uniquement les exercices de ce bloc.</div>
@@ -700,10 +707,9 @@ function PoolStep({ athletes, poolBlocks, poolAssignments, flashBlock, onAssignP
 function PoolBlock({ block, blockIndex, blockCount, assigned, athletes, flash, onAssign, onRemove, onMove, onUpdate, onRowsChange }: { block: BuilderPoolBlock; blockIndex: number; blockCount: number; assigned: string[]; athletes: BuilderAthlete[]; flash: boolean; onAssign: (ids: string[]) => void; onRemove: () => void; onMove: (direction: -1 | 1) => void; onUpdate: (update: Partial<Pick<BuilderPoolBlock, "title" | "duration">>) => void; onRowsChange: (rows: PoolListRow[]) => void }) {
   return (
     <div className="block-layout grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <BlockCard type="pool" title={block.title || "Piscine"} duration={block.duration} assigned={assigned} athletes={athletes} state={poolBlockIsValid(block) ? "Personnalisable" : "A completer"} flash={flash} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < blockCount - 1} onMoveUp={() => onMove(-1)} onMoveDown={() => onMove(1)}>
-        <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_130px]">
+      <BlockCard type="pool" title={block.title || "Piscine"} assigned={assigned} athletes={athletes} state={poolBlockIsValid(block) ? "Personnalisable" : "A completer"} flash={flash} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < blockCount - 1} onMoveUp={() => onMove(-1)} onMoveDown={() => onMove(1)}>
+        <div className="mb-4">
           <Input aria-label={`Nom du bloc piscine ${block.title}`} value={block.title} placeholder="Nom du bloc piscine" onChange={(event) => onUpdate({ title: event.target.value })} />
-          <Input aria-label={`Durée du bloc piscine ${block.title}`} type="number" min="1" value={block.duration} onChange={(event) => onUpdate({ duration: Number(event.target.value) })} />
         </div>
         <label className="mb-4 flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-white p-3 font-black">
           <input type="checkbox" defaultChecked onChange={(event) => { if (!event.target.checked) onRemove(); }} /> Inclure ce bloc dans l&apos;entraînement
@@ -744,7 +750,7 @@ function AssignmentsStep(props: { athletes: BuilderAthlete[]; drylandBlocks: Bui
   );
 }
 
-function PublicationStep({ title, date, totalDuration, totalVolume, unassignedBlocks, selectedExercises, athleteCount }: { title: string; date: string; totalDuration: number; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number }) {
+function PublicationStep({ title, date, time, totalVolume, unassignedBlocks, selectedExercises, athleteCount }: { title: string; date: string; time: string; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number }) {
   return (
     <Card>
       <CardHeader><CardTitle>Publication</CardTitle></CardHeader>
@@ -752,9 +758,8 @@ function PublicationStep({ title, date, totalDuration, totalVolume, unassignedBl
         <div className="rounded-[var(--radius-panel)] border border-[var(--color-navy)] bg-[var(--color-navy)] p-5 text-white">
           <StatusPill status="READY" />
           <h2 className="mt-4 text-3xl font-black leading-none text-white">{title || "Nouvelle seance"}</h2>
-          <p className="mt-3 text-sm leading-6 text-white/68">{date || "Date a definir"}</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-4">
-            <DarkMetric label="Duree" value={`${totalDuration || 0} min`} />
+          <p className="mt-3 text-sm leading-6 text-white/68">{date || "Date a definir"}{time ? ` · ${time}` : ""}</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <DarkMetric label="Athletes" value={athleteCount} />
             <DarkMetric label="Volume" value={totalVolume} />
             <DarkMetric label="Exercices" value={selectedExercises} />
@@ -769,7 +774,7 @@ function PublicationStep({ title, date, totalDuration, totalVolume, unassignedBl
   );
 }
 
-function SummaryPanel(props: { title: string; date: string; duration: number; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number; isPending: boolean; canPublish: boolean; onPublish: () => void }) {
+function SummaryPanel(props: { title: string; date: string; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number; isPending: boolean; canPublish: boolean; onPublish: () => void }) {
   return (
     <aside className="hidden xl:block">
       <Card className="sticky top-6">
@@ -783,7 +788,6 @@ function SummaryPanel(props: { title: string; date: string; duration: number; bl
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <SummaryMetric icon={Clock3} label="Duree totale" value={`${props.duration || 0} min`} />
           <SummaryMetric icon={FileText} label="Blocs" value={props.blockCount} />
           <SummaryMetric icon={Users} label="Athletes concernes" value={props.athleteCount} />
           <SummaryMetric icon={AlertTriangle} label="Sans assignation" value={props.unassignedCount} tone={props.unassignedCount > 0 ? "warning" : "default"} />
@@ -800,7 +804,7 @@ function SummaryPanel(props: { title: string; date: string; duration: number; bl
   );
 }
 
-function BlockCard({ type, title, duration, assigned, athletes, state, flash, canMoveUp, canMoveDown, onMoveUp, onMoveDown, children }: { type: "dryland" | "pool"; title: string; duration: number; assigned: string[]; athletes: BuilderAthlete[]; state: string; flash?: boolean; canMoveUp?: boolean; canMoveDown?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; children: React.ReactNode }) {
+function BlockCard({ type, title, assigned, athletes, state, flash, canMoveUp, canMoveDown, onMoveUp, onMoveDown, children }: { type: "dryland" | "pool"; title: string; assigned: string[]; athletes: BuilderAthlete[]; state: string; flash?: boolean; canMoveUp?: boolean; canMoveDown?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const contentId = useId();
 
@@ -813,7 +817,6 @@ function BlockCard({ type, title, duration, assigned, athletes, state, flash, ca
             <BlockTypeBadge type={type} />
             <CardTitle className="mt-3 text-2xl">{title}</CardTitle>
             <div className="mt-2 flex flex-wrap gap-3 text-sm font-bold text-[var(--color-ink-muted)]">
-              <span>{duration} min</span>
               <span>{assigned.length} athlete{assigned.length > 1 ? "s" : ""}</span>
               <span>{state}</span>
             </div>

@@ -94,7 +94,7 @@ export default async function AthleteTodayPage() {
       <SectionHeading title="Dernière séance" href="/athlete/week" linkLabel="Voir l’historique" />
       <section className="latest-card">
         {latestCompletion ? (
-          <ScheduleRow date={latestCompletion.completedAt ? formatMontrealDate(new Date(latestCompletion.completedAt), { weekday: "short", day: "numeric", month: "short" }) : "Récente"} title={latestCompletion.title} details={`${latestCompletion.duration} min  ·  ${latestCompletion.focus}`} meta={latestCompletion.status === "COMPLETED" ? "Séance complétée" : "Séance en cours"} href="/athlete/week" status={latestCompletion.status === "COMPLETED"} />
+          <ScheduleRow date={latestCompletion.completedAt ? formatMontrealDate(new Date(latestCompletion.completedAt), { weekday: "short", day: "numeric", month: "short" }) : "Récente"} title={latestCompletion.title} details={[`${latestCompletion.duration} min`, latestCompletion.focus].filter(Boolean).join(" · ")} meta={latestCompletion.status === "COMPLETED" ? "Séance complétée" : "Séance en cours"} href="/athlete/week" status={latestCompletion.status === "COMPLETED"} />
         ) : <EmptyState className="border-0 bg-transparent p-4" title="Aucun historique" description="Tes séances terminées apparaîtront ici." />}
       </section>
 
@@ -130,7 +130,7 @@ function formatMinutes(minutes: number) {
 }
 
 function ScheduleRow({ date, icon, title, details, meta, href, status }: { date: string; icon?: React.ReactNode; title: string; details: string; meta: string; href: string; status?: boolean }) {
-  return <Link href={href} className={`schedule-row ${icon ? "" : "schedule-row-no-icon"}`}><span className="schedule-date">{date}</span>{icon && <span className="schedule-icon">{icon}</span>}<span className="schedule-copy"><strong>{title}</strong><span>{details}</span><em>{meta}</em></span>{status ? <span className="completed-pill"><Check /> Complétée</span> : <ChevronRight className="row-arrow" />}</Link>;
+  return <Link href={href} className={`schedule-row ${icon ? "" : "schedule-row-no-icon"}`}><span className="schedule-date">{date}</span>{icon && <span className="schedule-icon">{icon}</span>}<span className="schedule-copy"><strong>{title}</strong><span>{details}</span>{meta && <em>{meta}</em>}</span>{status ? <span className="completed-pill"><Check /> Complétée</span> : <ChevronRight className="row-arrow" />}</Link>;
 }
 
 function QuickLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, Plus, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves, X } from "lucide-react";
-import { addCompetitionDive, deleteAthlete, removeCompetitionDive, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
+import { deleteAthlete, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
+import { CompetitionDiveEditor } from "@/components/coach/competition-dive-editor";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { TechniqueDetails } from "@/components/athlete/technique-details";
 import { StatusPill } from "@/components/training/status-pill";
@@ -367,7 +368,7 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
 
       <AthleteProgress profile={profile} />
 
-      <CompetitionDiveEditor profile={profile} demo={demo} />
+      <CompetitionDiveEditor athleteId={profile.id} dives={profile.competitionDives} demo={demo} />
 
       <DiveNotesCard notes={profile.diveNotes} />
 
@@ -519,64 +520,6 @@ function AthleteProgress({ profile }: { profile: AthleteProfile }) {
         <CardContent className="p-5"><TechniqueDetails technique={technique} skillDives={profile.progress.skillDives} athleteId={profile.id} updateFamilyAction={updateAthleteDiveFamily} /></CardContent>
       </Card>
     </div>
-  );
-}
-
-const competitionHeights = [
-  { value: "ONE_METER", label: "1 m" },
-  { value: "THREE_METER", label: "3 m" },
-  { value: "PLATFORM", label: "Plateforme" }
-] as const;
-
-function CompetitionDiveEditor({ profile, demo }: { profile: AthleteProfile; demo: boolean }) {
-  return (
-    <Card className="mb-6 overflow-hidden">
-      <CardHeader className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-        <CardTitle>Liste de compétition</CardTitle>
-        <p className="text-sm leading-6 text-[var(--color-ink-muted)]">Cette liste est visible dans le profil de l’athlète. Ajoute les plongeons dans l’ordre de passage prévu.</p>
-      </CardHeader>
-      <CardContent className="grid gap-5 p-5 lg:grid-cols-3">
-        {competitionHeights.map((height) => {
-          const dives = profile.competitionDives.filter((dive) => dive.height === height.value);
-
-          return (
-            <section key={height.value} className="rounded-[var(--radius-ui)] border border-[var(--color-border)] p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h3 className="text-lg font-black">{height.label}</h3>
-                <Badge variant="outline">{dives.length}</Badge>
-              </div>
-
-              <div className="space-y-2">
-                {dives.map((dive) => (
-                  <div key={dive.id} className="flex items-center gap-2 rounded-xl bg-[var(--color-surface-raised)] p-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-black">{dive.code} <span className="ml-1 text-sm font-semibold text-[var(--color-ink-muted)]">{dive.difficulty?.toFixed(1) ?? "—"}</span></div>
-                    </div>
-                    <form action={demo ? undefined : removeCompetitionDive}>
-                      <input type="hidden" name="diveId" value={dive.id} />
-                      <Button type="submit" variant="ghost" size="icon" disabled={demo} aria-label={`Retirer ${dive.code}`} className="text-[var(--color-danger)]">
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </form>
-                  </div>
-                ))}
-                {dives.length === 0 && <p className="py-3 text-sm font-semibold text-[var(--color-ink-muted)]">Aucun plongeon.</p>}
-              </div>
-
-              <form action={demo ? undefined : addCompetitionDive} className="mt-4 grid gap-2 border-t border-[var(--color-border)] pt-4">
-                <input type="hidden" name="athleteId" value={profile.id} />
-                <input type="hidden" name="height" value={height.value} />
-                <div className="grid grid-cols-[1fr_5rem] gap-2">
-                  <input name="diveCode" required maxLength={12} placeholder="Code" aria-label={`Code du plongeon ${height.label}`} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
-                  <input name="difficulty" inputMode="decimal" placeholder="DD" aria-label={`Degré de difficulté ${height.label}`} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
-                </div>
-                <Button type="submit" disabled={demo} variant="default" className="w-full"><Plus className="h-4 w-4" /> Ajouter</Button>
-              </form>
-            </section>
-          );
-        })}
-      </CardContent>
-    </Card>
   );
 }
 

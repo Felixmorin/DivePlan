@@ -361,7 +361,7 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     thisWeekDiveRepetitions: thisWeekDiveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0),
     thisWeekMinutes: thisWeekSessions.reduce((sum, completion) => sum + completion.session.duration, 0),
     completionRate,
-    recentNote: completedSessions[0]?.session.focus ?? "Complete une seance pour generer une tendance.",
+    recentNote: completedSessions[0]?.session.focus || "Complete une seance pour generer une tendance.",
     chartData: dailyData
       .slice(-6)
       .map(({ date, volume }) => ({

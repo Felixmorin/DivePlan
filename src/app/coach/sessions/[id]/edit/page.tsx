@@ -105,7 +105,6 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
                     <option value="NOT_DONE">Non faite</option>
                   </select>
                 </Field>
-                <Field label="Focus" className="md:col-span-2"><Input name="focus" defaultValue={session.focus} required /></Field>
                 <Field label="Notes coach" className="md:col-span-2"><Textarea name="notes" defaultValue={session.notes ?? ""} /></Field>
               </CardContent>
             </Card>

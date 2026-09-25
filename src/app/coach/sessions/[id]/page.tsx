@@ -41,7 +41,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         <div>
           <StatusPill status={session.status} />
           <h1 className="mt-2 text-3xl font-black">{session.title}</h1>
-          <p className="text-[var(--color-ink-muted)]">{formatMontrealDate(session.date)} · {session.duration} min · {session.focus}</p>
+          <p className="text-[var(--color-ink-muted)]">{[formatMontrealDate(session.date), `${session.duration} min`, session.focus].filter(Boolean).join(" · ")}</p>
         </div>
         <div className="flex gap-2">
           <form action={duplicateTrainingSession}>

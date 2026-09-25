@@ -228,6 +228,7 @@ a {
 .coach-athlete-progress .trend-chart-toolbar option { background: var(--color-surface); color: var(--color-ink); }
 .coach-athlete-progress .technique-row,
 .coach-athlete-progress .technique-dive { color: var(--color-ink-muted); }
+.coach-athlete-progress .technique-dives { border-left-color: var(--color-brand); background: var(--color-surface-raised); }
 .coach-athlete-progress .technique-dive strong { color: var(--color-brand-strong); }
 .coach-athlete-progress .technique-dive b { color: var(--color-ink); }
 .coach-athlete-progress .technique-dives p { color: var(--color-ink-muted); }
