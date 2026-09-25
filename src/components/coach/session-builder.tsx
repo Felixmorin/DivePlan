@@ -319,7 +319,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     }
   }
 
-  function publishSession() {
+  function publishSession(status: "READY" | "DRAFT" = "READY") {
     const invalidPoolBlock = activePoolBlocks.find((block) => block.sections.length === 0 || poolSectionsToRows(block.sections).some((row) => validatePoolListRow(row).errors.length > 0));
 
     if (invalidPoolBlock) {
@@ -336,6 +336,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
         try {
           await onCreate({
             ...values,
+            status,
             focus: "",
             duration: totalDuration,
             warmup: { ...warmup, enabled: false },
@@ -350,7 +351,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
           });
           window.localStorage.removeItem(draftKey);
         } catch (error) {
-          setPublishError(error instanceof Error ? error.message : "La publication est impossible pour le moment.");
+          setPublishError(error instanceof Error ? error.message : "La séance ne peut pas être enregistrée pour le moment.");
         }
       });
     })();
@@ -432,6 +433,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
               unassignedBlocks={unassignedBlocks.length}
               selectedExercises={selectedDrylandExercises}
               athleteCount={allAssignedIds.length}
+              onSaveDraft={() => publishSession("DRAFT")}
             />
           )}
         </div>
@@ -447,7 +449,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
           canPublish={
             visibleAthletes.length > 0 && groups.length > 0 && Boolean(watched.time) && (drylandBlocks.length > 0 || activePoolBlocks.length > 0) && drylandBlocks.every((block) => block.title.trim().length > 0 && Number.isInteger(block.duration) && block.duration > 0 && block.exerciseIds.length > 0 && block.athleteIds.length > 0) && activePoolBlocks.every(poolBlockIsValid) && poolAssignmentValues.every((ids) => ids.length > 0)
           }
-          onPublish={publishSession}
+          onPublish={() => publishSession("READY")}
+          onSaveDraft={() => publishSession("DRAFT")}
         />
       </div>
 
@@ -753,7 +756,7 @@ function AssignmentsStep(props: { athletes: BuilderAthlete[]; drylandBlocks: Bui
   );
 }
 
-function PublicationStep({ title, date, time, totalVolume, unassignedBlocks, selectedExercises, athleteCount }: { title: string; date: string; time: string; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number }) {
+function PublicationStep({ title, date, time, totalVolume, unassignedBlocks, selectedExercises, athleteCount, onSaveDraft }: { title: string; date: string; time: string; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number; onSaveDraft: () => void }) {
   return (
     <Card>
       <CardHeader><CardTitle>Publication</CardTitle></CardHeader>
@@ -770,14 +773,15 @@ function PublicationStep({ title, date, time, totalVolume, unassignedBlocks, sel
         </div>
         {unassignedBlocks > 0 && <WarningText>{unassignedBlocks} bloc{unassignedBlocks > 1 ? "s" : ""} sans assignation. La publication sera refusee par validation serveur si dryland ou piscine A/B est vide.</WarningText>}
         <div className="rounded-2xl bg-[var(--color-surface-raised)] p-4 text-sm font-semibold text-[var(--color-ink-muted)]">
-          La seance est enregistree et publiee uniquement quand tu cliques sur Publier la seance.
+          Tu peux enregistrer la séance comme brouillon. Les athlètes ne la verront qu’après publication.
         </div>
+        <Button type="button" variant="outline" onClick={onSaveDraft}><FileText className="h-4 w-4" /> Enregistrer en brouillon</Button>
       </CardContent>
     </Card>
   );
 }
 
-function SummaryPanel(props: { title: string; date: string; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number; isPending: boolean; canPublish: boolean; onPublish: () => void }) {
+function SummaryPanel(props: { title: string; date: string; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number; isPending: boolean; canPublish: boolean; onPublish: () => void; onSaveDraft: () => void }) {
   return (
     <aside className="hidden xl:block">
       <Card className="sticky top-6">
@@ -795,10 +799,11 @@ function SummaryPanel(props: { title: string; date: string; blockCount: number; 
           <SummaryMetric icon={Users} label="Athletes concernes" value={props.athleteCount} />
           <SummaryMetric icon={AlertTriangle} label="Sans assignation" value={props.unassignedCount} tone={props.unassignedCount > 0 ? "warning" : "default"} />
           <SummaryMetric icon={Waves} label="Volume estime" value={props.totalVolume} />
-          <div className="rounded-2xl bg-[var(--color-surface-raised)] p-3 text-xs font-semibold text-[var(--color-ink-muted)]">Sauvegarde: non enregistre. Publication: creation serveur en statut publie.</div>
+          <div className="rounded-2xl bg-[var(--color-surface-raised)] p-3 text-xs font-semibold text-[var(--color-ink-muted)]">Les brouillons sont visibles uniquement par le coach jusqu’à leur publication.</div>
           <div className="grid gap-2">
             <Button type="button" variant="outline" disabled><Eye className="h-4 w-4" /> Apercu apres creation</Button>
             <Button type="button" variant="outline" disabled><Printer className="h-4 w-4" /> Impression apres creation</Button>
+            <Button type="button" variant="outline" disabled={props.isPending || !props.canPublish} onClick={props.onSaveDraft}><FileText className="h-4 w-4" /> Enregistrer en brouillon</Button>
             <Button type="button" variant="action" disabled={props.isPending || !props.canPublish} onClick={props.onPublish}><Send className="h-4 w-4" /> {props.isPending ? "Publication..." : "Publier la seance"}</Button>
           </div>
         </CardContent>

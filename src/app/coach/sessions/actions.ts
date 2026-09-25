@@ -26,6 +26,7 @@ const sessionInputSchema = z.object({
   notes: z.string().optional(),
   planningEventId: z.string().optional(),
   templateId: z.string().optional(),
+  status: z.nativeEnum(SessionStatus).default(SessionStatus.READY).refine((status) => status === SessionStatus.DRAFT || status === SessionStatus.READY),
   warmup: z.object({
     enabled: z.boolean(),
     title: z.string().trim().min(1),
@@ -166,7 +167,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         focus: data.focus.trim(),
         notes: data.notes?.trim() || null,
         payload,
-        status: SessionStatus.READY
+        status: data.status
       })
     );
     if (planningEvent?.id) {
@@ -248,7 +249,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         notes: data.notes?.trim() || null,
         weekId: week.id,
         coachId: coach.id,
-        status: SessionStatus.READY
+        status: data.status
         ,planningEventId: planningEvent?.id
       }
     });
@@ -453,6 +454,25 @@ export async function markTrainingSessionNotDone(formData: FormData) {
   revalidatePath("/coach/planning");
   revalidatePath("/coach/sessions");
   revalidatePath(`/coach/sessions/${session.id}`);
+}
+
+export async function publishTrainingSession(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const session = await prisma.trainingSession.findFirst({
+    where: { id: sessionId, week: { clubId }, status: SessionStatus.DRAFT },
+    select: { id: true, title: true }
+  });
+  if (!session) throw new Error("Brouillon introuvable pour ce club.");
+
+  await prisma.trainingSession.update({ where: { id: session.id }, data: { status: SessionStatus.READY } });
+  await trackEvent({ type: "session.published", message: `Seance publiee: ${session.title}`, clubId, userId: user.id, metadata: { sessionId: session.id } });
+  revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/coach/sessions");
+  revalidatePath(`/coach/sessions/${session.id}`);
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/calendar");
 }
 
 export async function markAthleteSessionCompleted(formData: FormData) {

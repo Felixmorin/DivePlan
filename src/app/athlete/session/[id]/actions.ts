@@ -25,6 +25,10 @@ export async function saveAthleteDiveNote(sessionId: string, poolDiveId: string,
   }
 
   const data = diveNoteSchema.parse({ poolDiveId, note });
+  const readyBlocks = await getAssignedSessionBlocks(sessionId, athlete.id);
+  const readyDiveIds = new Set(readyBlocks.flatMap((block) => block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.id)) ?? []));
+  if (!readyDiveIds.has(data.poolDiveId)) throw new Error("Ce plongeon n'est pas accessible a l'athlete courant.");
+
   const dive = await prisma.poolDive.findFirst({
     where: {
       id: data.poolDiveId,
@@ -60,16 +64,17 @@ export async function startAthleteSession(sessionId: string) {
   const session = await prisma.trainingSession.findFirst({
     where: {
       id: sessionId,
+      status: "READY",
       blocks: { some: { assignments: { some: { athleteId: athlete.id } } } }
     },
-    select: { date: true }
+    select: { date: true, status: true }
   });
 
   if (!session) {
     throw new Error("Cette seance n'est pas assignee a l'athlete courant.");
   }
 
-  if (!isSessionStartAvailable(session.date)) {
+  if (session.status !== "READY" || !isSessionStartAvailable(session.date)) {
     throw new Error(SESSION_NOT_STARTED_MESSAGE);
   }
 
@@ -131,6 +136,7 @@ export async function recordAthleteSessionPreview(sessionId: string) {
   const session = await prisma.trainingSession.findFirst({
     where: {
       id: sessionId,
+      status: "READY",
       blocks: { some: { assignments: { some: { athleteId: athlete.id } } } }
     },
     select: { title: true }
@@ -153,6 +159,9 @@ export async function openAthleteBlock(sessionId: string, blockId: string) {
   const athlete = await getCurrentAthlete();
   if (!athlete) throw new Error("Aucun athlete actif trouve.");
 
+  const readyBlocks = await getAssignedSessionBlocks(sessionId, athlete.id);
+  if (!readyBlocks.some((block) => block.id === blockId)) throw new Error("Ce bloc n'est pas accessible a l'athlete courant.");
+
   const block = await prisma.sessionBlock.findFirst({
     where: { id: blockId, sessionId, assignments: { some: { athleteId: athlete.id } } },
     select: { id: true }
@@ -169,6 +178,9 @@ export async function openAthleteBlock(sessionId: string, blockId: string) {
 export async function closeAthleteBlock(sessionId: string, blockId: string) {
   const athlete = await getCurrentAthlete();
   if (!athlete) throw new Error("Aucun athlete actif trouve.");
+
+  const readyBlocks = await getAssignedSessionBlocks(sessionId, athlete.id);
+  if (!readyBlocks.some((block) => block.id === blockId)) throw new Error("Ce bloc n'est pas accessible a l'athlete courant.");
 
   await prisma.athleteBlockTiming.updateMany({
     where: { athleteId: athlete.id, blockId, block: { sessionId } },
@@ -233,10 +245,10 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
 async function assertSessionStartAvailable(sessionId: string) {
   const session = await prisma.trainingSession.findUnique({
     where: { id: sessionId },
-    select: { date: true }
+    select: { date: true, status: true }
   });
 
-  if (!session || !isSessionStartAvailable(session.date)) {
+  if (!session || session.status !== "READY" || !isSessionStartAvailable(session.date)) {
     throw new Error(SESSION_NOT_STARTED_MESSAGE);
   }
 }

@@ -188,6 +188,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
   const session = await prisma.trainingSession.findFirst({
     where: {
       id: sessionId,
+      status: "READY",
       blocks: { some: { assignments: { some: { athleteId } } } }
     },
     include: {

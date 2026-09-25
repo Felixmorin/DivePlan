@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
-import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
+import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolProgressRefresh, PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
 import { CoachShell } from "@/components/coach/coach-shell";
@@ -44,6 +44,10 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <p className="text-[var(--color-ink-muted)]">{[formatMontrealDate(session.date), `${session.duration} min`, session.focus].filter(Boolean).join(" · ")}</p>
         </div>
         <div className="flex gap-2">
+          {session.status === "DRAFT" && <form action={publishTrainingSession}>
+            <input type="hidden" name="sessionId" value={session.id} />
+            <Button type="submit" variant="action">Publier pour les athlètes</Button>
+          </form>}
           <form action={duplicateTrainingSession}>
             <input type="hidden" name="sessionId" value={session.id} />
             <Button type="submit" variant="outline"><Copy className="h-4 w-4" /> Dupliquer</Button>

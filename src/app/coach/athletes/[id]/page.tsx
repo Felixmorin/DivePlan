@@ -39,7 +39,7 @@ type AthleteProfile = {
   nextCompetition?: { title: string; startsAt: Date; endsAt: Date | null };
   competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; difficulty: number | null }>;
   diveNotes: Array<{ id: string; code: string; name: string; height: string; note: string; updatedAt: Date; sessionId: string; sessionTitle: string; sessionDate: Date }>;
-  progress: Pick<AthleteProgressTotals, "chartData" | "weeklyChartData" | "monthlyChartData" | "skillData" | "skillDives">;
+  progress: Pick<AthleteProgressTotals, "chartData" | "sessionChartData" | "weeklyChartData" | "monthlyChartData" | "skillData" | "skillDives">;
   previewStats: AthleteSessionPreviewStats;
   attendance: { seasonLabel: string; absent: number; total: number; rate: number; months: Array<{ label: string; absent: number; total: number; rate: number }> };
 };
@@ -275,6 +275,12 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
             { name: "20 août", volume: 31 },
             { name: "22 août", volume: 27 },
             { name: "25 août", volume: 36 }
+          ],
+          sessionChartData: [
+            { name: "18 août", volume: 22, finalRating: "Bien" },
+            { name: "20 août", volume: 31, finalRating: "Très bien" },
+            { name: "22 août", volume: 27, finalRating: "Moyen" },
+            { name: "25 août", volume: 36, finalRating: "Bien" }
           ],
           weeklyChartData: [{ name: "Sem. 18 août", volume: 29 }],
           monthlyChartData: [{ name: "août 2026", volume: 29 }],
@@ -514,7 +520,7 @@ function AthleteProgress({ profile }: { profile: AthleteProfile }) {
     <div className="coach-athlete-progress mb-6 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,.9fr)]">
       <Card>
         <CardHeader><CardTitle>Tendance</CardTitle><p className="text-sm leading-6 text-[var(--color-ink-muted)]">Volume d’entraînement dans le temps</p></CardHeader>
-        <CardContent><ProgressChart data={profile.progress.chartData} weeklyData={profile.progress.weeklyChartData} monthlyData={profile.progress.monthlyChartData} /></CardContent>
+        <CardContent><ProgressChart data={profile.progress.chartData} sessionData={profile.progress.sessionChartData} weeklyData={profile.progress.weeklyChartData} monthlyData={profile.progress.monthlyChartData} /></CardContent>
       </Card>
       <Card>
         <CardContent className="p-5"><TechniqueDetails technique={technique} skillDives={profile.progress.skillDives} athleteId={profile.id} updateFamilyAction={updateAthleteDiveFamily} /></CardContent>

@@ -31,10 +31,10 @@ export async function POST(request: Request) {
 
   const session = await prisma.trainingSession.findUnique({
     where: { id: payload.sessionId },
-    select: { date: true }
+    select: { date: true, status: true }
   });
 
-  if (!session || !isSessionStartAvailable(session.date)) {
+  if (!session || session.status !== "READY" || !isSessionStartAvailable(session.date)) {
     return NextResponse.json({ error: SESSION_NOT_STARTED_MESSAGE }, { status: 409 });
   }
 

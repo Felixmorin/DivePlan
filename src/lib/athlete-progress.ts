@@ -38,6 +38,9 @@ type AssignedSessionBlock = Prisma.SessionBlockGetPayload<{
 }>;
 
 export async function getAssignedSessionBlocks(sessionId: string, athleteId: string) {
+  const session = await prisma.trainingSession.findFirst({ where: { id: sessionId, status: "READY" }, select: { id: true } });
+  if (!session) return [];
+
   return prisma.sessionBlock.findMany({
     where: {
       sessionId,
