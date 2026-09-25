@@ -1,0 +1,1 @@
+ALTER TABLE "DrylandExercise" ADD COLUMN "roundTrip" BOOLEAN NOT NULL DEFAULT false;

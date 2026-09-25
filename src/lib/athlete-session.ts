@@ -12,6 +12,7 @@ export type AthleteSessionExercise = {
   sets: number | null;
   reps: number | null;
   duration: number | null;
+  roundTrip: boolean;
   equipment: string | null;
   completed: boolean;
   rating: string | null;
@@ -247,6 +248,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
           sets: blockExercise.sets,
           reps: blockExercise.reps,
           duration: blockExercise.duration,
+          roundTrip: blockExercise.exercise.roundTrip,
           equipment: blockExercise.exercise.equipment,
           completed: latestLog?.completed ?? false,
           rating: latestLog?.rating ?? null,

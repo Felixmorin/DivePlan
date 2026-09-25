@@ -43,7 +43,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     prisma.drylandExercise.findMany({
       where: { archivedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, equipment: true, tags: true }
+      select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, roundTrip: true, equipment: true, tags: true }
     }),
     templateId ? prisma.sessionTemplate.findFirst({ where: { id: templateId, clubId } }) : Promise.resolve(null),
     prisma.trainingSession.findMany({
@@ -99,6 +99,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
             sets: exercise.defaultSets,
             reps: exercise.defaultReps,
             duration: exercise.defaultDuration,
+            roundTrip: exercise.roundTrip,
             equipment: exercise.equipment,
             tags: exercise.tags
           }))}

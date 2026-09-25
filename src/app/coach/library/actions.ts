@@ -16,6 +16,7 @@ const exerciseSchema = z.object({
   defaultSets: z.number().int().min(1).max(50).nullable().optional(),
   defaultReps: z.number().int().min(1).max(500).nullable().optional(),
   defaultDuration: z.number().int().min(1).max(7200).nullable().optional(),
+  roundTrip: z.boolean().default(false),
   restSeconds: z.number().int().min(0).max(3600).nullable().optional(),
   coachNotes: z.string().trim().optional()
 });
@@ -37,8 +38,9 @@ export async function saveLibraryExercise(input: LibraryExerciseInput) {
     equipment: clean(data.equipment),
     setup: clean(data.setup),
     defaultSets: data.defaultSets ?? null,
-    defaultReps: data.defaultReps ?? null,
-    defaultDuration: data.defaultDuration ?? null,
+    defaultReps: data.roundTrip ? null : data.defaultReps ?? null,
+    defaultDuration: data.roundTrip ? null : data.defaultDuration ?? null,
+    roundTrip: data.roundTrip,
     restSeconds: data.restSeconds ?? null,
     coachNotes: clean(data.coachNotes),
     archivedAt: null

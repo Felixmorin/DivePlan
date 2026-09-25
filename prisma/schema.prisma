@@ -272,6 +272,7 @@ model DrylandExercise {
   defaultSets     Int?
   defaultReps     Int?
   defaultDuration Int?
+  roundTrip       Boolean                @default(false)
   equipment       String?
   tags            String[]
   bodyArea        String?

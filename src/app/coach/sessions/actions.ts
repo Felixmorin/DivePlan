@@ -78,6 +78,7 @@ const quickExerciseSchema = z.object({
   defaultSets: z.number().int().min(1).max(20).nullable().optional(),
   defaultReps: z.number().int().min(1).max(200).nullable().optional(),
   defaultDuration: z.number().int().min(1).max(3600).nullable().optional(),
+  roundTrip: z.boolean().default(false),
   tags: z.array(z.string().trim().min(1)).default([])
 });
 
@@ -100,11 +101,12 @@ export async function createDrylandExercise(input: QuickExerciseInput) {
       description: `Exercice ajoute rapidement: ${data.name}`,
       equipment: data.equipment?.trim() || null,
       defaultSets: data.defaultSets ?? null,
-      defaultReps: data.defaultReps ?? null,
-      defaultDuration: data.defaultDuration ?? null,
+      defaultReps: data.roundTrip ? null : data.defaultReps ?? null,
+      defaultDuration: data.roundTrip ? null : data.defaultDuration ?? null,
+      roundTrip: data.roundTrip,
       tags: Array.from(new Set(data.tags.map((tag) => tag.toLowerCase())))
     },
-    select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, equipment: true, tags: true }
+    select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, roundTrip: true, equipment: true, tags: true }
   });
 
   revalidatePath("/coach/sessions/new");
@@ -117,6 +119,7 @@ export async function createDrylandExercise(input: QuickExerciseInput) {
     sets: exercise.defaultSets,
     reps: exercise.defaultReps,
     duration: exercise.defaultDuration,
+    roundTrip: exercise.roundTrip,
     equipment: exercise.equipment,
     tags: exercise.tags
   };
@@ -197,7 +200,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
     }),
     prisma.drylandExercise.findMany({
       where: { id: { in: data.drylandBlocks.flatMap((block) => block.exerciseIds) }, archivedAt: null },
-      select: { id: true, defaultSets: true, defaultReps: true, defaultDuration: true }
+      select: { id: true, defaultSets: true, defaultReps: true, defaultDuration: true, roundTrip: true }
     })
   ]);
 
@@ -279,8 +282,8 @@ export async function createTrainingSession(input: CreateSessionInput) {
           blockId: drylandBlock.id,
           exerciseId: exercise.id,
           sets: exercise.override?.sets ?? exercise.defaultSets,
-          reps: exercise.override?.reps ?? exercise.defaultReps,
-          duration: exercise.override?.duration ?? exercise.defaultDuration,
+          reps: exercise.roundTrip ? null : exercise.override?.reps ?? exercise.defaultReps,
+          duration: exercise.roundTrip ? null : exercise.override?.duration ?? exercise.defaultDuration,
           notes: exercise.override?.notes ?? null,
           order
         }))

@@ -48,6 +48,7 @@ type BuilderExercise = {
   sets: number | null;
   reps: number | null;
   duration: number | null;
+  roundTrip: boolean;
   equipment: string | null;
   tags: string[];
 };
@@ -536,9 +537,9 @@ function DrylandStep(props: {
             </button>
             <div>
               <div className="font-black">{exercise.name}</div>
-              <div className="text-sm text-[var(--color-ink-muted)]">{exercise.sets ?? 1} x {exercise.reps ?? `${exercise.duration ?? 30} sec`} - {exercise.equipment ?? "Aucun"}</div>
+              <div className="text-sm text-[var(--color-ink-muted)]">{exercise.sets ?? 1} x {exercise.roundTrip ? "Aller-retour" : exercise.reps ?? `${exercise.duration ?? 30} sec`} - {exercise.equipment ?? "Aucun"}</div>
               {selected && <div className="mt-2 grid gap-2 sm:grid-cols-4">
-                {(["sets", "reps", "duration"] as const).map((field) => {
+                {(["sets", ...(exercise.roundTrip ? [] : ["reps", "duration"])] as ("sets" | "reps" | "duration")[]).map((field) => {
                   const value = block.exerciseOverrides[exercise.id]?.[field] ?? exercise[field];
                   return <Input key={field} aria-label={`${field === "sets" ? "Séries" : field === "reps" ? "Répétitions" : "Durée"} ${exercise.name}`} type="number" min="1" value={value ?? ""} placeholder={field === "sets" ? "Séries" : field === "reps" ? "Répétitions" : "Sec."} onChange={(event) => props.onUpdateBlock(block.id, { exerciseOverrides: { ...block.exerciseOverrides, [exercise.id]: { sets: block.exerciseOverrides[exercise.id]?.sets ?? exercise.sets, reps: block.exerciseOverrides[exercise.id]?.reps ?? exercise.reps, duration: block.exerciseOverrides[exercise.id]?.duration ?? exercise.duration, notes: block.exerciseOverrides[exercise.id]?.notes ?? null, [field]: event.target.value ? Number(event.target.value) : null } } })} />;
                 })}
@@ -583,6 +584,7 @@ function DrylandStep(props: {
 function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: QuickExerciseInput) => Promise<void> }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [roundTrip, setRoundTrip] = useState(false);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -608,11 +610,12 @@ function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: Qui
         category,
         equipment,
         defaultSets: optionalNumber(formData.get("sets")),
-        defaultReps: optionalNumber(formData.get("reps")),
-        defaultDuration: optionalNumber(formData.get("duration")),
+        defaultReps: roundTrip ? null : optionalNumber(formData.get("reps")),
+        defaultDuration: roundTrip ? null : optionalNumber(formData.get("duration")),
+        roundTrip: formData.get("roundTrip") === "on",
         tags
       })
-        .then(() => form.reset())
+        .then(() => { form.reset(); setRoundTrip(false); })
         .catch((caught) => setError(caught instanceof Error ? caught.message : "Creation impossible."));
     });
   }
@@ -626,8 +629,8 @@ function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: Qui
         <Input name="equipment" placeholder="Équipement" />
         <Input name="tags" placeholder="Tags: force, ouverture" />
         <Input name="sets" type="number" min="1" placeholder="Séries" />
-        <Input name="reps" type="number" min="1" placeholder="Répétitions" />
-        <Input name="duration" type="number" min="1" placeholder="Durée sec." />
+        <label className="flex items-center gap-2 text-sm font-bold"><input name="roundTrip" type="checkbox" checked={roundTrip} onChange={(event) => setRoundTrip(event.target.checked)} className="h-4 w-4 accent-[var(--color-brand)]" /> Aller-retour</label>
+        {!roundTrip && <><Input name="reps" type="number" min="1" placeholder="Répétitions" /><Input name="duration" type="number" min="1" placeholder="Durée sec." /></>}
         <Button type="submit" variant="action" disabled={pending}><Plus className="h-4 w-4" /> {pending ? "Création..." : "Ajouter"}</Button>
       </div>
       {error && <div className="mt-3 rounded-xl bg-[var(--color-danger)]/10 p-3 text-sm font-semibold text-[var(--color-danger)]">{error}</div>}

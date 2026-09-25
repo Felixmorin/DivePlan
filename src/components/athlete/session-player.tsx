@@ -699,7 +699,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                 return (
                   <button key={exercise.id} type="button" onClick={() => toggleExercise(exercise.id)} className={`grid min-h-20 w-full grid-cols-[48px_1fr_auto] items-center gap-3 rounded-2xl border p-3 text-left transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${checked ? "border-[var(--color-success)] bg-[var(--color-success)]/18" : "border-white/10 bg-[var(--color-athlete-panel)]"} ${pulseKey === exercise.id ? "builder-pulse" : ""}`}>
                     <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-athlete-panel-2)] text-white/72"><Dumbbell className="h-5 w-5" /></span>
-                    <span className="min-w-0"><span className="block break-words text-lg font-black leading-tight">{exercise.name}</span><span className="mt-1 block text-sm font-semibold text-white/60">{exercise.sets} x {exercise.reps ?? `${exercise.duration} sec`}</span></span>
+                    <span className="min-w-0"><span className="block break-words text-lg font-black leading-tight">{exercise.name}</span><span className="mt-1 block text-sm font-semibold text-white/60">{exercise.sets ?? 1} x {exercise.roundTrip ? "Aller-retour" : exercise.reps ?? `${exercise.duration} sec`}</span></span>
                     <span className={`flex h-11 w-11 items-center justify-center rounded-full ${checked ? "bg-[var(--color-success)] text-white" : "bg-white/8 text-white/45"}`}>{checked ? <CheckCircle2 className="h-6 w-6" /> : <Circle className="h-5 w-5" />}</span>
                   </button>
                 );
@@ -786,6 +786,7 @@ function countSessionItems(blocks: AthleteSessionView["blocks"]) {
 }
 
 function formatExercisePrescription(exercise: AthleteSessionView["blocks"][number]["exercises"][number]) {
+  if (exercise.roundTrip) return [exercise.sets !== null ? `${exercise.sets} série${exercise.sets > 1 ? "s" : ""}` : null, "Aller-retour"].filter(Boolean).join(" · ");
   const prescription = [
     exercise.sets !== null ? `${exercise.sets} série${exercise.sets > 1 ? "s" : ""}` : null,
     exercise.reps !== null ? `${exercise.reps} répétition${exercise.reps > 1 ? "s" : ""}` : null,
