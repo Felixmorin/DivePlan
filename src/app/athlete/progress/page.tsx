@@ -45,7 +45,7 @@ export default async function AthleteProgressPage() {
 
       <section className="progress-card trend-card" id="tendance">
         <div className="section-heading"><span className="section-icon mint"><Activity size={22} /></span><div><h2>Tendance</h2><p>Volume d’entraînement dans le temps</p></div></div>
-        <ProgressChart data={totals?.chartData ?? []} weeklyData={totals?.weeklyChartData ?? []} monthlyData={totals?.monthlyChartData ?? []} />
+        <ProgressChart data={totals?.chartData ?? []} sessionData={totals?.sessionChartData ?? []} weeklyData={totals?.weeklyChartData ?? []} monthlyData={totals?.monthlyChartData ?? []} />
       </section>
 
       <section className="progress-card technique-card">

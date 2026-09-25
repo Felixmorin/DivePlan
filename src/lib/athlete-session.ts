@@ -75,6 +75,7 @@ export type AthleteProgressTotals = {
   completionRate: number;
   recentNote: string;
   chartData: Array<{ name: string; volume: number }>;
+  sessionChartData: Array<{ name: string; volume: number; finalRating: string | null }>;
   weeklyChartData: Array<{ name: string; volume: number }>;
   monthlyChartData: Array<{ name: string; volume: number }>;
   skillData: Array<{ name: string; volume: number }>;
@@ -317,8 +318,10 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
   ]);
   const skillDives = new Map<string, { category: string; code: string; name: string; height: PoolHeight; volume: number }>();
   const dailyTotals = new Map<string, { date: Date; volume: number }>();
+  const sessionVolumes = new Map<string, number>();
 
   for (const log of diveLogs) {
+    sessionVolumes.set(log.sessionId, (sessionVolumes.get(log.sessionId) ?? 0) + log.repetitionsCompleted);
     const label = log.familyOverride ?? familyLabels[log.poolDive.diveCode.charAt(0)] ?? "Equilibre";
     chartTotals.set(label, (chartTotals.get(label) ?? 0) + log.repetitionsCompleted);
     const height = log.poolDive.poolSection.height;
@@ -369,6 +372,16 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
       .map(({ date, volume }) => ({
         name: new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", weekday: "short", day: "numeric", month: "short" }).format(date),
         volume
+      })),
+    sessionChartData: completedSessions
+      .filter((completion) => completion.completedAt !== null)
+      .slice()
+      .sort((a, b) => a.completedAt!.getTime() - b.completedAt!.getTime())
+      .slice(-8)
+      .map((completion) => ({
+        name: new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", day: "numeric", month: "short" }).format(completion.completedAt!),
+        volume: sessionVolumes.get(completion.sessionId) ?? 0,
+        finalRating: completion.rating
       })),
     weeklyChartData: weeklyData,
     monthlyChartData: monthlyData,
