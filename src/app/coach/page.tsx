@@ -44,7 +44,13 @@ export default async function CoachDashboard() {
   const dayStart = startOfMontrealDay(today);
   const dayEnd = addMontrealDays(dayStart, 1);
 
-  const [activeAthletes, rawSessions, schedules, recentEvents, recentCompletions] = await Promise.all([
+  const sessionInclude = {
+    week: { include: { group: true } },
+    blocks: { orderBy: { position: "asc" as const }, include: { assignments: true } },
+    completions: true
+  };
+
+  const [activeAthletes, rawSessions, schedules, recentEvents, recentCompletions, nextScheduledSession, latestScheduledSession] = await Promise.all([
     prisma.athlete.findMany({
       where: { clubId, active: true },
       include: { user: true, group: true },
@@ -75,23 +81,26 @@ export default async function CoachDashboard() {
       orderBy: [{ completedAt: "desc" }, { startedAt: "desc" }],
       take: 5,
       include: { athlete: { include: { user: true } }, session: true }
+    }),
+    prisma.trainingSession.findFirst({
+      where: { week: { clubId }, date: { gt: today } },
+      orderBy: { date: "asc" },
+      include: sessionInclude
+    }),
+    prisma.trainingSession.findFirst({
+      where: { week: { clubId }, date: { lte: today } },
+      orderBy: { date: "desc" },
+      include: sessionInclude
     })
   ]);
 
-  const sessions: DashboardSession[] = rawSessions.map((session) => ({
-    id: session.id,
-    title: session.title,
-    focus: session.focus,
-    date: session.date,
-    duration: session.duration,
-    status: session.status,
-    groupName: session.week.group.name,
-    blocks: session.blocks,
-    completions: session.completions,
-    planningEventId: session.planningEventId
-  }));
+  const sessions: DashboardSession[] = rawSessions.map(toDashboardSession);
   const todaySessions = sessions.filter((session) => session.date >= dayStart && session.date < dayEnd);
-  const primarySession = pickPrimarySession(todaySessions, sessions, today);
+  const primarySession = pickPrimarySession(
+    todaySessions,
+    nextScheduledSession ? toDashboardSession(nextScheduledSession) : undefined,
+    latestScheduledSession ? toDashboardSession(latestScheduledSession) : undefined
+  );
   const activeSessionIds = new Set(sessions.filter((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
   const groups = summarizeGroups(activeAthletes);
   const dashboardAthletes = activeAthletes.map((athlete) => ({
@@ -198,7 +207,13 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
     completions: []
     ,planningEventId: null
   })) satisfies DashboardSession[];
-  const primarySession = sessions.find((session) => session.title === demoSession.title) ?? sessions[0];
+  const now = new Date();
+  const todaySessions = sessions.filter((session) => sameMontrealDay(session.date, now));
+  const primarySession = pickPrimarySession(
+    todaySessions,
+    sessions.find((session) => session.date > now),
+    [...sessions].filter((session) => session.date <= now).sort((a, b) => b.date.getTime() - a.date.getTime())[0]
+  );
   const activeSessionIds = new Set<string>();
 
   return (
@@ -392,8 +407,34 @@ function getPrimaryAction(session: DashboardSession, status: SessionStatus | str
   return { label: "Ouvrir", href: base };
 }
 
-function pickPrimarySession(todaySessions: DashboardSession[], sessions: DashboardSession[], today: Date) {
-  return todaySessions.find((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")) ?? todaySessions.find((session) => session.date >= today) ?? todaySessions[0] ?? sessions.find((session) => session.date >= today) ?? sessions[0];
+function pickPrimarySession(todaySessions: DashboardSession[], nextSession?: DashboardSession, latestSession?: DashboardSession) {
+  return todaySessions.find((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")) ?? nextSession ?? latestSession;
+}
+
+function toDashboardSession(session: {
+  id: string;
+  title: string;
+  focus: string;
+  date: Date;
+  duration: number;
+  status: SessionStatus;
+  week: { group: { name: string } };
+  blocks: DashboardSession["blocks"];
+  completions: DashboardSession["completions"];
+  planningEventId: string | null;
+}): DashboardSession {
+  return {
+    id: session.id,
+    title: session.title,
+    focus: session.focus,
+    date: session.date,
+    duration: session.duration,
+    status: session.status,
+    groupName: session.week.group.name,
+    blocks: session.blocks,
+    completions: session.completions,
+    planningEventId: session.planningEventId
+  };
 }
 
 function summarizeGroups(activeAthletes: Array<{ id: string; group: { name: string } | null }>) {
