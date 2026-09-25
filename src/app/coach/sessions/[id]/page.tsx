@@ -34,6 +34,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     session.exerciseLogs.length > 0;
   const athleteComparisons = buildAthleteComparisons(session, athleteAverageReps);
   const resultSummary = summarizeResults(athleteComparisons);
+  const goldenRepCount = session.diveLogs.reduce((sum, log) => sum + log.goldenRepetitions, 0);
+  const averageGoldenReps = uniqueAthletes.length > 0 ? (goldenRepCount / uniqueAthletes.length).toFixed(1) : "0.0";
+  const firstPoolSectionId = session.blocks.flatMap((block) => block.poolTraining?.sections ?? [])[0]?.id;
 
   return (
     <CoachShell active="Seances">
@@ -90,7 +93,10 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       </Card>
       <Card className="mb-4">
         <CardHeader><CardTitle>Présences</CardTitle><p className="text-sm text-[var(--color-ink-muted)]">Coche les athlètes absents à cette séance.</p></CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <CardContent>
+          <details>
+          <summary className="mb-3 cursor-pointer text-sm font-bold text-[var(--color-ink-muted)]">Liste des athlètes ({uniqueAthletes.length})</summary>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {uniqueAthletes.map((athlete) => {
             const absent = session.absences.some((absence) => absence.athleteId === athlete.id);
             return <form key={athlete.id} action={setAthleteSessionAbsence} className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] p-3">
@@ -101,6 +107,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             </form>;
           })}
           {uniqueAthletes.length === 0 && <p className="text-sm text-[var(--color-ink-muted)]">Aucun athlète assigné à cette séance.</p>}
+          </div>
+          </details>
         </CardContent>
       </Card>
       <Card className="mb-4">
@@ -114,13 +122,15 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           </div>
         </CardHeader>
         <CardContent>
-          <div className="mb-4 grid gap-3 md:grid-cols-6">
+          <div className="mb-4 grid gap-3 md:grid-cols-8">
             <ResultSummaryTile label="Athletes termines" value={`${resultSummary.completedAthletes}/${resultSummary.totalAthletes}`} tone={resultSummary.completedAthletes === resultSummary.totalAthletes && resultSummary.totalAthletes > 0 ? "success" : "neutral"} />
             <ResultSummaryTile label="Reps dryland" value={`${resultSummary.actualDrylandReps}/${resultSummary.plannedDrylandReps}`} tone="neutral" />
             <ResultSummaryTile label="Reps piscine" value={`${resultSummary.actualPoolReps}/${resultSummary.plannedPoolReps}`} tone="neutral" />
             <ResultSummaryTile label="Progression dryland" value={`${resultSummary.drylandProgress}%`} tone={progressTone(resultSummary.drylandProgress, resultSummary.hasResults)} />
             <ResultSummaryTile label="Progression piscine" value={`${resultSummary.poolProgress}%`} tone={progressTone(resultSummary.poolProgress, resultSummary.hasResults)} />
             <ResultSummaryTile label="A revoir" value={resultSummary.needsAttention} tone={resultSummary.needsAttention > 0 ? "warning" : "success"} />
+            <ResultSummaryTile label="Golden reps" value={goldenRepCount} tone="neutral" />
+            <ResultSummaryTile label="Moy. golden / athlète" value={averageGoldenReps} tone="neutral" />
           </div>
           <div className="space-y-3">
             {athleteComparisons.map((athlete) => (
@@ -150,14 +160,17 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   <ComparisonMetric label="Progression" value={`${athlete.progress}%`} />
                 </div>
                 {athlete.notes.length > 0 ? (
-                  <div className="mt-3 space-y-2">
+                  <details className="mt-3 rounded-2xl bg-[var(--color-surface-raised)] p-3">
+                    <summary className="cursor-pointer font-bold">Commentaires ({athlete.notes.length})</summary>
+                    <div className="mt-2 space-y-2">
                     {athlete.notes.map((note) => (
                       <div key={note.key} className="flex gap-2 rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm text-[var(--color-ink-muted)]">
                         <NotebookText className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-brand-strong)]" />
                         <span><span className="font-black text-[var(--color-ink)]">{note.label}: </span>{note.text}</span>
                       </div>
                     ))}
-                  </div>
+                    </div>
+                  </details>
                 ) : (
                   <div className="mt-3 flex items-center gap-2 rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">
                     <CheckCircle2 className="h-4 w-4 text-[var(--color-success)]" />
@@ -194,13 +207,16 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                     <PoolProgressTracker
                       key={`progress-${section.id}`}
                       sectionLabel={section.label ?? section.height}
+                      showLegend={section.id === firstPoolSectionId}
                       athletes={block.assignments.map(({ athlete }) => ({ id: athlete.id, firstName: athlete.user.firstName, lastName: athlete.user.lastName }))}
                       dives={section.dives.map(({ id, diveCode, repetitions }) => ({ id, diveCode, repetitions }))}
-                      logs={session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted }) => ({ athleteId, poolDiveId, repetitionsCompleted }))}
+                      logs={session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted, goldenRepetitions }) => ({ athleteId, poolDiveId, repetitionsCompleted, goldenRepetitions }))}
                     />
                   ))}
                 </>}
-                <p className="mt-4 text-sm text-[var(--color-ink-muted)]">
+                <details className="mt-4 rounded-2xl border border-[var(--color-border)] px-3 py-2">
+                  <summary className="cursor-pointer text-sm font-bold text-[var(--color-ink-muted)]">Athletes ({assignedIds.length})</summary>
+                  <p className="pt-2 text-sm text-[var(--color-ink-muted)]">
                   Athletes:{" "}
                   {block.assignments.map((assignment, index) => (
                     <span key={assignment.athleteId}>
@@ -210,7 +226,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                       </Link>
                     </span>
                   ))}
-                </p>
+                  </p>
+                </details>
               </CardContent>
             </Card>
           );
