@@ -54,6 +54,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const [openDiveNote, setOpenDiveNote] = useState<string | null>(null);
   const [diveNoteDraft, setDiveNoteDraft] = useState("");
   const [expandedPreviewBlocks, setExpandedPreviewBlocks] = useState<Set<string>>(new Set());
+  const [sessionPreviewOpen, setSessionPreviewOpen] = useState(false);
   const [isNotePending, startNoteTransition] = useTransition();
   const [diveNotes, setDiveNotes] = useState<Record<string, string>>(() => Object.fromEntries(blocks.flatMap((block) => block.poolSections.flatMap((section) => section.dives.map((dive) => [dive.id, dive.personalNote ?? ""])) )));
   const previewTracked = useRef(false);
@@ -619,13 +620,39 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         <header className="sticky top-0 z-20 -mx-4 bg-[var(--color-athlete-bg)]/96 px-4 pb-3 pt-2 backdrop-blur">
           <div className="flex items-center justify-between gap-3">
             <button type="button" onClick={leaveSession} className="flex min-h-11 items-center gap-2 rounded-xl px-1 text-sm font-bold text-white/62 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowLeft className="h-4 w-4" /> Quitter</button>
-            <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-3">
+              <button type="button" aria-expanded={sessionPreviewOpen} aria-controls="active-session-preview" onClick={() => setSessionPreviewOpen((open) => !open)} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-2 text-xs font-bold text-white/55 transition hover:bg-white/6 hover:text-white/85 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><Eye className="h-4 w-4 text-[var(--color-action)]" /> Aperçu</button>
+              <div className="flex flex-col items-end gap-1">
               <div className="text-right text-xs font-bold text-white/45">Bloc {current + 1}/{blocks.length}</div>
               <SaveIndicator status={saveStatus} compact />
+              </div>
             </div>
           </div>
           <Progress value={progress} className="mt-2 h-2 bg-white/10" />
         </header>
+
+        {sessionPreviewOpen && <section id="active-session-preview" className="rounded-2xl border border-white/10 bg-[var(--color-athlete-panel)] p-3" aria-label="Aperçu de l’entraînement">
+          <div className="mb-2 flex items-center gap-2 px-1 text-xs font-black text-white/65"><Eye className="h-4 w-4 text-[var(--color-action)]" /> Aperçu de l’entraînement</div>
+          <div className="space-y-2">
+            {blocks.map((previewBlock, index) => <details key={previewBlock.id} open={expandedPreviewBlocks.has(previewBlock.id)} onToggle={(event) => {
+              const isOpen = event.currentTarget.open;
+              setExpandedPreviewBlocks((previous) => {
+                const next = new Set(previous);
+                if (isOpen) next.add(previewBlock.id);
+                else next.delete(previewBlock.id);
+                return next;
+              });
+            }} className="rounded-xl bg-[var(--color-athlete-bg)] px-3 py-2">
+              <summary className="min-h-10 cursor-pointer py-2 text-sm font-black marker:text-white/40">{index + 1}. {previewBlock.title}<span className="ml-2 text-xs font-semibold text-white/45">{previewBlock.exercises.length} exercice(s) · {previewBlock.poolSections.reduce((sum, section) => sum + section.dives.length, 0)} plongeon(s)</span></summary>
+              <div className="space-y-2 border-t border-white/8 pb-1 pt-3">
+                {previewBlock.description && <p className="whitespace-pre-line text-sm leading-5 text-white/62">{previewBlock.description}</p>}
+                {previewBlock.exercises.map((exercise) => <div key={exercise.id} className="flex items-start gap-2 text-sm"><Dumbbell className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-action)]" /><span><span className="font-bold">{exercise.name}</span><span className="ml-2 text-xs text-white/50">{formatExercisePrescription(exercise)}</span></span></div>)}
+                {previewBlock.poolSections.map((section) => <div key={section.id}><div className="mb-1 text-xs font-black uppercase tracking-wide text-white/45">{section.label}</div>{section.dives.map((dive) => <div key={dive.id} className="flex justify-between gap-2 py-1 text-sm"><span><b>{dive.code}</b> · {dive.name}</span><span className="shrink-0 text-xs text-white/55">{dive.repetitions} rep.</span></div>)}</div>)}
+                {previewBlock.exercises.length === 0 && previewBlock.poolSections.length === 0 && <p className="text-sm text-white/48">Aucun exercice détaillé pour ce bloc.</p>}
+              </div>
+            </details>)}
+          </div>
+        </section>}
 
         <section className="rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
           <div className="flex items-center justify-between gap-3">
