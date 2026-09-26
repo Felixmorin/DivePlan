@@ -28,7 +28,16 @@ export const getCurrentUser = cache(async () => {
       clubId: "dev-club",
       createdAt: new Date(),
       club: { id: "dev-club", name: "Club Mustang", logo: null, createdAt: new Date() },
-      coach: { id: "dev-coach-profile", userId: "dev-coach", clubId: "dev-club" },
+      coach: {
+        id: "dev-coach-profile",
+        userId: "dev-coach",
+        clubId: "dev-club",
+        planningDefaultView: "week",
+        weekStartsOn: 1,
+        printShowCoachNotes: true,
+        printShowAthleteNames: true,
+        printRepetitionChecks: false
+      },
       athlete: null
     };
   }

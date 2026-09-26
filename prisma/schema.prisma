@@ -147,13 +147,18 @@ model CompetitionDive {
 }
 
 model Coach {
-  id       String            @id @default(cuid())
-  userId   String            @unique
-  clubId   String
-  user     User              @relation(fields: [userId], references: [id])
-  club     Club              @relation(fields: [clubId], references: [id])
-  groups   TrainingGroup[]
-  sessions TrainingSession[]
+  id                    String            @id @default(cuid())
+  userId                String            @unique
+  clubId                String
+  planningDefaultView   String            @default("week")
+  weekStartsOn          Int               @default(1)
+  printShowCoachNotes   Boolean           @default(true)
+  printShowAthleteNames Boolean           @default(true)
+  printRepetitionChecks Boolean           @default(false)
+  user                  User              @relation(fields: [userId], references: [id])
+  club                  Club              @relation(fields: [clubId], references: [id])
+  groups                TrainingGroup[]
+  sessions              TrainingSession[]
 }
 
 model TrainingGroup {

@@ -113,6 +113,40 @@ export async function updateCoachAccount(formData: FormData) {
   revalidatePath("/coach/settings");
 }
 
+export async function updateCoachPreferences(formData: FormData) {
+  const { user, coach } = await requireCoach();
+  const planningDefaultView = formData.get("planningDefaultView");
+  const weekStartsOn = formData.get("weekStartsOn");
+
+  if (planningDefaultView !== "week" && planningDefaultView !== "month") {
+    throw new Error("Choisis une vue de planning valide.");
+  }
+
+  if (weekStartsOn !== "1" && weekStartsOn !== "0") {
+    throw new Error("Choisis le lundi ou le dimanche comme début de semaine.");
+  }
+
+  const preferences = {
+    planningDefaultView,
+    weekStartsOn: Number(weekStartsOn),
+    printShowCoachNotes: formData.get("printShowCoachNotes") === "on",
+    printShowAthleteNames: formData.get("printShowAthleteNames") === "on",
+    printRepetitionChecks: formData.get("printRepetitionChecks") === "on"
+  };
+
+  await prisma.coach.update({ where: { id: coach.id }, data: preferences });
+
+  await trackEvent({
+    type: "coach.preferences_updated",
+    message: "Préférences du coach mises à jour",
+    clubId: user.clubId,
+    userId: user.id
+  });
+
+  revalidatePath("/coach/settings");
+  revalidatePath("/coach/planning");
+}
+
 export async function signOutCoach() {
   await signOut({ redirectTo: "/login" });
 }

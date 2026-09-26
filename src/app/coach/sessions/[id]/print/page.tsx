@@ -1,4 +1,5 @@
 import { PrintButton } from "@/components/coach/print-button";
+import { requireCoach } from "@/lib/current-user";
 import { getCoachSession } from "@/lib/coach-session";
 import { formatMontrealDate } from "@/lib/timezone";
 import { countPoolContexts } from "@/lib/pool-list";
@@ -7,7 +8,11 @@ export const dynamic = "force-dynamic";
 
 export default async function PrintPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const { coach } = await requireCoach();
   const session = await getCoachSession(id);
+  const showCoachNotes = coach.printShowCoachNotes;
+  const showAthleteNames = coach.printShowAthleteNames;
+  const repetitionChecks = coach.printRepetitionChecks;
   const athletes = Array.from(
     new Map(
       session.blocks
@@ -32,12 +37,15 @@ export default async function PrintPage({ params }: { params: Promise<{ id: stri
         <header className="mb-3 border-b-2 border-black pb-2">
           <h1 className="text-2xl font-black">FEUILLE DE BASSIN · {session.title.toUpperCase()}</h1>
           <p className="text-sm">{formatMontrealDate(session.date)} · {session.week.group.name} · {session.duration} min</p>
+          {showCoachNotes && session.notes && <p className="mt-2 text-sm">Notes du coach : {session.notes}</p>}
         </header>
         <div className="print-block mb-3 rounded border border-black p-2">
           <h2 className="font-black">DRYLAND COMMUN</h2>
           {commonDry.length > 0 ? commonDry.map((block) => (
             <div key={block.id} className="text-sm">
-              <strong>{block.assignments.map((assignment) => assignment.athlete.user.firstName).join(" · ")}</strong> · {block.drylandExercises.map((item) => `${item.exercise.name} ${item.sets ?? 1} x ${item.reps ?? `${item.duration ?? 30} sec`}`).join(" · ")}
+              {showAthleteNames && <strong>{block.assignments.map((assignment) => fullName(assignment.athlete.user)).join(" · ")}</strong>}{showAthleteNames ? " · " : ""}{block.drylandExercises.map((item) => `${item.exercise.name} ${item.sets ?? 1} x ${item.reps ?? `${item.duration ?? 30} sec`}`).join(" · ")}
+              {showCoachNotes && block.description && <p className="ml-2">{block.description}</p>}
+              {showCoachNotes && block.drylandExercises.some((item) => item.notes) && <p className="ml-2">{block.drylandExercises.filter((item) => item.notes).map((item) => `${item.exercise.name} : ${item.notes}`).join(" · ")}</p>}
             </div>
           )) : <p className="text-sm">Aucun bloc dryland partage.</p>}
         </div>
@@ -50,8 +58,8 @@ export default async function PrintPage({ params }: { params: Promise<{ id: stri
 
             return (
               <div key={athlete.id} className="print-athlete-card min-h-52 border border-black p-2 text-xs">
-                <h3 className="text-base font-black">{athlete.user.firstName}</h3>
-                <table className="mt-1 w-full border-collapse"><thead><tr className="border-b border-black text-left"><th>Hauteur(s)</th><th>Plongeons</th><th>Reps</th><th className="text-right">Total</th></tr></thead><tbody>{sections.map((section) => <tr key={section.id} className="border-b border-black/30"><td>{section.label ?? section.height}</td><td>{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td>{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="text-right font-black">{sectionTotal(section)}</td></tr>)}</tbody></table>
+                {showAthleteNames && <h3 className="text-base font-black">{fullName(athlete.user)}</h3>}
+                <table className="mt-1 w-full border-collapse"><thead><tr className="border-b border-black text-left"><th>Hauteur</th><th>Plongeon</th><th>Reps</th>{repetitionChecks && <th>Fait</th>}</tr></thead><tbody>{sections.flatMap((section) => section.dives.map((dive) => <tr key={dive.id} className="border-b border-black/30"><td>{section.label ?? section.height}</td><td>{dive.diveCode}</td><td>{dive.repetitions}</td>{repetitionChecks && <td>{Array.from({ length: dive.repetitions }, (_, index) => <span key={index} className="mr-1 inline-block h-3 w-3 border border-black" />)}</td>}</tr>))}</tbody></table>
                 <div className="mt-2 border-t border-black pt-1 font-black">Total {total}</div>
                 <div className="mt-2 h-10 border border-dashed border-black p-1">Notes</div>
               </div>
@@ -67,11 +75,11 @@ export default async function PrintPage({ params }: { params: Promise<{ id: stri
 
         return (
           <section key={athlete.id} className="print-page mx-auto mt-4 max-w-6xl bg-white p-6 print:max-w-none">
-            <h1 className="mb-3 border-b-2 border-black pb-2 text-2xl font-black">FICHE INDIVIDUELLE · {athlete.user.firstName} {athlete.user.lastName}</h1>
+            <h1 className="mb-3 border-b-2 border-black pb-2 text-2xl font-black">FICHE INDIVIDUELLE{showAthleteNames ? ` · ${fullName(athlete.user)}` : ""}</h1>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="print-block"><h2 className="font-black">DRYLAND</h2>{blocks.filter((block) => block.type === "DRYLAND").flatMap((block) => block.drylandExercises).map((item) => <p key={item.exerciseId}>□ {item.exercise.name} · {item.sets ?? 1} x {item.reps ?? `${item.duration ?? 30} sec`}</p>)}</div>
-              <div className="print-block">{session.focus && <><h2 className="font-black">OBJECTIFS</h2><p>{session.focus}</p></>}<div className="mt-4 h-28 border border-black p-2">Notes</div></div>
-              {poolBlock && <div className="print-block col-span-2"><h2 className="font-black">LISTE PISCINE</h2><table className="w-full border-collapse"><thead><tr className="border-b border-black text-left"><th>Hauteur(s)</th><th>Plongeons</th><th>Repetitions</th><th className="text-right">Total</th></tr></thead><tbody>{poolBlock.poolTraining?.sections.map((section) => <tr key={section.id} className="border-b border-black/30"><td>{section.label ?? section.height}</td><td>{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td>{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="text-right font-black">{sectionTotal(section)}</td></tr>)}</tbody><tfoot><tr className="border-t-2 border-black font-black"><td colSpan={3}>Total general</td><td className="text-right">{poolBlock.estimatedVolume}</td></tr></tfoot></table></div>}
+              <div className="print-block"><h2 className="font-black">DRYLAND</h2>{blocks.filter((block) => block.type === "DRYLAND").map((block) => <div key={block.id}>{showCoachNotes && block.description && <p>{block.description}</p>}{block.drylandExercises.map((item) => <div key={item.exerciseId}><p>□ {item.exercise.name} · {item.sets ?? 1} x {item.reps ?? `${item.duration ?? 30} sec`}</p>{showCoachNotes && item.notes && <p className="ml-4">{item.notes}</p>}</div>)}</div>)}</div>
+              <div className="print-block">{session.focus && <><h2 className="font-black">OBJECTIFS</h2><p>{session.focus}</p></>}{showCoachNotes && session.notes && <><h2 className="mt-3 font-black">NOTES DU COACH</h2><p>{session.notes}</p></>}<div className="mt-4 h-28 border border-black p-2">Notes à écrire</div></div>
+              {poolBlock && <div className="print-block col-span-2"><h2 className="font-black">LISTE PISCINE</h2>{showCoachNotes && poolBlock.description && <p>{poolBlock.description}</p>}<table className="w-full border-collapse"><thead><tr className="border-b border-black text-left"><th>Hauteur</th><th>Plongeon</th><th>Répétitions</th>{repetitionChecks && <th>Fait</th>}</tr></thead><tbody>{poolBlock.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => <tr key={dive.id} className="border-b border-black/30"><td>{section.label ?? section.height}</td><td>{dive.diveCode}</td><td>{dive.repetitions}</td>{repetitionChecks && <td>{Array.from({ length: dive.repetitions }, (_, index) => <span key={index} className="mr-1 inline-block h-3 w-3 border border-black" />)}</td>}</tr>))}</tbody><tfoot><tr className="border-t-2 border-black font-black"><td colSpan={repetitionChecks ? 3 : 2}>Total général</td><td>{poolBlock.estimatedVolume}</td></tr></tfoot></table></div>}
             </div>
           </section>
         );
@@ -82,7 +90,8 @@ export default async function PrintPage({ params }: { params: Promise<{ id: stri
         {session.blocks.filter((block) => ["DRYLAND", "POOL"].includes(block.type)).map((block) => (
           <div key={block.id} className="print-block mb-3 border border-black p-2">
             <h2 className="font-black">{block.title}</h2>
-            <p>{block.assignments.length > 1 ? "Partage par " : "Assigne a "}{block.assignments.map((assignment) => assignment.athlete.user.firstName).join(" · ")}</p>
+            {showAthleteNames && <p>{block.assignments.length > 1 ? "Partagé par " : "Assigné à "}{block.assignments.map((assignment) => fullName(assignment.athlete.user)).join(" · ")}</p>}
+            {showCoachNotes && block.description && <p>{block.description}</p>}
           </div>
         ))}
       </section>
@@ -92,4 +101,8 @@ export default async function PrintPage({ params }: { params: Promise<{ id: stri
 
 function sectionTotal(section: { label: string | null; dives: Array<{ repetitions: number }> }) {
   return Math.max(1, countPoolContexts(section.label ?? "")) * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0);
+}
+
+function fullName(user: { firstName: string; lastName: string }) {
+  return `${user.firstName} ${user.lastName}`;
 }

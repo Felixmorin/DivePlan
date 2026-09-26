@@ -67,10 +67,12 @@ type PlanningSearchParams = {
 
 export default async function PlanningPage({ searchParams }: { searchParams: Promise<PlanningSearchParams> }) {
   const params = await searchParams;
-  const period = getPlanningPeriod(params);
-  const { clubId } = await requireCoach();
+  const { clubId, coach } = await requireCoach();
+  const weekStartsOn = coach.weekStartsOn === 0 ? 0 : 1;
+  const defaultView = coach.planningDefaultView === "month" ? "month" : "week";
+  const period = getPlanningPeriod(params, defaultView, weekStartsOn);
   if (clubId === "dev-club") {
-    return <DemoPlanningPage period={period} />;
+    return <DemoPlanningPage period={period} weekStartsOn={weekStartsOn} />;
   }
 
   const [rawSessions, rawEvents, groups, athletes] = await Promise.all([
@@ -121,10 +123,10 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
     ...athletes.map((athlete) => ({ id: athlete.id, label: `${athlete.user.firstName} ${athlete.user.lastName}`, kind: "athlete" as const }))
   ];
 
-  return <PlanningView period={period} sessions={sessions} events={events} targets={targets} />;
+  return <PlanningView period={period} sessions={sessions} events={events} targets={targets} weekStartsOn={weekStartsOn} />;
 }
 
-function DemoPlanningPage({ period }: { period: PlanningPeriod }) {
+function DemoPlanningPage({ period, weekStartsOn }: { period: PlanningPeriod; weekStartsOn: 0 | 1 }) {
   const sessions = weekSessions.filter((session) => session.title).map((session, index) => ({
     id: index === 1 ? "demo" : `demo-${index}`,
     title: session.title,
@@ -171,10 +173,10 @@ function DemoPlanningPage({ period }: { period: PlanningPeriod }) {
     ...demoAthletes.map((athlete) => ({ id: athlete.id, label: `${athlete.firstName} ${athlete.lastName}`, kind: "athlete" as const }))
   ];
 
-  return <PlanningView period={period} sessions={sessions} events={events} targets={targets} demo />;
+  return <PlanningView period={period} sessions={sessions} events={events} targets={targets} weekStartsOn={weekStartsOn} demo />;
 }
 
-function PlanningView({ period, sessions, events, targets, demo = false }: { period: PlanningPeriod; sessions: PlanningSession[]; events: PlanningEvent[]; targets: PlanningTarget[]; demo?: boolean }) {
+function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = false }: { period: PlanningPeriod; sessions: PlanningSession[]; events: PlanningEvent[]; targets: PlanningTarget[]; weekStartsOn: 0 | 1; demo?: boolean }) {
   const activeSessionIds = new Set(sessions.filter((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
 
   return (
@@ -190,21 +192,21 @@ function PlanningView({ period, sessions, events, targets, demo = false }: { per
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex rounded-full border border-[var(--color-border)] bg-white p-1">
-          <PlanningModeLink mode="week" active={period.mode === "week"} period={period}>Semaine</PlanningModeLink>
-          <PlanningModeLink mode="month" active={period.mode === "month"} period={period}>Mois</PlanningModeLink>
+          <PlanningModeLink mode="week" active={period.mode === "week"} period={period} weekStartsOn={weekStartsOn}>Semaine</PlanningModeLink>
+          <PlanningModeLink mode="month" active={period.mode === "month"} period={period} weekStartsOn={weekStartsOn}>Mois</PlanningModeLink>
         </div>
 
         {period.mode === "week" ? (
           <div className="flex items-center gap-2">
-            <Button asChild variant="outline" size="sm"><Link href={planningHref("week", addMontrealDays(period.weekStart, -7))}><ChevronLeft className="h-4 w-4" /> Semaine précédente</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href={planningHref("week", addMontrealDays(period.weekStart, -7), weekStartsOn)}><ChevronLeft className="h-4 w-4" /> Semaine précédente</Link></Button>
             <Button asChild variant="outline" size="sm"><Link href="/coach/planning?view=week">Aujourd&apos;hui</Link></Button>
-            <Button asChild variant="outline" size="sm"><Link href={planningHref("week", addMontrealDays(period.weekStart, 7))}>Semaine suivante <ChevronRight className="h-4 w-4" /></Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href={planningHref("week", addMontrealDays(period.weekStart, 7), weekStartsOn)}>Semaine suivante <ChevronRight className="h-4 w-4" /></Link></Button>
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm"><Link href={planningHref("month", addMontrealMonths(period.rangeStart, -1))}><ChevronLeft className="h-4 w-4" /> Mois précédent</Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href={planningHref("month", addMontrealMonths(period.rangeStart, -1), weekStartsOn)}><ChevronLeft className="h-4 w-4" /> Mois précédent</Link></Button>
             <Button asChild variant="outline" size="sm"><Link href="/coach/planning?view=month">Aujourd&apos;hui</Link></Button>
-            <Button asChild variant="outline" size="sm"><Link href={planningHref("month", addMontrealMonths(period.rangeStart, 1))}>Mois suivant <ChevronRight className="h-4 w-4" /></Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href={planningHref("month", addMontrealMonths(period.rangeStart, 1), weekStartsOn)}>Mois suivant <ChevronRight className="h-4 w-4" /></Link></Button>
             <span className="inline-flex items-center gap-2 px-2 text-sm font-bold text-[var(--color-ink-muted)]">
               <CalendarDays className="h-4 w-4" />
               {sessions.length} séance{sessions.length > 1 ? "s" : ""} · {events.length} événement{events.length > 1 ? "s" : ""}
@@ -218,7 +220,7 @@ function PlanningView({ period, sessions, events, targets, demo = false }: { per
       {sessions.length === 0 && events.length === 0 ? (
         <EmptyState title={period.mode === "week" ? "Aucune séance cette semaine" : "Aucune séance ce mois-ci"} description="Ajoute une séance pour commencer la planification." action={<Button asChild variant="action"><Link href="/coach/sessions/new">Créer une séance</Link></Button>} />
       ) : period.mode === "month" ? (
-        <MonthCalendar period={period} sessions={sessions} events={events} activeSessionIds={activeSessionIds} targets={targets} demo={demo} />
+        <MonthCalendar period={period} sessions={sessions} events={events} activeSessionIds={activeSessionIds} targets={targets} weekStartsOn={weekStartsOn} demo={demo} />
       ) : (
         <div className="grid gap-3 lg:grid-cols-7">
           {weekDays(period.weekStart).map((day) => (
@@ -238,10 +240,10 @@ function PlanningView({ period, sessions, events, targets, demo = false }: { per
   );
 }
 
-function PlanningModeLink({ mode, active, period, children }: { mode: PlanningMode; active: boolean; period: PlanningPeriod; children: React.ReactNode }) {
+function PlanningModeLink({ mode, active, period, weekStartsOn, children }: { mode: PlanningMode; active: boolean; period: PlanningPeriod; weekStartsOn: 0 | 1; children: React.ReactNode }) {
   return (
     <Link
-      href={planningHref(mode, period.mode === "week" ? period.weekStart : period.rangeStart)}
+      href={planningHref(mode, period.mode === "week" ? period.weekStart : period.rangeStart, weekStartsOn)}
       className={`inline-flex min-h-9 items-center rounded-full px-4 text-sm font-black focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active ? "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)] shadow-sm" : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"}`}
       aria-current={active ? "page" : undefined}
     >
@@ -277,13 +279,13 @@ function DayColumn({ day, sessions, events, activeSessionIds, targets, demo, com
   );
 }
 
-function MonthCalendar({ period, sessions, events, activeSessionIds, targets, demo }: { period: PlanningPeriod; sessions: PlanningSession[]; events: PlanningEvent[]; activeSessionIds: Set<string>; targets: PlanningTarget[]; demo: boolean }) {
-  const days = monthCalendarDays(period.rangeStart, period.rangeEnd);
+function MonthCalendar({ period, sessions, events, activeSessionIds, targets, weekStartsOn, demo }: { period: PlanningPeriod; sessions: PlanningSession[]; events: PlanningEvent[]; activeSessionIds: Set<string>; targets: PlanningTarget[]; weekStartsOn: 0 | 1; demo: boolean }) {
+  const days = monthCalendarDays(period.rangeStart, period.rangeEnd, weekStartsOn);
 
   return (
     <div className="overflow-hidden rounded-[var(--radius-panel)] border border-[var(--color-border)] bg-white shadow-[var(--shadow-soft)]">
       <div className="grid grid-cols-7 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-        {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => (
+        {(weekStartsOn === 0 ? ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"] : ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]).map((day) => (
           <div key={day} className="px-2 py-3 text-center text-xs font-black uppercase text-[var(--color-ink-muted)]">{day}</div>
         ))}
       </div>
@@ -411,11 +413,15 @@ function uniqueBlockTypes(blocks: PlanningSession["blocks"]) {
 }
 
 function weekDays(weekStart: Date) {
-  return ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((label, index) => ({ key: index + 1, label, date: addMontrealDays(weekStart, index) }));
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = addMontrealDays(weekStart, index);
+    const label = formatMontrealDate(date, { weekday: "long" });
+    return { key: toMontrealDateInputValue(date), label: label.charAt(0).toLocaleUpperCase("fr-CA") + label.slice(1), date };
+  });
 }
 
-function monthCalendarDays(monthStart: Date, monthEnd: Date) {
-  const calendarStart = startOfMontrealWeek(monthStart);
+function monthCalendarDays(monthStart: Date, monthEnd: Date, weekStartsOn: 0 | 1) {
+  const calendarStart = startOfMontrealWeek(monthStart, weekStartsOn);
   const monthKey = toMonthKey(monthStart);
   return Array.from({ length: 42 }, (_, index) => {
     const date = addMontrealDays(calendarStart, index);
@@ -427,16 +433,17 @@ function monthCalendarDays(monthStart: Date, monthEnd: Date) {
   });
 }
 
-function getPlanningPeriod(params: PlanningSearchParams): PlanningPeriod {
-  const mode: PlanningMode = getFirstParam(params.view) === "month" ? "month" : "week";
+function getPlanningPeriod(params: PlanningSearchParams, defaultView: PlanningMode, weekStartsOn: 0 | 1): PlanningPeriod {
+  const requestedView = getFirstParam(params.view);
+  const mode: PlanningMode = requestedView === "month" || requestedView === "week" ? requestedView : defaultView;
   const today = new Date();
-  const weekStart = parseWeekParam(getFirstParam(params.week)) ?? startOfMontrealWeek(today);
+  const weekStart = parseWeekParam(getFirstParam(params.week), weekStartsOn) ?? startOfMontrealWeek(today, weekStartsOn);
   const monthStart = parseMonthParam(getFirstParam(params.month)) ?? startOfMontrealMonth(today);
 
   if (mode === "month") {
     return {
       mode,
-      weekStart: startOfMontrealWeek(monthStart),
+      weekStart: startOfMontrealWeek(monthStart, weekStartsOn),
       rangeStart: monthStart,
       rangeEnd: addMontrealMonths(monthStart, 1),
       monthKey: toMonthKey(monthStart)
@@ -452,9 +459,9 @@ function getPlanningPeriod(params: PlanningSearchParams): PlanningPeriod {
   };
 }
 
-function parseWeekParam(value?: string) {
+function parseWeekParam(value: string | undefined, weekStartsOn: 0 | 1) {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  return startOfMontrealWeek(parseMontrealSessionDate(value, "12:00"));
+  return startOfMontrealWeek(parseMontrealSessionDate(value, "12:00"), weekStartsOn);
 }
 
 function parseMonthParam(value?: string) {
@@ -472,9 +479,9 @@ function addMontrealMonths(date: Date, months: number) {
   return parseMonthParam(toMonthKey(shifted)) ?? date;
 }
 
-function planningHref(mode: PlanningMode, date: Date) {
+function planningHref(mode: PlanningMode, date: Date, weekStartsOn: 0 | 1) {
   if (mode === "month") return `/coach/planning?view=month&month=${toMonthKey(date)}`;
-  return `/coach/planning?view=week&week=${toMontrealDateInputValue(startOfMontrealWeek(date))}`;
+  return `/coach/planning?view=week&week=${toMontrealDateInputValue(startOfMontrealWeek(date, weekStartsOn))}`;
 }
 
 function periodLabel(period: PlanningPeriod) {

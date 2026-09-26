@@ -1,0 +1,6 @@
+ALTER TABLE "Coach"
+ADD COLUMN "planningDefaultView" TEXT NOT NULL DEFAULT 'week',
+ADD COLUMN "weekStartsOn" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN "printShowCoachNotes" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "printShowAthleteNames" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "printRepetitionChecks" BOOLEAN NOT NULL DEFAULT false;

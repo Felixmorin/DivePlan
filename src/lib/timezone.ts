@@ -64,13 +64,14 @@ export function startOfMontrealDay(date = new Date()) {
   return montrealPartsToUtcDate({ ...parts, hour: 0, minute: 0, second: 0 });
 }
 
-export function startOfMontrealWeek(date = new Date()) {
+export function startOfMontrealWeek(date = new Date(), weekStartsOn: 0 | 1 = 1) {
   const parts = getMontrealParts(date);
   const currentNoonUtc = montrealPartsToUtcDate({ ...parts, hour: 12, minute: 0, second: 0 });
   const weekday = montrealWeekday(currentNoonUtc);
-  const mondayNoon = addMontrealDays(currentNoonUtc, -(weekday - 1));
-  const mondayParts = getMontrealParts(mondayNoon);
-  return montrealPartsToUtcDate({ ...mondayParts, hour: 0, minute: 0, second: 0 });
+  const dayOffset = weekStartsOn === 0 ? weekday % 7 : weekday - 1;
+  const weekStartNoon = addMontrealDays(currentNoonUtc, -dayOffset);
+  const weekStartParts = getMontrealParts(weekStartNoon);
+  return montrealPartsToUtcDate({ ...weekStartParts, hour: 0, minute: 0, second: 0 });
 }
 
 export function addMontrealDays(date: Date, days: number) {

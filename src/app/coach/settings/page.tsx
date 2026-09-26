@@ -1,6 +1,6 @@
 import Image from "next/image";
-import { LogOut, Save, Settings, Shield, Waves } from "lucide-react";
-import { signOutCoach, updateClubSettings, updateCoachAccount } from "@/app/coach/settings/actions";
+import { LogOut, Save, Shield, Waves } from "lucide-react";
+import { signOutCoach, updateClubSettings, updateCoachAccount, updateCoachPreferences } from "@/app/coach/settings/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -109,13 +109,37 @@ export default async function CoachSettingsPage() {
 
           <Card>
             <CardHeader className="border-b border-[var(--color-border)] bg-white">
-              <CardTitle>À venir</CardTitle>
-              <CardDescription>Paramètres utiles à ajouter sans alourdir cette première version.</CardDescription>
+              <CardTitle>Préférences</CardTitle>
+              <CardDescription>Personnalise ton planning et les feuilles de séance que tu imprimes.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 p-5 text-sm font-semibold text-[var(--color-ink-muted)]">
-              <SettingPreview icon={<Settings className="h-4 w-4" />} label="Préférences d’impression" />
-              <SettingPreview icon={<Settings className="h-4 w-4" />} label="Heures par défaut des séances" />
-              <SettingPreview icon={<Settings className="h-4 w-4" />} label="Gestion des accès coach" />
+            <CardContent className="p-5">
+              <form action={updateCoachPreferences} className="grid gap-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-2 text-xs font-black uppercase text-[var(--color-ink-muted)]">
+                    Vue par défaut du planning
+                    <select name="planningDefaultView" defaultValue={user.coach?.planningDefaultView ?? "week"} className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold normal-case text-[var(--color-ink)] outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]">
+                      <option value="week">Semaine</option>
+                      <option value="month">Mois</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-2 text-xs font-black uppercase text-[var(--color-ink-muted)]">
+                    Premier jour de la semaine
+                    <select name="weekStartsOn" defaultValue={String(user.coach?.weekStartsOn ?? 1)} className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold normal-case text-[var(--color-ink)] outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]">
+                      <option value="1">Lundi</option>
+                      <option value="0">Dimanche</option>
+                    </select>
+                  </label>
+                </div>
+
+                <fieldset className="grid gap-3">
+                  <legend className="mb-1 text-xs font-black uppercase text-[var(--color-ink-muted)]">Contenu de la feuille imprimée</legend>
+                  <PreferenceCheckbox name="printShowCoachNotes" defaultChecked={user.coach?.printShowCoachNotes ?? true} label="Afficher les notes et consignes du coach" />
+                  <PreferenceCheckbox name="printShowAthleteNames" defaultChecked={user.coach?.printShowAthleteNames ?? true} label="Afficher les noms des athlètes" />
+                  <PreferenceCheckbox name="printRepetitionChecks" defaultChecked={user.coach?.printRepetitionChecks ?? false} label="Ajouter une case à cocher pour chaque répétition" />
+                </fieldset>
+
+                <Button type="submit" variant="action"><Save className="h-4 w-4" /> Enregistrer les préférences</Button>
+              </form>
             </CardContent>
           </Card>
         </div>
@@ -124,11 +148,11 @@ export default async function CoachSettingsPage() {
   );
 }
 
-function SettingPreview({ icon, label }: { icon: React.ReactNode; label: string }) {
+function PreferenceCheckbox({ name, defaultChecked, label }: { name: string; defaultChecked: boolean; label: string }) {
   return (
-    <div className="flex min-h-11 items-center gap-3 rounded-[var(--radius-ui)] bg-[var(--color-surface-raised)] px-3">
-      {icon}
+    <label className="flex min-h-11 items-center gap-3 rounded-[var(--radius-ui)] bg-[var(--color-surface-raised)] px-3 text-sm font-semibold text-[var(--color-ink-muted)]">
+      <input type="checkbox" name={name} defaultChecked={defaultChecked} className="h-4 w-4 accent-[var(--color-brand-strong)]" />
       <span>{label}</span>
-    </div>
+    </label>
   );
 }
