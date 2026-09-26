@@ -36,6 +36,29 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   const athleteComparisons = buildAthleteComparisons(session, athleteAverageReps);
   const resultSummary = summarizeResults(athleteComparisons);
   const firstPoolSectionId = session.blocks.flatMap((block) => block.poolTraining?.sections ?? [])[0]?.id;
+  const lastStartedDiveByAthlete = new Map<string, { diveId: string; incomplete: boolean }>();
+  for (const block of session.blocks) {
+    for (const section of block.poolTraining?.sections ?? []) {
+      const multiplier = Math.max(1, countPoolContexts(section.label ?? section.height));
+      for (const assignment of block.assignments) {
+        for (const dive of section.dives) {
+          const log = session.diveLogs.find((item) => item.athleteId === assignment.athleteId && item.poolDiveId === dive.id);
+          const completed = log?.repetitionsCompleted ?? 0;
+          if (completed > 0) {
+            lastStartedDiveByAthlete.set(assignment.athleteId, {
+              diveId: dive.id,
+              incomplete: completed < dive.repetitions * multiplier
+            });
+          }
+        }
+      }
+    }
+  }
+  const activeDiveIds = Object.fromEntries(
+    Array.from(lastStartedDiveByAthlete.entries())
+      .filter(([, state]) => state.incomplete)
+      .map(([athleteId, state]) => [athleteId, state.diveId])
+  );
 
   return (
     <CoachShell active="Seances">
@@ -209,6 +232,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                       key={`progress-${section.id}`}
                       sectionLabel={section.label ?? section.height}
                       showLegend={section.id === firstPoolSectionId}
+                      activeDiveIds={activeDiveIds}
                       athletes={block.assignments.map(({ athlete }) => ({ id: athlete.id, firstName: athlete.user.firstName, lastName: athlete.user.lastName }))}
                       dives={section.dives.map(({ id, diveCode, repetitions }) => ({ id, diveCode, repetitions }))}
                       logs={session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted, goldenRepetitions }) => ({ athleteId, poolDiveId, repetitionsCompleted, goldenRepetitions }))}
