@@ -44,9 +44,7 @@ export function PoolProgressTracker({
         <Legend color="bg-[var(--color-border)]" label="A venir" />
         <Legend color="bg-amber-400" label="Golden rep" />
       </div>}
-      <details>
-      <summary className="cursor-pointer text-xs font-bold text-[var(--color-ink-muted)]">Progression par athlète ({athletes.length})</summary>
-      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {athletes.map((athlete) => {
           const athleteLogs = new Map(logs.filter((log) => log.athleteId === athlete.id).map((log) => [log.poolDiveId, log.repetitionsCompleted]));
           const loggedDiveIds = new Set(logs.filter((log) => log.athleteId === athlete.id).map((log) => log.poolDiveId));
@@ -93,7 +91,6 @@ export function PoolProgressTracker({
           );
         })}
       </div>
-      </details>
     </div>
   );
 }
