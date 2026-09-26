@@ -200,9 +200,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               <CardContent>
                 {block.description && <p className="mb-4 whitespace-pre-line text-sm leading-6 text-[var(--color-ink-muted)]">{block.description}</p>}
                 {block.drylandExercises.length > 0 && <div className="grid gap-2 md:grid-cols-3">{block.drylandExercises.map((item) => <div key={item.exerciseId} className="rounded-2xl bg-[var(--color-surface-raised)] p-3"><div className="font-bold">{item.exercise.name}</div><div className="text-sm text-[var(--color-ink-muted)]">{item.sets ?? 1} x {item.reps ?? `${item.duration ?? 30} sec`}</div></div>)}</div>}
-                {block.poolTraining && <>
+                {block.poolTraining && <details className="mt-3">
+                  <summary className="cursor-pointer rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-ink-muted)]">Liste de plongeons ({block.poolTraining.sections.reduce((sum, section) => sum + section.dives.length, 0)} plongeons · {block.estimatedVolume} répétitions)</summary>
                   <div className="overflow-x-auto rounded-2xl border border-[var(--color-border)]"><table className="w-full min-w-[620px] text-sm"><thead className="bg-[var(--color-navy)] text-left text-white"><tr><th className="p-3">Hauteur(s)</th><th className="p-3">Plongeons</th><th className="p-3">Repetitions</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{block.poolTraining.sections.map((section) => { const multiplier = Math.max(1, countPoolContexts(section.label ?? "")); return <tr key={section.id} className="border-t border-[var(--color-border)]"><td className="p-3 font-black">{section.label ?? section.height}</td><td className="p-3 font-bold">{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td className="p-3">{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="p-3 text-right font-black">{multiplier * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)}</td></tr>; })}</tbody><tfoot className="border-t-2 border-[var(--color-navy)] bg-[var(--color-surface-raised)] font-black"><tr><td className="p-3" colSpan={3}>Total general</td><td className="p-3 text-right">{block.estimatedVolume}</td></tr></tfoot></table></div>
-                  {block.poolTraining.sections.map((section) => (
+                </details>}
+                  {block.poolTraining?.sections.map((section) => (
                     <PoolProgressTracker
                       key={`progress-${section.id}`}
                       sectionLabel={section.label ?? section.height}
@@ -212,7 +214,6 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                       logs={session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted, goldenRepetitions }) => ({ athleteId, poolDiveId, repetitionsCompleted, goldenRepetitions }))}
                     />
                   ))}
-                </>}
               </CardContent>
             </Card>
           );
