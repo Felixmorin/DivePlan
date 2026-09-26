@@ -53,6 +53,7 @@ export function PoolProgressTracker({
           const complete = nextIndex === -1;
           const progress = dives.reduce((sum, dive) => sum + Math.min(athleteLogs.get(dive.id) ?? 0, dive.repetitions * multiplier), 0);
           const partial = !complete && (progress > 0 || skippedDiveIds.size > 0);
+          const lastStartedIndex = dives.reduce((lastIndex, dive, index) => (athleteLogs.get(dive.id) ?? 0) > 0 ? index : lastIndex, -1);
           const planned = dives.reduce((sum, dive) => sum + dive.repetitions * multiplier, 0);
 
           return (
@@ -67,7 +68,7 @@ export function PoolProgressTracker({
               <div className="flex flex-wrap gap-1.5">
                 {dives.map((dive, index) => {
                   const done = (athleteLogs.get(dive.id) ?? 0) >= dive.repetitions * multiplier;
-                  const current = !complete && index === nextIndex && (athleteLogs.get(dive.id) ?? 0) > 0;
+                  const current = index === lastStartedIndex && (athleteLogs.get(dive.id) ?? 0) < dive.repetitions * multiplier;
                   const skipped = skippedDiveIds.has(dive.id);
                   const golden = logs.find((log) => log.athleteId === athlete.id && log.poolDiveId === dive.id)?.goldenRepetitions ?? 0;
                   const className = golden > 0
