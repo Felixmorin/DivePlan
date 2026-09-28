@@ -35,6 +35,12 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     session.exerciseLogs.length > 0;
   const athleteComparisons = buildAthleteComparisons(session, athleteAverageReps);
   const resultSummary = summarizeResults(athleteComparisons);
+  const evaluationBlock = session.blocks.find((block) => block.competitionEvaluation);
+  const competitionEvaluationMoment = session.competitionEvaluationAtStart
+    ? "Au début de l’entraînement"
+    : evaluationBlock
+      ? `Pendant le bloc « ${evaluationBlock.title} »`
+      : null;
   const firstPoolSectionId = session.blocks.flatMap((block) => block.poolTraining?.sections ?? [])[0]?.id;
   const lastStartedDiveByAthlete = new Map<string, { diveId: string; incomplete: boolean }>();
   for (const block of session.blocks) {
@@ -102,6 +108,15 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           Seance deja commencee: la modification est bloquee pour garder les donnees realisees comparables au plan original. La suppression reste possible et effacera les donnees athletes associees.
         </div>
       )}
+      <div className={`mb-4 flex items-start gap-3 rounded-2xl border p-4 ${competitionEvaluationMoment ? "border-[var(--color-success)]/30 bg-[var(--color-success)]/10" : "border-[var(--color-border)] bg-white"}`}>
+        {competitionEvaluationMoment
+          ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-success)]" />
+          : <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-ink-muted)]" />}
+        <div>
+          <p className="font-black">Évaluation de la liste de compétition : {competitionEvaluationMoment ? "prévue" : "non prévue"}</p>
+          {competitionEvaluationMoment && <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{competitionEvaluationMoment}. Les athlètes pourront évaluer les plongeons de leur liste de compétition.</p>}
+        </div>
+      </div>
       <Card className="mb-4">
         <CardHeader><CardTitle>Enregistrer comme modele</CardTitle></CardHeader>
         <CardContent>
