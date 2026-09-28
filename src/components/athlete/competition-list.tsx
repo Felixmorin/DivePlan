@@ -1,7 +1,8 @@
 "use client";
 
-import { ListChecks } from "lucide-react";
+import { BarChart3, ListChecks } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CompetitionConfidenceChart, type CompetitionConfidencePoint } from "@/components/athlete/competition-confidence-chart";
 
 export type CompetitionDiveItem = {
   id: string;
@@ -9,17 +10,20 @@ export type CompetitionDiveItem = {
   code: string;
   difficulty: number | null;
   volume: number;
+  latestConfidence?: number | null;
+  confidenceHistory?: CompetitionConfidencePoint[];
 };
 
 const heights = [
   { value: "ONE_METER", label: "1 m" },
   { value: "THREE_METER", label: "3 m" },
-  { value: "PLATFORM", label: "Plateforme" }
+  { value: "PLATFORM", label: "Plateforme" },
+  { value: "CUSTOM", label: "Autre" }
 ] as const;
 
 export function CompetitionList({ dives }: { dives: CompetitionDiveItem[] }) {
   const availableHeights = heights.filter(
-    (height) => height.value !== "PLATFORM" || dives.some((dive) => dive.height === "PLATFORM")
+    (height) => dives.some((dive) => dive.height === height.value)
   );
   const firstHeight = availableHeights.find((height) => dives.some((dive) => dive.height === height.value))?.value ?? "ONE_METER";
 
@@ -45,13 +49,20 @@ export function CompetitionList({ dives }: { dives: CompetitionDiveItem[] }) {
             {filtered.length > 0 ? (
               <div className="divide-y divide-white/8">
                 {filtered.map((dive, index) => (
-                  <div key={dive.id} className="grid grid-cols-[minmax(0,1fr)_2.25rem_auto] items-center gap-3 px-4 py-3.5">
-                    <span className="text-lg font-black tracking-tight text-white">{dive.code}</span>
-                    <span className="text-sm font-semibold text-white/45">{dive.difficulty?.toFixed(1) ?? "—"}</span>
-                    <span className="min-w-[3.5rem] text-right" aria-label={`${dive.volume} répétitions effectuées`}>
-                      <strong className="block text-base font-black leading-none text-cyan-200">{dive.volume}</strong>
-                      <span className="mt-1 block text-[11px] font-bold text-white/40">effectués</span>
-                    </span>
+                  <div key={dive.id}>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 px-4 py-3.5">
+                      <span className="text-lg font-black tracking-tight text-white">{dive.code}</span>
+                      <span className="text-sm font-semibold text-white/45">{dive.difficulty?.toFixed(1) ?? "—"}</span>
+                      <span className="min-w-[3.5rem] text-right" aria-label={`${dive.volume} répétitions effectuées`}>
+                        <strong className="block text-base font-black leading-none text-cyan-200">{dive.volume}</strong>
+                        <span className="mt-1 block text-[11px] font-bold text-white/40">effectués</span>
+                      </span>
+                      <span className="min-w-9 text-center text-sm font-black text-amber-200" aria-label={dive.latestConfidence ? `Dernière confiance : ${dive.latestConfidence} sur 5` : "Aucune évaluation de confiance"}>{dive.latestConfidence ?? "—"}<span className="block text-[10px] font-bold text-white/40">confiance</span></span>
+                    </div>
+                    {dive.confidenceHistory && dive.confidenceHistory.length > 0 && <details className="border-t border-white/8 px-4 py-2">
+                      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 text-xs font-bold text-cyan-200/75 marker:hidden"><BarChart3 className="h-4 w-4" /> Voir l’évolution de confiance</summary>
+                      <div className="pt-2"><CompetitionConfidenceChart data={dive.confidenceHistory} initialDiveId={dive.id} athleteView /></div>
+                    </details>}
                     <span className="sr-only">Plongeon {index + 1}</span>
                   </div>
                 ))}

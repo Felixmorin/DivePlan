@@ -81,6 +81,7 @@ type BuilderPoolBlock = {
   duration: number;
   athleteIds: string[];
   sections: BuilderPoolSection[];
+  competitionEvaluation?: boolean;
 };
 
 type BuilderDrylandBlock = {
@@ -90,6 +91,7 @@ type BuilderDrylandBlock = {
   exerciseIds: string[];
   athleteIds: string[];
   exerciseOverrides: Record<string, { sets: number | null; reps: number | null; duration: number | null; notes: string | null }>;
+  competitionEvaluation?: boolean;
 };
 
 type SessionBuilderProps = {
@@ -134,6 +136,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
         id: `template-dryland-${index}`,
         title: block.title,
         duration: block.duration,
+        competitionEvaluation: block.competitionEvaluation,
         exerciseIds: block.drylandExercises.map((item) => item.exerciseId).filter((id) => drylandLibrary.some((exercise) => exercise.id === id)),
         athleteIds: block.athleteIds.filter((id) => initialAthleteIds.includes(id)),
         exerciseOverrides: Object.fromEntries(block.drylandExercises.map((item) => [item.exerciseId, { sets: item.sets, reps: item.reps, duration: item.duration, notes: item.notes }]))
@@ -156,6 +159,10 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     duration: templateCooldown?.duration ?? 8,
     description: templateCooldown?.description ?? ""
   });
+  const initialEvaluationBlock = [...drylandBlocks, ...activePoolBlocks].find((block) => block.competitionEvaluation);
+  const [evaluationPlacement, setEvaluationPlacement] = useState(() => initialTemplate?.payload.competitionEvaluationAtStart
+    ? "start"
+    : initialEvaluationBlock ? `block:${initialEvaluationBlock.id}` : "none");
   const [flashBlock, setFlashBlock] = useState<string | null>(null);
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -183,7 +190,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     try {
       const raw = window.localStorage.getItem(draftKey);
       if (raw) {
-        const draft = JSON.parse(raw) as { values?: Partial<FormValues>; drylandBlocks?: BuilderDrylandBlock[]; poolBlocks?: BuilderPoolBlock[]; poolAssignments?: Record<string, string[]>; warmup?: OptionalBlock; cooldown?: OptionalBlock };
+        const draft = JSON.parse(raw) as { values?: Partial<FormValues>; drylandBlocks?: BuilderDrylandBlock[]; poolBlocks?: BuilderPoolBlock[]; poolAssignments?: Record<string, string[]>; warmup?: OptionalBlock; cooldown?: OptionalBlock; evaluationPlacement?: string };
         queueMicrotask(() => {
           if (draft.values) form.reset({ ...form.getValues(), ...draft.values });
           if (draft.drylandBlocks) setDrylandBlocks(draft.drylandBlocks);
@@ -191,6 +198,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
           if (draft.poolAssignments) setPoolAssignments(draft.poolAssignments);
           if (draft.warmup) setWarmup({ ...draft.warmup, enabled: false });
           if (draft.cooldown) setCooldown({ ...draft.cooldown, enabled: false });
+          if (draft.evaluationPlacement) setEvaluationPlacement(draft.evaluationPlacement);
           restoredDraft.current = true;
         });
       } else restoredDraft.current = true;
@@ -200,8 +208,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   }, [draftKey, form]);
   useEffect(() => {
     if (!restoredDraft.current) return;
-    window.localStorage.setItem(draftKey, JSON.stringify({ values: watched, drylandBlocks, poolBlocks: activePoolBlocks, poolAssignments, warmup, cooldown }));
-  }, [activePoolBlocks, cooldown, draftKey, drylandBlocks, form, poolAssignments, warmup, watched]);
+    window.localStorage.setItem(draftKey, JSON.stringify({ values: watched, drylandBlocks, poolBlocks: activePoolBlocks, poolAssignments, warmup, cooldown, evaluationPlacement }));
+  }, [activePoolBlocks, cooldown, draftKey, drylandBlocks, evaluationPlacement, form, poolAssignments, warmup, watched]);
   useEffect(() => {
     if (watched.planningEventId && !planningEvents.some((event) => event.id === watched.planningEventId && (!event.groupId || event.groupId === watched.groupId) && toMontrealDateInputValue(event.startsAt) === watched.date)) {
       form.setValue("planningEventId", "");
@@ -233,6 +241,15 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     return blockSum + repetitions * sets * block.athleteIds.length;
   }, 0), 0);
   const totalVolume = poolVolume + dryVolume;
+  const evaluationChoices = [
+    { value: "none", label: "Aucune évaluation" },
+    { value: "start", label: "Au début de l’entraînement" },
+    ...drylandBlocks.map((block) => ({ value: `block:${block.id}`, label: `Dans le bloc « ${block.title} »` })),
+    ...activePoolBlocks.map((block) => ({ value: `block:${block.id}`, label: `Dans le bloc « ${block.title} »` }))
+  ];
+  useEffect(() => {
+    if (!evaluationChoices.some((choice) => choice.value === evaluationPlacement)) setEvaluationPlacement("none");
+  }, [evaluationChoices, evaluationPlacement]);
 
   async function advanceTo(nextStep: number) {
     if (nextStep > step && !(await form.trigger())) return;
@@ -339,14 +356,16 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
             status,
             focus: "",
             duration: totalDuration,
-            warmup: { ...warmup, enabled: false },
-            cooldown: { ...cooldown, enabled: false },
-            drylandBlocks: effectiveDrylandBlocks.map(({ title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides }) => ({ title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides })),
+            warmup: { ...warmup, enabled: false, competitionEvaluation: false },
+            cooldown: { ...cooldown, enabled: false, competitionEvaluation: false },
+            evaluationPlacement,
+            drylandBlocks: effectiveDrylandBlocks.map(({ id, title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides }) => ({ title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides, competitionEvaluation: evaluationPlacement === `block:${id}` })),
             poolBlocks: activePoolBlocks.map((block) => ({
               title: block.title,
               duration: block.duration,
               athleteIds: effectivePoolAssignments[block.id] ?? [],
-              sections: block.sections
+              sections: block.sections,
+              competitionEvaluation: evaluationPlacement === `block:${block.id}`
             }))
           });
           window.localStorage.removeItem(draftKey);
@@ -383,7 +402,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
-          {step === 0 && <DetailsStep form={form} selectedGroupId={watched.groupId ?? ""} selectedDate={watched.date ?? ""} selectedPlanningEventId={watched.planningEventId ?? ""} selectedTime={watched.time ?? ""} groups={groups} planningEvents={planningEvents} />}
+          {step === 0 && <DetailsStep form={form} selectedGroupId={watched.groupId ?? ""} selectedDate={watched.date ?? ""} selectedPlanningEventId={watched.planningEventId ?? ""} selectedTime={watched.time ?? ""} groups={groups} planningEvents={planningEvents} evaluationPlacement={evaluationPlacement} evaluationChoices={evaluationChoices} onEvaluationPlacementChange={setEvaluationPlacement} />}
           {step === 1 && (
             <DrylandStep
               exercises={library}
@@ -483,7 +502,7 @@ function Stepper({ current, onStepChange }: { current: number; onStepChange: (st
 
 type OptionalBlock = { enabled: boolean; title: string; duration: number; description: string };
 
-function DetailsStep({ form, selectedGroupId, selectedDate, selectedPlanningEventId, selectedTime, groups, planningEvents }: { form: ReturnType<typeof useForm<FormValues>>; selectedGroupId: string; selectedDate: string; selectedPlanningEventId: string; selectedTime: string; groups: BuilderGroup[]; planningEvents: BuilderPlanningEvent[] }) {
+function DetailsStep({ form, selectedGroupId, selectedDate, selectedPlanningEventId, selectedTime, groups, planningEvents, evaluationPlacement, evaluationChoices, onEvaluationPlacementChange }: { form: ReturnType<typeof useForm<FormValues>>; selectedGroupId: string; selectedDate: string; selectedPlanningEventId: string; selectedTime: string; groups: BuilderGroup[]; planningEvents: BuilderPlanningEvent[]; evaluationPlacement: string; evaluationChoices: Array<{ value: string; label: string }>; onEvaluationPlacementChange: (value: string) => void }) {
   return (
     <Card>
       <CardHeader><CardTitle>Details de la seance</CardTitle></CardHeader>
@@ -504,6 +523,12 @@ function DetailsStep({ form, selectedGroupId, selectedDate, selectedPlanningEven
           <span className="mt-1 block text-xs font-semibold normal-case text-[var(--color-ink-muted)]">L’horaire reste affiché dans le planning; la séance sera ouverte depuis ce même élément.</span>
         </Field>
         <Field label="Notes coach" className="md:col-span-2"><Textarea placeholder="Notes coach" {...form.register("notes")} /></Field>
+        <Field label="Évaluation de confiance des plongeons" className="md:col-span-2">
+          <select aria-label="Moment de l’évaluation de confiance" className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]" value={evaluationPlacement} onChange={(event) => onEvaluationPlacementChange(event.target.value)}>
+            {evaluationChoices.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+          </select>
+          <span className="mt-1 block text-xs font-semibold normal-case text-[var(--color-ink-muted)]">Facultative. Une seule demande par entraînement, au début ou dans un bloc précis. L’athlète évaluera tous ses plongeons de compétition.</span>
+        </Field>
         {Object.values(form.formState.errors).length > 0 && <div className="md:col-span-2 rounded-2xl bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">Certains champs requis sont incomplets.</div>}
       </CardContent>
     </Card>
@@ -884,6 +909,7 @@ function poolBlocksFromTemplate(blocks: SessionTemplatePayload["blocks"]): Build
     id: `template-pool-${index}`,
     title: block.title,
     duration: block.duration,
+    competitionEvaluation: block.competitionEvaluation,
     athleteIds: block.athleteIds,
     sections: block.poolTraining?.sections.map((section) => ({
       height: section.height,

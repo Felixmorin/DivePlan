@@ -26,6 +26,7 @@ type SessionPlayerProps = {
   onSaveProgress: (payload: SaveAthleteProgressPayload) => Promise<void>;
   onComplete: (payload: CompleteSessionPayload) => Promise<void>;
   onSaveDiveNote: (sessionId: string, poolDiveId: string, note: string) => Promise<void>;
+  onSaveCompetitionEvaluation: (input: { sessionId: string; ratings: Array<{ competitionDiveId: string; rating: number }> }) => Promise<void>;
 };
 
 type PageFeedback = Record<string, { rating: string; note: string }>;
@@ -34,7 +35,7 @@ type DiveChecks = Record<string, DiveRepState[]>;
 type ExerciseChecks = Record<string, boolean>;
 type SaveStatus = "saved" | "saving" | "error";
 
-export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onCloseBlock, onSaveProgress, onComplete, onSaveDiveNote }: SessionPlayerProps) {
+export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onCloseBlock, onSaveProgress, onComplete, onSaveDiveNote, onSaveCompetitionEvaluation }: SessionPlayerProps) {
   const router = useRouter();
   const blocks = session.blocks;
   const [current, setCurrent] = useState(0);
@@ -56,6 +57,10 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const [expandedPreviewBlocks, setExpandedPreviewBlocks] = useState<Set<string>>(new Set());
   const [sessionPreviewOpen, setSessionPreviewOpen] = useState(false);
   const [isNotePending, startNoteTransition] = useTransition();
+  const [evaluationOpen, setEvaluationOpen] = useState(false);
+  const [evaluationPending, startEvaluationTransition] = useTransition();
+  const evaluationPrompted = useRef(false);
+  const [evaluationRatings, setEvaluationRatings] = useState<Record<string, number>>(() => Object.fromEntries(session.competitionEvaluations.map((item) => [item.competitionDiveId, item.rating])));
   const [diveNotes, setDiveNotes] = useState<Record<string, string>>(() => Object.fromEntries(blocks.flatMap((block) => block.poolSections.flatMap((section) => section.dives.map((dive) => [dive.id, dive.personalNote ?? ""])) )));
   const previewTracked = useRef(false);
   const [finalFeedback, setFinalFeedback] = useState(() => ({
@@ -119,6 +124,18 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
   const canStart = isSessionStartAvailable(session.date, new Date(now));
   const activeTiming = blockTimings[block.id];
+  const evaluationComplete = session.competitionDives.length > 0 && session.competitionDives.every((dive) => evaluationRatings[dive.id] !== undefined);
+  const evaluationRequired = session.competitionEvaluationAtStart || session.competitionEvaluationBlockIds.length > 0;
+
+  useEffect(() => {
+    if (!started || evaluationComplete || evaluationPrompted.current) return;
+    const evaluationAtCurrentMoment = (session.competitionEvaluationAtStart && session.competitionEvaluations.length === 0)
+      || session.competitionEvaluationBlockIds.includes(block.id);
+    if (evaluationAtCurrentMoment) {
+      evaluationPrompted.current = true;
+      setEvaluationOpen(true);
+    }
+  }, [block.id, evaluationComplete, session.competitionEvaluationAtStart, session.competitionEvaluationBlockIds, session.competitionEvaluations.length, started]);
 
   useEffect(() => {
     if (started || previewTracked.current) return;
@@ -245,6 +262,21 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       } catch {
         setNow(Date.now());
         setError("Impossible de démarrer. Vérifie l’heure prévue et ta connexion, puis réessaie.");
+      }
+    });
+  }
+
+  function saveCompetitionEvaluation() {
+    if (!evaluationComplete) return;
+    startEvaluationTransition(async () => {
+      try {
+        await onSaveCompetitionEvaluation({
+          sessionId: session.id,
+          ratings: session.competitionDives.map((dive) => ({ competitionDiveId: dive.id, rating: evaluationRatings[dive.id] }))
+        });
+        setEvaluationOpen(false);
+      } catch {
+        setError("Impossible d’enregistrer l’évaluation. Vérifie ta connexion et réessaie.");
       }
     });
   }
@@ -407,6 +439,14 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
 
   function finishTraining() {
     if (!hasFeedback) return;
+    if (evaluationRequired && session.competitionDives.length > 0 && !evaluationComplete && session.competitionEvaluationBlockIds.some((id) => blocks.findIndex((item) => item.id === id) > current)) {
+      setError("Continue jusqu’au bloc prévu pour répondre à l’évaluation.");
+      return;
+    }
+    if (evaluationRequired && session.competitionDives.length > 0 && !evaluationComplete) {
+      setEvaluationOpen(true);
+      return;
+    }
     closeBlock(block.id);
     setReviewing(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -471,6 +511,11 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   }
 
   function completeSession() {
+    if (evaluationRequired && session.competitionDives.length > 0 && !evaluationComplete) {
+      setEvaluationOpen(true);
+      setError("Réponds à tous les plongeons avant de terminer l’entraînement.");
+      return;
+    }
     setError(null);
     Object.values(feedbackSaveTimeouts.current).forEach((timeout) => window.clearTimeout(timeout));
     window.clearTimeout(finalFeedbackSaveTimeout.current);
@@ -632,6 +677,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
             </div>
           </div>
         </div>
+        {evaluationOpen && <CompetitionEvaluationDialog dives={session.competitionDives} ratings={evaluationRatings} pending={evaluationPending} error={error} onChange={(id, rating) => setEvaluationRatings((currentRatings) => ({ ...currentRatings, [id]: rating }))} onSave={saveCompetitionEvaluation} />}
       </AthleteShell>
     );
   }
@@ -777,7 +823,43 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
           </div>
         </div>
       </div>
+      {evaluationOpen && <CompetitionEvaluationDialog dives={session.competitionDives} ratings={evaluationRatings} pending={evaluationPending} error={error} onChange={(id, rating) => setEvaluationRatings((currentRatings) => ({ ...currentRatings, [id]: rating }))} onSave={saveCompetitionEvaluation} />}
     </AthleteShell>
+  );
+}
+
+function CompetitionEvaluationDialog({ dives, ratings, pending, error, onChange, onSave }: {
+  dives: AthleteSessionView["competitionDives"];
+  ratings: Record<string, number>;
+  pending: boolean;
+  error: string | null;
+  onChange: (diveId: string, rating: number) => void;
+  onSave: () => void;
+}) {
+  if (dives.length === 0) return null;
+  const complete = dives.every((dive) => ratings[dive.id] !== undefined);
+  const heightLabels: Record<string, string> = { ONE_METER: "1 m", THREE_METER: "3 m", PLATFORM: "Plateforme", CUSTOM: "Autre" };
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-3 backdrop-blur-sm sm:items-center" role="presentation">
+      <section role="dialog" aria-modal="true" aria-labelledby="confidence-evaluation-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[1.5rem] border border-white/12 bg-[#0b1e30] p-5 text-white shadow-2xl">
+        <h2 id="confidence-evaluation-title" className="text-2xl font-black">Confiance en tes plongeons</h2>
+        <p className="mt-2 text-sm leading-6 text-white/65">Pour chaque plongeon, choisis ton niveau de confiance. 1 = très peu confiant · 5 = très confiant.</p>
+        <div className="mt-5 space-y-3">
+          {dives.map((dive) => (
+            <fieldset key={dive.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+              <legend className="px-1 text-sm font-black">{dive.code} <span className="ml-1 font-semibold text-white/45">· {heightLabels[dive.height] ?? dive.height}</span></legend>
+              <div className="mt-2 grid grid-cols-5 gap-2">
+                {[1, 2, 3, 4, 5].map((rating) => <label key={rating} className={`flex h-11 cursor-pointer items-center justify-center rounded-xl border text-sm font-black transition ${ratings[dive.id] === rating ? "border-cyan-200 bg-cyan-300 text-[#06101d]" : "border-white/12 bg-[#06101d] text-white/70"}`}>
+                  <input type="radio" name={`confidence-${dive.id}`} value={rating} checked={ratings[dive.id] === rating} onChange={() => onChange(dive.id, rating)} className="sr-only" />{rating}
+                </label>)}
+              </div>
+            </fieldset>
+          ))}
+        </div>
+        {error && <p role="alert" className="mt-3 text-sm font-semibold text-rose-300">{error}</p>}
+        <Button type="button" variant="action" className="mt-5 h-12 w-full" disabled={!complete || pending} onClick={onSave}>{pending ? "Enregistrement…" : "Enregistrer l’évaluation"}</Button>
+      </section>
+    </div>
   );
 }
 

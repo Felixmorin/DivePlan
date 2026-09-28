@@ -7,6 +7,7 @@ import { CompetitionList } from "@/components/athlete/competition-list";
 import { ProfileForm } from "@/components/athlete/profile-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +17,10 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const [totals, weekSummary] = await Promise.all([
+  const [totals, weekSummary, confidenceRows] = await Promise.all([
     getAthleteProgressTotals(athlete.id),
-    getAthleteCurrentWeekSummary(athlete.id)
+    getAthleteCurrentWeekSummary(athlete.id),
+    prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId: athlete.id }, orderBy: { evaluatedAt: "asc" }, select: { competitionDiveId: true, diveCode: true, height: true, rating: true, evaluatedAt: true } })
   ]);
   const coachName = athlete.group?.coach.user
     ? `${athlete.group.coach.user.firstName} ${athlete.group.coach.user.lastName}`
@@ -70,11 +72,13 @@ export default async function ProfilePage() {
           <span className="text-xs font-bold text-white/35">{athlete.competitionDives.length} plongeons</span>
         </div>
         <CompetitionList
-          dives={athlete.competitionDives.filter((dive) => dive.height !== "CUSTOM").map((dive) => ({
+          dives={athlete.competitionDives.map((dive) => ({
             id: dive.id,
           height: dive.height,
           code: dive.diveCode,
           difficulty: dive.difficulty,
+            latestConfidence: confidenceRows.filter((item) => item.competitionDiveId === dive.id).at(-1)?.rating ?? null,
+            confidenceHistory: confidenceRows.filter((item) => item.competitionDiveId === dive.id).map((item) => ({ competitionDiveId: item.competitionDiveId, code: item.diveCode, height: item.height, rating: item.rating, evaluatedAt: item.evaluatedAt.toISOString() })),
             volume: totals.skillDives
               .filter((trackedDive) => trackedDive.code === dive.diveCode && trackedDive.height === dive.height)
               .reduce((sum, trackedDive) => sum + trackedDive.volume, 0)

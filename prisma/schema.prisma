@@ -130,6 +130,7 @@ model Athlete {
   skills           AthleteSkill[]
   planningEvents   PlanningEvent[]
   competitionDives CompetitionDive[]
+  competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
 }
 
 model CompetitionDive {
@@ -219,6 +220,7 @@ model TrainingSession {
   coachId         String
   status          SessionStatus              @default(DRAFT)
   planningEventId String?                    @unique
+  competitionEvaluationAtStart Boolean        @default(false)
   week            TrainingWeek               @relation(fields: [weekId], references: [id])
   coach           Coach                      @relation(fields: [coachId], references: [id])
   blocks          SessionBlock[]
@@ -228,6 +230,7 @@ model TrainingSession {
   exerciseLogs    AthleteExerciseLog[]
   templates       SessionTemplate[]
   planningEvent   PlanningEvent?             @relation(fields: [planningEventId], references: [id], onDelete: SetNull)
+  competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
 }
 
 model SessionBlock {
@@ -239,11 +242,29 @@ model SessionBlock {
   duration         Int
   position         Int
   estimatedVolume  Int                      @default(0)
+  competitionEvaluation Boolean              @default(false)
   session          TrainingSession          @relation(fields: [sessionId], references: [id])
   assignments      SessionBlockAssignment[]
   athleteTimings   AthleteBlockTiming[]
   drylandExercises DrylandBlockExercise[]
   poolTraining     PoolTraining?
+}
+
+model AthleteCompetitionDiveEvaluation {
+  id                String          @id @default(cuid())
+  athleteId         String
+  sessionId         String
+  competitionDiveId String
+  diveCode          String
+  height            PoolHeight
+  rating            Int
+  evaluatedAt       DateTime        @default(now())
+  athlete           Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  session           TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, sessionId, competitionDiveId], map: "AthleteCompDiveEval_athlete_session_dive_key")
+  @@index([athleteId, competitionDiveId, evaluatedAt], map: "AthleteCompDiveEval_athlete_dive_time_idx")
+  @@index([sessionId], map: "AthleteCompDiveEval_session_idx")
 }
 
 model AthleteBlockTiming {

@@ -24,22 +24,26 @@ const sessionInputSchema = z.object({
   duration: z.number().int().min(15).max(600),
   focus: z.string().trim().max(200).default(""),
   notes: z.string().optional(),
+  evaluationPlacement: z.string().default("none"),
   planningEventId: z.string().optional(),
   templateId: z.string().optional(),
   status: z.nativeEnum(SessionStatus).default(SessionStatus.READY).refine((status) => status === SessionStatus.DRAFT || status === SessionStatus.READY),
   warmup: z.object({
     enabled: z.boolean(),
+    competitionEvaluation: z.boolean().default(false),
     title: z.string().trim().min(1),
     duration: z.number().int().min(1),
     description: z.string().optional()
   }),
   cooldown: z.object({
     enabled: z.boolean(),
+    competitionEvaluation: z.boolean().default(false),
     title: z.string().trim().min(1),
     duration: z.number().int().min(1),
     description: z.string().optional()
   }),
   drylandBlocks: z.array(z.object({
+    competitionEvaluation: z.boolean().default(false),
     title: z.string().trim().min(1),
     duration: z.number().int().min(1),
     exerciseIds: z.array(z.string()).min(1),
@@ -52,6 +56,7 @@ const sessionInputSchema = z.object({
     })).default({})
   })).default([]),
   poolBlocks: z.array(z.object({
+    competitionEvaluation: z.boolean().default(false),
     title: z.string().min(1),
     duration: z.number().int().min(1).max(600),
     athleteIds: z.array(z.string()).default([]),
@@ -187,6 +192,19 @@ export async function createTrainingSession(input: CreateSessionInput) {
     redirect(`/coach/sessions/${session.id}`);
   }
 
+  const blockEvaluationCount = Number(data.warmup.competitionEvaluation) + Number(data.cooldown.competitionEvaluation) +
+    data.drylandBlocks.filter((block) => block.competitionEvaluation).length +
+    data.poolBlocks.filter((block) => block.competitionEvaluation).length;
+  const isBlockPlacement = data.evaluationPlacement.startsWith("block:") && data.evaluationPlacement.length > 6;
+  const invalidEvaluationPlacement = data.evaluationPlacement === "none"
+    ? blockEvaluationCount !== 0
+    : data.evaluationPlacement === "start"
+      ? blockEvaluationCount !== 0
+      : !isBlockPlacement || data.warmup.competitionEvaluation || data.cooldown.competitionEvaluation || blockEvaluationCount !== 1;
+  if (invalidEvaluationPlacement) {
+    throw new Error("Choisis un seul moment pour l’évaluation de confiance.");
+  }
+
   if ((!data.warmup.enabled && !data.cooldown.enabled && data.drylandBlocks.length === 0 && data.poolBlocks.length === 0) ||
       data.poolBlocks.some((block) => block.athleteIds.length === 0)) {
     throw new Error("La seance doit contenir au moins un bloc et chaque bloc d'entrainement doit etre complet et assigne.");
@@ -250,6 +268,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         weekId: week.id,
         coachId: coach.id,
         status: data.status
+        ,competitionEvaluationAtStart: data.evaluationPlacement === "start"
         ,planningEventId: planningEvent?.id
       }
     });
@@ -264,6 +283,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         position: 1,
         estimatedVolume: 0,
         athleteIds: allAthleteIds
+        ,competitionEvaluation: data.warmup.competitionEvaluation
       });
     }
 
@@ -276,6 +296,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         position: index + 2,
         estimatedVolume: dryland.exercises.reduce((sum, exercise) => sum + (exercise.override?.sets ?? exercise.defaultSets ?? 1) * (exercise.override?.reps ?? exercise.defaultReps ?? 1) * dryland.athleteIds.length, 0),
         athleteIds: dryland.athleteIds
+        ,competitionEvaluation: dryland.competitionEvaluation
       });
 
       await tx.drylandBlockExercise.createMany({
@@ -305,6 +326,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         position: 99,
         estimatedVolume: 0,
         athleteIds: allAthleteIds
+        ,competitionEvaluation: data.cooldown.competitionEvaluation
       });
     }
 
@@ -778,6 +800,7 @@ async function createBlock(
     estimatedVolume: number;
     athleteIds: string[];
     description?: string;
+    competitionEvaluation?: boolean;
   }
 ) {
   const block = await tx.sessionBlock.create({
@@ -789,6 +812,7 @@ async function createBlock(
       position: data.position,
       estimatedVolume: data.estimatedVolume,
       description: data.description?.trim() || null
+      ,competitionEvaluation: data.competitionEvaluation ?? false
     }
   });
 
@@ -810,6 +834,7 @@ async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInp
     position,
     estimatedVolume: volume,
     athleteIds: data.athleteIds
+    ,competitionEvaluation: data.competitionEvaluation
   });
 
   await tx.poolTraining.create({ data: { blockId: block.id } });

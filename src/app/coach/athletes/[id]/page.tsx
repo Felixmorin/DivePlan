@@ -5,6 +5,7 @@ import { deleteAthlete, updateAthleteDiveFamily } from "@/app/coach/athletes/act
 import { CoachShell } from "@/components/coach/coach-shell";
 import { CompetitionDiveEditor } from "@/components/coach/competition-dive-editor";
 import { ProgressChart } from "@/components/athlete/progress-chart";
+import { CompetitionConfidenceChart, type CompetitionConfidencePoint } from "@/components/athlete/competition-confidence-chart";
 import { TechniqueDetails } from "@/components/athlete/technique-details";
 import { StatusPill } from "@/components/training/status-pill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -38,6 +39,7 @@ type AthleteProfile = {
   planningEvents: Array<{ id: string; title: string; type: string; startsAt: Date; endsAt: Date | null; location?: string | null }>;
   nextCompetition?: { title: string; startsAt: Date; endsAt: Date | null };
   competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; difficulty: number | null }>;
+  competitionConfidence: CompetitionConfidencePoint[];
   diveNotes: Array<{ id: string; code: string; name: string; height: string; note: string; updatedAt: Date; sessionId: string; sessionTitle: string; sessionDate: Date }>;
   progress: Pick<AthleteProgressTotals, "chartData" | "sessionChartData" | "weeklyChartData" | "monthlyChartData" | "skillData" | "skillDives">;
   previewStats: AthleteSessionPreviewStats;
@@ -131,6 +133,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     getAthleteProgressTotals(athlete.id),
     getAthleteSessionPreviewStats(athlete.userId)
   ]);
+  const confidenceRows = await prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId: athlete.id }, orderBy: { evaluatedAt: "asc" }, select: { competitionDiveId: true, diveCode: true, height: true, rating: true, evaluatedAt: true } });
   const today = startOfMontrealDay();
   const seasonStartYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
   const seasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00");
@@ -212,6 +215,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       code: dive.diveCode,
       difficulty: dive.difficulty
     })),
+    competitionConfidence: confidenceRows.map((item) => ({ competitionDiveId: item.competitionDiveId, code: item.diveCode, height: item.height, rating: item.rating, evaluatedAt: item.evaluatedAt.toISOString() })),
     diveNotes: athlete.diveNotes.map((item) => ({
       id: item.poolDiveId,
       code: item.poolDive.diveCode,
@@ -268,6 +272,7 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
           { id: "competition-2", height: "ONE_METER", code: "201B", difficulty: 1.6 },
           { id: "competition-3", height: "THREE_METER", code: "405C", difficulty: 3.1 }
         ],
+        competitionConfidence: [],
         diveNotes: [],
         progress: {
           chartData: [
@@ -375,6 +380,8 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
       <AthleteProgress profile={profile} />
 
       <CompetitionDiveEditor athleteId={profile.id} dives={profile.competitionDives} demo={demo} />
+
+      <CompetitionConfidenceChart data={profile.competitionConfidence} />
 
       <DiveNotesCard notes={profile.diveNotes} />
 

@@ -5,6 +5,7 @@ import { formatMontrealDate, startOfMontrealWeek } from "@/lib/timezone";
 
 export const sessionTemplatePayloadSchema = z.object({
   version: z.literal(1),
+  competitionEvaluationAtStart: z.boolean().default(false),
   title: z.string(),
   duration: z.number(),
   focus: z.string(),
@@ -16,6 +17,7 @@ export const sessionTemplatePayloadSchema = z.object({
     duration: z.number(),
     position: z.number(),
     estimatedVolume: z.number(),
+    competitionEvaluation: z.boolean().default(false),
     athleteIds: z.array(z.string()),
     drylandExercises: z.array(z.object({
       exerciseId: z.string(),
@@ -61,6 +63,7 @@ type Tx = Prisma.TransactionClient;
 export function buildSessionTemplatePayload(session: SessionSnapshot): SessionTemplatePayload {
   return {
     version: 1,
+    competitionEvaluationAtStart: session.competitionEvaluationAtStart,
     title: session.title,
     duration: session.duration,
     focus: session.focus,
@@ -75,6 +78,7 @@ export function buildSessionTemplatePayload(session: SessionSnapshot): SessionTe
         duration: block.duration,
         position: block.position,
         estimatedVolume: block.estimatedVolume,
+        competitionEvaluation: block.competitionEvaluation,
         athleteIds: block.assignments.map((assignment) => assignment.athleteId),
         drylandExercises: block.drylandExercises
           .slice()
@@ -162,6 +166,7 @@ export async function createSessionFromPayload(
       weekId: week.id,
       coachId: data.coachId,
       status: data.status ?? SessionStatus.READY
+      ,competitionEvaluationAtStart: data.payload.competitionEvaluationAtStart
     }
   });
 
@@ -175,6 +180,7 @@ export async function createSessionFromPayload(
         duration: block.duration,
         position: block.position,
         estimatedVolume: block.estimatedVolume
+        ,competitionEvaluation: block.competitionEvaluation
       }
     });
     const athleteIds = block.athleteIds.filter((athleteId) => validAthleteIds.has(athleteId));

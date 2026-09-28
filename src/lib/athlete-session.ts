@@ -61,6 +61,10 @@ export type AthleteSessionView = {
   finalRating: string | null;
   finalNote: string | null;
   blocks: AthleteSessionBlock[];
+  competitionEvaluationAtStart: boolean;
+  competitionEvaluationBlockIds: string[];
+  competitionDives: Array<{ id: string; code: string; height: PoolHeight }>;
+  competitionEvaluations: Array<{ competitionDiveId: string; rating: number }>;
 };
 
 export type AthleteProgressTotals = {
@@ -220,6 +224,11 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
     return null;
   }
 
+  const [competitionDives, competitionEvaluations] = await Promise.all([
+    prisma.competitionDive.findMany({ where: { athleteId }, orderBy: [{ height: "asc" }, { position: "asc" }, { createdAt: "asc" }], select: { id: true, diveCode: true, height: true } }),
+    prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId, sessionId }, select: { competitionDiveId: true, rating: true } })
+  ]);
+
   return {
     id: session.id,
     title: session.title,
@@ -231,6 +240,10 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
     completionStatus: session.completions[0]?.status ?? "NOT_STARTED",
     finalRating: session.completions[0]?.rating ?? null,
     finalNote: session.completions[0]?.note ?? null,
+    competitionEvaluationAtStart: session.competitionEvaluationAtStart,
+    competitionEvaluationBlockIds: session.blocks.filter((block) => block.competitionEvaluation).map((block) => block.id),
+    competitionDives: competitionDives.map((dive) => ({ id: dive.id, code: dive.diveCode, height: dive.height })),
+    competitionEvaluations,
     blocks: session.blocks.map((block) => ({
       id: block.id,
       title: block.title,
