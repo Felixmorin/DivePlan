@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, Plus, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves, X } from "lucide-react";
 import { deleteAthlete, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
@@ -41,6 +42,7 @@ type AthleteProfile = {
   nextCompetition?: { title: string; startsAt: Date; endsAt: Date | null };
   competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; difficulty: number | null }>;
   competitionConfidence: CompetitionConfidencePoint[];
+  confidenceSchemaUnavailable: boolean;
   diveNotes: Array<{ id: string; code: string; name: string; height: string; note: string; updatedAt: Date; sessionId: string; sessionTitle: string; sessionDate: Date }>;
   progress: Pick<AthleteProgressTotals, "chartData" | "sessionChartData" | "weeklyChartData" | "monthlyChartData" | "skillData" | "skillDives">;
   previewStats: AthleteSessionPreviewStats;
@@ -134,7 +136,17 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     getAthleteProgressTotals(athlete.id),
     getAthleteSessionPreviewStats(athlete.userId)
   ]);
-  const confidenceRows = await prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId: athlete.id }, orderBy: { evaluatedAt: "asc" }, select: { competitionDiveId: true, diveCode: true, height: true, rating: true, evaluator: true, evaluatedAt: true } });
+  let confidenceRows: Prisma.AthleteCompetitionDiveEvaluationGetPayload<{ select: { competitionDiveId: true; diveCode: true; height: true; rating: true; evaluator: true; evaluatedAt: true } }>[] = [];
+  let confidenceSchemaUnavailable = false;
+  try {
+    confidenceRows = await prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId: athlete.id }, orderBy: { evaluatedAt: "asc" }, select: { competitionDiveId: true, diveCode: true, height: true, rating: true, evaluator: true, evaluatedAt: true } });
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || !["P2021", "P2022"].includes(error.code)) {
+      throw error;
+    }
+    confidenceSchemaUnavailable = true;
+    console.error("Competition dive evaluations are unavailable because the database migration has not been applied.", error);
+  }
   const today = startOfMontrealDay();
   const seasonStartYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
   const seasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00");
@@ -217,6 +229,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       difficulty: dive.difficulty
     })),
     competitionConfidence: confidenceRows.map((item) => ({ competitionDiveId: item.competitionDiveId, code: item.diveCode, height: item.height, rating: item.rating, evaluator: item.evaluator, evaluatedAt: item.evaluatedAt.toISOString() })),
+    confidenceSchemaUnavailable,
     diveNotes: athlete.diveNotes.map((item) => ({
       id: item.poolDiveId,
       code: item.poolDive.diveCode,
@@ -274,6 +287,7 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
           { id: "competition-3", height: "THREE_METER", code: "405C", difficulty: 3.1 }
         ],
         competitionConfidence: [],
+        confidenceSchemaUnavailable: false,
         diveNotes: [],
         progress: {
           chartData: [
@@ -382,7 +396,9 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
 
       <CompetitionDiveEditor athleteId={profile.id} dives={profile.competitionDives} demo={demo} />
 
-      <CoachCompetitionEvaluationForm athleteId={profile.id} dives={profile.competitionDives.map(({ id, code, height }) => ({ id, code, height }))} />
+      {profile.confidenceSchemaUnavailable && <div role="status" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-950">Les évaluations sont temporairement indisponibles. La migration de la base de données doit être appliquée avant de pouvoir les consulter ou en saisir.</div>}
+
+      {!profile.confidenceSchemaUnavailable && <CoachCompetitionEvaluationForm athleteId={profile.id} dives={profile.competitionDives.map(({ id, code, height }) => ({ id, code, height }))} />}
 
       <CompetitionConfidenceChart data={profile.competitionConfidence} />
 
