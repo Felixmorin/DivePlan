@@ -4,6 +4,7 @@ import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, Plus, ShieldAler
 import { deleteAthlete, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { CompetitionDiveEditor } from "@/components/coach/competition-dive-editor";
+import { CoachCompetitionEvaluationForm } from "@/components/coach/coach-competition-evaluation-form";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { CompetitionConfidenceChart, type CompetitionConfidencePoint } from "@/components/athlete/competition-confidence-chart";
 import { TechniqueDetails } from "@/components/athlete/technique-details";
@@ -133,7 +134,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     getAthleteProgressTotals(athlete.id),
     getAthleteSessionPreviewStats(athlete.userId)
   ]);
-  const confidenceRows = await prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId: athlete.id }, orderBy: { evaluatedAt: "asc" }, select: { competitionDiveId: true, diveCode: true, height: true, rating: true, evaluatedAt: true } });
+  const confidenceRows = await prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId: athlete.id }, orderBy: { evaluatedAt: "asc" }, select: { competitionDiveId: true, diveCode: true, height: true, rating: true, evaluator: true, evaluatedAt: true } });
   const today = startOfMontrealDay();
   const seasonStartYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
   const seasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00");
@@ -215,7 +216,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
       code: dive.diveCode,
       difficulty: dive.difficulty
     })),
-    competitionConfidence: confidenceRows.map((item) => ({ competitionDiveId: item.competitionDiveId, code: item.diveCode, height: item.height, rating: item.rating, evaluatedAt: item.evaluatedAt.toISOString() })),
+    competitionConfidence: confidenceRows.map((item) => ({ competitionDiveId: item.competitionDiveId, code: item.diveCode, height: item.height, rating: item.rating, evaluator: item.evaluator, evaluatedAt: item.evaluatedAt.toISOString() })),
     diveNotes: athlete.diveNotes.map((item) => ({
       id: item.poolDiveId,
       code: item.poolDive.diveCode,
@@ -380,6 +381,8 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
       <AthleteProgress profile={profile} />
 
       <CompetitionDiveEditor athleteId={profile.id} dives={profile.competitionDives} demo={demo} />
+
+      <CoachCompetitionEvaluationForm athleteId={profile.id} dives={profile.competitionDives.map(({ id, code, height }) => ({ id, code, height }))} />
 
       <CompetitionConfidenceChart data={profile.competitionConfidence} />
 

@@ -44,7 +44,7 @@ export async function saveCompetitionDiveEvaluation(input: z.infer<typeof compet
   if (dives.length === 0 || uniqueIds.size !== dives.length || dives.some((dive) => !uniqueIds.has(dive.id))) {
     throw new Error("Une note doit être choisie pour chacun de tes plongeons de compétition.");
   }
-  const previous = await prisma.athleteCompetitionDiveEvaluation.count({ where: { athleteId: athlete.id, sessionId: session.id } });
+  const previous = await prisma.athleteCompetitionDiveEvaluation.count({ where: { athleteId: athlete.id, sessionId: session.id, evaluator: "ATHLETE" } });
   if (previous > 0) throw new Error("Cette évaluation a déjà été enregistrée.");
   const evaluatedAt = new Date();
   await prisma.athleteCompetitionDiveEvaluation.createMany({
@@ -55,6 +55,7 @@ export async function saveCompetitionDiveEvaluation(input: z.infer<typeof compet
       diveCode: dive.diveCode,
       height: dive.height,
       rating: data.ratings.find((entry) => entry.competitionDiveId === dive.id)!.rating,
+      evaluator: "ATHLETE",
       evaluatedAt
     }))
   });
@@ -260,7 +261,7 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   if (evaluationSession) {
     const [diveCount, evaluationCount] = await Promise.all([
       prisma.competitionDive.count({ where: { athleteId: athlete.id } }),
-      prisma.athleteCompetitionDiveEvaluation.count({ where: { athleteId: athlete.id, sessionId: payload.sessionId } })
+      prisma.athleteCompetitionDiveEvaluation.count({ where: { athleteId: athlete.id, sessionId: payload.sessionId, evaluator: "ATHLETE" } })
     ]);
     if (diveCount > 0 && evaluationCount !== diveCount) throw new Error("Réponds à tous les plongeons de compétition avant de terminer.");
   }

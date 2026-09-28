@@ -135,7 +135,6 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
                   }} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
                   <input name="difficulty" inputMode="decimal" placeholder="DD" aria-label={`Degré de difficulté ${height.label}`} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
                 </div>
-                <p className="text-xs text-[var(--color-ink-muted)]">DD World Aquatics proposé automatiquement pour les codes reconnus; modifiable au besoin.</p>
                 <Button type="submit" disabled={demo || pending} variant="default" className="w-full"><Plus className="h-4 w-4" /> Ajouter</Button>
               </form>
             </section>

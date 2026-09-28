@@ -20,7 +20,7 @@ export default async function ProfilePage() {
   const [totals, weekSummary, confidenceRows] = await Promise.all([
     getAthleteProgressTotals(athlete.id),
     getAthleteCurrentWeekSummary(athlete.id),
-    prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId: athlete.id }, orderBy: { evaluatedAt: "asc" }, select: { competitionDiveId: true, diveCode: true, height: true, rating: true, evaluatedAt: true } })
+    prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId: athlete.id, evaluator: "ATHLETE" }, orderBy: { evaluatedAt: "asc" }, select: { competitionDiveId: true, diveCode: true, height: true, rating: true, evaluator: true, evaluatedAt: true } })
   ]);
   const coachName = athlete.group?.coach.user
     ? `${athlete.group.coach.user.firstName} ${athlete.group.coach.user.lastName}`
@@ -78,7 +78,7 @@ export default async function ProfilePage() {
           code: dive.diveCode,
           difficulty: dive.difficulty,
             latestConfidence: confidenceRows.filter((item) => item.competitionDiveId === dive.id).at(-1)?.rating ?? null,
-            confidenceHistory: confidenceRows.filter((item) => item.competitionDiveId === dive.id).map((item) => ({ competitionDiveId: item.competitionDiveId, code: item.diveCode, height: item.height, rating: item.rating, evaluatedAt: item.evaluatedAt.toISOString() })),
+            confidenceHistory: confidenceRows.filter((item) => item.competitionDiveId === dive.id).map((item) => ({ competitionDiveId: item.competitionDiveId, code: item.diveCode, height: item.height, rating: item.rating, evaluator: item.evaluator, evaluatedAt: item.evaluatedAt.toISOString() })),
             volume: totals.skillDives
               .filter((trackedDive) => trackedDive.code === dive.diveCode && trackedDive.height === dive.height)
               .reduce((sum, trackedDive) => sum + trackedDive.volume, 0)

@@ -41,6 +41,11 @@ enum PoolHeight {
   CUSTOM
 }
 
+enum CompetitionEvaluationAuthor {
+  ATHLETE
+  COACH
+}
+
 enum SkillStatus {
   NOT_STARTED
   LEARNING
@@ -160,6 +165,7 @@ model Coach {
   club                  Club              @relation(fields: [clubId], references: [id])
   groups                TrainingGroup[]
   sessions              TrainingSession[]
+  competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
 }
 
 model TrainingGroup {
@@ -253,18 +259,22 @@ model SessionBlock {
 model AthleteCompetitionDiveEvaluation {
   id                String          @id @default(cuid())
   athleteId         String
-  sessionId         String
+  sessionId         String?
+  coachId           String?
   competitionDiveId String
   diveCode          String
   height            PoolHeight
   rating            Int
+  evaluator         CompetitionEvaluationAuthor @default(ATHLETE)
   evaluatedAt       DateTime        @default(now())
   athlete           Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  session           TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session           TrainingSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  coach             Coach?          @relation(fields: [coachId], references: [id], onDelete: SetNull)
 
   @@unique([athleteId, sessionId, competitionDiveId], map: "AthleteCompDiveEval_athlete_session_dive_key")
   @@index([athleteId, competitionDiveId, evaluatedAt], map: "AthleteCompDiveEval_athlete_dive_time_idx")
   @@index([sessionId], map: "AthleteCompDiveEval_session_idx")
+  @@index([athleteId, evaluator, evaluatedAt], map: "AthleteCompDiveEval_subject_author_time_idx")
 }
 
 model AthleteBlockTiming {

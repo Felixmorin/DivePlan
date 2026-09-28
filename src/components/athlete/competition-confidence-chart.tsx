@@ -10,6 +10,7 @@ export type CompetitionConfidencePoint = {
   height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
   rating: number;
   evaluatedAt: string;
+  evaluator: "ATHLETE" | "COACH";
 };
 
 const heights = [
@@ -23,23 +24,32 @@ const colors = ["#0891b2", "#e11d48", "#7c3aed", "#16a34a", "#d97706", "#2563eb"
 export function CompetitionConfidenceChart({ data, initialDiveId, athleteView = false }: { data: CompetitionConfidencePoint[]; initialDiveId?: string; athleteView?: boolean }) {
   const [height, setHeight] = useState("ALL");
   const [diveId, setDiveId] = useState(initialDiveId ?? "ALL");
+  const [author, setAuthor] = useState("ALL");
   const matchingHeight = height === "ALL" ? data : data.filter((item) => item.height === height);
   const dives = Array.from(new Map(matchingHeight.map((item) => [item.competitionDiveId, { id: item.competitionDiveId, code: item.code, height: item.height }])).values());
   const selectedDive = dives.some((dive) => dive.id === diveId) ? diveId : "ALL";
   const visibleDiveIds = selectedDive === "ALL" ? dives.map((dive) => dive.id) : [selectedDive];
+  const visiblePoints = data.filter((point) => (height === "ALL" || point.height === height) && visibleDiveIds.includes(point.competitionDiveId) && (athleteView || author === "ALL" || point.evaluator === author));
+  const series = Array.from(new Map(visiblePoints.map((point) => [`${point.evaluator}:${point.competitionDiveId}`, {
+    key: `${point.evaluator}:${point.competitionDiveId}`,
+    diveId: point.competitionDiveId,
+    code: point.code,
+    evaluator: point.evaluator,
+    label: `${point.code} · ${point.evaluator === "COACH" ? "Coach" : "Athlète"}`
+  }])).values());
   const chartData = useMemo(() => {
     const byDate = new Map<string, Record<string, string | number>>();
-    for (const item of data.filter((point) => (height === "ALL" || point.height === height) && visibleDiveIds.includes(point.competitionDiveId))) {
+    for (const item of visiblePoints) {
       const time = new Date(item.evaluatedAt).getTime();
       const row = byDate.get(String(time)) ?? {
         time,
         date: new Intl.DateTimeFormat("fr-CA", { day: "numeric", month: "short", year: "2-digit" }).format(new Date(time))
       };
-      row[item.competitionDiveId] = item.rating;
+      row[`${item.evaluator}:${item.competitionDiveId}`] = item.rating;
       byDate.set(String(time), row);
     }
     return Array.from(byDate.values()).sort((a, b) => Number(a.time) - Number(b.time));
-  }, [data, height, visibleDiveIds.join("|")]);
+  }, [visiblePoints]);
 
   return (
     <Card className={athleteView ? "border-cyan-200/15 bg-[#0b1e30] text-white" : ""}>
@@ -58,6 +68,11 @@ export function CompetitionConfidenceChart({ data, initialDiveId, athleteView = 
               {dives.map((item) => <option key={item.id} value={item.id}>{item.code} · {heights.find((heightOption) => heightOption.value === item.height)?.label ?? item.height}</option>)}
             </select>
           </label>
+          {!athleteView && <label className="text-xs font-bold text-current/65 sm:col-span-2">Évaluateur
+            <select aria-label="Filtrer par évaluateur" value={author} onChange={(event) => setAuthor(event.target.value)} className="mt-1 h-10 w-full rounded-lg border border-current/15 bg-transparent px-3 text-sm text-current">
+              <option value="ALL">Athlète et coach</option><option value="ATHLETE">Athlète</option><option value="COACH">Coach</option>
+            </select>
+          </label>}
         </div>
         {chartData.length === 0 ? <p className="py-10 text-center text-sm font-semibold text-current/55">Aucune évaluation enregistrée pour ce filtre.</p> : (
           <div className="h-64 w-full">
@@ -66,13 +81,13 @@ export function CompetitionConfidenceChart({ data, initialDiveId, athleteView = 
                 <CartesianGrid stroke="rgba(137,160,180,.2)" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} label={{ value: "Date d’évaluation", position: "insideBottom", offset: -12, fontSize: 11 }} />
                 <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} allowDecimals={false} width={34} label={{ value: "Note (1 à 5)", angle: -90, position: "insideLeft", fontSize: 11 }} />
-                <Tooltip formatter={(value, name) => [value, dives.find((dive) => dive.id === name)?.code ?? name]} labelFormatter={(label) => `Évaluation · ${label}`} />
-                {dives.filter((item) => visibleDiveIds.includes(item.id)).map((item) => <Line key={item.id} type="linear" dataKey={item.id} name={item.code} stroke={colors[dives.findIndex((dive) => dive.id === item.id) % colors.length]} strokeWidth={2.5} connectNulls={false} dot={{ r: 4 }} activeDot={{ r: 6 }} />)}
+                <Tooltip formatter={(value, name) => [value, series.find((item) => item.key === name)?.label ?? name]} labelFormatter={(label) => `Évaluation · ${label}`} />
+                {series.map((item) => <Line key={item.key} type="linear" dataKey={item.key} name={item.label} stroke={colors[dives.findIndex((dive) => dive.id === item.diveId) % colors.length]} strokeWidth={2.5} strokeDasharray={item.evaluator === "COACH" ? "6 4" : undefined} connectNulls dot={{ r: 4 }} activeDot={{ r: 6 }} />)}
               </LineChart>
             </ResponsiveContainer>
           </div>
         )}
-        {selectedDive === "ALL" && <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">{dives.map((item) => <span key={item.id} className="inline-flex items-center gap-2 text-xs font-bold text-current/70"><i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colors[dives.findIndex((dive) => dive.id === item.id) % colors.length] }} />{item.code}</span>)}</div>}
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">{series.map((item) => <span key={item.key} className="inline-flex items-center gap-2 text-xs font-bold text-current/70"><i className={`h-2.5 w-2.5 rounded-full ${item.evaluator === "COACH" ? "border border-current bg-transparent" : ""}`} style={{ color: colors[dives.findIndex((dive) => dive.id === item.diveId)], backgroundColor: item.evaluator === "COACH" ? "transparent" : colors[dives.findIndex((dive) => dive.id === item.diveId)] }} />{item.label}</span>)}</div>
       </CardContent>
     </Card>
   );

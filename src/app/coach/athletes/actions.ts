@@ -52,6 +52,11 @@ const competitionDiveOrderSchema = z.object({
   diveIds: z.array(z.string().min(1)).max(50)
 });
 
+const coachCompetitionEvaluationSchema = z.object({
+  athleteId: z.string().min(1),
+  ratings: z.array(z.object({ competitionDiveId: z.string().min(1), rating: z.number().int().min(1).max(5) })).min(1)
+});
+
 const athleteDiveFamilySchema = z.object({
   athleteId: z.string().min(1),
   diveCode: z.string().trim().min(1).max(12),
@@ -353,6 +358,37 @@ export async function addCompetitionDive(formData: FormData) {
 
   revalidatePath(`/coach/athletes/${athlete.id}`);
   revalidatePath("/athlete/profile");
+}
+
+export async function saveCoachCompetitionDiveEvaluation(input: z.infer<typeof coachCompetitionEvaluationSchema>) {
+  const { coach, clubId } = await requireCoach();
+  const data = coachCompetitionEvaluationSchema.parse(input);
+  const athlete = await prisma.athlete.findFirst({
+    where: { id: data.athleteId, clubId },
+    select: { id: true }
+  });
+  if (!athlete) throw new Error("Athlète introuvable pour ce club.");
+
+  const dives = await prisma.competitionDive.findMany({ where: { athleteId: athlete.id }, select: { id: true, diveCode: true, height: true } });
+  const submittedIds = new Set(data.ratings.map((entry) => entry.competitionDiveId));
+  if (dives.length === 0 || submittedIds.size !== dives.length || dives.some((dive) => !submittedIds.has(dive.id))) {
+    throw new Error("Une note doit être choisie pour chacun des plongeons de compétition.");
+  }
+
+  const evaluatedAt = new Date();
+  await prisma.athleteCompetitionDiveEvaluation.createMany({
+    data: dives.map((dive) => ({
+      athleteId: athlete.id,
+      coachId: coach.id,
+      competitionDiveId: dive.id,
+      diveCode: dive.diveCode,
+      height: dive.height,
+      rating: data.ratings.find((entry) => entry.competitionDiveId === dive.id)!.rating,
+      evaluator: "COACH",
+      evaluatedAt
+    }))
+  });
+  revalidatePath(`/coach/athletes/${athlete.id}`);
 }
 
 export async function updateCompetitionDiveDifficulty(formData: FormData) {

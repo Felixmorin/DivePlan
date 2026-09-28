@@ -226,7 +226,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
 
   const [competitionDives, competitionEvaluations] = await Promise.all([
     prisma.competitionDive.findMany({ where: { athleteId }, orderBy: [{ height: "asc" }, { position: "asc" }, { createdAt: "asc" }], select: { id: true, diveCode: true, height: true } }),
-    prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId, sessionId }, select: { competitionDiveId: true, rating: true } })
+    prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId, sessionId, evaluator: "ATHLETE" }, select: { competitionDiveId: true, rating: true } })
   ]);
 
   return {
