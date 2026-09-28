@@ -336,7 +336,7 @@ model DrylandBlockExercise {
   block      SessionBlock    @relation(fields: [blockId], references: [id], onDelete: Cascade)
   exercise   DrylandExercise @relation(fields: [exerciseId], references: [id])
 
-  @@id([blockId, exerciseId])
+  @@id([blockId, order])
 }
 
 model PoolTraining {

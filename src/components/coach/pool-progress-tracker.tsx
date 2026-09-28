@@ -66,7 +66,10 @@ export function PoolProgressTracker({
                   {complete ? "Termine" : partial ? "Partiel" : "A venir"}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="mr-0.5 text-xs font-black text-[var(--color-ink-muted)]" aria-label="Hauteur">
+                  {sectionLabel}
+                </span>
                 {dives.map((dive) => {
                   const done = (athleteLogs.get(dive.id) ?? 0) >= dive.repetitions * multiplier;
                   const current = activeDiveIds[athlete.id] === dive.id;

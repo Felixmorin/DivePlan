@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Eye, FileText, MoreHorizontal, Plus, Printer, Send, Trash2, Users, Waves } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Eye, FileText, MoreHorizontal, Plus, Printer, Search, Send, Trash2, Users, Waves } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -301,16 +301,19 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     pulse(blockId);
   }
 
-  function toggleExercise(blockId: string, exerciseId: string) {
+  function toggleExercise(blockId: string, exerciseId: string, selected: boolean, occurrenceIndex?: number) {
     const block = drylandBlocks.find((item) => item.id === blockId);
     if (!block) return;
-    updateDrylandBlock(blockId, { exerciseIds: block.exerciseIds.includes(exerciseId) ? block.exerciseIds.filter((id) => id !== exerciseId) : [...block.exerciseIds, exerciseId] });
+    const next = [...block.exerciseIds];
+    if (selected && occurrenceIndex !== undefined) next.splice(occurrenceIndex, 1);
+    else next.push(exerciseId);
+    updateDrylandBlock(blockId, { exerciseIds: next });
   }
 
-  function moveExercise(blockId: string, exerciseId: string, direction: -1 | 1) {
+  function moveExercise(blockId: string, occurrenceIndex: number, direction: -1 | 1) {
     setDrylandBlocks((current) => current.map((block) => {
       if (block.id !== blockId) return block;
-      const index = block.exerciseIds.indexOf(exerciseId);
+      const index = occurrenceIndex;
       const nextIndex = index + direction;
       if (index < 0 || nextIndex < 0 || nextIndex >= block.exerciseIds.length) return block;
       const next = [...block.exerciseIds];
@@ -540,14 +543,15 @@ function DrylandStep(props: {
   blocks: BuilderDrylandBlock[];
   athletes: BuilderAthlete[];
   flashBlock: string | null;
-  onToggleExercise: (blockId: string, exerciseId: string) => void;
-  onMoveExercise: (blockId: string, exerciseId: string, direction: -1 | 1) => void;
+  onToggleExercise: (blockId: string, exerciseId: string, selected: boolean, occurrenceIndex?: number) => void;
+  onMoveExercise: (blockId: string, occurrenceIndex: number, direction: -1 | 1) => void;
   onUpdateBlock: (blockId: string, update: Partial<Omit<BuilderDrylandBlock, "id">>) => void;
   onAddBlock: () => void;
   onRemoveBlock: (blockId: string) => void;
   onMoveBlock: (blockId: string, direction: -1 | 1) => void;
   onCreateExercise: (input: QuickExerciseInput) => Promise<void>;
 }) {
+  const [search, setSearch] = useState("");
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-[var(--block-dryland-fg)]/20 bg-[var(--block-dryland-bg)]/45 p-4">
@@ -557,10 +561,10 @@ function DrylandStep(props: {
       <QuickExerciseForm onCreateExercise={props.onCreateExercise} />
       {props.blocks.map((block, blockIndex) => {
         const selectedExercises = orderExercises(props.exercises, block.exerciseIds);
-        const availableExercises = props.exercises.filter((exercise) => !block.exerciseIds.includes(exercise.id));
-        const renderExercise = (exercise: BuilderExercise, selected: boolean) => (
-          <div key={exercise.id} className={cn("grid gap-3 rounded-2xl border p-3 sm:grid-cols-[auto_1fr_auto] sm:items-center", selected ? "border-[var(--block-dryland-fg)]/30 bg-[var(--block-dryland-bg)]/45" : "border-[var(--color-border)] bg-white")}>
-            <button type="button" onClick={() => props.onToggleExercise(block.id, exercise.id)} className={cn("flex h-11 w-11 items-center justify-center rounded-xl border focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", selected ? "border-[var(--color-success)] bg-[var(--color-success)] text-white" : "border-[var(--color-border)] text-[var(--color-ink-soft)]")} aria-label={`${selected ? "Retirer" : "Ajouter"} ${exercise.name} ${selected ? "du" : "au"} bloc ${block.title}`}>
+        const availableExercises = props.exercises.filter((exercise) => `${exercise.name} ${exercise.category} ${exercise.equipment ?? ""}`.toLocaleLowerCase("fr").includes(search.trim().toLocaleLowerCase("fr")));
+        const renderExercise = (exercise: BuilderExercise, selected: boolean, occurrenceIndex?: number) => (
+          <div key={selected ? `${exercise.id}-${occurrenceIndex}` : exercise.id} className={cn("grid gap-3 rounded-2xl border p-3 sm:grid-cols-[auto_1fr_auto] sm:items-center", selected ? "border-[var(--block-dryland-fg)]/30 bg-[var(--block-dryland-bg)]/45" : "border-[var(--color-border)] bg-white")}>
+            <button type="button" onClick={() => props.onToggleExercise(block.id, exercise.id, selected, occurrenceIndex)} className={cn("flex h-11 w-11 items-center justify-center rounded-xl border focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", selected ? "border-[var(--color-success)] bg-[var(--color-success)] text-white" : "border-[var(--color-border)] text-[var(--color-ink-soft)]")} aria-label={`${selected ? "Retirer" : "Ajouter encore"} ${exercise.name} ${selected ? "du" : "au"} bloc ${block.title}`}>
               {selected ? <CheckCircle2 className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
             </button>
             <div>
@@ -576,7 +580,7 @@ function DrylandStep(props: {
             </div>
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-[var(--color-ink-muted)]">{exercise.category}</span>
-              {selected && <div className="flex gap-1"><button type="button" aria-label={`Monter ${exercise.name}`} onClick={() => props.onMoveExercise(block.id, exercise.id, -1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white"><ArrowUp className="h-4 w-4" /></button><button type="button" aria-label={`Descendre ${exercise.name}`} onClick={() => props.onMoveExercise(block.id, exercise.id, 1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white"><ArrowDown className="h-4 w-4" /></button></div>}
+              {selected && <div className="flex gap-1"><button type="button" aria-label={`Monter ${exercise.name}`} onClick={() => props.onMoveExercise(block.id, occurrenceIndex!, -1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white"><ArrowUp className="h-4 w-4" /></button><button type="button" aria-label={`Descendre ${exercise.name}`} onClick={() => props.onMoveExercise(block.id, occurrenceIndex!, 1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white"><ArrowDown className="h-4 w-4" /></button></div>}
             </div>
           </div>
         );
@@ -591,11 +595,12 @@ function DrylandStep(props: {
               <div className="max-h-[520px] space-y-4 overflow-y-auto pr-1">
                 {selectedExercises.length > 0 && <div className="space-y-2">
                   <div className="text-sm font-black uppercase tracking-wide text-[var(--block-dryland-fg)]">Exercices sélectionnés</div>
-                  {selectedExercises.map((exercise) => renderExercise(exercise, true))}
+                  {selectedExercises.map((exercise, occurrenceIndex) => renderExercise(exercise, true, occurrenceIndex))}
                 </div>}
                 <div className="space-y-2">
                   <div className="text-sm font-black uppercase tracking-wide text-[var(--color-ink-muted)]">Exercices disponibles</div>
-                  {availableExercises.length > 0 ? availableExercises.map((exercise) => renderExercise(exercise, false)) : <div className="rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">Tous les exercices sont déjà sélectionnés dans ce bloc.</div>}
+                  <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-soft)]" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice dryland" className="pl-9" /></label>
+                  {availableExercises.length > 0 ? availableExercises.map((exercise) => renderExercise(exercise, false)) : <div className="rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">Aucun exercice trouvé.</div>}
                 </div>
               </div>
               {selectedExercises.length === 0 && <WarningText>Ajoute au moins un exercice à ce bloc.</WarningText>}

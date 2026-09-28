@@ -724,35 +724,23 @@ export async function updateTrainingSession(formData: FormData) {
       }
 
       if (block.type === BlockType.DRYLAND) {
-        const selectedIds = Array.from(new Set(formData.getAll(`exerciseSelection:${block.id}`).map(String)))
+        const selectedIds = formData.getAll(`exerciseSelection:${block.id}`).map(String)
           .filter((id) => validDrylandById.has(id));
         if (selectedIds.length === 0) throw new Error(`Le bloc dryland « ${block.title} » doit contenir un exercice.`);
-        await tx.drylandBlockExercise.deleteMany({
-          where: { blockId: block.id, exerciseId: { notIn: selectedIds } }
-        });
-
-        for (const [order, exerciseId] of selectedIds.entries()) {
+        await tx.drylandBlockExercise.deleteMany({ where: { blockId: block.id } });
+        await tx.drylandBlockExercise.createMany({ data: selectedIds.map((exerciseId, order) => {
           const defaults = validDrylandById.get(exerciseId)!;
-          const existingExercise = block.drylandExercises.find((exercise) => exercise.exerciseId === exerciseId);
-          await tx.drylandBlockExercise.upsert({
-            where: { blockId_exerciseId: { blockId: block.id, exerciseId } },
-            create: {
-              blockId: block.id,
-              exerciseId,
-              sets: defaults.defaultSets,
-              reps: defaults.defaultReps,
-              duration: defaults.defaultDuration,
-              order
-            },
-            update: {
-              sets: existingExercise ? nullableNumber(formData.get(`exerciseSets:${block.id}:${exerciseId}`)) : defaults.defaultSets,
-              reps: existingExercise ? nullableNumber(formData.get(`exerciseReps:${block.id}:${exerciseId}`)) : defaults.defaultReps,
-              duration: existingExercise ? nullableNumber(formData.get(`exerciseDuration:${block.id}:${exerciseId}`)) : defaults.defaultDuration,
-              notes: existingExercise ? nullableText(formData.get(`exerciseNotes:${block.id}:${exerciseId}`)) : null,
-              order
-            }
-          });
-        }
+          const existingExercise = block.drylandExercises.filter((exercise) => exercise.exerciseId === exerciseId)[order];
+          return {
+            blockId: block.id,
+            exerciseId,
+            sets: existingExercise ? nullableNumber(formData.get(`exerciseSets:${block.id}:${existingExercise.order}`)) : defaults.defaultSets,
+            reps: existingExercise ? nullableNumber(formData.get(`exerciseReps:${block.id}:${existingExercise.order}`)) : defaults.defaultReps,
+            duration: existingExercise ? nullableNumber(formData.get(`exerciseDuration:${block.id}:${existingExercise.order}`)) : defaults.defaultDuration,
+            notes: existingExercise ? nullableText(formData.get(`exerciseNotes:${block.id}:${existingExercise.order}`)) : null,
+            order
+          };
+        }) });
       }
 
       if (block.poolTraining) {
