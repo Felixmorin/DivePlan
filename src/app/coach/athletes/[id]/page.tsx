@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, Plus, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves, X } from "lucide-react";
-import { deleteAthlete, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
+import { deleteAthlete, removeAthleteDiveFromVolume, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { CompetitionDiveEditor } from "@/components/coach/competition-dive-editor";
 import { CoachCompetitionEvaluationForm } from "@/components/coach/coach-competition-evaluation-form";
@@ -549,7 +549,7 @@ function AthleteProgress({ profile }: { profile: AthleteProfile }) {
         <CardContent><ProgressChart data={profile.progress.chartData} sessionData={profile.progress.sessionChartData} weeklyData={profile.progress.weeklyChartData} monthlyData={profile.progress.monthlyChartData} /></CardContent>
       </Card>
       <Card>
-        <CardContent className="p-5"><TechniqueDetails technique={technique} skillDives={profile.progress.skillDives} athleteId={profile.id} updateFamilyAction={updateAthleteDiveFamily} /></CardContent>
+        <CardContent className="p-5"><TechniqueDetails technique={technique} skillDives={profile.progress.skillDives} athleteId={profile.id} updateFamilyAction={updateAthleteDiveFamily} removeDiveAction={removeAthleteDiveFromVolume} /></CardContent>
       </Card>
     </div>
   );

@@ -497,6 +497,39 @@ export async function updateAthleteDiveFamily(formData: FormData) {
   revalidatePath("/athlete/progress");
 }
 
+export async function removeAthleteDiveFromVolume(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const parsed = z.object({
+    athleteId: z.string().min(1),
+    diveCode: z.string().trim().min(1).max(12),
+    height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM, PoolHeight.CUSTOM])
+  }).safeParse({
+    athleteId: formData.get("athleteId"),
+    diveCode: formData.get("diveCode"),
+    height: formData.get("height")
+  });
+  if (!parsed.success) throw new Error("Les informations du plongeon sont invalides.");
+
+  const athlete = await prisma.athlete.findFirst({
+    where: { id: parsed.data.athleteId, clubId },
+    select: { id: true }
+  });
+  if (!athlete) throw new Error("Athlète introuvable.");
+
+  await prisma.athleteDiveLog.deleteMany({
+    where: {
+      athleteId: athlete.id,
+      poolDive: {
+        diveCode: parsed.data.diveCode,
+        poolSection: { height: parsed.data.height }
+      }
+    }
+  });
+
+  revalidatePath(`/coach/athletes/${athlete.id}`);
+  revalidatePath("/athlete/progress");
+}
+
 export async function deleteAthlete(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const athleteId = String(formData.get("athleteId") ?? "");
