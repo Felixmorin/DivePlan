@@ -2,11 +2,11 @@
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, ChevronUp, Eye, FileText, MoreHorizontal, Plus, Printer, Search, Send, Trash2, Users, Waves } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, BookmarkPlus, CheckCircle2, ChevronDown, ChevronUp, Eye, FileText, MoreHorizontal, Plus, Printer, Search, Send, Trash2, Users, Waves } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
-import type { CreateSessionInput, QuickExerciseInput } from "@/app/coach/sessions/actions";
+import { saveDrylandBlockAsTemplate, type CreateSessionInput, type QuickExerciseInput } from "@/app/coach/sessions/actions";
 import { AssignmentSelector } from "@/components/coach/assignment-selector";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolListTable } from "@/components/coach/pool-list-table";
@@ -389,6 +389,26 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     pulse(blockId);
   }
 
+  function saveDrylandTemplate(blockId: string) {
+    const block = drylandBlocks.find((item) => item.id === blockId);
+    if (!block || block.exerciseIds.length === 0) return;
+    const name = window.prompt("Nom du template dryland", block.title);
+    if (!name?.trim()) return;
+    const exercises = block.exerciseIds.map((exerciseId) => {
+      const exercise = library.find((item) => item.id === exerciseId);
+      const override = block.exerciseOverrides[exerciseId];
+      return { exerciseId, sets: override?.sets ?? exercise?.sets ?? null, reps: override?.reps ?? exercise?.reps ?? null, duration: override?.duration ?? exercise?.duration ?? null, notes: override?.notes ?? null };
+    });
+    const formData = new FormData();
+    formData.set("name", name.trim());
+    formData.set("block", JSON.stringify({ title: block.title, duration: block.duration, exercises }));
+    startTransition(() => {
+      void saveDrylandBlockAsTemplate(formData)
+        .then(() => window.alert("Template dryland enregistré."))
+        .catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Le template n'a pas pu être enregistré."));
+    });
+  }
+
   return (
     <div className="pb-24 lg:pb-0">
       <Stepper current={step} onStepChange={(nextStep) => { void advanceTo(nextStep); }} />
@@ -418,6 +438,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
               onAddBlock={addDrylandBlock}
               onRemoveBlock={(blockId) => setDrylandBlocks((current) => current.filter((block) => block.id !== blockId))}
               onMoveBlock={moveDrylandBlock}
+              onSaveBlockTemplate={saveDrylandTemplate}
               onCreateExercise={addExercise}
             />
           )}
@@ -530,7 +551,6 @@ function DetailsStep({ form, selectedGroupId, selectedDate, selectedPlanningEven
           <select aria-label="Moment de l’évaluation de confiance" className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]" value={evaluationPlacement} onChange={(event) => onEvaluationPlacementChange(event.target.value)}>
             {evaluationChoices.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
           </select>
-          <span className="mt-1 block text-xs font-semibold normal-case text-[var(--color-ink-muted)]">Facultative. Une seule demande par entraînement, au début ou dans un bloc précis. L’athlète évaluera tous ses plongeons de compétition.</span>
         </Field>
         {Object.values(form.formState.errors).length > 0 && <div className="md:col-span-2 rounded-2xl bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">Certains champs requis sont incomplets.</div>}
       </CardContent>
@@ -549,6 +569,7 @@ function DrylandStep(props: {
   onAddBlock: () => void;
   onRemoveBlock: (blockId: string) => void;
   onMoveBlock: (blockId: string, direction: -1 | 1) => void;
+  onSaveBlockTemplate: (blockId: string) => void;
   onCreateExercise: (input: QuickExerciseInput) => Promise<void>;
 }) {
   const [search, setSearch] = useState("");
@@ -586,7 +607,7 @@ function DrylandStep(props: {
         );
         return (
           <div key={block.id} className="block-layout grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-            <BlockCard type="dryland" title={block.title || `Dryland ${blockIndex + 1}`} assigned={block.athleteIds} athletes={props.athletes} state={selectedExercises.length > 0 ? "Pret" : "A completer"} flash={props.flashBlock === block.id} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < props.blocks.length - 1} onMoveUp={() => props.onMoveBlock(block.id, -1)} onMoveDown={() => props.onMoveBlock(block.id, 1)}>
+            <BlockCard type="dryland" title={block.title || `Dryland ${blockIndex + 1}`} assigned={block.athleteIds} athletes={props.athletes} state={selectedExercises.length > 0 ? "Pret" : "A completer"} flash={props.flashBlock === block.id} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < props.blocks.length - 1} onMoveUp={() => props.onMoveBlock(block.id, -1)} onMoveDown={() => props.onMoveBlock(block.id, 1)} onSaveTemplate={() => props.onSaveBlockTemplate(block.id)}>
               <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_auto]">
                 <Input aria-label={`Nom du bloc dryland ${blockIndex + 1}`} value={block.title} placeholder={`Dryland ${blockIndex + 1}`} onChange={(event) => props.onUpdateBlock(block.id, { title: event.target.value })} />
                 <Button type="button" variant="outline" aria-label={`Supprimer ${block.title}`} onClick={() => props.onRemoveBlock(block.id)}><Trash2 className="h-4 w-4" /> Supprimer</Button>
@@ -842,7 +863,7 @@ function SummaryPanel(props: { title: string; date: string; blockCount: number; 
   );
 }
 
-function BlockCard({ type, title, assigned, athletes, state, flash, canMoveUp, canMoveDown, onMoveUp, onMoveDown, children }: { type: "dryland" | "pool"; title: string; assigned: string[]; athletes: BuilderAthlete[]; state: string; flash?: boolean; canMoveUp?: boolean; canMoveDown?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; children: React.ReactNode }) {
+function BlockCard({ type, title, assigned, athletes, state, flash, canMoveUp, canMoveDown, onMoveUp, onMoveDown, onSaveTemplate, children }: { type: "dryland" | "pool"; title: string; assigned: string[]; athletes: BuilderAthlete[]; state: string; flash?: boolean; canMoveUp?: boolean; canMoveDown?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; onSaveTemplate?: () => void; children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const contentId = useId();
 
@@ -875,6 +896,7 @@ function BlockCard({ type, title, assigned, athletes, state, flash, canMoveUp, c
             >
               {collapsed ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
             </button>
+            {onSaveTemplate && <button type="button" aria-label={`Enregistrer ${title} comme template`} title="Enregistrer comme template" onClick={onSaveTemplate} className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><BookmarkPlus className="h-4 w-4" /></button>}
             <details className="relative">
               <summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-[var(--color-border)] bg-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><MoreHorizontal className="h-4 w-4" /></summary>
               <div className="absolute right-0 z-10 mt-2 w-52 rounded-2xl border border-[var(--color-border)] bg-white p-3 text-sm font-semibold text-[var(--color-ink-muted)] shadow-[var(--shadow-soft)]">Les actions de duplication et suppression ne sont pas connectees au backend actuel.</div>

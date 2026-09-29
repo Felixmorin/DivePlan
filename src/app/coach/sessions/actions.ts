@@ -424,6 +424,58 @@ export async function saveSessionAsTemplate(formData: FormData) {
   revalidatePath(`/coach/sessions/${source.id}`);
 }
 
+export async function saveDrylandBlockAsTemplate(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const name = String(formData.get("name") ?? "").trim();
+  let block: { title: string; duration: number; exercises: { exerciseId: string; sets: number | null; reps: number | null; duration: number | null; notes: string | null }[] };
+  try {
+    block = JSON.parse(String(formData.get("block") ?? ""));
+  } catch {
+    throw new Error("Bloc dryland invalide.");
+  }
+  if (name.length < 3 || !block.title || !Number.isFinite(block.duration) || !Array.isArray(block.exercises) || block.exercises.length === 0) {
+    throw new Error("Donne un nom au modèle et ajoute au moins un exercice au bloc.");
+  }
+  const exercises = await prisma.drylandExercise.findMany({
+    where: { id: { in: block.exercises.map((item) => item.exerciseId) }, archivedAt: null },
+    select: { id: true }
+  });
+  const validIds = new Set(exercises.map((exercise) => exercise.id));
+  const items = block.exercises.filter((item) => validIds.has(item.exerciseId));
+  if (items.length === 0) throw new Error("Aucun exercice valide dans ce bloc.");
+  const volume = items.reduce((sum, item) => sum + (item.sets ?? 1) * (item.reps ?? 0), 0);
+  await prisma.sessionTemplate.create({
+    data: {
+      name,
+      category: "Dryland",
+      clubId,
+      payload: {
+        version: 1,
+        competitionEvaluationAtStart: false,
+        title: name,
+        duration: block.duration,
+        focus: "",
+        notes: null,
+        blocks: [{
+          type: "DRYLAND",
+          title: block.title,
+          description: null,
+          duration: block.duration,
+          position: 0,
+          estimatedVolume: volume,
+          competitionEvaluation: false,
+          athleteIds: [],
+          drylandExercises: items.map((item, order) => ({ ...item, order })),
+          poolTraining: null
+        }]
+      }
+    }
+  });
+  await trackEvent({ type: "session_template.created", message: `Modele dryland cree: ${name}`, clubId, userId: user.id });
+  revalidatePath("/coach/templates");
+  revalidatePath("/coach/library");
+}
+
 export async function deleteSessionTemplate(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const templateId = String(formData.get("templateId") ?? "");

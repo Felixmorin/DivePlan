@@ -16,7 +16,7 @@ export default async function TemplatesPage() {
 
   if (clubId === "dev-club") {
     return (
-      <CoachShell active="Bibliotheque">
+      <CoachShell active="Template">
         <div className="mb-6 flex items-center justify-between">
           <div><h1 className="text-3xl font-black">Templates</h1><p className="text-[var(--color-ink-muted)]">Mode demo local sans PostgreSQL.</p></div>
           <Button asChild><Link href="/coach/sessions/demo">Ouvrir la seance demo</Link></Button>
@@ -32,7 +32,7 @@ export default async function TemplatesPage() {
   });
 
   return (
-    <CoachShell active="Bibliotheque">
+    <CoachShell active="Template">
       <div className="mb-6 flex items-center justify-between">
         <div><h1 className="text-3xl font-black">Templates</h1><p className="text-[var(--color-ink-muted)]">Modeles sauvegardes par les coachs du club.</p></div>
         <Button asChild><Link href="/coach/sessions/new">Nouvelle seance</Link></Button>
@@ -52,7 +52,7 @@ export default async function TemplatesPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <CardTitle>{template.name}</CardTitle>
-                      <p className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{template.category}</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{template.category === "Dryland" ? "Bloc dryland" : template.category}</p>
                     </div>
                     <form action={toggleSessionTemplateFavorite}>
                       <input type="hidden" name="templateId" value={template.id} />

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Activity, CalendarDays, Computer, Dumbbell, LayoutDashboard, Library, LogOut, Settings, Users, Waves } from "lucide-react";
+import { Activity, CalendarDays, Computer, Dumbbell, FileText, LayoutDashboard, Library, LogOut, Settings, Users, Waves } from "lucide-react";
 import { signOutCoach } from "@/app/coach/settings/actions";
 import { requireCoach } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ const nav = [
   { href: "/coach/athletes", label: "Athlètes", match: "Athletes", icon: Users },
   { href: "/coach/groups", label: "Groupes", icon: Dumbbell },
   { href: "/coach/library", label: "Bibliothèque", match: "Bibliotheque", icon: Library },
+  { href: "/coach/templates", label: "Template", match: "Template", icon: FileText },
 ];
 
 const utilityNav = [
