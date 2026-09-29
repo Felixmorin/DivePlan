@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { parseSessionTemplatePayload } from "@/lib/session-template";
+import { sessionTemplatePayloadSchema } from "@/lib/session-template";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +42,10 @@ export default async function TemplatesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {templates.map((template) => {
-            const payload = parseSessionTemplatePayload(template.payload);
-            const volume = payload.blocks.reduce((sum, block) => sum + block.estimatedVolume, 0);
-            const athleteCount = new Set(payload.blocks.flatMap((block) => block.athleteIds)).size;
+            const parsedPayload = sessionTemplatePayloadSchema.safeParse(template.payload);
+            const payload = parsedPayload.success ? parsedPayload.data : null;
+            const volume = payload?.blocks.reduce((sum, block) => sum + block.estimatedVolume, 0) ?? 0;
+            const athleteCount = new Set(payload?.blocks.flatMap((block) => block.athleteIds) ?? []).size;
 
             return (
               <Card key={template.id}>
@@ -64,12 +65,13 @@ export default async function TemplatesPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-3 gap-2 text-sm font-bold text-[var(--color-ink-muted)]">
-                    <span>{payload.blocks.length} blocs</span>
+                    <span>{payload?.blocks.length ?? 0} blocs</span>
                     <span>{volume} vol.</span>
                     <span>{athleteCount} athletes</span>
                   </div>
+                  {!payload && <p role="alert" className="text-sm font-semibold text-[var(--color-danger)]">Ce template contient des données incomplètes et ne peut pas être chargé.</p>}
                   <div className="flex flex-wrap gap-2">
-                    <Button asChild size="sm" variant="action"><Link href={`/coach/sessions/new?templateId=${template.id}`}><FileText className="h-4 w-4" /> Charger</Link></Button>
+                    {payload && <Button asChild size="sm" variant="action"><Link href={`/coach/sessions/new?templateId=${template.id}`}><FileText className="h-4 w-4" /> Charger</Link></Button>}
                     <form action={deleteSessionTemplate}>
                       <input type="hidden" name="templateId" value={template.id} />
                       <Button type="submit" size="sm" variant="outline"><Trash2 className="h-4 w-4" /> Supprimer</Button>
