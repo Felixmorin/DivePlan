@@ -70,7 +70,7 @@ export async function saveAthleteDiveNote(sessionId: string, poolDiveId: string,
   if (!readyDiveIds.has(data.poolDiveId)) throw new Error("Ce plongeon n'est pas accessible a l'athlete courant.");
 
   const dive = await query(
-    `SELECT d.id FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId" JOIN "PoolTraining" p ON p.blockId = s."poolTrainingId"
+    `SELECT d.id FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId" JOIN "PoolTraining" p ON p."blockId" = s."poolTrainingId"
      JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = p."blockId" WHERE d.id = $1 AND a."athleteId" = $2 LIMIT 1`, [data.poolDiveId, athlete.id]
   );
 

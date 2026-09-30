@@ -36,14 +36,14 @@ export async function getAssignedSessionBlocks(sessionId: string, athleteId: str
     ),
     query<PoolSectionItem & { poolTrainingId: string }>(
       `SELECT s.id, s."poolTrainingId", s.height, s.label, s."order" FROM "PoolSection" s
-       JOIN "PoolTraining" p ON p.blockId = s."poolTrainingId" JOIN "SessionBlock" b ON b.id = p."blockId"
+       JOIN "PoolTraining" p ON p."blockId" = s."poolTrainingId" JOIN "SessionBlock" b ON b.id = p."blockId"
        JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
        WHERE b."sessionId" = $1 AND a."athleteId" = $2 ORDER BY b.position ASC, s."order" ASC`, [sessionId, athleteId]
     ),
     query<PoolDiveItem>(
       `SELECT d.id, d."poolSectionId", d."diveCode", d."diveName", d.position, d.repetitions, d.notes, d."order"
        FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId"
-       JOIN "PoolTraining" p ON p.blockId = s."poolTrainingId" JOIN "SessionBlock" b ON b.id = p."blockId"
+       JOIN "PoolTraining" p ON p."blockId" = s."poolTrainingId" JOIN "SessionBlock" b ON b.id = p."blockId"
        JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
        WHERE b."sessionId" = $1 AND a."athleteId" = $2 ORDER BY b.position ASC, s."order" ASC, d."order" ASC`, [sessionId, athleteId]
     )

@@ -17,7 +17,7 @@ export default async function LibraryPage() {
     ),
     query<{ diveCode: string; diveName: string; position: string; height: string }>(
       `SELECT d."diveCode", d."diveName", d.position, s.height FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId"
-       JOIN "PoolTraining" p ON p.blockId = s."poolTrainingId" JOIN "SessionBlock" b ON b.id = p."blockId"
+       JOIN "PoolTraining" p ON p."blockId" = s."poolTrainingId" JOIN "SessionBlock" b ON b.id = p."blockId"
        JOIN "TrainingSession" ts ON ts.id = b."sessionId" JOIN "TrainingWeek" w ON w.id = ts."weekId"
        WHERE w."clubId" = $1 ORDER BY d."diveCode" ASC, d."order" ASC`, [clubId]
     ),
