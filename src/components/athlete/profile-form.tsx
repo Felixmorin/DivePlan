@@ -63,16 +63,6 @@ export function ProfileForm({ firstName, lastName, avatar }: ProfileFormProps) {
       </div>
       {error ? <p role="alert" className="text-sm font-semibold text-rose-300">{error}</p> : null}
 
-      <ProfileField
-        label="Adresse de la photo (optionnel)"
-        name="avatarUrl"
-        defaultValue={avatar?.startsWith("data:") ? "" : avatar ?? ""}
-        type="url"
-        onChange={(event) => {
-          setAvatarData("");
-          setPreview(event.target.value || avatar || "");
-        }}
-      />
       <input type="hidden" name="avatar" value={avatarData} readOnly />
       <Button type="submit" className="w-full">Enregistrer</Button>
     </form>
