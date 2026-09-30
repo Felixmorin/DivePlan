@@ -1,5 +1,7 @@
 import "server-only";
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
 
 const globalForPool = globalThis as typeof globalThis & { divePlanPool?: Pool };
@@ -10,6 +12,8 @@ function createPool() {
   const databaseUrl = new URL(connectionString);
   const sslMode = databaseUrl.searchParams.get("sslmode")?.toLowerCase();
   const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(databaseUrl.hostname);
+  const isSupabase = databaseUrl.hostname.endsWith(".supabase.co")
+    || databaseUrl.hostname.endsWith(".pooler.supabase.com");
   const ssl = sslMode === "require"
     ? { rejectUnauthorized: false }
     : sslMode === "verify-ca" || sslMode === "verify-full"
@@ -17,6 +21,12 @@ function createPool() {
       : isLocalhost
         ? undefined
         : { rejectUnauthorized: true };
+  const sslConfig = isSupabase
+    ? {
+        ca: readFileSync(join(process.cwd(), "certs", "prod-ca-2021.crt"), "utf8"),
+        rejectUnauthorized: true
+      }
+    : ssl;
 
   // node-postgres parses SSL query parameters from connectionString after reading
   // the pool options, which can replace the explicit `ssl` object above. Strip
@@ -33,7 +43,7 @@ function createPool() {
     connectionTimeoutMillis: 5_000,
     // Hosted PostgreSQL providers commonly require TLS even when the URL omits sslmode.
     // Keep local development URLs unencrypted unless sslmode explicitly requests TLS.
-    ssl
+    ssl: sslConfig
   });
 }
 
