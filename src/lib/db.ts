@@ -7,7 +7,16 @@ const globalForPool = globalThis as typeof globalThis & { divePlanPool?: Pool };
 function createPool() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is required for database access");
-  const sslMode = new URL(connectionString).searchParams.get("sslmode")?.toLowerCase();
+  const databaseUrl = new URL(connectionString);
+  const sslMode = databaseUrl.searchParams.get("sslmode")?.toLowerCase();
+  const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(databaseUrl.hostname);
+  const ssl = sslMode === "require"
+    ? { rejectUnauthorized: false }
+    : sslMode === "verify-ca" || sslMode === "verify-full"
+      ? { rejectUnauthorized: true }
+      : isLocalhost
+        ? undefined
+        : { rejectUnauthorized: true };
 
   return new Pool({
     connectionString,
@@ -15,12 +24,9 @@ function createPool() {
     max: 3,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 5_000,
-    // Supabase pooler URLs generally provide sslmode=require in the URL.
-    ssl: sslMode === "require"
-      ? { rejectUnauthorized: false }
-      : sslMode === "verify-ca" || sslMode === "verify-full"
-        ? { rejectUnauthorized: true }
-        : undefined
+    // Hosted PostgreSQL providers commonly require TLS even when the URL omits sslmode.
+    // Keep local development URLs unencrypted unless sslmode explicitly requests TLS.
+    ssl
   });
 }
 
