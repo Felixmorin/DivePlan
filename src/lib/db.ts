@@ -18,8 +18,13 @@ function createPool() {
         ? undefined
         : { rejectUnauthorized: true };
 
+  // node-postgres parses SSL query parameters from connectionString after reading
+  // the pool options, which can replace the explicit `ssl` object above.
+  databaseUrl.searchParams.delete("sslmode");
+  databaseUrl.searchParams.delete("ssl");
+
   return new Pool({
-    connectionString,
+    connectionString: databaseUrl.toString(),
     // Keep per-instance connection use small for Vercel serverless functions.
     max: 3,
     idleTimeoutMillis: 10_000,
