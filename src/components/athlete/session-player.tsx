@@ -438,7 +438,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   }
 
   function finishTraining() {
-    if (!hasFeedback) return;
+    if (!hasFeedback && !hasZeroRepDive) return;
     if (evaluationRequired && session.competitionDives.length > 0 && !evaluationComplete && session.competitionEvaluationBlockIds.some((id) => blocks.findIndex((item) => item.id === id) > current)) {
       setError("Continue jusqu’au bloc prévu pour répondre à l’évaluation.");
       return;
@@ -811,7 +811,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
             {blockRatings.map((rating) => <Button key={rating} type="button" size="sm" variant="dark" className={feedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFeedback({ rating })}>{rating}</Button>)}
           </div>
           <Textarea className="mt-3 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note rapide (facultatif)" value={feedback.note} onChange={(event) => updateFeedback({ note: event.target.value })} />
-          {!hasFeedback && <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">Choisis ton ressenti avant de continuer.</p>}
+          {!hasFeedback && !hasZeroRepDive && <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">Choisis ton ressenti avant de continuer.</p>}
         </section>
 
         {error && <ErrorBanner message={error} />}
@@ -819,7 +819,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
           <div className="mx-auto grid max-w-[430px] grid-cols-[1fr_1.35fr] gap-2">
             <Button type="button" variant="outline" className="h-14 bg-transparent text-white" disabled={current === 0 && stepIndex === 0} onClick={previousStep}><ChevronLeft className="h-5 w-5" /> Precedent</Button>
-            <Button type="button" variant="action" className="h-14 rounded-2xl" disabled={!hasFeedback} onClick={hasZeroRepDive ? finishTraining : nextStep}>{hasZeroRepDive || (current === blocks.length - 1 && isLastBlockStep) ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
+            <Button type="button" variant="action" className="h-14 rounded-2xl" disabled={!hasFeedback && !hasZeroRepDive} onClick={hasZeroRepDive ? finishTraining : nextStep}>{hasZeroRepDive || (current === blocks.length - 1 && isLastBlockStep) ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
           </div>
         </div>
       </div>
