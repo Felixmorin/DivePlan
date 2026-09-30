@@ -2,17 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { BlockType, PoolHeight, SessionStatus, WeekStatus } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import { withTransaction, query } from "@/lib/db";
 import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
-import { prisma } from "@/lib/prisma";
 import { countPoolContexts, validatePoolListRow, type PoolListRow } from "@/lib/pool-list";
 import {
   buildSessionTemplatePayload,
   createSessionFromPayload,
   getSessionSnapshot,
   parseSessionTemplatePayload
+  ,BlockType, PoolHeight, SessionStatus, WeekStatus, type SessionBlockType, type SessionPoolHeight
 } from "@/lib/session-template";
 import { formatMontrealDate, parseMontrealDateTimeInput, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 
@@ -100,20 +101,10 @@ export type QuickExerciseInput = z.infer<typeof quickExerciseSchema>;
 export async function createDrylandExercise(input: QuickExerciseInput) {
   await requireCoach();
   const data = quickExerciseSchema.parse(input);
-  const exercise = await prisma.drylandExercise.create({
-    data: {
-      name: data.name,
-      category: data.category || "Custom",
-      description: `Exercice ajoute rapidement: ${data.name}`,
-      equipment: data.equipment?.trim() || null,
-      defaultSets: data.defaultSets ?? null,
-      defaultReps: data.roundTrip ? null : data.defaultReps ?? null,
-      defaultDuration: data.roundTrip ? null : data.defaultDuration ?? null,
-      roundTrip: data.roundTrip,
-      tags: Array.from(new Set(data.tags.map((tag) => tag.toLowerCase())))
-    },
-    select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, roundTrip: true, equipment: true, tags: true }
-  });
+  const exercise = (await query<{id:string;name:string;category:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean;equipment:string|null;tags:string[]}>(
+    `INSERT INTO "DrylandExercise" (id,name,category,description,equipment,"defaultSets","defaultReps","defaultDuration","roundTrip",tags,"createdAt","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW()) RETURNING id,name,category,"defaultSets","defaultReps","defaultDuration","roundTrip",equipment,tags`,
+    [randomUUID(),data.name,data.category||"Custom",`Exercice ajoute rapidement: ${data.name}`,data.equipment?.trim()||null,data.defaultSets??null,data.roundTrip?null:data.defaultReps??null,data.roundTrip?null:data.defaultDuration??null,data.roundTrip,Array.from(new Set(data.tags.map(tag=>tag.toLowerCase())))]
+  )).rows[0];
 
   revalidatePath("/coach/sessions/new");
   revalidatePath("/coach/library");
@@ -134,16 +125,14 @@ export async function createDrylandExercise(input: QuickExerciseInput) {
 export async function createTrainingSession(input: CreateSessionInput) {
   const { user, coach, clubId } = await requireCoach();
   const data = sessionInputSchema.parse(input);
-  const group = await prisma.trainingGroup.findFirst({
-    where: { id: data.groupId, clubId }
-  });
+  const group = (await query<{id:string}>(`SELECT id FROM "TrainingGroup" WHERE id=$1 AND "clubId"=$2`,[data.groupId,clubId])).rows[0];
 
   if (!group) {
     throw new Error("Groupe introuvable pour ce club.");
   }
 
   const planningEvent = data.planningEventId
-    ? await prisma.planningEvent.findFirst({ where: { id: data.planningEventId, clubId, groupId: data.groupId, type: "TRAINING_SCHEDULE" } })
+    ? (await query<{id:string;startsAt:Date}>(`SELECT id,"startsAt" FROM "PlanningEvent" WHERE id=$1 AND "clubId"=$2 AND "groupId"=$3 AND type='TRAINING_SCHEDULE'`,[data.planningEventId,clubId,data.groupId])).rows[0] ?? null
     : null;
   if (data.planningEventId && !planningEvent) throw new Error("Horaire d'entraînement introuvable pour ce groupe.");
   if (planningEvent && toMontrealDateInputValue(planningEvent.startsAt) !== data.date) {
@@ -152,17 +141,15 @@ export async function createTrainingSession(input: CreateSessionInput) {
   const sessionDate = planningEvent?.startsAt ?? parseMontrealDateTimeInput(`${data.date}T${data.time}`);
 
   if (data.templateId) {
-    const template = await prisma.sessionTemplate.findFirst({
-      where: { id: data.templateId, clubId }
-    });
+    const template = (await query<{id:string;payload:unknown;name:string}>(`SELECT id,payload,name FROM "SessionTemplate" WHERE id=$1 AND "clubId"=$2`,[data.templateId,clubId])).rows[0];
 
     if (!template) {
       throw new Error("Modele introuvable pour ce club.");
     }
 
     const payload = parseSessionTemplatePayload(template.payload);
-    const session = await prisma.$transaction((tx) =>
-      createSessionFromPayload(tx, {
+    const session = await withTransaction(async (tx) => {
+      const created = await createSessionFromPayload(tx, {
         clubId,
         coachId: coach.id,
         groupId: data.groupId,
@@ -173,11 +160,10 @@ export async function createTrainingSession(input: CreateSessionInput) {
         notes: data.notes?.trim() || null,
         payload,
         status: data.status
-      })
-    );
-    if (planningEvent?.id) {
-      await prisma.trainingSession.update({ where: { id: session.id }, data: { planningEventId: planningEvent.id } });
-    }
+      });
+      if (planningEvent?.id) await tx.query(`UPDATE "TrainingSession" SET "planningEventId"=$1 WHERE id=$2`,[planningEvent.id,created.id]);
+      return created;
+    });
 
     revalidatePath("/coach");
     revalidatePath("/coach/planning");
@@ -213,17 +199,11 @@ export async function createTrainingSession(input: CreateSessionInput) {
   const poolAthleteIds = data.poolBlocks.flatMap((block) => block.athleteIds);
   const requestedAthleteIds = Array.from(new Set([...data.drylandBlocks.flatMap((block) => block.athleteIds), ...poolAthleteIds]));
   const [athletes, exercises] = await Promise.all([
-    prisma.athlete.findMany({
-      where: { clubId, active: true, groupId: data.groupId },
-      select: { id: true }
-    }),
-    prisma.drylandExercise.findMany({
-      where: { id: { in: data.drylandBlocks.flatMap((block) => block.exerciseIds) }, archivedAt: null },
-      select: { id: true, defaultSets: true, defaultReps: true, defaultDuration: true, roundTrip: true }
-    })
+    query<{id:string}>(`SELECT id FROM "Athlete" WHERE "clubId"=$1 AND active=true AND "groupId"=$2`,[clubId,data.groupId]),
+    query<{id:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean}>(`SELECT id,"defaultSets","defaultReps","defaultDuration","roundTrip" FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`,[data.drylandBlocks.flatMap((block) => block.exerciseIds)])
   ]);
 
-  const validAthleteIds = new Set(athletes.map((athlete) => athlete.id));
+  const validAthleteIds = new Set(athletes.rows.map((athlete) => athlete.id));
   const requireValidAthletes = (ids: string[]) => ids.filter((id) => validAthleteIds.has(id));
   const allAthleteIds = requestedAthleteIds.length > 0
     ? requestedAthleteIds.filter((id) => validAthleteIds.has(id))
@@ -232,7 +212,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
     ...block,
     athleteIds: requireValidAthletes(block.athleteIds),
     exercises: block.exerciseIds.flatMap((id) => {
-      const exercise = exercises.find((item) => item.id === id);
+      const exercise = exercises.rows.find((item) => item.id === id);
       return exercise ? [{ ...exercise, override: block.exerciseOverrides[id] }] : [];
     })
   }));
@@ -243,35 +223,11 @@ export async function createTrainingSession(input: CreateSessionInput) {
   }
 
   const weekStart = startOfMontrealWeek(sessionDate);
-  const session = await prisma.$transaction(async (tx) => {
-    let week = await tx.trainingWeek.findFirst({
-      where: { clubId, groupId: data.groupId, startDate: weekStart }
-    });
-
-    week ??= await tx.trainingWeek.create({
-      data: {
-        clubId,
-        groupId: data.groupId,
-        startDate: weekStart,
-        title: `Semaine du ${formatMontrealDate(weekStart)}`,
-        status: WeekStatus.PUBLISHED
-      }
-    });
-
-    const createdSession = await tx.trainingSession.create({
-      data: {
-        date: sessionDate,
-        title: data.title.trim(),
-        duration: data.duration,
-        focus: data.focus.trim(),
-        notes: data.notes?.trim() || null,
-        weekId: week.id,
-        coachId: coach.id,
-        status: data.status
-        ,competitionEvaluationAtStart: data.evaluationPlacement === "start"
-        ,planningEventId: planningEvent?.id
-      }
-    });
+  const session = await withTransaction(async (tx) => {
+    const found=(await tx.query<{id:string}>(`SELECT id FROM "TrainingWeek" WHERE "clubId"=$1 AND "groupId"=$2 AND "startDate"=$3 LIMIT 1`,[clubId,data.groupId,weekStart])).rows[0];
+    const weekId=found?.id??randomUUID();
+    if(!found) await tx.query(`INSERT INTO "TrainingWeek" (id,"clubId","groupId","startDate",title,status) VALUES ($1,$2,$3,$4,$5,$6)`,[weekId,clubId,data.groupId,weekStart,`Semaine du ${formatMontrealDate(weekStart)}`,WeekStatus.PUBLISHED]);
+    const createdSession=(await tx.query<{id:string;title:string}>(`INSERT INTO "TrainingSession" (id,date,title,duration,focus,notes,"weekId","coachId",status,"competitionEvaluationAtStart","planningEventId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,title`,[randomUUID(),sessionDate,data.title.trim(),data.duration,data.focus.trim(),data.notes?.trim()||null,weekId,coach.id,data.status,data.evaluationPlacement === "start",planningEvent?.id??null])).rows[0];
 
     if (data.warmup.enabled) {
       await createBlock(tx, {
@@ -299,17 +255,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         ,competitionEvaluation: dryland.competitionEvaluation
       });
 
-      await tx.drylandBlockExercise.createMany({
-        data: dryland.exercises.map((exercise, order) => ({
-          blockId: drylandBlock.id,
-          exerciseId: exercise.id,
-          sets: exercise.override?.sets ?? exercise.defaultSets,
-          reps: exercise.roundTrip ? null : exercise.override?.reps ?? exercise.defaultReps,
-          duration: exercise.roundTrip ? null : exercise.override?.duration ?? exercise.defaultDuration,
-          notes: exercise.override?.notes ?? null,
-          order
-        }))
-      });
+      for (const [order, exercise] of dryland.exercises.entries()) await tx.query(`INSERT INTO "DrylandBlockExercise" ("blockId","exerciseId",sets,reps,duration,notes,"order") VALUES ($1,$2,$3,$4,$5,$6,$7)`,[drylandBlock.id,exercise.id,exercise.override?.sets??exercise.defaultSets,exercise.roundTrip?null:exercise.override?.reps??exercise.defaultReps,exercise.roundTrip?null:exercise.override?.duration??exercise.defaultDuration,exercise.override?.notes??null,order]);
     }
 
     for (const [index, poolBlock] of poolBlocks.entries()) {
@@ -357,7 +303,7 @@ export async function duplicateTrainingSession(formData: FormData) {
 
   const payload = buildSessionTemplatePayload(source);
   const copyDate = new Date(source.date);
-  const session = await prisma.$transaction((tx) =>
+  const session = await withTransaction((tx) =>
     createSessionFromPayload(tx, {
       clubId,
       coachId: coach.id,
@@ -401,15 +347,7 @@ export async function saveSessionAsTemplate(formData: FormData) {
     throw new Error("Le nom du modele est requis.");
   }
 
-  const template = await prisma.sessionTemplate.create({
-    data: {
-      name,
-      category,
-      sessionId: source.id,
-      clubId,
-      payload: buildSessionTemplatePayload(source)
-    }
-  });
+  const template=(await query<{id:string;name:string}>(`INSERT INTO "SessionTemplate" (id,name,category,"sessionId","clubId",favorite,payload) VALUES ($1,$2,$3,$4,$5,false,$6::jsonb) RETURNING id,name`,[randomUUID(),name,category,source.id,clubId,JSON.stringify(buildSessionTemplatePayload(source))])).rows[0];
 
   await trackEvent({
     type: "session_template.created",
@@ -436,20 +374,12 @@ export async function saveDrylandBlockAsTemplate(formData: FormData) {
   if (name.length < 3 || !block.title || !Number.isFinite(block.duration) || !Array.isArray(block.exercises) || block.exercises.length === 0) {
     throw new Error("Donne un nom au modèle et ajoute au moins un exercice au bloc.");
   }
-  const exercises = await prisma.drylandExercise.findMany({
-    where: { id: { in: block.exercises.map((item) => item.exerciseId) }, archivedAt: null },
-    select: { id: true }
-  });
-  const validIds = new Set(exercises.map((exercise) => exercise.id));
+  const exercises = await query<{id:string}>(`SELECT id FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`,[block.exercises.map((item) => item.exerciseId)]);
+  const validIds = new Set(exercises.rows.map((exercise) => exercise.id));
   const items = block.exercises.filter((item) => validIds.has(item.exerciseId));
   if (items.length === 0) throw new Error("Aucun exercice valide dans ce bloc.");
   const volume = items.reduce((sum, item) => sum + (item.sets ?? 1) * (item.reps ?? 0), 0);
-  await prisma.sessionTemplate.create({
-    data: {
-      name,
-      category: "Dryland",
-      clubId,
-      payload: {
+  const payload = {
         version: 1,
         competitionEvaluationAtStart: false,
         title: name,
@@ -468,9 +398,8 @@ export async function saveDrylandBlockAsTemplate(formData: FormData) {
           drylandExercises: items.map((item, order) => ({ ...item, order })),
           poolTraining: null
         }]
-      }
-    }
-  });
+      };
+  await query(`INSERT INTO "SessionTemplate" (id,name,category,"clubId",favorite,payload) VALUES ($1,$2,'Dryland',$3,false,$4::jsonb)`,[randomUUID(),name,clubId,JSON.stringify(payload)]);
   await trackEvent({ type: "session_template.created", message: `Modele dryland cree: ${name}`, clubId, userId: user.id });
   revalidatePath("/coach/templates");
   revalidatePath("/coach/library");
@@ -479,15 +408,13 @@ export async function saveDrylandBlockAsTemplate(formData: FormData) {
 export async function deleteSessionTemplate(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const templateId = String(formData.get("templateId") ?? "");
-  const template = await prisma.sessionTemplate.findFirst({
-    where: { id: templateId, clubId }
-  });
+  const template=(await query<{id:string;name:string}>(`SELECT id,name FROM "SessionTemplate" WHERE id=$1 AND "clubId"=$2`,[templateId,clubId])).rows[0];
 
   if (!template) {
     throw new Error("Modele introuvable.");
   }
 
-  await prisma.sessionTemplate.delete({ where: { id: template.id } });
+  await query(`DELETE FROM "SessionTemplate" WHERE id=$1 AND "clubId"=$2`,[template.id,clubId]);
   await trackEvent({
     type: "session_template.deleted",
     message: `Modele supprime: ${template.name}`,
@@ -502,19 +429,13 @@ export async function deleteSessionTemplate(formData: FormData) {
 export async function markTrainingSessionNotDone(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
-  const session = await prisma.trainingSession.findFirst({
-    where: { id: sessionId, week: { clubId } },
-    select: { id: true, title: true }
-  });
+  const session=(await query<{id:string;title:string}>(`SELECT s.id,s.title FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE s.id=$1 AND w."clubId"=$2`,[sessionId,clubId])).rows[0];
 
   if (!session) {
     throw new Error("Seance introuvable.");
   }
 
-  await prisma.trainingSession.update({
-    where: { id: session.id },
-    data: { status: SessionStatus.NOT_DONE }
-  });
+  await query(`UPDATE "TrainingSession" s SET status=$1 FROM "TrainingWeek" w WHERE s.id=$2 AND w.id=s."weekId" AND w."clubId"=$3`,[SessionStatus.NOT_DONE,session.id,clubId]);
 
   await trackEvent({
     type: "session.not_done",
@@ -533,13 +454,10 @@ export async function markTrainingSessionNotDone(formData: FormData) {
 export async function publishTrainingSession(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
-  const session = await prisma.trainingSession.findFirst({
-    where: { id: sessionId, week: { clubId }, status: SessionStatus.DRAFT },
-    select: { id: true, title: true }
-  });
+  const session=(await query<{id:string;title:string}>(`SELECT s.id,s.title FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE s.id=$1 AND w."clubId"=$2 AND s.status=$3`,[sessionId,clubId,SessionStatus.DRAFT])).rows[0];
   if (!session) throw new Error("Brouillon introuvable pour ce club.");
 
-  await prisma.trainingSession.update({ where: { id: session.id }, data: { status: SessionStatus.READY } });
+  await query(`UPDATE "TrainingSession" SET status=$1 WHERE id=$2`,[SessionStatus.READY,session.id]);
   await trackEvent({ type: "session.published", message: `Seance publiee: ${session.title}`, clubId, userId: user.id, metadata: { sessionId: session.id } });
   revalidatePath("/coach");
   revalidatePath("/coach/planning");
@@ -553,18 +471,11 @@ export async function markAthleteSessionCompleted(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
   const athleteId = String(formData.get("athleteId") ?? "");
-  const session = await prisma.trainingSession.findFirst({
-    where: { id: sessionId, week: { clubId }, blocks: { some: { assignments: { some: { athleteId } } } } },
-    select: { id: true, title: true }
-  });
+  const session=(await query<{id:string;title:string}>(`SELECT DISTINCT s.id,s.title FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "SessionBlock" b ON b."sessionId"=s.id JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE s.id=$1 AND w."clubId"=$2 AND a."athleteId"=$3`,[sessionId,clubId,athleteId])).rows[0];
   if (!session) throw new Error("Séance ou athlète introuvable.");
 
   const completedAt = new Date();
-  await prisma.athleteSessionCompletion.upsert({
-    where: { athleteId_sessionId: { athleteId, sessionId } },
-    create: { athleteId, sessionId, startedAt: completedAt, completedAt, status: "COMPLETED" },
-    update: { completedAt, status: "COMPLETED" }
-  });
+  await query(`INSERT INTO "AthleteSessionCompletion" ("athleteId","sessionId","startedAt","completedAt",status) VALUES ($1,$2,$3,$3,'COMPLETED') ON CONFLICT ("athleteId","sessionId") DO UPDATE SET "completedAt"=EXCLUDED."completedAt",status='COMPLETED'`,[athleteId,sessionId,completedAt]);
 
   await trackEvent({
     type: "session.completed",
@@ -585,20 +496,13 @@ export async function setAthleteSessionAbsence(formData: FormData) {
   const sessionId = String(formData.get("sessionId") ?? "");
   const athleteId = String(formData.get("athleteId") ?? "");
   const absent = formData.get("absent") === "on";
-  const session = await prisma.trainingSession.findFirst({
-    where: { id: sessionId, week: { clubId }, blocks: { some: { assignments: { some: { athleteId } } } } },
-    select: { id: true }
-  });
+  const session=(await query<{id:string}>(`SELECT DISTINCT s.id FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "SessionBlock" b ON b."sessionId"=s.id JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE s.id=$1 AND w."clubId"=$2 AND a."athleteId"=$3`,[sessionId,clubId,athleteId])).rows[0];
   if (!session) throw new Error("Séance ou athlète introuvable.");
 
   if (absent) {
-    await prisma.athleteSessionAbsence.upsert({
-      where: { athleteId_sessionId: { athleteId, sessionId } },
-      create: { athleteId, sessionId },
-      update: {}
-    });
+    await query(`INSERT INTO "AthleteSessionAbsence" ("athleteId","sessionId","createdAt") VALUES ($1,$2,NOW()) ON CONFLICT ("athleteId","sessionId") DO NOTHING`,[athleteId,sessionId]);
   } else {
-    await prisma.athleteSessionAbsence.deleteMany({ where: { athleteId, sessionId } });
+    await query(`DELETE FROM "AthleteSessionAbsence" WHERE "athleteId"=$1 AND "sessionId"=$2`,[athleteId,sessionId]);
   }
 
   revalidatePath(`/coach/sessions/${sessionId}`);
@@ -608,31 +512,25 @@ export async function setAthleteSessionAbsence(formData: FormData) {
 export async function deleteTrainingSession(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
-  const session = await prisma.trainingSession.findFirst({
-    where: { id: sessionId, week: { clubId } },
-    include: {
-      blocks: { select: { id: true } }
-    }
-  });
+  const session=(await query<{id:string;title:string}>(`SELECT s.id,s.title FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE s.id=$1 AND w."clubId"=$2`,[sessionId,clubId])).rows[0];
 
   if (!session) {
     throw new Error("Seance introuvable.");
   }
 
-  const blockIds = session.blocks.map((block) => block.id);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.sessionTemplate.updateMany({ where: { sessionId: session.id }, data: { sessionId: null } });
-    await tx.athleteDiveLog.deleteMany({ where: { sessionId: session.id } });
-    await tx.athleteExerciseLog.deleteMany({ where: { sessionId: session.id } });
-    await tx.athleteSessionCompletion.deleteMany({ where: { sessionId: session.id } });
-    await tx.poolDive.deleteMany({ where: { poolSection: { poolTrainingId: { in: blockIds } } } });
-    await tx.poolSection.deleteMany({ where: { poolTrainingId: { in: blockIds } } });
-    await tx.poolTraining.deleteMany({ where: { blockId: { in: blockIds } } });
-    await tx.drylandBlockExercise.deleteMany({ where: { blockId: { in: blockIds } } });
-    await tx.sessionBlockAssignment.deleteMany({ where: { sessionBlockId: { in: blockIds } } });
-    await tx.sessionBlock.deleteMany({ where: { sessionId: session.id } });
-    await tx.trainingSession.delete({ where: { id: session.id } });
+  await withTransaction(async (tx) => {
+    await tx.query(`UPDATE "SessionTemplate" SET "sessionId"=NULL WHERE "sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "AthleteDiveLog" WHERE "sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "AthleteExerciseLog" WHERE "sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "AthleteSessionCompletion" WHERE "sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "AthleteSessionAbsence" WHERE "sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "PoolDive" d USING "PoolSection" p,"PoolTraining" t,"SessionBlock" b WHERE d."poolSectionId"=p.id AND p."poolTrainingId"=t."blockId" AND t."blockId"=b.id AND b."sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "PoolSection" p USING "PoolTraining" t,"SessionBlock" b WHERE p."poolTrainingId"=t."blockId" AND t."blockId"=b.id AND b."sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "PoolTraining" t USING "SessionBlock" b WHERE t."blockId"=b.id AND b."sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "DrylandBlockExercise" d USING "SessionBlock" b WHERE d."blockId"=b.id AND b."sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "SessionBlockAssignment" a USING "SessionBlock" b WHERE a."sessionBlockId"=b.id AND b."sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "SessionBlock" WHERE "sessionId"=$1`,[session.id]);
+    await tx.query(`DELETE FROM "TrainingSession" WHERE id=$1`,[session.id]);
   });
 
   await trackEvent({
@@ -652,18 +550,13 @@ export async function deleteTrainingSession(formData: FormData) {
 export async function toggleSessionTemplateFavorite(formData: FormData) {
   const { clubId } = await requireCoach();
   const templateId = String(formData.get("templateId") ?? "");
-  const template = await prisma.sessionTemplate.findFirst({
-    where: { id: templateId, clubId }
-  });
+  const template=(await query<{id:string;favorite:boolean}>(`SELECT id,favorite FROM "SessionTemplate" WHERE id=$1 AND "clubId"=$2`,[templateId,clubId])).rows[0];
 
   if (!template) {
     throw new Error("Modele introuvable.");
   }
 
-  await prisma.sessionTemplate.update({
-    where: { id: template.id },
-    data: { favorite: !template.favorite }
-  });
+  await query(`UPDATE "SessionTemplate" SET favorite=$1 WHERE id=$2 AND "clubId"=$3`,[!template.favorite,template.id,clubId]);
   revalidatePath("/coach/templates");
   revalidatePath("/coach/library");
 }
@@ -671,30 +564,18 @@ export async function toggleSessionTemplateFavorite(formData: FormData) {
 export async function updateTrainingSession(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
-  const existing = await prisma.trainingSession.findFirst({
-    where: { id: sessionId, week: { clubId } },
-    include: {
-      completions: true,
-      diveLogs: { select: { id: true } },
-      exerciseLogs: { select: { id: true } },
-      blocks: {
-        include: {
-          assignments: true,
-          drylandExercises: true,
-          poolTraining: { include: { sections: { include: { dives: true } } } }
-        }
-      }
-    }
-  });
+  const existing = await getSessionSnapshot(sessionId,clubId);
 
   if (!existing) {
     throw new Error("Seance introuvable.");
   }
 
-  const hasStarted =
-    existing.completions.some((completion) => completion.startedAt || completion.status !== "NOT_STARTED") ||
-    existing.diveLogs.length > 0 ||
-    existing.exerciseLogs.length > 0;
+  const [completions,diveLogs,exerciseLogs]=await Promise.all([
+    query<{startedAt:Date|null;status:string}>(`SELECT "startedAt",status FROM "AthleteSessionCompletion" WHERE "sessionId"=$1`,[sessionId]),
+    query<{id:string}>(`SELECT id FROM "AthleteDiveLog" WHERE "sessionId"=$1 LIMIT 1`,[sessionId]),
+    query<{id:string}>(`SELECT id FROM "AthleteExerciseLog" WHERE "sessionId"=$1 LIMIT 1`,[sessionId])
+  ]);
+  const hasStarted = completions.rows.some((completion) => completion.startedAt || completion.status !== "NOT_STARTED") || diveLogs.rowCount! > 0 || exerciseLogs.rowCount! > 0;
 
   if (hasStarted) {
     throw new Error("Cette seance a deja ete commencee. Duplique-la pour modifier la planification sans alterer les donnees realisees.");
@@ -710,11 +591,8 @@ export async function updateTrainingSession(formData: FormData) {
     throw new Error("Details de seance invalides.");
   }
 
-  const validAthletes = await prisma.athlete.findMany({
-    where: { clubId, active: true },
-    select: { id: true }
-  });
-  const validAthleteIds = new Set(validAthletes.map((athlete) => athlete.id));
+  const validAthletes = await query<{id:string}>(`SELECT id FROM "Athlete" WHERE "clubId"=$1 AND active=true`,[clubId]);
+  const validAthleteIds = new Set(validAthletes.rows.map((athlete) => athlete.id));
   const includedBlockIds = new Set(formData.getAll("includedBlocks").map(String));
   if (includedBlockIds.size === 0) {
     throw new Error("La seance doit contenir au moins un bloc.");
@@ -722,28 +600,13 @@ export async function updateTrainingSession(formData: FormData) {
   const selectedDrylandIds = Array.from(new Set(existing.blocks.flatMap((block) =>
     block.type === BlockType.DRYLAND ? formData.getAll(`exerciseSelection:${block.id}`).map(String) : []
   )));
-  const validDrylandExercises = await prisma.drylandExercise.findMany({
-    where: { id: { in: selectedDrylandIds }, archivedAt: null },
-    select: { id: true, defaultSets: true, defaultReps: true, defaultDuration: true }
-  });
-  const validDrylandById = new Map(validDrylandExercises.map((exercise) => [exercise.id, exercise]));
+  const validDrylandExercises = await query<{id:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null}>(`SELECT id,"defaultSets","defaultReps","defaultDuration" FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`,[selectedDrylandIds]);
+  const validDrylandById = new Map(validDrylandExercises.rows.map((exercise) => [exercise.id, exercise]));
 
-  await prisma.$transaction(async (tx) => {
-    await tx.trainingSession.update({
-      where: { id: sessionId },
-      data: {
-        title,
-        focus,
-        duration: Number.isFinite(duration) ? duration : existing.duration,
-        date: parseMontrealDateTimeInput(date),
-        notes: String(formData.get("notes") ?? "").trim() || null,
-        status
-      }
-    });
-
-    await tx.sessionBlock.deleteMany({
-      where: { sessionId, id: { notIn: Array.from(includedBlockIds) } }
-    });
+  await withTransaction(async (tx) => {
+    const updated=await tx.query(`UPDATE "TrainingSession" s SET title=$1,focus=$2,duration=$3,date=$4,notes=$5,status=$6 FROM "TrainingWeek" w WHERE s.id=$7 AND s."weekId"=w.id AND w."clubId"=$8 AND NOT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND (c."startedAt" IS NOT NULL OR c.status<>'NOT_STARTED')) AND NOT EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id) AND NOT EXISTS (SELECT 1 FROM "AthleteExerciseLog" l WHERE l."sessionId"=s.id)`,[title,focus,Number.isFinite(duration)?duration:existing.duration,parseMontrealDateTimeInput(date),String(formData.get("notes")??"").trim()||null,status,sessionId,clubId]);
+    if(!updated.rowCount) throw new Error("Cette seance a deja ete commencee ou est introuvable.");
+    await tx.query(`DELETE FROM "SessionBlock" WHERE "sessionId"=$1 AND NOT (id=ANY($2::text[]))`,[sessionId,Array.from(includedBlockIds)]);
 
     for (const block of existing.blocks) {
       if (!includedBlockIds.has(block.id)) continue;
@@ -757,42 +620,20 @@ export async function updateTrainingSession(formData: FormData) {
         throw new Error(`Le bloc « ${block.title} » est incomplet.`);
       }
 
-      await tx.sessionBlock.update({
-        where: { id: block.id },
-        data: {
-          title: blockTitle || block.title,
-          description: blockDescription || null,
-          duration: Number.isFinite(blockDuration) ? blockDuration : block.duration,
-          estimatedVolume: Number.isFinite(estimatedVolume) ? estimatedVolume : block.estimatedVolume
-        }
-      });
-
-      await tx.sessionBlockAssignment.deleteMany({ where: { sessionBlockId: block.id } });
-      if (assignedIds.length > 0) {
-        await tx.sessionBlockAssignment.createMany({
-          data: assignedIds.map((athleteId) => ({ sessionBlockId: block.id, athleteId })),
-          skipDuplicates: true
-        });
-      }
+      await tx.query(`UPDATE "SessionBlock" SET title=$1,description=$2,duration=$3,"estimatedVolume"=$4 WHERE id=$5 AND "sessionId"=$6`,[blockTitle,blockDescription||null,Number.isFinite(blockDuration)?blockDuration:block.duration,Number.isFinite(estimatedVolume)?estimatedVolume:block.estimatedVolume,block.id,sessionId]);
+      await tx.query(`DELETE FROM "SessionBlockAssignment" WHERE "sessionBlockId"=$1`,[block.id]);
+      for(const athleteId of assignedIds) await tx.query(`INSERT INTO "SessionBlockAssignment" (id,"sessionBlockId","athleteId") VALUES ($1,$2,$3) ON CONFLICT ("sessionBlockId","athleteId") DO NOTHING`,[randomUUID(),block.id,athleteId]);
 
       if (block.type === BlockType.DRYLAND) {
         const selectedIds = formData.getAll(`exerciseSelection:${block.id}`).map(String)
           .filter((id) => validDrylandById.has(id));
         if (selectedIds.length === 0) throw new Error(`Le bloc dryland « ${block.title} » doit contenir un exercice.`);
-        await tx.drylandBlockExercise.deleteMany({ where: { blockId: block.id } });
-        await tx.drylandBlockExercise.createMany({ data: selectedIds.map((exerciseId, order) => {
+        await tx.query(`DELETE FROM "DrylandBlockExercise" WHERE "blockId"=$1`,[block.id]);
+        for(const [order,exerciseId] of selectedIds.entries()) {
           const defaults = validDrylandById.get(exerciseId)!;
           const existingExercise = block.drylandExercises.filter((exercise) => exercise.exerciseId === exerciseId)[order];
-          return {
-            blockId: block.id,
-            exerciseId,
-            sets: existingExercise ? nullableNumber(formData.get(`exerciseSets:${block.id}:${existingExercise.order}`)) : defaults.defaultSets,
-            reps: existingExercise ? nullableNumber(formData.get(`exerciseReps:${block.id}:${existingExercise.order}`)) : defaults.defaultReps,
-            duration: existingExercise ? nullableNumber(formData.get(`exerciseDuration:${block.id}:${existingExercise.order}`)) : defaults.defaultDuration,
-            notes: existingExercise ? nullableText(formData.get(`exerciseNotes:${block.id}:${existingExercise.order}`)) : null,
-            order
-          };
-        }) });
+          await tx.query(`INSERT INTO "DrylandBlockExercise" ("blockId","exerciseId",sets,reps,duration,notes,"order") VALUES ($1,$2,$3,$4,$5,$6,$7)`,[block.id,exerciseId,existingExercise?nullableNumber(formData.get(`exerciseSets:${block.id}:${existingExercise.order}`)):defaults.defaultSets,existingExercise?nullableNumber(formData.get(`exerciseReps:${block.id}:${existingExercise.order}`)):defaults.defaultReps,existingExercise?nullableNumber(formData.get(`exerciseDuration:${block.id}:${existingExercise.order}`)):defaults.defaultDuration,existingExercise?nullableText(formData.get(`exerciseNotes:${block.id}:${existingExercise.order}`)):null,order]);
+        }
       }
 
       if (block.poolTraining) {
@@ -800,14 +641,14 @@ export async function updateTrainingSession(formData: FormData) {
         if (rows.length === 0 || rows.some((row) => validatePoolListRow(row).errors.length > 0)) {
           throw new Error(`Le bloc piscine « ${block.title} » contient une ligne invalide.`);
         }
-        await tx.poolDive.deleteMany({ where: { poolSection: { poolTrainingId: block.id } } });
-        await tx.poolSection.deleteMany({ where: { poolTrainingId: block.id } });
+        await tx.query(`DELETE FROM "PoolDive" d USING "PoolSection" s WHERE d."poolSectionId"=s.id AND s."poolTrainingId"=$1`,[block.id]);
+        await tx.query(`DELETE FROM "PoolSection" WHERE "poolTrainingId"=$1`,[block.id]);
         for (const [sectionOrder, row] of rows.entries()) {
-          const section = await tx.poolSection.create({ data: { poolTrainingId: block.id, height: poolHeightFromContext(row.context), label: row.context, order: sectionOrder } });
+          const sectionId=randomUUID(); await tx.query(`INSERT INTO "PoolSection" (id,"poolTrainingId",height,label,"order") VALUES ($1,$2,$3,$4,$5)`,[sectionId,block.id,poolHeightFromContext(row.context),row.context,sectionOrder]);
           const repetitions = row.repetitions.length === 1 ? row.diveCodes.map(() => row.repetitions[0]) : row.repetitions;
-          await tx.poolDive.createMany({ data: row.diveCodes.map((diveCode, order) => ({ poolSectionId: section.id, diveCode, diveName: diveCode, position: "Libre", repetitions: repetitions[order], order })) });
+          for(const [order,diveCode] of row.diveCodes.entries()) await tx.query(`INSERT INTO "PoolDive" (id,"poolSectionId","diveCode","diveName",position,repetitions,"order") VALUES ($1,$2,$3,$3,'Libre',$4,$5)`,[randomUUID(),sectionId,diveCode,repetitions[order],order]);
         }
-        await tx.sessionBlock.update({ where: { id: block.id }, data: { estimatedVolume: poolRowsVolume(rows) } });
+        await tx.query(`UPDATE "SessionBlock" SET "estimatedVolume"=$1 WHERE id=$2 AND "sessionId"=$3`,[poolRowsVolume(rows),block.id,sessionId]);
       }
     }
   });
@@ -827,7 +668,8 @@ export async function updateTrainingSession(formData: FormData) {
   redirect(`/coach/sessions/${sessionId}`);
 }
 
-type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+type Tx = import("pg").PoolClient;
+type BlockType = SessionBlockType;
 
 async function createBlock(
   tx: Tx,
@@ -843,24 +685,8 @@ async function createBlock(
     competitionEvaluation?: boolean;
   }
 ) {
-  const block = await tx.sessionBlock.create({
-    data: {
-      sessionId: data.sessionId,
-      type: data.type,
-      title: data.title,
-      duration: data.duration,
-      position: data.position,
-      estimatedVolume: data.estimatedVolume,
-      description: data.description?.trim() || null
-      ,competitionEvaluation: data.competitionEvaluation ?? false
-    }
-  });
-
-  await tx.sessionBlockAssignment.createMany({
-    data: data.athleteIds.map((athleteId) => ({ sessionBlockId: block.id, athleteId })),
-    skipDuplicates: true
-  });
-
+  const block=(await tx.query<{id:string}>(`INSERT INTO "SessionBlock" (id,"sessionId",type,title,duration,position,"estimatedVolume",description,"competitionEvaluation") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,[randomUUID(),data.sessionId,data.type,data.title,data.duration,data.position,data.estimatedVolume,data.description?.trim()||null,data.competitionEvaluation??false])).rows[0];
+  for(const athleteId of data.athleteIds) await tx.query(`INSERT INTO "SessionBlockAssignment" (id,"sessionBlockId","athleteId") VALUES ($1,$2,$3) ON CONFLICT ("sessionBlockId","athleteId") DO NOTHING`,[randomUUID(),block.id,athleteId]);
   return block;
 }
 
@@ -877,23 +703,11 @@ async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInp
     ,competitionEvaluation: data.competitionEvaluation
   });
 
-  await tx.poolTraining.create({ data: { blockId: block.id } });
+  await tx.query(`INSERT INTO "PoolTraining" ("blockId") VALUES ($1)`,[block.id]);
   for (const [sectionOrder, section] of data.sections.entries()) {
-    const createdSection = await tx.poolSection.create({
-      data: { poolTrainingId: block.id, height: section.height, label: section.label, order: sectionOrder }
-    });
-
-    await tx.poolDive.createMany({
-      data: section.dives.map((dive) => ({
-        poolSectionId: createdSection.id,
-        diveCode: dive.diveCode,
-        diveName: dive.diveName,
-        position: dive.position,
-        repetitions: dive.repetitions,
-        notes: dive.notes,
-        order: dive.order
-      }))
-    });
+    const createdSectionId=randomUUID();
+    await tx.query(`INSERT INTO "PoolSection" (id,"poolTrainingId",height,label,"order") VALUES ($1,$2,$3,$4,$5)`,[createdSectionId,block.id,section.height,section.label,sectionOrder]);
+    for(const dive of section.dives) await tx.query(`INSERT INTO "PoolDive" (id,"poolSectionId","diveCode","diveName",position,repetitions,notes,"order") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,[randomUUID(),createdSectionId,dive.diveCode,dive.diveName,dive.position,dive.repetitions,dive.notes,dive.order]);
   }
 }
 
@@ -915,7 +729,7 @@ function poolRowsVolume(rows: PoolListRow[]) {
   return rows.reduce((sum, row) => sum + validatePoolListRow(row).total, 0);
 }
 
-function poolHeightFromContext(context: string): PoolHeight {
+function poolHeightFromContext(context: string): SessionPoolHeight {
   const normalized = context.trim().toLowerCase();
   if (countPoolContexts(context) > 1) return PoolHeight.CUSTOM;
   if (normalized.startsWith("1m")) return PoolHeight.ONE_METER;

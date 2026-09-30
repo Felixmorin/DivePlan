@@ -1,11 +1,10 @@
-import type { PlanningEventType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { addMontrealDays, startOfMontrealDay, startOfMontrealWeek } from "@/lib/timezone";
 
 export type AthletePlanningEvent = {
   id: string;
   title: string;
-  type: PlanningEventType;
+  type: "COMPETITION" | "CAMP" | "TRAINING_SCHEDULE";
   startsAt: Date;
   endsAt: Date | null;
   duration: number | null;
@@ -60,36 +59,23 @@ async function findAthletePlanningEvents({
   rangeEnd: Date;
   includeOverlapping?: boolean;
 }): Promise<AthletePlanningEvent[]> {
-  const audienceFilters = [
-    { athleteId },
-    ...(groupId ? [{ groupId }] : []),
-    { athleteId: null, groupId: null }
-  ];
+  const result = await query<{
+    id: string; title: string; type: AthletePlanningEvent["type"]; startsAt: Date; endsAt: Date | null;
+    duration: number | null; location: string | null; athleteId: string | null; groupId: string | null; groupName: string | null;
+  }>(
+    `SELECT e.id, e.title, e.type, e."startsAt", e."endsAt", e.duration, e.location, e."athleteId", e."groupId", g.name AS "groupName"
+     FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id = e."groupId"
+     WHERE e."clubId" = $1
+       AND (e."athleteId" = $2 OR ($3::text IS NOT NULL AND e."groupId" = $3) OR (e."athleteId" IS NULL AND e."groupId" IS NULL))
+       AND ${includeOverlapping ? 'e."startsAt" < $5 AND (e."endsAt" IS NULL OR e."endsAt" >= $4)' : 'e."startsAt" >= $4 AND e."startsAt" < $5'}
+     ORDER BY e."startsAt" ASC`,
+    [clubId, athleteId, groupId, rangeStart, rangeEnd]
+  );
 
-  const events = await prisma.planningEvent.findMany({
-    where: {
-      clubId,
-      ...(includeOverlapping
-        ? {
-            startsAt: { lt: rangeEnd },
-            OR: [{ endsAt: null }, { endsAt: { gte: rangeStart } }]
-          }
-        : { startsAt: { gte: rangeStart, lt: rangeEnd } }),
-      AND: [{ OR: audienceFilters }]
-    },
-    orderBy: { startsAt: "asc" },
-    include: { group: { select: { name: true } } }
-  });
-
-  return events.map((event) => ({
-    id: event.id,
-    title: event.title,
-    type: event.type,
-    startsAt: event.startsAt,
-    endsAt: event.endsAt,
-    duration: event.duration,
-    location: event.location,
+  return result.rows.map((event) => ({
+    id: event.id, title: event.title, type: event.type, startsAt: event.startsAt, endsAt: event.endsAt,
+    duration: event.duration, location: event.location,
     audience: event.athleteId === athleteId ? "athlete" : event.groupId ? "group" : "club",
-    groupName: event.group?.name ?? null
+    groupName: event.groupName
   }));
 }

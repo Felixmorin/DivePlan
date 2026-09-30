@@ -1,10 +1,11 @@
 import NextAuth from "next-auth";
 import { AuthError } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import type { UserRole } from "@prisma/client";
 import { trackEvent } from "@/lib/monitoring";
 import { verifyPassword } from "@/lib/password";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
+
+type UserRole = "ADMIN" | "COACH" | "ATHLETE";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   basePath: "/api/auth",
@@ -41,15 +42,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const lookupEmail = identifier === "coach@diveplan.local" ? "felix@diveplan.local" : identifier;
-        let user = await prisma.user.findFirst({
-          where: { OR: [{ email: identifier }, { username: identifier }] },
-          select: { id: true, email: true, firstName: true, lastName: true, role: true, clubId: true, passwordHash: true, passwordSetAt: true }
-        });
+        const fields = `id, email, "firstName", "lastName", role, "clubId", "passwordHash", "passwordSetAt"`;
+        const primary = await query<{
+          id: string; email: string; firstName: string; lastName: string; role: UserRole;
+          clubId: string | null; passwordHash: string | null; passwordSetAt: Date | null;
+        }>(`SELECT ${fields} FROM "User" WHERE email = $1 OR username = $1 LIMIT 1`, [identifier]);
+        let user = primary.rows[0] ?? null;
 
-        user ??= await prisma.user.findUnique({
-          where: { email: lookupEmail },
-          select: { id: true, email: true, firstName: true, lastName: true, role: true, clubId: true, passwordHash: true, passwordSetAt: true }
-        });
+        if (!user) {
+          const fallback = await query<typeof primary.rows[number]>(
+            `SELECT ${fields} FROM "User" WHERE email = $1 LIMIT 1`, [lookupEmail]
+          );
+          user = fallback.rows[0] ?? null;
+        }
 
         if (!user) {
           return null;

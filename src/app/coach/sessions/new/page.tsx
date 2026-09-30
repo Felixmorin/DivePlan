@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { parseSessionTemplatePayload } from "@/lib/session-template";
+import type { SessionPoolHeight } from "@/lib/session-template";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -33,36 +34,21 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     );
   }
 
-  const [groups, athletes, drylandLibrary, template, recentPoolSessions, planningEvents] = await Promise.all([
-    prisma.trainingGroup.findMany({ where: { clubId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.athlete.findMany({
-      where: { clubId, active: true },
-      orderBy: { user: { firstName: "asc" } },
-      select: { id: true, groupId: true, level: true, user: { select: { firstName: true, lastName: true, avatar: true } } }
-    }),
-    prisma.drylandExercise.findMany({
-      where: { archivedAt: null },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, category: true, defaultSets: true, defaultReps: true, defaultDuration: true, roundTrip: true, equipment: true, tags: true }
-    }),
-    templateId ? prisma.sessionTemplate.findFirst({ where: { id: templateId, clubId } }) : Promise.resolve(null),
-    prisma.trainingSession.findMany({
-      where: { week: { clubId }, blocks: { some: { type: "POOL", poolTraining: { isNot: null } } } },
-      orderBy: { date: "desc" },
-      take: 8,
-      include: {
-        blocks: {
-          where: { type: "POOL" },
-          orderBy: { position: "asc" },
-          include: {
-            assignments: true,
-            poolTraining: { include: { sections: { orderBy: { order: "asc" }, include: { dives: { orderBy: { order: "asc" } } } } } }
-          }
-        }
-      }
-    }),
-    prisma.planningEvent.findMany({ where: { clubId, type: "TRAINING_SCHEDULE" }, orderBy: { startsAt: "asc" }, select: { id: true, title: true, startsAt: true, groupId: true, location: true } })
+  const [groupsR, athletesR, drylandR, templateR, eventsR, recentR] = await Promise.all([
+    query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`,[clubId]),
+    query<{id:string;groupId:string;level:string;firstName:string;lastName:string;avatar:string|null}>(`SELECT a.id,a."groupId",a.level,u."firstName",u."lastName",u.avatar FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
+    query<{id:string;name:string;category:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean;equipment:string|null;tags:string[]}>(`SELECT id,name,category,"defaultSets","defaultReps","defaultDuration","roundTrip",equipment,tags FROM "DrylandExercise" WHERE "archivedAt" IS NULL ORDER BY name`),
+    templateId ? query<{id:string;name:string;category:string;payload:unknown}>(`SELECT id,name,category,payload FROM "SessionTemplate" WHERE id=$1 AND "clubId"=$2`,[templateId,clubId]) : Promise.resolve(null),
+    query<{id:string;title:string;startsAt:Date;groupId:string;location:string|null}>(`SELECT id,title,"startsAt","groupId",location FROM "PlanningEvent" WHERE "clubId"=$1 AND type='TRAINING_SCHEDULE' ORDER BY "startsAt"`,[clubId]),
+    query<{sessionId:string;sessionTitle:string;blockId:string;title:string;duration:number;position:number}>(`WITH recent AS (SELECT s.id,s.title,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "PoolTraining" p ON p."blockId"=b.id WHERE b."sessionId"=s.id) ORDER BY s.date DESC LIMIT 8) SELECT r.id AS "sessionId",r.title AS "sessionTitle",b.id AS "blockId",b.title,b.duration,b.position FROM recent r JOIN "SessionBlock" b ON b."sessionId"=r.id JOIN "PoolTraining" p ON p."blockId"=b.id ORDER BY r.date DESC,b.position ASC`,[clubId])
   ]);
+  const groups=groupsR.rows;
+  const athletes=athletesR.rows.map(a=>({id:a.id,groupId:a.groupId,level:a.level,user:{firstName:a.firstName,lastName:a.lastName,avatar:a.avatar}}));
+  const drylandLibrary=drylandR.rows;
+  const template=templateR?.rows[0]??null;
+  const planningEvents=eventsR.rows;
+  const recentPoolSessions:( {id:string;blocks:{id:string;title:string;duration:number;assignments:{athleteId:string}[];poolTraining:{sections:{height:SessionPoolHeight;label:string|null;dives:{diveCode:string;diveName:string;position:string;repetitions:number;notes:string|null;order:number}[]}[]}|null}[]} )[]=[];
+  for(const row of recentR.rows){let session=recentPoolSessions.find(s=>s.id===row.sessionId);if(!session){session={id:row.sessionId,blocks:[]};recentPoolSessions.push(session);}const block={id:row.blockId,title:row.title,duration:row.duration,assignments:(await query<{athleteId:string}>(`SELECT "athleteId" FROM "SessionBlockAssignment" WHERE "sessionBlockId"=$1`,[row.blockId])).rows,poolTraining:{sections:[] as {height:SessionPoolHeight;label:string|null;dives:{diveCode:string;diveName:string;position:string;repetitions:number;notes:string|null;order:number}[]}[]}};const sections=(await query<{id:string;height:SessionPoolHeight;label:string|null}>(`SELECT id,height,label FROM "PoolSection" WHERE "poolTrainingId"=$1 ORDER BY "order"`,[row.blockId])).rows;for(const section of sections)block.poolTraining.sections.push({...section,dives:(await query<{diveCode:string;diveName:string;position:string;repetitions:number;notes:string|null;order:number}>(`SELECT "diveCode","diveName",position,repetitions,notes,"order" FROM "PoolDive" WHERE "poolSectionId"=$1 ORDER BY "order"`,[section.id])).rows});session.blocks.push(block);}
   const poolBlocks = recentPoolSessions.flatMap((session) => session.blocks).filter((block) => block.poolTraining).slice(0, 3);
   const initialTemplate = template
     ? {

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
-import { prisma } from "@/lib/prisma";
+import { query, withTransaction } from "@/lib/db";
 
 const groupSchema = z.object({
   name: z.string().trim().min(2).max(80)
@@ -20,18 +20,17 @@ export async function createTrainingGroup(formData: FormData) {
   }
 
   const name = parsed.data.name;
-  const existingGroup = await prisma.trainingGroup.findFirst({
-    where: { clubId, name: { equals: name, mode: "insensitive" } },
-    select: { id: true }
-  });
+  const existingGroup = await query(`SELECT id FROM "TrainingGroup" WHERE "clubId" = $1 AND lower(name) = lower($2) LIMIT 1`, [clubId, name]);
 
   if (existingGroup) {
     throw new Error("Un groupe avec ce nom existe deja.");
   }
 
-  const group = await prisma.trainingGroup.create({
-    data: { name, clubId, coachId: coach.id }
-  });
+  const created = await query<{ id: string; name: string }>(
+    `INSERT INTO "TrainingGroup" (id, name, "clubId", "coachId") VALUES ($1, $2, $3, $4) RETURNING id, name`,
+    [crypto.randomUUID(), name, clubId, coach.id]
+  );
+  const group = created.rows[0];
 
   await trackEvent({
     type: "group.created",
@@ -49,35 +48,24 @@ export async function assignAthletesToGroup(formData: FormData) {
   const groupId = String(formData.get("groupId") ?? "");
   const selectedAthleteIds = formData.getAll("athleteId").map(String).filter(Boolean);
 
-  const group = await prisma.trainingGroup.findFirst({
-    where: { id: groupId, clubId },
-    select: { id: true, name: true }
-  });
+  const groupResult = await query<{ id: string; name: string }>(`SELECT id, name FROM "TrainingGroup" WHERE id = $1 AND "clubId" = $2 LIMIT 1`, [groupId, clubId]);
+  const group = groupResult.rows[0];
 
   if (!group) {
     throw new Error("Groupe introuvable.");
   }
 
-  const validAthletes = selectedAthleteIds.length > 0
-    ? await prisma.athlete.findMany({
-      where: { id: { in: selectedAthleteIds }, clubId, active: true },
-      select: { id: true }
-    })
-    : [];
-  const validAthleteIds = validAthletes.map((athlete) => athlete.id);
+  const validResult = selectedAthleteIds.length > 0
+    ? await query<{ id: string }>(`SELECT id FROM "Athlete" WHERE id = ANY($1::text[]) AND "clubId" = $2 AND active = true`, [selectedAthleteIds, clubId])
+    : { rows: [] as Array<{ id: string }> };
+  const validAthleteIds = validResult.rows.map((athlete) => athlete.id);
 
-  await prisma.$transaction([
-    prisma.athlete.updateMany({
-      where: { clubId, groupId: group.id },
-      data: { groupId: null }
-    }),
-    ...(validAthleteIds.length > 0
-      ? [prisma.athlete.updateMany({
-        where: { clubId, id: { in: validAthleteIds } },
-        data: { groupId: group.id }
-      })]
-      : [])
-  ]);
+  await withTransaction(async (tx) => {
+    await tx.query(`UPDATE "Athlete" SET "groupId" = NULL WHERE "clubId" = $1 AND "groupId" = $2`, [clubId, group.id]);
+    if (validAthleteIds.length) {
+      await tx.query(`UPDATE "Athlete" SET "groupId" = $1 WHERE "clubId" = $2 AND id = ANY($3::text[])`, [group.id, clubId, validAthleteIds]);
+    }
+  });
 
   await trackEvent({
     type: "group.athletes_assigned",
@@ -93,20 +81,21 @@ export async function assignAthletesToGroup(formData: FormData) {
 export async function deleteTrainingGroup(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const groupId = String(formData.get("groupId") ?? "");
-  const group = await prisma.trainingGroup.findFirst({
-    where: { id: groupId, clubId },
-    select: { id: true, name: true, _count: { select: { weeks: true } } }
-  });
+  const groupResult = await query<{ id: string; name: string; weeks: number }>(
+    `SELECT g.id, g.name, (SELECT count(*)::int FROM "TrainingWeek" w WHERE w."groupId" = g.id) AS weeks
+     FROM "TrainingGroup" g WHERE g.id = $1 AND g."clubId" = $2 LIMIT 1`, [groupId, clubId]
+  );
+  const group = groupResult.rows[0];
 
   if (!group) throw new Error("Groupe introuvable.");
-  if (group._count.weeks > 0) {
+  if (group.weeks > 0) {
     throw new Error("Ce groupe contient des séances planifiées. Supprime ou déplace d’abord ses séances.");
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.athlete.updateMany({ where: { groupId: group.id }, data: { groupId: null } });
-    await tx.planningEvent.updateMany({ where: { groupId: group.id }, data: { groupId: null } });
-    await tx.trainingGroup.delete({ where: { id: group.id } });
+  await withTransaction(async (tx) => {
+    await tx.query(`UPDATE "Athlete" SET "groupId" = NULL WHERE "groupId" = $1`, [group.id]);
+    await tx.query(`UPDATE "PlanningEvent" SET "groupId" = NULL WHERE "groupId" = $1`, [group.id]);
+    await tx.query(`DELETE FROM "TrainingGroup" WHERE id = $1 AND "clubId" = $2`, [group.id, clubId]);
   });
 
   await trackEvent({

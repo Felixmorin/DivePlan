@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { signOut } from "@/auth";
 import { getCurrentAthlete } from "@/lib/athlete-session";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 
 const athleteProfileSchema = z.object({
   firstName: z.string().trim().min(1).max(50),
@@ -30,14 +30,9 @@ export async function updateAthleteProfile(formData: FormData) {
     throw new Error("Les informations du profil sont invalides.");
   }
 
-  await prisma.user.update({
-    where: { id: athlete.userId },
-    data: {
-      firstName: parsed.data.firstName,
-      lastName: parsed.data.lastName,
-      avatar: parsed.data.avatar || null
-    }
-  });
+  await query(`UPDATE "User" SET "firstName" = $1, "lastName" = $2, avatar = $3 WHERE id = $4`, [
+    parsed.data.firstName, parsed.data.lastName, parsed.data.avatar || null, athlete.userId
+  ]);
 
   revalidatePath("/athlete/profile");
 }

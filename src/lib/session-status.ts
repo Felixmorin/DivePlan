@@ -1,5 +1,3 @@
-import { SessionStatus } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 
 export const SESSION_COMPLETION_GRACE_MINUTES = 30;
 
@@ -23,23 +21,13 @@ export function shouldCompleteSession(
 
 /** Marks ready sessions as completed once their scheduled end plus grace period has passed. */
 export async function completeExpiredTrainingSessions(now = new Date()) {
-  const candidates = await prisma.trainingSession.findMany({
-    where: { status: SessionStatus.READY, date: { lte: now } },
-    select: { id: true, date: true, duration: true }
-  });
-
-  const expiredIds = candidates
-    .filter((session) => shouldCompleteSession(session.date, session.duration, now))
-    .map((session) => session.id);
-
-  if (expiredIds.length === 0) {
-    return 0;
-  }
-
-  const result = await prisma.trainingSession.updateMany({
-    where: { id: { in: expiredIds }, status: SessionStatus.READY },
-    data: { status: SessionStatus.COMPLETED }
-  });
-
-  return result.count;
+  const { query } = await import("@/lib/db");
+  const result = await query(
+    `UPDATE "TrainingSession"
+     SET status = 'COMPLETED'
+     WHERE status = 'READY' AND date <= $1
+       AND date + (duration + $2) * INTERVAL '1 minute' <= $1`,
+    [now, SESSION_COMPLETION_GRACE_MINUTES]
+  );
+  return result.rowCount ?? 0;
 }

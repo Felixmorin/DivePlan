@@ -5,7 +5,7 @@ import { z } from "zod";
 import { signOut } from "@/auth";
 import { requireCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 
 function cleanText(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
@@ -44,10 +44,7 @@ export async function updateClubSettings(formData: FormData) {
     throw new Error("Le nom doit contenir entre 2 et 80 caracteres.");
   }
 
-  await prisma.club.update({
-    where: { id: clubId },
-    data: { name, logo }
-  });
+  await query(`UPDATE "Club" SET name = $1, logo = $2 WHERE id = $3`, [name, logo, clubId]);
 
   await trackEvent({
     type: "club.settings_updated",
@@ -76,16 +73,11 @@ export async function updateCoachAccount(formData: FormData) {
     throw new Error("Le courriel ou le nom d’utilisateur est invalide.");
   }
 
-  const conflict = await prisma.user.findFirst({
-    where: {
-      id: { not: user.id },
-      OR: [
-        { email: parsed.data.email },
-        ...(parsed.data.username ? [{ username: parsed.data.username }] : [])
-      ]
-    },
-    select: { email: true, username: true }
-  });
+  const conflictResult = await query<{ email: string; username: string | null }>(
+    `SELECT email, username FROM "User" WHERE id <> $1 AND (email = $2 OR ($3::text IS NOT NULL AND username = $3)) LIMIT 1`,
+    [user.id, parsed.data.email, parsed.data.username]
+  );
+  const conflict = conflictResult.rows[0] ?? null;
 
   if (conflict?.email === parsed.data.email) {
     throw new Error("Ce courriel est déjà utilisé par un autre compte.");
@@ -95,13 +87,7 @@ export async function updateCoachAccount(formData: FormData) {
     throw new Error("Ce nom d’utilisateur est déjà utilisé par un autre compte.");
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      email: parsed.data.email,
-      username: parsed.data.username
-    }
-  });
+  await query(`UPDATE "User" SET email = $1, username = $2 WHERE id = $3`, [parsed.data.email, parsed.data.username, user.id]);
 
   await trackEvent({
     type: "coach.account_updated",
@@ -134,7 +120,12 @@ export async function updateCoachPreferences(formData: FormData) {
     printRepetitionChecks: formData.get("printRepetitionChecks") === "on"
   };
 
-  await prisma.coach.update({ where: { id: coach.id }, data: preferences });
+  await query(
+    `UPDATE "Coach" SET "planningDefaultView" = $1, "weekStartsOn" = $2, "printShowCoachNotes" = $3,
+       "printShowAthleteNames" = $4, "printRepetitionChecks" = $5 WHERE id = $6`,
+    [preferences.planningDefaultView, preferences.weekStartsOn, preferences.printShowCoachNotes,
+      preferences.printShowAthleteNames, preferences.printRepetitionChecks, coach.id]
+  );
 
   await trackEvent({
     type: "coach.preferences_updated",

@@ -5,7 +5,7 @@ import { signOut } from "@/auth";
 import { getCurrentUser } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
 import { hashPassword } from "@/lib/password";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 
 export type ChangePasswordState = {
   error?: string;
@@ -37,10 +37,7 @@ export async function changeTemporaryPassword(_: ChangePasswordState, formData: 
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash, passwordSetAt: new Date() }
-  });
+  await query(`UPDATE "User" SET "passwordHash" = $1, "passwordSetAt" = $2 WHERE id = $3`, [passwordHash, new Date(), user.id]);
 
   await trackEvent({
     type: "athlete.password_changed",

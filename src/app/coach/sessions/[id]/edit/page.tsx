@@ -12,22 +12,20 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getCoachSession } from "@/lib/coach-session";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { toMontrealDateTimeInputValue } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditSessionPage({ params }: { params: Promise<{ id: string }> }) {
   const [{ id }, { clubId }] = await Promise.all([params, requireCoach()]);
-  const [session, athletes, drylandLibrary] = await Promise.all([
+  const [session, athletesR, drylandR] = await Promise.all([
     getCoachSession(id),
-    prisma.athlete.findMany({
-      where: { clubId, active: true },
-      orderBy: { user: { firstName: "asc" } },
-      include: { user: true }
-    }),
-    prisma.drylandExercise.findMany({ where: { archivedAt: null }, orderBy: [{ category: "asc" }, { name: "asc" }] })
+    query<{id:string;firstName:string;lastName:string;avatar:string|null}>(`SELECT a.id,u."firstName",u."lastName",u.avatar FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
+    query<{id:string;name:string;category:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean;equipment:string|null;tags:string[];archivedAt:Date|null}>(`SELECT * FROM "DrylandExercise" WHERE "archivedAt" IS NULL ORDER BY category,name`)
   ]);
+  const athletes=athletesR.rows.map(a=>({id:a.id,user:{firstName:a.firstName,lastName:a.lastName,avatar:a.avatar}}));
+  const drylandLibrary=drylandR.rows;
   const uniqueAthletes = athletes.map((athlete) => ({
     id: athlete.id,
     firstName: athlete.user.firstName,

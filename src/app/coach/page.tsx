@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { BlockType, CompletionStatus, SessionStatus } from "@prisma/client";
 import { ArrowRight, CalendarPlus, Dumbbell, Printer, Users } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
@@ -10,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { athletes, demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, sameMontrealDay, startOfMontrealDay, startOfMontrealWeek } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -21,13 +20,14 @@ type DashboardSession = {
   focus: string;
   date: Date;
   duration: number;
-  status: SessionStatus | string;
+  status: string;
   groupName: string;
-  blocks: Array<{ type: BlockType | string; estimatedVolume: number; assignments: Array<{ athleteId: string }> }>;
-  completions: Array<{ status: CompletionStatus | string }>;
+  blocks: Array<{ type: string; estimatedVolume: number; assignments: Array<{ athleteId: string }> }>;
+  completions: Array<{ status: string }>;
   planningEventId: string | null;
 };
 type DashboardSchedule = { id: string; title: string; startsAt: Date; duration: number | null; location: string | null; groupName: string | null; sessionId: string | null };
+type SessionRow = {id:string;title:string;focus:string;date:Date;duration:number;status:string;planningEventId:string|null;groupName:string};
 
 type AvatarAthlete = { id: string; firstName: string; lastName: string; avatar?: string | null };
 
@@ -44,55 +44,22 @@ export default async function CoachDashboard() {
   const dayStart = startOfMontrealDay(today);
   const dayEnd = addMontrealDays(dayStart, 1);
 
-  const sessionInclude = {
-    week: { include: { group: true } },
-    blocks: { orderBy: { position: "asc" as const }, include: { assignments: true } },
-    completions: true
-  };
-
-  const [activeAthletes, rawSessions, schedules, recentEvents, recentCompletions, nextScheduledSession, latestScheduledSession] = await Promise.all([
-    prisma.athlete.findMany({
-      where: { clubId, active: true },
-      include: { user: true, group: true },
-      orderBy: { user: { firstName: "asc" } }
-    }),
-    prisma.trainingSession.findMany({
-      where: { week: { clubId }, date: { gte: weekStart, lt: weekEnd } },
-      orderBy: { date: "asc" },
-      include: {
-        week: { include: { group: true } },
-        blocks: { orderBy: { position: "asc" }, include: { assignments: true } },
-        completions: true
-      }
-    }),
-    prisma.planningEvent.findMany({
-      where: { clubId, type: "TRAINING_SCHEDULE", startsAt: { gte: weekStart, lt: weekEnd } },
-      orderBy: { startsAt: "asc" },
-      include: { group: true, session: { select: { id: true, status: true } } }
-    }),
-    prisma.appEvent.findMany({
-      where: { OR: [{ clubId }, { clubId: null }] },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: { user: true }
-    }),
-    prisma.athleteSessionCompletion.findMany({
-      where: { session: { week: { clubId } } },
-      orderBy: [{ completedAt: "desc" }, { startedAt: "desc" }],
-      take: 5,
-      include: { athlete: { include: { user: true } }, session: true }
-    }),
-    prisma.trainingSession.findFirst({
-      where: { week: { clubId }, date: { gt: today } },
-      orderBy: { date: "asc" },
-      include: sessionInclude
-    }),
-    prisma.trainingSession.findFirst({
-      where: { week: { clubId }, date: { lte: today } },
-      orderBy: { date: "desc" },
-      include: sessionInclude
-    })
+  const [athleteRows, weekSessionRows, scheduleRows, eventRows, completionRows, nextRows, latestRows] = await Promise.all([
+    query<{id:string;firstName:string;lastName:string;avatar:string|null;groupName:string|null}>(`SELECT a.id,u."firstName",u."lastName",u.avatar,g.name AS "groupName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
+    query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,weekStart,weekEnd]),
+    query<{id:string;title:string;startsAt:Date;duration:number|null;location:string|null;groupName:string|null;sessionId:string|null}>(`SELECT e.id,e.title,e."startsAt",e.duration,e.location,g.name AS "groupName",s.id AS "sessionId" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "TrainingSession" s ON s."planningEventId"=e.id WHERE e."clubId"=$1 AND e.type='TRAINING_SCHEDULE' AND e."startsAt">=$2 AND e."startsAt"<$3 ORDER BY e."startsAt"`,[clubId,weekStart,weekEnd]),
+    query<{id:string;message:string;type:string;createdAt:Date;email:string|null}>(`SELECT e.id,e.message,e.type,e."createdAt",u.email FROM "AppEvent" e LEFT JOIN "User" u ON u.id=e."userId" WHERE e."clubId"=$1 OR e."clubId" IS NULL ORDER BY e."createdAt" DESC LIMIT 5`,[clubId]),
+    query<{athleteId:string;sessionId:string;status:string;completedAt:Date|null;startedAt:Date|null;firstName:string;lastName:string;title:string}>(`SELECT c."athleteId",c."sessionId",c.status,c."completedAt",c."startedAt",u."firstName",u."lastName",s.title FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "Athlete" a ON a.id=c."athleteId" JOIN "User" u ON u.id=a."userId" WHERE w."clubId"=$1 ORDER BY c."completedAt" DESC,c."startedAt" DESC LIMIT 5`,[clubId]),
+    query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" WHERE w."clubId"=$1 AND s.date>$2 ORDER BY s.date ASC LIMIT 1`,[clubId,today]),
+    query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" WHERE w."clubId"=$1 AND s.date<=$2 ORDER BY s.date DESC LIMIT 1`,[clubId,today])
   ]);
+  const activeAthletes=athleteRows.rows.map(a=>({id:a.id,user:{firstName:a.firstName,lastName:a.lastName,avatar:a.avatar},group:a.groupName?{name:a.groupName}:null}));
+  const rawSessions=await loadDashboardSessions([...weekSessionRows.rows,...nextRows.rows,...latestRows.rows]);
+  const nextScheduledSession=nextRows.rows[0]?rawSessions.find(s=>s.id===nextRows.rows[0].id):null;
+  const latestScheduledSession=latestRows.rows[0]?rawSessions.find(s=>s.id===latestRows.rows[0].id):null;
+  const schedules=scheduleRows.rows;
+  const recentEvents=eventRows.rows;
+  const recentCompletions=completionRows.rows;
 
   const sessions: DashboardSession[] = rawSessions.map(toDashboardSession);
   const todaySessions = sessions.filter((session) => session.date >= dayStart && session.date < dayEnd);
@@ -112,14 +79,14 @@ export default async function CoachDashboard() {
   const recentActivity = [
     ...recentCompletions.map((completion) => ({
       key: `completion-${completion.athleteId}-${completion.sessionId}`,
-      label: `${completion.athlete.user.firstName} ${completion.athlete.user.lastName}`,
-      detail: `${completionStatusLabel(completion.status)} - ${completion.session.title}`,
+      label: `${completion.firstName} ${completion.lastName}`,
+      detail: `${completionStatusLabel(completion.status)} - ${completion.title}`,
       date: completion.completedAt ?? completion.startedAt
     })),
     ...recentEvents.map((event) => ({
       key: `event-${event.id}`,
       label: event.message,
-      detail: event.user?.email ?? event.type,
+      detail: event.email ?? event.type,
       date: event.createdAt
     }))
   ].filter((item): item is { key: string; label: string; detail: string; date: Date } => Boolean(item.date)).sort((a, b) => Number(b.date) - Number(a.date)).slice(0, 6);
@@ -149,7 +116,7 @@ export default async function CoachDashboard() {
           <WeekSelector sessions={sessions} />
         </div>
         <div className="grid gap-3 lg:grid-cols-7">
-          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date))} schedules={schedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date)).map((schedule) => ({ id: schedule.id, title: schedule.title, startsAt: schedule.startsAt, duration: schedule.duration, location: schedule.location, groupName: schedule.group?.name ?? null, sessionId: schedule.session?.id ?? null }))} activeSessionIds={activeSessionIds} />)}
+          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date))} schedules={schedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date))} activeSessionIds={activeSessionIds} />)}
         </div>
       </section>
 
@@ -400,7 +367,7 @@ function Shortcut({ href, label, icon: Icon, primary = false }: { href: string; 
   );
 }
 
-function getPrimaryAction(session: DashboardSession, status: SessionStatus | string, demo: boolean) {
+function getPrimaryAction(session: DashboardSession, status: string, demo: boolean) {
   const base = demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`;
   if (status === "DRAFT") return { label: "Preparer", href: `${base}/edit` };
   if (status === "IN_PROGRESS") return { label: "Poursuivre", href: base };
@@ -417,7 +384,7 @@ function toDashboardSession(session: {
   focus: string;
   date: Date;
   duration: number;
-  status: SessionStatus;
+  status: string;
   week: { group: { name: string } };
   blocks: DashboardSession["blocks"];
   completions: DashboardSession["completions"];
@@ -435,6 +402,24 @@ function toDashboardSession(session: {
     completions: session.completions,
     planningEventId: session.planningEventId
   };
+}
+
+async function loadDashboardSessions(rows: SessionRow[]) {
+  const uniqueRows=Array.from(new Map(rows.map(row=>[row.id,row])).values());
+  const sessionIds=uniqueRows.map(row=>row.id);
+  if(sessionIds.length===0)return [] as Array<SessionRow & {week:{group:{name:string}};blocks:DashboardSession["blocks"];completions:DashboardSession["completions"]}>;
+  const blockRows=await query<{id:string;sessionId:string;type:string;estimatedVolume:number;position:number}>(`SELECT id,"sessionId",type,"estimatedVolume",position FROM "SessionBlock" WHERE "sessionId"=ANY($1::text[]) ORDER BY position`,[sessionIds]);
+  const blockIds=blockRows.rows.map(row=>row.id);
+  const [assignmentRows,completionRows]=await Promise.all([
+    query<{sessionBlockId:string;athleteId:string}>(`SELECT "sessionBlockId","athleteId" FROM "SessionBlockAssignment" WHERE "sessionBlockId"=ANY($1::text[])`,[blockIds]),
+    query<{sessionId:string;status:string}>(`SELECT "sessionId",status FROM "AthleteSessionCompletion" WHERE "sessionId"=ANY($1::text[])`,[sessionIds])
+  ]);
+  return uniqueRows.map(row=>({
+    ...row,
+    week:{group:{name:row.groupName}},
+    blocks:blockRows.rows.filter(block=>block.sessionId===row.id).map(block=>({type:block.type,estimatedVolume:block.estimatedVolume,assignments:assignmentRows.rows.filter(a=>a.sessionBlockId===block.id).map(a=>({athleteId:a.athleteId}))})),
+    completions:completionRows.rows.filter(completion=>completion.sessionId===row.id).map(completion=>({status:completion.status}))
+  }));
 }
 
 function summarizeGroups(activeAthletes: Array<{ id: string; group: { name: string } | null }>) {
@@ -457,7 +442,7 @@ function uniqueBlockTypes(blocks: DashboardSession["blocks"]) {
   return Array.from(new Set(blocks.map((block) => block.type)));
 }
 
-function completionStatusLabel(status: CompletionStatus | string) {
+function completionStatusLabel(status: string) {
   if (status === "COMPLETED") return "Séance terminée";
   if (status === "IN_PROGRESS") return "Séance en cours";
   if (status === "SKIPPED") return "Séance ignorée";

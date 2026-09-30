@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { PlanningEventType } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
+import { query, withTransaction } from "@/lib/db";
 import { addMontrealDays, parseMontrealDateTimeInput } from "@/lib/timezone";
+
+const PlanningEventType = { COMPETITION: "COMPETITION", CAMP: "CAMP", TRAINING_SCHEDULE: "TRAINING_SCHEDULE" } as const;
 
 const planningEventSchema = z.object({
   type: z.nativeEnum(PlanningEventType),
@@ -58,13 +60,13 @@ export async function createPlanningEvent(formData: FormData) {
   const target = parseTarget(data.target);
 
   if (target.groupId) {
-    const group = await prisma.trainingGroup.findFirst({ where: { id: target.groupId, clubId }, select: { id: true } });
-    if (!group) throw new Error("Groupe introuvable pour ce club.");
+    const group = await query(`SELECT id FROM "TrainingGroup" WHERE id = $1 AND "clubId" = $2 LIMIT 1`, [target.groupId, clubId]);
+    if (!group.rowCount) throw new Error("Groupe introuvable pour ce club.");
   }
 
   if (target.athleteId) {
-    const athlete = await prisma.athlete.findFirst({ where: { id: target.athleteId, clubId }, select: { id: true } });
-    if (!athlete) throw new Error("Athlete introuvable pour ce club.");
+    const athlete = await query(`SELECT id FROM "Athlete" WHERE id = $1 AND "clubId" = $2 LIMIT 1`, [target.athleteId, clubId]);
+    if (!athlete.rowCount) throw new Error("Athlete introuvable pour ce club.");
   }
 
   const firstDate = parseMontrealDateTimeInput(data.startsAt);
@@ -72,24 +74,21 @@ export async function createPlanningEvent(formData: FormData) {
   const lastDate = isRecurringTraining && data.recurrenceUntil
     ? parseMontrealDateTimeInput(`${data.recurrenceUntil}T23:59`)
     : firstDate;
-  const startsAt = [];
+  const startsAt: Date[] = [];
   for (let occurrence = firstDate; occurrence <= lastDate; occurrence = addMontrealDays(occurrence, 7)) {
     startsAt.push(occurrence);
   }
 
-  await prisma.planningEvent.createMany({
-    data: startsAt.map((startsAt) => ({
-      clubId,
-      groupId: target.groupId,
-      athleteId: target.athleteId,
-      type: data.type,
-      title: data.title,
-      startsAt,
-      endsAt: data.type === PlanningEventType.COMPETITION && data.endsAt ? parseMontrealDateTimeInput(data.endsAt) : null,
-      duration: data.duration,
-      location: data.location || null,
-      notes: data.notes || null
-    }))
+  await withTransaction(async (tx) => {
+    for (const occurrence of startsAt) {
+      await tx.query(
+        `INSERT INTO "PlanningEvent" (id, "clubId", "groupId", "athleteId", type, title, "startsAt", "endsAt", duration, location, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [randomUUID(), clubId, target.groupId ?? null, target.athleteId ?? null, data.type, data.title, occurrence,
+          data.type === PlanningEventType.COMPETITION && data.endsAt ? parseMontrealDateTimeInput(data.endsAt) : null,
+          data.duration ?? null, data.location || null, data.notes || null]
+      );
+    }
   });
 
   revalidatePath("/coach");
@@ -114,36 +113,24 @@ export async function updatePlanningEvent(formData: FormData) {
   });
   const target = parseTarget(data.target);
 
-  const event = await prisma.planningEvent.findFirst({
-    where: { id: eventId, clubId },
-    select: { id: true }
-  });
-  if (!event) throw new Error("Événement introuvable.");
+  const event = await query(`SELECT id FROM "PlanningEvent" WHERE id = $1 AND "clubId" = $2 LIMIT 1`, [eventId, clubId]);
+  if (!event.rowCount) throw new Error("Événement introuvable.");
 
   if (target.groupId) {
-    const group = await prisma.trainingGroup.findFirst({ where: { id: target.groupId, clubId }, select: { id: true } });
-    if (!group) throw new Error("Groupe introuvable pour ce club.");
+    const group = await query(`SELECT id FROM "TrainingGroup" WHERE id = $1 AND "clubId" = $2 LIMIT 1`, [target.groupId, clubId]);
+    if (!group.rowCount) throw new Error("Groupe introuvable pour ce club.");
   }
 
   if (target.athleteId) {
-    const athlete = await prisma.athlete.findFirst({ where: { id: target.athleteId, clubId }, select: { id: true } });
-    if (!athlete) throw new Error("Athlète introuvable pour ce club.");
+    const athlete = await query(`SELECT id FROM "Athlete" WHERE id = $1 AND "clubId" = $2 LIMIT 1`, [target.athleteId, clubId]);
+    if (!athlete.rowCount) throw new Error("Athlète introuvable pour ce club.");
   }
 
-  await prisma.planningEvent.update({
-    where: { id: event.id },
-    data: {
-      type: data.type,
-      title: data.title,
-      startsAt: parseMontrealDateTimeInput(data.startsAt),
-      endsAt: data.type === PlanningEventType.COMPETITION && data.endsAt ? parseMontrealDateTimeInput(data.endsAt) : null,
-      duration: data.duration,
-      location: data.location || null,
-      notes: data.notes || null,
-      groupId: target.groupId ?? null,
-      athleteId: target.athleteId ?? null
-    }
-  });
+  await query(
+    `UPDATE "PlanningEvent" SET type=$1, title=$2, "startsAt"=$3, "endsAt"=$4, duration=$5, location=$6, notes=$7, "groupId"=$8, "athleteId"=$9 WHERE id=$10 AND "clubId"=$11`,
+    [data.type, data.title, parseMontrealDateTimeInput(data.startsAt), data.type === PlanningEventType.COMPETITION && data.endsAt ? parseMontrealDateTimeInput(data.endsAt) : null,
+      data.duration ?? null, data.location || null, data.notes || null, target.groupId ?? null, target.athleteId ?? null, eventId, clubId]
+  );
 
   revalidatePath("/coach");
   revalidatePath("/coach/planning");
@@ -156,11 +143,9 @@ export async function deletePlanningEvent(formData: FormData) {
 
   if (!eventId) throw new Error("Événement introuvable.");
 
-  const deleted = await prisma.planningEvent.deleteMany({
-    where: { id: eventId, clubId }
-  });
+  const deleted = await query(`DELETE FROM "PlanningEvent" WHERE id = $1 AND "clubId" = $2`, [eventId, clubId]);
 
-  if (deleted.count === 0) throw new Error("Événement introuvable.");
+  if (!deleted.rowCount) throw new Error("Événement introuvable.");
 
   revalidatePath("/coach");
   revalidatePath("/coach/planning");

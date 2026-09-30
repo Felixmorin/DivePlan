@@ -40,7 +40,7 @@ Le produit est actuellement conçu pour des **pilotes accompagnés avec des club
 
 - Next.js 16 avec App Router, React 19 et TypeScript
 - Tailwind CSS 4 et composants d’interface inspirés de shadcn/ui
-- PostgreSQL et Prisma ORM
+- PostgreSQL via le driver `pg`
 - Auth.js / NextAuth v5 avec authentification par identifiants
 - Recharts, Lucide, React Hook Form et Zod
 
@@ -72,11 +72,9 @@ Le produit est actuellement conçu pour des **pilotes accompagnés avec des club
 
 3. Configurer au minimum `DATABASE_URL` et `AUTH_SECRET` dans `.env`.
 
-4. Générer le client Prisma, appliquer les migrations et charger les données du pilote :
+4. Charger les données du pilote (après avoir appliqué les migrations SQL relues dans l’environnement prévu) :
 
    ```bash
-   npm run prisma:generate
-   npm run prisma:migrate
    npm run db:seed:pilot
    ```
 
@@ -176,21 +174,18 @@ Les blocs piscine contiennent des sections par hauteur et des plongeons avec leu
 | Commande | Action |
 | --- | --- |
 | `npm run dev` | Démarre le serveur de développement. |
-| `npm run build` | Génère le build de production; `prebuild` génère Prisma Client et applique les migrations déployables. |
+| `npm run build` | Génère le build de production; aucun accès à la base n’est lancé automatiquement. |
 | `npm run start` | Démarre le serveur de production. |
 | `npm run lint` | Lance ESLint. |
 | `npm run test` | Lance les tests unitaires présents dans `src`. |
-| `npm run prisma:generate` | Génère Prisma Client. |
-| `npm run prisma:migrate` | Crée ou applique une migration en développement. |
-| `npm run prisma:migrate:deploy` | Applique les migrations existantes en déploiement. |
 | `npm run db:seed:pilot` | Ajoute ou met à jour les données du pilote sans vider les tables. |
-| `npm run db:seed` | Réinitialise les données applicatives avec le seed de démonstration historique. |
+| `npm run db:seed` | Réinitialise les données applicatives avec le seed de démonstration. |
 
 ## Déploiement Vercel
 
 Configurer les variables d’environnement requises dans Vercel, en particulier `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL` et `CRON_SECRET`. `NEXT_PUBLIC_APP_URL` doit correspondre à l’URL publique si elle est utilisée par l’environnement. Garder `NEXT_PUBLIC_ENABLE_DEMO_ROUTES=false` en production.
 
-Le script `prebuild` applique `prisma migrate deploy` avant le build. Vérifier que la base configurée est celle du bon environnement avant tout déploiement.
+Les migrations SQL doivent être relues et appliquées explicitement dans l’environnement cible, indépendamment du build. Les seeds utilisent `DATABASE_URL` uniquement lorsqu’ils sont lancés explicitement.
 
 `vercel.json` programme l’appel quotidien de `/api/cron/complete-sessions`. La route répond avec une erreur si `CRON_SECRET` est absent ou si l’en-tête Bearer ne correspond pas.
 

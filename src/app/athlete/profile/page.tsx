@@ -7,7 +7,7 @@ import { CompetitionList } from "@/components/athlete/competition-list";
 import { ProfileForm } from "@/components/athlete/profile-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,11 +17,14 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const [totals, weekSummary, confidenceRows] = await Promise.all([
+  const [totals, weekSummary, confidenceResult] = await Promise.all([
     getAthleteProgressTotals(athlete.id),
     getAthleteCurrentWeekSummary(athlete.id),
-    prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId: athlete.id, evaluator: "ATHLETE" }, orderBy: { evaluatedAt: "asc" }, select: { competitionDiveId: true, diveCode: true, height: true, rating: true, evaluator: true, evaluatedAt: true } })
+    query<{ competitionDiveId: string; diveCode: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; rating: number; evaluator: "COACH" | "ATHLETE"; evaluatedAt: Date }>(
+      `SELECT "competitionDiveId", "diveCode", height, rating, evaluator, "evaluatedAt" FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId" = $1 AND evaluator = 'ATHLETE' ORDER BY "evaluatedAt" ASC`, [athlete.id]
+    )
   ]);
+  const confidenceRows = confidenceResult.rows;
   const coachName = athlete.group?.coach.user
     ? `${athlete.group.coach.user.firstName} ${athlete.group.coach.user.lastName}`
     : "Équipe d’entraîneurs";

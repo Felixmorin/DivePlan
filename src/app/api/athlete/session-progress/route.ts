@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentAthlete } from "@/lib/athlete-session";
 import { getAssignedSessionBlocks, persistAthleteProgress, type AthleteProgressPayload } from "@/lib/athlete-progress";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { isSessionStartAvailable, SESSION_NOT_STARTED_MESSAGE } from "@/lib/session-availability";
 
 export async function POST(request: Request) {
@@ -29,10 +29,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const session = await prisma.trainingSession.findUnique({
-    where: { id: payload.sessionId },
-    select: { date: true, status: true }
-  });
+  const sessionResult = await query<{ date: Date; status: string }>(
+    `SELECT date, status FROM "TrainingSession" WHERE id = $1 LIMIT 1`, [payload.sessionId]
+  );
+  const session = sessionResult.rows[0];
 
   if (!session || session.status !== "READY" || !isSessionStartAvailable(session.date)) {
     return NextResponse.json({ error: SESSION_NOT_STARTED_MESSAGE }, { status: 409 });

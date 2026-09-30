@@ -5,9 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
 import { ATHLETE_SESSION_PREVIEW_EVENT } from "@/lib/monitoring";
 import { formatMontrealDate } from "@/lib/timezone";
+import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -29,17 +29,25 @@ export default async function MonitoringPage() {
     );
   }
 
-  const [events, failedLogins, completedSessions, previewViews] = await Promise.all([
-    prisma.appEvent.findMany({
-      where: { OR: [{ clubId }, { clubId: null }] },
-      orderBy: { createdAt: "desc" },
-      take: 80,
-      include: { user: true }
-    }),
-    prisma.appEvent.count({ where: { clubId, type: "auth.failed", createdAt: { gte: sinceHours(24) } } }),
-    prisma.athleteSessionCompletion.count({ where: { status: "COMPLETED", session: { week: { clubId } }, completedAt: { gte: sinceHours(24) } } }),
-    prisma.appEvent.count({ where: { clubId, type: ATHLETE_SESSION_PREVIEW_EVENT, createdAt: { gte: sinceHours(24) } } })
+  const since = sinceHours(24);
+  const [eventsResult, failedResult, completedResult, previewResult] = await Promise.all([
+    query<{ id: string; type: string; message: string; email: string | null; createdAt: Date }>(
+      `SELECT e.id, e.type, e.message, u.email, e."createdAt" FROM "AppEvent" e
+       LEFT JOIN "User" u ON u.id = e."userId" WHERE e."clubId" = $1 OR e."clubId" IS NULL
+       ORDER BY e."createdAt" DESC LIMIT 80`, [clubId]
+    ),
+    query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE "clubId" = $1 AND type = 'auth.failed' AND "createdAt" >= $2`, [clubId, since]),
+    query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM "AthleteSessionCompletion" c
+       JOIN "TrainingSession" s ON s.id = c."sessionId" JOIN "TrainingWeek" w ON w.id = s."weekId"
+       WHERE c.status = 'COMPLETED' AND c."completedAt" >= $1 AND w."clubId" = $2`, [since, clubId]
+    ),
+    query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE "clubId" = $1 AND type = $2 AND "createdAt" >= $3`, [clubId, ATHLETE_SESSION_PREVIEW_EVENT, since])
   ]);
+  const events = eventsResult.rows;
+  const failedLogins = Number(failedResult.rows[0]?.count ?? 0);
+  const completedSessions = Number(completedResult.rows[0]?.count ?? 0);
+  const previewViews = Number(previewResult.rows[0]?.count ?? 0);
 
   return (
     <CoachShell active="Monitoring">
@@ -50,7 +58,7 @@ export default async function MonitoringPage() {
           id: event.id,
           type: event.type,
           message: event.message,
-          source: event.user?.email ?? "system",
+          source: event.email ?? "system",
           date: formatMonitoringDate(event.createdAt)
         }))}
       />

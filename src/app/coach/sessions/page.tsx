@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SessionCard } from "@/components/training/session-card";
 import { demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -18,14 +18,14 @@ export default async function SessionsPage() {
     return <DemoSessionsPage />;
   }
 
-  const sessions = await prisma.trainingSession.findMany({
-    where: { week: { clubId } },
-    orderBy: { date: "desc" },
-    include: {
-      week: { include: { group: true } },
-      blocks: { include: { assignments: true } }
-    }
-  });
+  const result = await query<{ id: string; title: string; focus: string; groupName: string; status: "DRAFT" | "READY" | "COMPLETED" | "NOT_DONE"; duration: number; volume: number; athleteCount: number }>(
+    `SELECT s.id, s.title, s.focus, g.name AS "groupName", s.status, s.duration,
+       COALESCE((SELECT sum(b."estimatedVolume")::int FROM "SessionBlock" b WHERE b."sessionId" = s.id), 0) AS volume,
+       (SELECT count(DISTINCT a."athleteId")::int FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id) AS "athleteCount"
+     FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id = s."weekId" JOIN "TrainingGroup" g ON g.id = w."groupId"
+     WHERE w."clubId" = $1 ORDER BY s.date DESC`, [clubId]
+  );
+  const sessions = result.rows;
 
   return (
     <CoachShell active="Seances">
@@ -41,13 +41,13 @@ export default async function SessionsPage() {
               key={session.id}
               title={session.title}
               focus={session.focus}
-              group={session.week.group.name}
+              group={session.groupName}
               href={`/coach/sessions/${session.id}`}
               printHref={`/coach/sessions/${session.id}/print`}
               status={session.status}
               duration={session.duration}
-              volume={session.blocks.reduce((sum, block) => sum + block.estimatedVolume, 0)}
-              athleteCount={uniqueAssignmentCount(session.blocks)}
+              volume={session.volume}
+              athleteCount={session.athleteCount}
               actions={
                 <>
                   {session.status !== "NOT_DONE" && (
@@ -102,6 +102,3 @@ function DemoSessionsPage() {
   );
 }
 
-function uniqueAssignmentCount(blocks: Array<{ assignments: Array<{ athleteId: string }> }>) {
-  return new Set(blocks.flatMap((block) => block.assignments.map((assignment) => assignment.athleteId))).size;
-}

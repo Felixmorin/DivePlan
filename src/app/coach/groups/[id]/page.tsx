@@ -9,49 +9,44 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { formatMontrealDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
-type GroupAthlete = {
-  id: string;
-  level: string;
-  user: { firstName: string; lastName: string; avatar: string | null };
-  completions: Array<{ status: string; session: { title: string; date: Date } }>;
-  diveLogs: Array<{ repetitionsCompleted: number }>;
-};
-
 export default async function GroupDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const [{ id }, { clubId }] = await Promise.all([params, requireCoach()]);
-  const group = await prisma.trainingGroup.findFirst({
-    where: { id, clubId },
-    include: {
-      athletes: {
-        where: { active: true },
-        include: {
-          user: true,
-          completions: {
-            orderBy: [{ completedAt: "desc" }, { startedAt: "desc" }],
-            take: 1,
-            include: { session: { select: { title: true, date: true } } }
-          },
-          diveLogs: {
-            where: { session: { week: { clubId } } },
-            select: { repetitionsCompleted: true }
-          }
-        },
-        orderBy: { user: { firstName: "asc" } }
-      }
-    }
-  });
+  type AthleteResult = { id: string; level: string; firstName: string; lastName: string; avatar: string | null; status: string | null; sessionTitle: string | null; sessionDate: Date | null; recentVolume: number };
+  const result = await query<AthleteResult & { groupId: string; groupName: string }>(
+    `SELECT g.id AS "groupId", g.name AS "groupName", a.id, a.level, u."firstName", u."lastName", u.avatar,
+       latest.status, latest."sessionTitle", latest."sessionDate",
+       COALESCE((SELECT sum(l."repetitionsCompleted")::int FROM "AthleteDiveLog" l
+         JOIN "TrainingSession" s ON s.id = l."sessionId" JOIN "TrainingWeek" w ON w.id = s."weekId"
+         WHERE l."athleteId" = a.id AND w."clubId" = $2), 0) AS "recentVolume"
+     FROM "TrainingGroup" g
+     LEFT JOIN "Athlete" a ON a."groupId" = g.id AND a.active = true
+     LEFT JOIN "User" u ON u.id = a."userId"
+     LEFT JOIN LATERAL (
+       SELECT c.status, s.title AS "sessionTitle", s.date AS "sessionDate"
+       FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id = c."sessionId"
+       WHERE c."athleteId" = a.id ORDER BY c."completedAt" DESC, c."startedAt" DESC LIMIT 1
+     ) latest ON true
+     WHERE g.id = $1 AND g."clubId" = $2 ORDER BY u."firstName" ASC`, [id, clubId]
+  );
+  const firstRow = result.rows[0];
 
-  if (!group) {
+  if (!firstRow) {
     notFound();
   }
 
-  const athletes = group.athletes.map(toGroupAthlete);
-  const watchCount = athletes.filter((athlete) => athlete.completions.some((completion) => completion.status === "IN_PROGRESS" || completion.status === "SKIPPED")).length;
+  const group = { id: firstRow.groupId, name: firstRow.groupName };
+  const athletes = result.rows.filter((row) => row.id !== null).map((row) => ({
+    id: row.id, level: row.level, firstName: row.firstName, lastName: row.lastName, avatar: row.avatar,
+    watch: row.status === "IN_PROGRESS" || row.status === "SKIPPED",
+    lastActivity: row.sessionTitle && row.sessionDate ? `${row.sessionTitle} · ${formatMontrealDate(row.sessionDate)}` : "Aucune activite",
+    recentVolume: Number(row.recentVolume)
+  }));
+  const watchCount = athletes.filter((athlete) => athlete.watch).length;
   const totalVolume = athletes.reduce((sum, athlete) => sum + athlete.recentVolume, 0);
 
   return (
@@ -137,23 +132,6 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
   );
 }
 
-function toGroupAthlete(athlete: GroupAthlete) {
-  const latestCompletion = athlete.completions[0];
-  const recentVolume = athlete.diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0);
-
-  return {
-    id: athlete.id,
-    firstName: athlete.user.firstName,
-    lastName: athlete.user.lastName,
-    avatar: athlete.user.avatar,
-    level: athlete.level,
-    completions: athlete.completions,
-    watch: latestCompletion?.status === "IN_PROGRESS" || latestCompletion?.status === "SKIPPED",
-    lastActivity: latestCompletion ? `${latestCompletion.session.title} · ${formatMontrealDate(latestCompletion.session.date)}` : "Aucune activite",
-    recentVolume
-  };
-}
-
 function GroupStat({ icon, label, value, tone = "pool" }: { icon: React.ReactNode; label: string; value: number; tone?: "pool" | "warning" }) {
   return (
     <Card>
@@ -170,7 +148,7 @@ function GroupStat({ icon, label, value, tone = "pool" }: { icon: React.ReactNod
   );
 }
 
-function AthleteIdentity({ athlete, groupName }: { athlete: ReturnType<typeof toGroupAthlete>; groupName: string }) {
+function AthleteIdentity({ athlete, groupName }: { athlete: { id: string; firstName: string; lastName: string; avatar: string | null }; groupName: string }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
       <Avatar className="h-11 w-11 border border-[var(--color-border)]">

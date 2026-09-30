@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { sessionTemplatePayloadSchema } from "@/lib/session-template";
 
 export const dynamic = "force-dynamic";
@@ -21,15 +21,15 @@ export default async function TemplatesPage() {
           <div><h1 className="text-3xl font-black">Templates</h1><p className="text-[var(--color-ink-muted)]">Mode demo local sans PostgreSQL.</p></div>
           <Button asChild><Link href="/coach/sessions/demo">Ouvrir la seance demo</Link></Button>
         </div>
-        <EmptyState title="Base de donnees requise" description="Les modeles de seance sont sauvegardes dans Prisma et necessitent DATABASE_URL." />
+        <EmptyState title="Base de donnees requise" description="Les modeles de seance necessitent DATABASE_URL." />
       </CoachShell>
     );
   }
 
-  const templates = await prisma.sessionTemplate.findMany({
-    where: { clubId },
-    orderBy: [{ favorite: "desc" }, { name: "asc" }]
-  });
+  const templatesResult = await query<{ id: string; name: string; category: string; favorite: boolean; payload: unknown }>(
+    `SELECT id, name, category, favorite, payload FROM "SessionTemplate" WHERE "clubId" = $1 ORDER BY favorite DESC, name ASC LIMIT 200`, [clubId]
+  );
+  const templates = templatesResult.rows;
 
   return (
     <CoachShell active="Template">

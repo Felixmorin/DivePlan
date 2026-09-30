@@ -1,5 +1,5 @@
 -- Initial DivePlan schema.
--- Generated from prisma/schema.prisma. Run `npm run prisma:migrate` to apply in development.
+-- Historical Prisma migration retained for schema reference; never run from the application or a build.
 
 CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'COACH', 'ATHLETE');
 CREATE TYPE "WeekStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED');

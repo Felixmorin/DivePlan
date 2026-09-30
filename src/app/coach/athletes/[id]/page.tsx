@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, Plus, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves, X } from "lucide-react";
 import { deleteAthlete, removeAthleteDiveFromVolume, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
@@ -16,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { getAthleteProgressTotals, type AthleteProgressTotals } from "@/lib/athlete-session";
 import { countPoolContexts } from "@/lib/pool-list";
 import { getAthleteSessionPreviewStats, type AthleteSessionPreviewStats } from "@/lib/monitoring";
@@ -56,196 +55,75 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     return <DemoAthleteDetailPage id={id} />;
   }
 
-  const athlete = await prisma.athlete.findFirst({
-    where: { id, clubId },
-    include: {
-      user: true,
-      group: true,
-      completions: {
-        orderBy: [{ completedAt: "desc" }, { startedAt: "desc" }],
-        take: 8,
-        include: {
-          session: {
-            include: {
-              blocks: {
-                orderBy: { position: "asc" },
-                include: {
-                  assignments: { select: { athleteId: true } },
-                  drylandExercises: true,
-                  poolTraining: { include: { sections: { include: { dives: true } } } }
-                }
-              }
-            }
-          }
-        }
-      },
-      diveLogs: { where: { session: { week: { clubId } } }, include: { poolDive: true, session: true } },
-      exerciseLogs: { where: { session: { week: { clubId } } }, select: { sessionId: true, exerciseId: true, completed: true } },
-      diveNotes: {
-        where: { poolDive: { poolSection: { poolTraining: { block: { session: { week: { clubId } } } } } } },
-        orderBy: { updatedAt: "desc" },
-        select: {
-          poolDiveId: true,
-          note: true,
-          updatedAt: true,
-          poolDive: {
-            select: {
-              diveCode: true,
-              diveName: true,
-              poolSection: {
-                select: {
-                  height: true,
-                  poolTraining: { select: { block: { select: { session: { select: { id: true, title: true, date: true } } } } } }
-                }
-              }
-            }
-          }
-        }
-      },
-      skills: { include: { skill: true }, orderBy: { progress: "desc" } },
-      planningEvents: { where: { startsAt: { gte: startOfMontrealDay() } }, orderBy: { startsAt: "asc" }, take: 6 },
-      competitionDives: { orderBy: [{ height: "asc" }, { position: "asc" }, { createdAt: "asc" }] }
-    }
-  });
-
-  if (!athlete) {
-    notFound();
-  }
-
-  const nextSession = await prisma.trainingSession.findFirst({
-    where: {
-      week: { clubId },
-      status: "READY",
-      date: { gte: startOfMontrealDay() },
-      blocks: { some: { assignments: { some: { athleteId: athlete.id } } } }
-    },
-    orderBy: { date: "asc" },
-    select: { id: true, title: true, date: true, status: true }
-  });
-  const nextCompetition = await prisma.planningEvent.findFirst({
-    where: {
-      clubId,
-      type: "COMPETITION",
-      startsAt: { gte: startOfMontrealDay() },
-      OR: [{ athleteId: athlete.id }, ...(athlete.groupId ? [{ groupId: athlete.groupId }] : []), { athleteId: null, groupId: null }]
-    },
-    orderBy: { startsAt: "asc" },
-    select: { title: true, startsAt: true, endsAt: true }
-  });
-  const [progress, previewStats] = await Promise.all([
-    getAthleteProgressTotals(athlete.id),
-    getAthleteSessionPreviewStats(athlete.userId)
+  const athlete=(await query<{id:string;userId:string;firstName:string;lastName:string;avatar:string|null;level:string;active:boolean;groupId:string|null;groupName:string|null;birthDate:Date|null}>(`SELECT a.id,a."userId",u."firstName",u."lastName",u.avatar,a.level,a.active,a."groupId",g.name AS "groupName",a."birthDate" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a.id=$1 AND a."clubId"=$2`,[id,clubId])).rows[0];
+  if(!athlete) notFound();
+  const today=startOfMontrealDay();
+  const seasonStartYear=today.getMonth()>=8?today.getFullYear():today.getFullYear()-1;
+  const seasonStart=parseMontrealSessionDate(`${seasonStartYear}-09-01`,"00:00");
+  const [completionRows,diveRows,exerciseRows,skillsRows,planningRows,competitionDiveRows,attendanceRows,diveNoteRows,nextSessionRows,nextCompetitionRows]=await Promise.all([
+    query<{sessionId:string;status:string;rating:string|null;note:string|null;title:string;date:Date}>(`SELECT c."sessionId",c.status,c.rating,c.note,s.title,s.date FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE c."athleteId"=$1 AND w."clubId"=$2 ORDER BY c."completedAt" DESC,c."startedAt" DESC LIMIT 8`,[athlete.id,clubId]),
+    query<{sessionId:string;poolDiveId:string;repetitionsCompleted:number}>(`SELECT l."sessionId",l."poolDiveId",l."repetitionsCompleted" FROM "AthleteDiveLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE l."athleteId"=$1 AND w."clubId"=$2`,[athlete.id,clubId]),
+    query<{sessionId:string;exerciseId:string;completed:boolean}>(`SELECT l."sessionId",l."exerciseId",l.completed FROM "AthleteExerciseLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE l."athleteId"=$1 AND w."clubId"=$2`,[athlete.id,clubId]),
+    query<{code:string;name:string;status:string;progress:number;trainings:number;repetitions:number}>(`SELECT s.code,s.name,a.status,a.progress,a.trainings,a.repetitions FROM "AthleteSkill" a JOIN "Skill" s ON s.id=a."skillId" WHERE a."athleteId"=$1 ORDER BY a.progress DESC`,[athlete.id]),
+    query<{id:string;title:string;type:string;startsAt:Date;endsAt:Date|null;location:string|null}>(`SELECT id,title,type,"startsAt","endsAt",location FROM "PlanningEvent" WHERE "athleteId"=$1 AND "startsAt">=$2 ORDER BY "startsAt" LIMIT 6`,[athlete.id,today]),
+    query<{id:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";diveCode:string;difficulty:number|null}>(`SELECT id,height,"diveCode",difficulty FROM "CompetitionDive" WHERE "athleteId"=$1 ORDER BY height,position,"createdAt"`,[athlete.id]),
+    query<{id:string;date:Date}>(`SELECT s.id,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.status<>'NOT_DONE' AND s.date >= $2 AND s.date < $3 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$4)`,[clubId,seasonStart,addMontrealDays(today,1),athlete.id]),
+    query<{poolDiveId:string;note:string;updatedAt:Date;diveCode:string;diveName:string;height:string;sessionId:string;sessionTitle:string;sessionDate:Date}>(`SELECT n."poolDiveId",n.note,n."updatedAt",d."diveCode",d."diveName",s.height,t.id AS "sessionId",t.title AS "sessionTitle",t.date AS "sessionDate" FROM "AthleteDiveNote" n JOIN "PoolDive" d ON d.id=n."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" JOIN "PoolTraining" p ON p."blockId"=s."poolTrainingId" JOIN "SessionBlock" b ON b.id=p."blockId" JOIN "TrainingSession" t ON t.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=t."weekId" WHERE n."athleteId"=$1 AND w."clubId"=$2 ORDER BY n."updatedAt" DESC`,[athlete.id,clubId]),
+    query<{id:string;title:string;date:Date;status:string}>(`SELECT s.id,s.title,s.date,s.status FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.status='READY' AND s.date >= $2 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$3) ORDER BY s.date LIMIT 1`,[clubId,today,athlete.id]),
+    query<{title:string;startsAt:Date;endsAt:Date|null}>(`SELECT title,"startsAt","endsAt" FROM "PlanningEvent" WHERE "clubId"=$1 AND type='COMPETITION' AND "startsAt">=$2 AND ("athleteId"=$3 OR ($4::text IS NOT NULL AND "groupId"=$4) OR ("athleteId" IS NULL AND "groupId" IS NULL)) ORDER BY "startsAt" LIMIT 1`,[clubId,today,athlete.id,athlete.groupId])
   ]);
-  let confidenceRows: Prisma.AthleteCompetitionDiveEvaluationGetPayload<{ select: { competitionDiveId: true; diveCode: true; height: true; rating: true; evaluator: true; evaluatedAt: true } }>[] = [];
-  let confidenceSchemaUnavailable = false;
+  const recentIds=completionRows.rows.map(row=>row.sessionId);
+  const blockRows=recentIds.length?await query<{id:string;sessionId:string;title:string;type:string}>(`SELECT b.id,b."sessionId",b.title,b.type FROM "SessionBlock" b WHERE b."sessionId"=ANY($1::text[]) AND EXISTS (SELECT 1 FROM "SessionBlockAssignment" a WHERE a."sessionBlockId"=b.id AND a."athleteId"=$2) ORDER BY b.position`,[recentIds,athlete.id]):{rows:[] as {id:string;sessionId:string;title:string;type:string}[]};
+  const blockIds=blockRows.rows.map(row=>row.id);
+  const [poolPlanRows,drylandPlanRows]=await Promise.all([
+    query<{blockId:string;diveId:string;diveCode:string;repetitions:number;label:string|null;height:string}>(`SELECT b.id AS "blockId",d.id AS "diveId",d."diveCode",d.repetitions,s.label,s.height FROM "PoolDive" d JOIN "PoolSection" s ON s.id=d."poolSectionId" JOIN "PoolTraining" p ON p."blockId"=s."poolTrainingId" JOIN "SessionBlock" b ON b.id=p."blockId" WHERE b.id=ANY($1::text[]) ORDER BY s."order",d."order"`,[blockIds]),
+    query<{blockId:string;exerciseId:string;sets:number|null;reps:number|null}>(`SELECT "blockId","exerciseId",sets,reps FROM "DrylandBlockExercise" WHERE "blockId"=ANY($1::text[]) ORDER BY "order"`,[blockIds])
+  ]);
+  let confidenceRows:Array<{competitionDiveId:string;diveCode:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";rating:number;evaluator:"ATHLETE"|"COACH";evaluatedAt:Date}>=[];
+  let confidenceSchemaUnavailable=false;
   try {
-    confidenceRows = await prisma.athleteCompetitionDiveEvaluation.findMany({ where: { athleteId: athlete.id }, orderBy: { evaluatedAt: "asc" }, select: { competitionDiveId: true, diveCode: true, height: true, rating: true, evaluator: true, evaluatedAt: true } });
-  } catch (error) {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || !["P2021", "P2022"].includes(error.code)) {
-      throw error;
-    }
-    confidenceSchemaUnavailable = true;
-    console.error("Competition dive evaluations are unavailable because the database migration has not been applied.", error);
+    confidenceRows=(await query<{competitionDiveId:string;diveCode:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";rating:number;evaluator:"ATHLETE"|"COACH";evaluatedAt:Date}>(`SELECT "competitionDiveId","diveCode",height,rating,evaluator,"evaluatedAt" FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId"=$1 ORDER BY "evaluatedAt"`,[athlete.id])).rows;
+  } catch(error) {
+    const code=(error as {code?:string})?.code;
+    if(code!=="42P01"&&code!=="42703")throw error;
+    confidenceSchemaUnavailable=true;
+    console.error("Competition dive evaluations are unavailable because the database migration has not been applied.",error);
   }
-  const today = startOfMontrealDay();
-  const seasonStartYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
-  const seasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00");
-  const attendanceSessions = await prisma.trainingSession.findMany({ where: { week: { clubId }, status: { not: "NOT_DONE" }, date: { gte: seasonStart, lt: addMontrealDays(today, 1) }, blocks: { some: { assignments: { some: { athleteId: athlete.id } } } } }, select: { id: true, date: true } });
-  const attendanceAbsences = await prisma.athleteSessionAbsence.findMany({ where: { athleteId: athlete.id, sessionId: { in: attendanceSessions.map((session) => session.id) } }, select: { sessionId: true } });
-  const absenceIds = new Set(attendanceAbsences.map((absence) => absence.sessionId));
-  const monthCount = (today.getMonth() - 8 + 12) % 12 + 1;
-  const attendanceMonths = Array.from({ length: monthCount }, (_, index) => {
-    const monthOffset = 8 + index;
-    const year = seasonStartYear + Math.floor(monthOffset / 12);
-    const month = monthOffset % 12;
-    const sessions = attendanceSessions.filter((session) => session.date.getFullYear() === year && session.date.getMonth() === month);
-    const absent = sessions.filter((session) => absenceIds.has(session.id)).length;
-    const total = sessions.length;
-    return { label: new Intl.DateTimeFormat("fr-CA", { month: "long" }).format(new Date(year, month, 1)), absent, total, rate: total ? Math.round(absent / total * 100) : 0 };
+  const [progress,previewStats,absenceRows]=await Promise.all([
+    getAthleteProgressTotals(athlete.id),getAthleteSessionPreviewStats(athlete.userId),
+    attendanceRows.rows.length?query<{sessionId:string}>(`SELECT "sessionId" FROM "AthleteSessionAbsence" WHERE "athleteId"=$1 AND "sessionId"=ANY($2::text[])`,[athlete.id,attendanceRows.rows.map(s=>s.id)]):Promise.resolve({rows:[] as {sessionId:string}[]})
+  ]);
+  const absenceIds=new Set(absenceRows.rows.map(row=>row.sessionId));
+  const monthCount=(today.getMonth()-8+12)%12+1;
+  const attendanceMonths=Array.from({length:monthCount},(_,index)=>{
+    const monthOffset=8+index,year=seasonStartYear+Math.floor(monthOffset/12),month=monthOffset%12;
+    const monthSessions=attendanceRows.rows.filter(s=>s.date.getFullYear()===year&&s.date.getMonth()===month);
+    const absent=monthSessions.filter(s=>absenceIds.has(s.id)).length,total=monthSessions.length;
+    return {label:new Intl.DateTimeFormat("fr-CA",{month:"long"}).format(new Date(year,month,1)),absent,total,rate:total?Math.round(absent/total*100):0};
   });
-
+  const recentSessions=completionRows.rows.map(completion=>{
+    const blocks=blockRows.rows.filter(block=>block.sessionId===completion.sessionId).map(block=>{
+      const pool=poolPlanRows.rows.filter(row=>row.blockId===block.id);
+      const dryland=drylandPlanRows.rows.filter(row=>row.blockId===block.id);
+      const planned=pool.reduce((sum,row)=>sum+row.repetitions*Math.max(1,countPoolContexts(row.label??row.height)),0)+dryland.reduce((sum,row)=>sum+(row.sets??1)*(row.reps??0),0);
+      const actual=pool.reduce((sum,row)=>sum+(diveRows.rows.find(log=>log.sessionId===completion.sessionId&&log.poolDiveId===row.diveId)?.repetitionsCompleted??0),0)+dryland.reduce((sum,row)=>sum+(exerciseRows.rows.find(log=>log.sessionId===completion.sessionId&&log.exerciseId===row.exerciseId)?.completed?(row.sets??1)*(row.reps??0):0),0);
+      return {id:block.id,title:block.title,planned,actual};
+    });
+    const poolPlanned=poolPlanRows.rows.filter(row=>blockRows.rows.some(block=>block.sessionId===completion.sessionId&&block.id===row.blockId)).reduce((sum,row)=>sum+row.repetitions*Math.max(1,countPoolContexts(row.label??row.height)),0);
+    const poolActual=diveRows.rows.filter(log=>log.sessionId===completion.sessionId).reduce((sum,log)=>sum+log.repetitionsCompleted,0);
+    return {id:completion.sessionId,title:completion.title,date:completion.date,status:completion.status,rating:completion.rating,note:completion.note,poolPlanned,poolActual,blocks};
+  });
   const profile: AthleteProfile = {
-    id: athlete.id,
-    firstName: athlete.user.firstName,
-    lastName: athlete.user.lastName,
-    avatar: athlete.user.avatar,
-    level: athlete.level,
-    active: athlete.active,
-    groupName: athlete.group?.name ?? "Sans groupe",
-    birthDate: athlete.birthDate,
-    volume: athlete.diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0),
-    completedSessions: athlete.completions.filter((completion) => completion.status === "COMPLETED").length,
-    nextSession: nextSession ?? undefined,
-    recentSessions: athlete.completions.map((completion) => ({
-      id: completion.sessionId,
-      title: completion.session.title,
-      date: completion.session.date,
-      status: completion.status,
-      rating: completion.rating,
-      note: completion.note,
-      poolPlanned: completion.session.blocks
-        .filter((block) => block.assignments.some((assignment) => assignment.athleteId === athlete.id))
-        .flatMap((block) => block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.repetitions * Math.max(1, countPoolContexts(section.label ?? section.height))) ?? []) ?? [])
-        .reduce((sum, reps) => sum + reps, 0),
-      poolActual: athlete.diveLogs
-        .filter((log) => log.sessionId === completion.sessionId)
-        .reduce((sum, log) => sum + log.repetitionsCompleted, 0),
-      blocks: completion.session.blocks
-        .filter((block) => block.assignments.some((assignment) => assignment.athleteId === athlete.id))
-        .map((block) => {
-          const dives = block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => ({
-            ...dive,
-            plannedRepetitions: dive.repetitions * Math.max(1, countPoolContexts(section.label ?? section.height))
-          }))) ?? [];
-          const exercises = block.drylandExercises;
-          const planned = dives.reduce((sum, dive) => sum + dive.plannedRepetitions, 0)
-            + exercises.reduce((sum, item) => sum + (item.sets ?? 1) * (item.reps ?? 0), 0);
-          const actual = dives.reduce((sum, dive) => sum + (athlete.diveLogs.find((log) => log.sessionId === completion.sessionId && log.poolDiveId === dive.id)?.repetitionsCompleted ?? 0), 0)
-            + exercises.reduce((sum, item) => sum + (athlete.exerciseLogs.find((log) => log.sessionId === completion.sessionId && log.exerciseId === item.exerciseId)?.completed ? (item.sets ?? 1) * (item.reps ?? 0) : 0), 0);
-          return { id: block.id, title: block.title, planned, actual };
-        })
-    })),
-    skills: athlete.skills.map((item) => ({
-      code: item.skill.code,
-      name: item.skill.name,
-      status: item.status,
-      progress: item.progress,
-      trainings: item.trainings,
-      repetitions: item.repetitions
-    })),
-    planningEvents: athlete.planningEvents.map((event) => ({
-      id: event.id,
-      title: event.title,
-      type: event.type,
-      startsAt: event.startsAt,
-      endsAt: event.endsAt,
-      location: event.location
-    })),
-    nextCompetition: nextCompetition ?? undefined,
-    competitionDives: athlete.competitionDives.map((dive) => ({
-      id: dive.id,
-      height: dive.height,
-      code: dive.diveCode,
-      difficulty: dive.difficulty
-    })),
-    competitionConfidence: confidenceRows.map((item) => ({ competitionDiveId: item.competitionDiveId, code: item.diveCode, height: item.height, rating: item.rating, evaluator: item.evaluator, evaluatedAt: item.evaluatedAt.toISOString() })),
-    confidenceSchemaUnavailable,
-    diveNotes: athlete.diveNotes.map((item) => ({
-      id: item.poolDiveId,
-      code: item.poolDive.diveCode,
-      name: item.poolDive.diveName,
-      height: item.poolDive.poolSection.height,
-      note: item.note,
-      updatedAt: item.updatedAt,
-      sessionId: item.poolDive.poolSection.poolTraining.block.session.id,
-      sessionTitle: item.poolDive.poolSection.poolTraining.block.session.title,
-      sessionDate: item.poolDive.poolSection.poolTraining.block.session.date
-    })),
-    progress,
-    previewStats,
-    attendance: { seasonLabel: `${seasonStartYear}-${seasonStartYear + 1}`, absent: attendanceAbsences.length, total: attendanceSessions.length, rate: attendanceSessions.length ? Math.round(attendanceAbsences.length / attendanceSessions.length * 100) : 0, months: attendanceMonths }
+    id:athlete.id,firstName:athlete.firstName,lastName:athlete.lastName,avatar:athlete.avatar,level:athlete.level,active:athlete.active,groupName:athlete.groupName??"Sans groupe",birthDate:athlete.birthDate,
+    volume:diveRows.rows.reduce((sum,log)=>sum+log.repetitionsCompleted,0),completedSessions:completionRows.rows.filter(row=>row.status==="COMPLETED").length,
+    nextSession:nextSessionRows.rows[0],recentSessions,
+    skills:skillsRows.rows.map(row=>({code:row.code,name:row.name,status:row.status,progress:row.progress,trainings:row.trainings,repetitions:row.repetitions})),
+    planningEvents:planningRows.rows,nextCompetition:nextCompetitionRows.rows[0],
+    competitionDives:competitionDiveRows.rows.map(row=>({id:row.id,height:row.height,code:row.diveCode,difficulty:row.difficulty})),
+    competitionConfidence:confidenceRows.map(row=>({competitionDiveId:row.competitionDiveId,code:row.diveCode,height:row.height,rating:row.rating,evaluator:row.evaluator,evaluatedAt:row.evaluatedAt.toISOString()})),confidenceSchemaUnavailable,
+    diveNotes:diveNoteRows.rows.map(row=>({id:row.poolDiveId,code:row.diveCode,name:row.diveName,height:row.height,note:row.note,updatedAt:row.updatedAt,sessionId:row.sessionId,sessionTitle:row.sessionTitle,sessionDate:row.sessionDate})),progress,previewStats,
+    attendance:{seasonLabel:`${seasonStartYear}-${seasonStartYear+1}`,absent:absenceRows.rows.length,total:attendanceRows.rows.length,rate:attendanceRows.rows.length?Math.round(absenceRows.rows.length/attendanceRows.rows.length*100):0,months:attendanceMonths}
   };
-
   return <AthleteDetail profile={profile} />;
 }
 

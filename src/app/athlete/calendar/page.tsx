@@ -1,6 +1,5 @@
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, List, MapPin, TentTree, Trophy, Users, Waves } from "lucide-react";
 import Link from "next/link";
-import type { PlanningEventType } from "@prisma/client";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAthletePlanningEvents, type AthletePlanningEvent } from "@/lib/athlete-planning";
@@ -9,6 +8,8 @@ import { addMontrealDays, formatMontrealCountdown, formatMontrealDate, formatMon
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+type PlanningEventType = "COMPETITION" | "CAMP" | "TRAINING_SCHEDULE";
 
 const eventStyles: Record<PlanningEventType, { label: string; icon: typeof Trophy; className: string }> = {
   COMPETITION: { label: "Compétition", icon: Trophy, className: "bg-amber-400/16 text-amber-200" },

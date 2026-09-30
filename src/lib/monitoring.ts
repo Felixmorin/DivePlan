@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { addMontrealDays, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 
 type TrackEventInput = {
@@ -11,15 +11,10 @@ type TrackEventInput = {
 
 export async function trackEvent(input: TrackEventInput) {
   try {
-    await prisma.appEvent.create({
-      data: {
-        type: input.type,
-        message: input.message,
-        clubId: input.clubId ?? null,
-        userId: input.userId ?? null,
-        metadata: input.metadata
-      }
-    });
+    await query(
+      `INSERT INTO "AppEvent" (id, type, message, "clubId", "userId", metadata) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [crypto.randomUUID(), input.type, input.message, input.clubId ?? null, input.userId ?? null, input.metadata ?? null]
+    );
   } catch (error) {
     console.error("Failed to track app event", error);
   }
@@ -35,18 +30,13 @@ export type AthleteSessionPreviewStats = {
 
 export async function getAthleteSessionPreviewStats(userId: string): Promise<AthleteSessionPreviewStats> {
   const weekStart = startOfMontrealWeek();
-  const events = await prisma.appEvent.findMany({
-    where: {
-      userId,
-      type: ATHLETE_SESSION_PREVIEW_EVENT,
-      createdAt: { gte: weekStart }
-    },
-    select: { createdAt: true },
-    orderBy: { createdAt: "asc" }
-  });
+  const result = await query<{ createdAt: Date }>(
+    `SELECT "createdAt" FROM "AppEvent" WHERE "userId" = $1 AND type = $2 AND "createdAt" >= $3 ORDER BY "createdAt" ASC`,
+    [userId, ATHLETE_SESSION_PREVIEW_EVENT, weekStart]
+  );
 
   const countsByDay = new Map<string, number>();
-  for (const event of events) {
+  for (const event of result.rows) {
     const key = toMontrealDateInputValue(event.createdAt);
     countsByDay.set(key, (countsByDay.get(key) ?? 0) + 1);
   }
@@ -60,7 +50,7 @@ export async function getAthleteSessionPreviewStats(userId: string): Promise<Ath
   });
 
   return {
-    total: events.length,
+    total: result.rowCount ?? result.rows.length,
     today: countsByDay.get(toMontrealDateInputValue()) ?? 0,
     days
   };

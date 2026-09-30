@@ -13,7 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { requireCoach } from "@/lib/current-user";
 import { athletes as demoAthletes, demoSession } from "@/lib/data";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { addMontrealDays, formatMontrealDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -25,49 +25,37 @@ export default async function GroupsPage() {
     return <DemoGroupsPage />;
   }
 
-  const [groups, allAthletes] = await Promise.all([
-    prisma.trainingGroup.findMany({
-      where: { clubId },
-      orderBy: { name: "asc" },
-      include: {
-        coach: { include: { user: true } },
-        athletes: {
-          where: { active: true },
-          include: {
-            user: true,
-            completions: {
-              where: { status: { in: ["IN_PROGRESS", "SKIPPED"] } },
-              select: { status: true },
-              take: 1
-            }
-          },
-          orderBy: { user: { firstName: "asc" } }
-        },
-        weeks: {
-          include: {
-            sessions: {
-              where: { date: { gte: startOfMontrealDay() } },
-              orderBy: { date: "asc" },
-              take: 1
-            }
-          }
-        }
-      }
-    }),
-    prisma.athlete.findMany({
-      where: { clubId, active: true },
-      orderBy: [{ user: { firstName: "asc" } }, { user: { lastName: "asc" } }],
-      include: { user: true, group: { select: { name: true } } }
-    })
+  type GroupAthlete = { id: string; firstName: string; lastName: string; avatar: string | null; hasOpenCompletion: boolean };
+  type GroupRow = { id: string; name: string; coachFirstName: string; coachLastName: string; weekCount: number; nextSession: { title: string; date: Date; duration: number; status: string } | null; athletes: GroupAthlete[] };
+  const [groupsResult, athletesResult] = await Promise.all([
+    query<GroupRow>(
+      `SELECT g.id, g.name, cu."firstName" AS "coachFirstName", cu."lastName" AS "coachLastName",
+       (SELECT count(*)::int FROM "TrainingWeek" w WHERE w."groupId" = g.id) AS "weekCount",
+       (SELECT json_build_object('title', s.title, 'date', s.date, 'duration', s.duration, 'status', s.status)
+        FROM "TrainingWeek" w JOIN "TrainingSession" s ON s."weekId" = w.id
+        WHERE w."groupId" = g.id AND s.date >= $2 ORDER BY s.date ASC LIMIT 1) AS "nextSession",
+       COALESCE((SELECT json_agg(json_build_object('id', a.id, 'firstName', au."firstName", 'lastName', au."lastName", 'avatar', au.avatar,
+          'hasOpenCompletion', EXISTS(SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."athleteId" = a.id AND c.status IN ('IN_PROGRESS', 'SKIPPED')))
+          ORDER BY au."firstName") FROM "Athlete" a JOIN "User" au ON au.id = a."userId" WHERE a."groupId" = g.id AND a.active = true), '[]'::json) AS athletes
+       FROM "TrainingGroup" g JOIN "Coach" c ON c.id = g."coachId" JOIN "User" cu ON cu.id = c."userId"
+       WHERE g."clubId" = $1 ORDER BY g.name ASC`, [clubId, startOfMontrealDay()]
+    ),
+    query<{ id: string; firstName: string; lastName: string; level: string; groupId: string | null; groupName: string | null }>(
+      `SELECT a.id, u."firstName", u."lastName", a.level, a."groupId", g.name AS "groupName"
+       FROM "Athlete" a JOIN "User" u ON u.id = a."userId" LEFT JOIN "TrainingGroup" g ON g.id = a."groupId"
+       WHERE a."clubId" = $1 AND a.active = true ORDER BY u."firstName" ASC, u."lastName" ASC`, [clubId]
+    )
   ]);
+  const groups = groupsResult.rows;
+  const allAthletes = athletesResult.rows;
 
   const assignmentGroups = groups.map((group) => ({ id: group.id, name: group.name }));
   const assignmentAthletes = allAthletes.map((athlete) => ({
     id: athlete.id,
-    name: `${athlete.user.firstName} ${athlete.user.lastName}`,
+    name: `${athlete.firstName} ${athlete.lastName}`,
     level: athlete.level,
     groupId: athlete.groupId,
-    groupName: athlete.group?.name ?? null
+    groupName: athlete.groupName
   }));
 
   return (
@@ -128,19 +116,19 @@ export default async function GroupsPage() {
                 {groups.map((group) => {
                   const nextSession = nextGroupSession(group);
                   const activeCount = group.athletes.length;
-                  const watchCount = group.athletes.filter((athlete) => athlete.completions.length > 0).length;
+                  const watchCount = group.athletes.filter((athlete) => athlete.hasOpenCompletion).length;
                   const avatarAthletes = group.athletes.map((athlete) => ({
                     id: athlete.id,
-                    firstName: athlete.user.firstName,
-                    lastName: athlete.user.lastName,
-                    avatar: athlete.user.avatar
+                    firstName: athlete.firstName,
+                    lastName: athlete.lastName,
+                    avatar: athlete.avatar
                   }));
 
                   return (
                 <tr key={group.id} className="border-t border-[var(--color-border)]">
                   <td className="px-5 py-4">
                     <div className="font-black text-[var(--color-ink)]">{group.name}</div>
-                    <div className="text-xs font-bold text-[var(--color-ink-muted)]">Coach {group.coach.user.firstName} {group.coach.user.lastName}</div>
+                    <div className="text-xs font-bold text-[var(--color-ink-muted)]">Coach {group.coachFirstName} {group.coachLastName}</div>
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
@@ -167,7 +155,7 @@ export default async function GroupsPage() {
                     ) : <span className="text-sm font-bold text-[var(--color-ink-muted)]">Aucune seance planifiee</span>}
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <div className="flex justify-end gap-2"><Button asChild variant="outline"><Link href={`/coach/groups/${group.id}`}>Ouvrir</Link></Button><DeleteGroupButton groupId={group.id} groupName={group.name} disabled={group.weeks.length > 0} /></div>
+                    <div className="flex justify-end gap-2"><Button asChild variant="outline"><Link href={`/coach/groups/${group.id}`}>Ouvrir</Link></Button><DeleteGroupButton groupId={group.id} groupName={group.name} disabled={group.weekCount > 0} /></div>
                   </td>
                 </tr>
                   );
@@ -183,12 +171,12 @@ export default async function GroupsPage() {
             {groups.map((group) => {
               const nextSession = nextGroupSession(group);
               const activeCount = group.athletes.length;
-              const watchCount = group.athletes.filter((athlete) => athlete.completions.length > 0).length;
+              const watchCount = group.athletes.filter((athlete) => athlete.hasOpenCompletion).length;
               const avatarAthletes = group.athletes.map((athlete) => ({
                 id: athlete.id,
-                firstName: athlete.user.firstName,
-                lastName: athlete.user.lastName,
-                avatar: athlete.user.avatar
+                firstName: athlete.firstName,
+                lastName: athlete.lastName,
+                avatar: athlete.avatar
               }));
 
               return (
@@ -196,7 +184,7 @@ export default async function GroupsPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-black">{group.name}</h2>
-                  <p className="mt-1 text-sm font-bold text-[var(--color-ink-muted)]">Coach {group.coach.user.firstName} {group.coach.user.lastName}</p>
+                  <p className="mt-1 text-sm font-bold text-[var(--color-ink-muted)]">Coach {group.coachFirstName} {group.coachLastName}</p>
                 </div>
                 <Badge variant="success">Actif</Badge>
               </div>
@@ -208,7 +196,7 @@ export default async function GroupsPage() {
                 <GroupMetric icon={<Waves className="h-4 w-4" />} label="Seance" value={nextSession?.title ?? "Aucune"} />
                 <GroupMetric icon={<Users className="h-4 w-4" />} label="Statut" value={watchCount > 0 ? `${watchCount} a surveiller` : "Tous actifs"} />
               </div>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2"><Button asChild variant="action"><Link href={`/coach/groups/${group.id}`}>Ouvrir le groupe</Link></Button><DeleteGroupButton groupId={group.id} groupName={group.name} disabled={group.weeks.length > 0} /></div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2"><Button asChild variant="action"><Link href={`/coach/groups/${group.id}`}>Ouvrir le groupe</Link></Button><DeleteGroupButton groupId={group.id} groupName={group.name} disabled={group.weekCount > 0} /></div>
             </div>
               );
             })}
@@ -359,12 +347,8 @@ function DemoGroupsPage() {
   );
 }
 
-type GroupWithRelations = Awaited<ReturnType<typeof prisma.trainingGroup.findMany>>[number] & {
-  weeks: Array<{ sessions: Array<{ title: string; date: Date; duration: number; status: string }> }>;
-};
-
-function nextGroupSession(group: GroupWithRelations) {
-  return group.weeks.flatMap((week) => week.sessions).sort((a, b) => Number(a.date) - Number(b.date))[0] ?? null;
+function nextGroupSession(group: { nextSession: { title: string; date: Date; duration: number; status: string } | null }) {
+  return group.nextSession;
 }
 
 function GroupMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {

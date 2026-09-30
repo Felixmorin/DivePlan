@@ -1,0 +1,3 @@
+-- Baseline marker only. DivePlan's existing schema and data were restored
+-- into Supabase before this migration history was introduced.
+-- This file intentionally contains no DDL and must not recreate or alter tables.

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { BlockType, CompletionStatus, PlanningEventType, SessionStatus } from "@prisma/client";
 import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, Edit, MapPin, Printer, Trophy, Users, Waves } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { PlanningEventForm } from "@/components/coach/planning-event-form";
@@ -11,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { athletes as demoAthletes, demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, parseMontrealSessionDate, sameMontrealDay, startOfMontrealWeek, toMontrealDateInputValue, toMontrealDateTimeInputValue } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -22,15 +21,15 @@ type PlanningSession = {
   focus: string;
   date: Date;
   duration: number;
-  status: SessionStatus | string;
-  blocks: Array<{ type: BlockType | string; estimatedVolume: number; assignments: Array<{ athleteId: string }> }>;
-  completions: Array<{ status: CompletionStatus | string }>;
+  status: string;
+  blocks: Array<{ type: string; estimatedVolume: number; assignments: Array<{ athleteId: string }> }>;
+  completions: Array<{ status: string }>;
   planningEventId: string | null;
 };
 
 type PlanningEvent = {
   id: string;
-  type: PlanningEventType | string;
+  type: string;
   title: string;
   startsAt: Date;
   endsAt: Date | null;
@@ -75,36 +74,32 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
     return <DemoPlanningPage period={period} weekStartsOn={weekStartsOn} />;
   }
 
-  const [rawSessions, rawEvents, groups, athletes] = await Promise.all([
-    prisma.trainingSession.findMany({
-      where: { week: { clubId }, date: { gte: period.rangeStart, lt: period.rangeEnd } },
-      orderBy: { date: "asc" },
-      include: {
-        blocks: { orderBy: { position: "asc" }, include: { assignments: true } },
-        completions: true
-      }
-    }),
-    prisma.planningEvent.findMany({
-      where: { clubId, startsAt: { gte: period.rangeStart, lt: period.rangeEnd } },
-      orderBy: { startsAt: "asc" },
-      include: { group: true, athlete: { include: { user: true } } }
-    }),
-    prisma.trainingGroup.findMany({ where: { clubId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.athlete.findMany({ where: { clubId, active: true }, orderBy: { user: { firstName: "asc" } }, include: { user: true } })
+  const [sessionRows,eventRows,groupsResult,athleteRows]=await Promise.all([
+    query<{id:string;title:string;focus:string;date:Date;duration:number;status:string;planningEventId:string|null}>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,period.rangeStart,period.rangeEnd]),
+    query<{id:string;type:string;title:string;startsAt:Date;endsAt:Date|null;duration:number|null;location:string|null;notes:string|null;groupId:string|null;athleteId:string|null;groupName:string|null;firstName:string|null;lastName:string|null}>(`SELECT e.id,e.type,e.title,e."startsAt",e."endsAt",e.duration,e.location,e.notes,e."groupId",e."athleteId",g.name AS "groupName",u."firstName",u."lastName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "User" u ON u.id=a."userId" WHERE e."clubId"=$1 AND e."startsAt">=$2 AND e."startsAt"<$3 ORDER BY e."startsAt"`,[clubId,period.rangeStart,period.rangeEnd]),
+    query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`,[clubId]),
+    query<{id:string;firstName:string;lastName:string}>(`SELECT a.id,u."firstName",u."lastName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId])
   ]);
-  const sessions: PlanningSession[] = rawSessions.map((session) => ({
+  const [blockRows,assignmentRows,completionRows]=await Promise.all([
+    query<{id:string;sessionId:string;type:string;estimatedVolume:number}>(`SELECT b.id,b."sessionId",b.type,b."estimatedVolume" FROM "SessionBlock" b WHERE b."sessionId"=ANY($1::text[]) ORDER BY b.position`,[sessionRows.rows.map(s=>s.id)]),
+    query<{sessionBlockId:string;athleteId:string}>(`SELECT "sessionBlockId","athleteId" FROM "SessionBlockAssignment" WHERE "sessionBlockId"=ANY($1::text[])`,[sessionRows.rows.map(s=>s.id)]),
+    query<{sessionId:string;status:string}>(`SELECT "sessionId",status FROM "AthleteSessionCompletion" WHERE "sessionId"=ANY($1::text[])`,[sessionRows.rows.map(s=>s.id)])
+  ]);
+  const blocksBySession=new Map<string,PlanningSession["blocks"]>();
+  for(const block of blockRows.rows){const blocks=blocksBySession.get(block.sessionId)??[];blocks.push({type:block.type,estimatedVolume:block.estimatedVolume,assignments:assignmentRows.rows.filter(a=>a.sessionBlockId===block.id).map(a=>({athleteId:a.athleteId}))});blocksBySession.set(block.sessionId,blocks);}
+  const sessions: PlanningSession[] = sessionRows.rows.map((session) => ({
     id: session.id,
     title: session.title,
     focus: session.focus,
     date: session.date,
     duration: session.duration,
     status: session.status,
-    blocks: session.blocks,
-    completions: session.completions,
+    blocks: blocksBySession.get(session.id)??[],
+    completions: completionRows.rows.filter(c=>c.sessionId===session.id),
     planningEventId: session.planningEventId
   }));
   const linkedEventIds = new Set(sessions.map((session) => session.planningEventId).filter(Boolean));
-  const events: PlanningEvent[] = rawEvents.filter((event) => !linkedEventIds.has(event.id)).map((event) => ({
+  const events: PlanningEvent[] = eventRows.rows.filter((event) => !linkedEventIds.has(event.id)).map((event) => ({
     id: event.id,
     type: event.type,
     title: event.title,
@@ -115,12 +110,13 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
     notes: event.notes,
     groupId: event.groupId,
     athleteId: event.athleteId,
-    groupName: event.group?.name ?? null,
-    athleteName: event.athlete ? `${event.athlete.user.firstName} ${event.athlete.user.lastName}` : null
+    groupName: event.groupName,
+    athleteName: event.athleteId ? `${event.firstName} ${event.lastName}` : null
   }));
+  const groups=groupsResult.rows;
   const targets: PlanningTarget[] = [
     ...groups.map((group) => ({ id: group.id, label: group.name, kind: "group" as const })),
-    ...athletes.map((athlete) => ({ id: athlete.id, label: `${athlete.user.firstName} ${athlete.user.lastName}`, kind: "athlete" as const }))
+    ...athleteRows.rows.map((athlete) => ({ id: athlete.id, label: `${athlete.firstName} ${athlete.lastName}`, kind: "athlete" as const }))
   ];
 
   return <PlanningView period={period} sessions={sessions} events={events} targets={targets} weekStartsOn={weekStartsOn} />;
@@ -384,7 +380,7 @@ function MonthEventItem({ event, targets }: { event: PlanningEvent; targets: Pla
   );
 }
 
-function statusTone(status: SessionStatus | string) {
+function statusTone(status: string) {
   if (status === "DRAFT") return "border-[var(--block-dryland-fg)]/20 bg-[var(--block-dryland-bg)]/45";
   if (status === "IN_PROGRESS") return "border-[var(--color-action)] bg-white";
   if (status === "COMPLETED") return "border-[var(--color-success)]/25 bg-[var(--color-success-soft)]/55";
@@ -392,13 +388,13 @@ function statusTone(status: SessionStatus | string) {
   return "border-[var(--block-pool-fg)]/20 bg-[var(--block-pool-bg)]/45";
 }
 
-function eventTone(type: PlanningEventType | string) {
+function eventTone(type: string) {
   if (type === "COMPETITION") return "border-[var(--color-action)]/30 bg-[var(--color-action)]/12 text-[var(--color-ink)]";
   if (type === "CAMP") return "border-[var(--block-dryland-fg)]/25 bg-[var(--block-dryland-bg)]/70 text-[var(--block-dryland-fg)]";
   return "border-[var(--color-brand)]/25 bg-[var(--color-surface-raised)] text-[var(--color-brand-strong)]";
 }
 
-function eventTypeLabel(type: PlanningEventType | string) {
+function eventTypeLabel(type: string) {
   if (type === "COMPETITION") return "Compétition";
   if (type === "CAMP") return "Camp";
   return "Horaire";

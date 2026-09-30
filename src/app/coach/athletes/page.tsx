@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { EmptyState } from "@/components/ui/empty-state";
 import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
-import { prisma } from "@/lib/prisma";
+import { query } from "@/lib/db";
 import { formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -44,65 +44,60 @@ export default async function AthletesPage() {
     return <DemoAthletesPage />;
   }
 
-  const [athletes, groups] = await Promise.all([
-    prisma.athlete.findMany({
-      where: { clubId },
-      orderBy: [{ group: { name: "asc" } }, { user: { firstName: "asc" } }],
-      include: {
-        user: true,
-        group: true,
-        completions: { where: { status: "COMPLETED" }, include: { session: true }, orderBy: { completedAt: "desc" } },
-        diveLogs: true
-      }
-    }),
-    prisma.trainingGroup.findMany({ where: { clubId }, orderBy: { name: "asc" }, select: { id: true, name: true } })
+  type AthleteListResult = { id: string; firstName: string; lastName: string; avatar: string | null; level: string; groupName: string | null; active: boolean; lastActivity: string | null; completedSessions: number; volume: number; averageVolume: number | null };
+  const [athletesResult, groupsResult] = await Promise.all([
+    query<AthleteListResult>(
+      `SELECT a.id, u."firstName", u."lastName", u.avatar, a.level, g.name AS "groupName", a.active,
+         (SELECT s.title FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id = c."sessionId"
+          WHERE c."athleteId" = a.id AND c.status = 'COMPLETED' ORDER BY c."completedAt" DESC LIMIT 1) AS "lastActivity",
+         (SELECT count(*)::int FROM "AthleteSessionCompletion" c WHERE c."athleteId" = a.id AND c.status = 'COMPLETED') AS "completedSessions",
+         COALESCE((SELECT sum(l."repetitionsCompleted")::int FROM "AthleteDiveLog" l WHERE l."athleteId" = a.id), 0) AS volume,
+         CASE WHEN (SELECT count(*) FROM "AthleteSessionCompletion" c WHERE c."athleteId" = a.id AND c.status = 'COMPLETED') = 0 THEN NULL
+          ELSE COALESCE((SELECT sum(l."repetitionsCompleted")::numeric FROM "AthleteDiveLog" l WHERE l."athleteId" = a.id), 0) /
+            (SELECT count(*)::numeric FROM "AthleteSessionCompletion" c WHERE c."athleteId" = a.id AND c.status = 'COMPLETED') END AS "averageVolume"
+       FROM "Athlete" a JOIN "User" u ON u.id = a."userId" LEFT JOIN "TrainingGroup" g ON g.id = a."groupId"
+       WHERE a."clubId" = $1 ORDER BY g.name ASC NULLS LAST, u."firstName" ASC`, [clubId]
+    ),
+    query<{ id: string; name: string }>(`SELECT id, name FROM "TrainingGroup" WHERE "clubId" = $1 ORDER BY name ASC`, [clubId])
   ]);
-
+  const athletes = athletesResult.rows;
+  const groups = groupsResult.rows;
   const athleteIds = athletes.map((athlete) => athlete.id);
-  const sessions = athleteIds.length
-    ? await prisma.trainingSession.findMany({
-        where: {
-          week: { clubId },
-          status: "READY",
-          date: { gte: startOfMontrealDay() },
-          blocks: { some: { assignments: { some: { athleteId: { in: athleteIds } } } } }
-        },
-        orderBy: { date: "asc" },
-        include: { blocks: { include: { assignments: true } } },
-        take: 20
-      })
-    : [];
+  const sessions = athleteIds.length ? await query<{ athleteId: string; id: string; title: string; date: Date; status: string }>(
+    `WITH candidates AS (
+       SELECT s.id, s.title, s.date, s.status FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id = s."weekId"
+       WHERE w."clubId" = $1 AND s.status = 'READY' AND s.date >= $2
+         AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
+                     WHERE b."sessionId" = s.id AND a."athleteId" = ANY($3::text[]))
+       ORDER BY s.date ASC LIMIT 20
+     )
+     SELECT a."athleteId", c.id, c.title, c.date, c.status FROM candidates c
+     JOIN "SessionBlock" b ON b."sessionId" = c.id JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
+     WHERE a."athleteId" = ANY($3::text[]) ORDER BY c.date ASC`,
+    [clubId, startOfMontrealDay(), athleteIds]
+  ) : { rows: [] as Array<{ athleteId: string; id: string; title: string; date: Date; status: string }> };
 
   const nextByAthlete = new Map<string, AthleteRow["nextSession"]>();
-  sessions.forEach((session) => {
-    session.blocks.forEach((block) => {
-      block.assignments.forEach((assignment) => {
-        if (!nextByAthlete.has(assignment.athleteId)) {
-          nextByAthlete.set(assignment.athleteId, { id: session.id, title: session.title, date: session.date, status: session.status });
-        }
-      });
-    });
+  sessions.rows.forEach((session) => {
+    if (!nextByAthlete.has(session.athleteId)) {
+      nextByAthlete.set(session.athleteId, { id: session.id, title: session.title, date: session.date, status: session.status });
+    }
   });
 
-  const rows: AthleteRow[] = athletes.map((athlete) => {
-    const lastCompletion = athlete.completions[0];
-    return {
+  const rows: AthleteRow[] = athletes.map((athlete) => ({
       id: athlete.id,
-      firstName: athlete.user.firstName,
-      lastName: athlete.user.lastName,
-      avatar: athlete.user.avatar,
+      firstName: athlete.firstName,
+      lastName: athlete.lastName,
+      avatar: athlete.avatar,
       level: athlete.level,
-      groupName: athlete.group?.name ?? "Sans groupe",
+      groupName: athlete.groupName ?? "Sans groupe",
       active: athlete.active,
       nextSession: nextByAthlete.get(athlete.id),
-      lastActivity: lastCompletion?.session.title,
-      volume: athlete.diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0),
-      completedSessions: athlete.completions.length,
-      averageVolume: athlete.completions.length > 0
-        ? athlete.diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0) / athlete.completions.length
-        : null
-    };
-  });
+      lastActivity: athlete.lastActivity ?? undefined,
+      volume: Number(athlete.volume),
+      completedSessions: athlete.completedSessions,
+      averageVolume: athlete.averageVolume === null ? null : Number(athlete.averageVolume)
+    }));
 
   return (
     <CoachShell active="Athletes">
