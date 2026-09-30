@@ -109,7 +109,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const isLastBlockStep = !isPoolBlock || stepIndex === blockSteps.length - 1;
   const feedback = pageFeedback[pageFeedbackKey(block.id, stepIndex)] ?? { rating: "", note: "" };
   const hasFeedback = Boolean(feedback.rating || feedback.note.trim());
-  const hasZeroRepDive = activeStep?.kind === "pool" && activeStep.section.dives.some((dive) => (diveChecks[dive.id] ?? []).filter((state) => state > 0).length === 0);
+  const hasZeroRepDive = activeStep?.kind === "pool" && activeStep.section.dives.every((dive) => (diveChecks[dive.id] ?? []).filter((state) => state > 0).length === 0);
   const totalItems = useMemo(() => countSessionItems(blocks), [blocks]);
   const completedItems = countCompletedItems(blocks, exerciseChecks, diveChecks);
   const poolDives = useMemo(
