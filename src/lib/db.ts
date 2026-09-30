@@ -19,9 +19,11 @@ function createPool() {
         : { rejectUnauthorized: true };
 
   // node-postgres parses SSL query parameters from connectionString after reading
-  // the pool options, which can replace the explicit `ssl` object above.
-  databaseUrl.searchParams.delete("sslmode");
-  databaseUrl.searchParams.delete("ssl");
+  // the pool options, which can replace the explicit `ssl` object above. Strip
+  // all SSL parameters so the selected TLS policy below is the one that applies.
+  for (const key of [...databaseUrl.searchParams.keys()]) {
+    if (key.toLowerCase().startsWith("ssl")) databaseUrl.searchParams.delete(key);
+  }
 
   return new Pool({
     connectionString: databaseUrl.toString(),
