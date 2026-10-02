@@ -44,9 +44,14 @@ export default async function AthleteTodayPage() {
   return (
     <AthleteShell>
       <header className="athlete-header">
-        <div>
-          <h1>Salut {athlete.user.firstName} <span aria-hidden="true">👋</span></h1>
+        <div className="athlete-header-copy">
+          <span className="athlete-kicker">ESPACE ATHLÈTE</span>
+          <h1>Salut {athlete.user.firstName}</h1>
+          <p>Prêt à plonger dans ta prochaine session ?</p>
         </div>
+        <Link href="/athlete/profile" className="athlete-avatar" aria-label="Ouvrir mon profil">
+          {athlete.user.firstName.charAt(0)}{athlete.user.lastName?.charAt(0) ?? ""}
+        </Link>
       </header>
 
       <section className="today-card" aria-labelledby="today-title">

@@ -139,11 +139,14 @@ a {
 }
 
 /* Athlete home — dark, compact training dashboard */
-.athlete-app { background: radial-gradient(circle at 50% -10%, #09263a 0, var(--color-athlete-bg) 34rem); }
-.athlete-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 2rem .8rem 1.25rem; }
-.athlete-header h1 { margin: 0; font-size: 2rem; line-height: 1.05; font-weight: 900; letter-spacing: -.045em; }
-.athlete-header h1 span { font-size: 1.8rem; }
-.athlete-header p { margin: .5rem 0 0; color: rgba(226,237,251,.7); font-size: 1.02rem; font-weight: 600; }
+.athlete-app { background: radial-gradient(circle at 50% -10%, #3a0a15 0, #090909 25rem, var(--color-athlete-bg) 42rem); }
+.athlete-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 2.1rem .8rem 1.35rem; }
+.athlete-header-copy { min-width: 0; }
+.athlete-kicker { display: block; margin-bottom: .7rem; color: var(--color-club-red-soft); font-size: .68rem; font-weight: 900; letter-spacing: .18em; }
+.athlete-header h1 { margin: 0; font-size: clamp(2rem, 9vw, 2.55rem); line-height: .98; font-weight: 900; letter-spacing: -.06em; }
+.athlete-header p { margin: .65rem 0 0; color: rgba(226,237,251,.58); font-size: .9rem; font-weight: 600; }
+.athlete-avatar { display: grid; width: 2.85rem; height: 2.85rem; flex: none; place-items: center; margin-top: .15rem; border: 1px solid rgba(255,255,255,.2); border-radius: 999px; background: linear-gradient(145deg, var(--color-club-red), #6e0a1e); color: white; font-size: .78rem; font-weight: 900; letter-spacing: .04em; box-shadow: 0 8px 24px rgba(237,22,61,.22); }
+.athlete-avatar:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(237,22,61,.3), 0 8px 24px rgba(237,22,61,.22); }
 .today-card, .week-card, .schedule-card, .latest-card { border: 1px solid rgba(99,174,215,.2); border-radius: 1.15rem; background: linear-gradient(145deg, rgba(11,33,51,.98), rgba(7,22,36,.98)); box-shadow: 0 16px 36px rgba(0,0,0,.16); }
 .today-card { overflow: hidden; background: radial-gradient(circle at 82% 24%, rgba(12,111,157,.5), transparent 35%), linear-gradient(145deg, #0b2d46, #071d30 75%); }
 .today-card-content { min-height: 13.3rem; padding: 1.3rem 1.3rem 1rem; }

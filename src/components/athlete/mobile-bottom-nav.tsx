@@ -24,7 +24,7 @@ export function MobileBottomNav() {
           <Link
             key={item.href}
             href={item.href}
-            className={cn("flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold text-white/42 transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", active && "bg-white/8 text-white")}
+            className={cn("flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-bold text-white/42 transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", active && "bg-white/8 text-white")}
           >
             <Icon className={cn("h-4 w-4 text-white/42", active && "text-[var(--color-action)]")} />
             {item.label}
