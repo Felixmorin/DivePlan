@@ -835,7 +835,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       </div>
       {evaluationOpen && <CompetitionEvaluationDialog dives={session.competitionDives} ratings={evaluationRatings} pending={evaluationPending} error={error} onChange={(id, rating) => setEvaluationRatings((currentRatings) => ({ ...currentRatings, [id]: rating }))} onSave={saveCompetitionEvaluation} />}
       {earnedMilestones.length > 0 && <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-[#04111de8] p-5 text-center backdrop-blur-sm" role="status" aria-live="polite">
-        <div className="milestone-confetti" aria-hidden="true">{Array.from({ length: 28 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 9) * -0.19}s`, backgroundColor: ["#facc15", "#22d3ee", "#fb7185", "#a3e635", "#c084fc"][index % 5] }} />)}</div>
+        <div className="milestone-confetti" aria-hidden="true">{Array.from({ length: 64 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 9) * -0.19}s`, backgroundColor: ["#facc15", "#22d3ee", "#fb7185", "#a3e635", "#c084fc"][index % 5] }} />)}</div>
         <div className="relative z-10 max-w-sm animate-[milestone-pop_500ms_cubic-bezier(.2,.9,.3,1.3)]">
           <div className="text-7xl" aria-hidden="true">🎉</div>
           <p className="mt-4 text-xs font-black uppercase tracking-[.22em] text-amber-300">Nouveau milestone</p>
