@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight, BarChart3, Check, ChevronRight, Clock3, History, ListChecks, Play, UserRound, Waves } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
-import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAssignedReadySession, getAthleteCurrentWeekSummary, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
@@ -35,8 +34,6 @@ export default async function AthleteTodayPage() {
   const completionStatus = readySession?.completions[0]?.status ?? "NOT_STARTED";
   const canStart = sessionDate ? isSessionStartAvailable(sessionDate) : false;
   const blocks = readySession?.blocks ?? [];
-  const totalVolume = blocks.reduce((sum, block) => sum + block.estimatedVolume, 0);
-  const blockTypes = Array.from(new Set(blocks.map((block) => block.type)));
   const sessionTime = sessionDate ? formatMontrealTime(sessionDate) : "--:--";
   const sessionDateLabel = sessionDate ? formatMontrealDate(sessionDate, { weekday: "short", day: "numeric", month: "short" }) : "À venir";
   const latestCompletion = recentCompletions[0];
@@ -44,70 +41,20 @@ export default async function AthleteTodayPage() {
   return (
     <AthleteShell>
       <header className="athlete-header">
-        <div className="athlete-header-copy">
-          <span className="athlete-kicker">ESPACE ATHLÈTE</span>
-          <h1>Salut {athlete.user.firstName}</h1>
-          <p>Prêt à plonger dans ta prochaine session ?</p>
-        </div>
-        <Link href="/athlete/profile" className="athlete-avatar" aria-label="Ouvrir mon profil">
-          {athlete.user.firstName.charAt(0)}{athlete.user.lastName?.charAt(0) ?? ""}
-        </Link>
+        <div className="athlete-header-copy"><span className="athlete-kicker">DIVEPLAN / ATHLETE</span><h1>Bonjour,<br /><em>{athlete.user.firstName}.</em></h1><p>Voici ton espace de préparation.</p></div>
+        <Link href="/athlete/profile" className="athlete-avatar" aria-label="Ouvrir mon profil">{athlete.user.firstName.charAt(0)}{athlete.user.lastName?.charAt(0) ?? ""}<span /></Link>
       </header>
 
       <section className="today-card" aria-labelledby="today-title">
-        <div className="today-card-content">
-          <span className="today-badge">Aujourd&apos;hui</span>
-          <h2 id="today-title">{readySession?.title ?? "Aucune séance planifiée"}</h2>
-          {readySession ? (
-            <div className="session-facts">
-              <span><Clock3 /> {sessionTime}</span>
-              <span><Waves /> {readySession.duration} min</span>
-              <span><ListChecks /> {blockTypes.map((type) => <BlockTypeBadge key={type} type={type.toLowerCase()} />)}</span>
-            </div>
-          ) : <p className="today-empty-copy">Ton coach n&apos;a pas encore publié de séance à venir.</p>}
-        </div>
-        {readySession && sessionHref ? (
-          <Button asChild size="lg" variant="action" className="today-cta">
-            <Link href={sessionHref}>
-              {completionStatus === "IN_PROGRESS" ? <History /> : canStart ? <Play className="fill-current" /> : <ListChecks />}
-              {completionStatus === "IN_PROGRESS" ? "Continuer la séance" : canStart ? "Commencer la séance" : "Voir l’aperçu"}
-              <ArrowRight className="ml-auto" />
-            </Link>
-          </Button>
-        ) : <EmptyState className="today-empty" title="Aucune séance" description="Reviens quand ton coach aura publié la prochaine séance." />}
+        <div className="today-card-content"><div className="today-eyebrow"><span className="today-badge">SESSION DU JOUR</span><span className="session-index">01 / 04</span></div><h2 id="today-title">{readySession?.title ?? "Aucune séance planifiée"}</h2>{readySession ? <><p className="today-focus">{readySession.focus}</p><div className="session-facts"><span><Clock3 /> {sessionTime}</span><span><Waves /> {readySession.duration} min</span><span><ListChecks /> {blocks.length} blocs</span></div></> : <p className="today-empty-copy">Ton coach n&apos;a pas encore publié de séance à venir.</p>}</div>
+        {readySession && sessionHref ? <Button asChild size="lg" variant="action" className="today-cta"><Link href={sessionHref}>{completionStatus === "IN_PROGRESS" ? <History /> : canStart ? <Play className="fill-current" /> : <ListChecks />}{completionStatus === "IN_PROGRESS" ? "Continuer" : canStart ? "Démarrer la séance" : "Voir l’aperçu"}<ArrowRight /></Link></Button> : <EmptyState className="today-empty" title="Aucune séance" description="Reviens quand ton coach aura publié la prochaine séance." />}
       </section>
 
-      <SectionHeading title="Ma semaine" />
-      <section className="week-card" aria-label="Résumé de la semaine">
-        <div className="week-metrics">
-          <WeekMetric value={`${weekSummary.completed}/${weekSummary.total}`} label="séances complétées" tone="blue" progress={weekSummary.total > 0 ? (weekSummary.completed / weekSummary.total) * 100 : 0} />
-          <WeekMetric value={`${formatMinutes(weekSummary.completedMinutes)}/${formatMinutes(weekSummary.plannedMinutes)}`} label="temps complété / planifié" tone="purple" progress={weekSummary.plannedMinutes > 0 ? (weekSummary.completedMinutes / weekSummary.plannedMinutes) * 100 : 0} />
-          <WeekMetric value={weekSummary.volume} label="volume total cette semaine" tone="mint" progress={weekSummary.volume > 0 ? 100 : 0} />
-        </div>
-        <div className="week-days" aria-label="Activités du lundi au dimanche">
-          {weekDays.map(({ date, key, events }) => <WeekDay key={key} date={date} eventCount={events.length} isToday={key === todayKey} />)}
-        </div>
-      </section>
+      <section className="week-card" aria-label="Résumé de la semaine"><div className="section-heading"><div><span className="section-overline">APERÇU</span><h2>Cette semaine</h2></div><Link href="/athlete/calendar">Planning <ArrowRight /></Link></div><div className="week-metrics"><WeekMetric value={`${weekSummary.completed}/${weekSummary.total}`} label="séances" tone="blue" progress={weekSummary.total > 0 ? (weekSummary.completed / weekSummary.total) * 100 : 0} /><WeekMetric value={`${formatMinutes(weekSummary.completedMinutes)}`} label="temps actif" tone="purple" progress={weekSummary.plannedMinutes > 0 ? (weekSummary.completedMinutes / weekSummary.plannedMinutes) * 100 : 0} /><WeekMetric value={weekSummary.volume} label="plongeons" tone="mint" progress={weekSummary.volume > 0 ? 100 : 0} /></div><div className="week-days" aria-label="Activités du lundi au dimanche">{weekDays.map(({ date, key, events }) => <WeekDay key={key} date={date} eventCount={events.length} isToday={key === todayKey} />)}</div></section>
 
-      <SectionHeading title="À venir" href="/athlete/calendar" linkLabel="Voir calendrier" />
-      <section className="schedule-card">
-        {readySession ? (
-          <ScheduleRow date={sessionDateLabel} icon={<Waves />} title={readySession.title} details={`${sessionTime}  ·  ${readySession.duration} min  ·  ${totalVolume || "—"} plongeons`} meta={readySession.focus} href={sessionHref ?? "/athlete"} />
-        ) : <EmptyState className="border-0 bg-transparent p-4" title="Rien de prévu" description="Les prochaines séances apparaîtront ici." />}
-      </section>
+      <div className="home-section-grid"><div><SectionHeading title="À venir" href="/athlete/calendar" linkLabel="Tout voir" /><section className="schedule-card">{readySession ? <ScheduleRow date={sessionDateLabel} icon={<Waves />} title={readySession.title} details={`${sessionTime}  ·  ${readySession.duration} min`} meta={readySession.focus} href={sessionHref ?? "/athlete"} /> : <EmptyState className="border-0 bg-transparent p-4" title="Rien de prévu" description="Les prochaines séances apparaîtront ici." />}</section></div><div><SectionHeading title="Dernière séance" href="/athlete/week" linkLabel="Historique" /><section className="latest-card">{latestCompletion ? <ScheduleRow date={latestCompletion.completedAt ? formatMontrealDate(new Date(latestCompletion.completedAt), { weekday: "short", day: "numeric", month: "short" }) : "Récente"} title={latestCompletion.title} details={[`${latestCompletion.duration} min`, latestCompletion.focus].filter(Boolean).join(" · ")} meta={latestCompletion.status === "COMPLETED" ? "Séance complétée" : "Séance en cours"} href="/athlete/week" status={latestCompletion.status === "COMPLETED"} /> : <EmptyState className="border-0 bg-transparent p-4" title="Aucun historique" description="Tes séances terminées apparaîtront ici." />}</section></div></div>
 
-      <SectionHeading title="Dernière séance" href="/athlete/week" linkLabel="Voir l’historique" />
-      <section className="latest-card">
-        {latestCompletion ? (
-          <ScheduleRow date={latestCompletion.completedAt ? formatMontrealDate(new Date(latestCompletion.completedAt), { weekday: "short", day: "numeric", month: "short" }) : "Récente"} title={latestCompletion.title} details={[`${latestCompletion.duration} min`, latestCompletion.focus].filter(Boolean).join(" · ")} meta={latestCompletion.status === "COMPLETED" ? "Séance complétée" : "Séance en cours"} href="/athlete/week" status={latestCompletion.status === "COMPLETED"} />
-        ) : <EmptyState className="border-0 bg-transparent p-4" title="Aucun historique" description="Tes séances terminées apparaîtront ici." />}
-      </section>
-
-      <SectionHeading title="Accès rapides" />
-      <div className="quick-links">
-        <QuickLink href="/athlete/progress" icon={<BarChart3 />} label="Ma progression" />
-        <QuickLink href="/athlete/profile" icon={<UserRound />} label="Mon profil" />
-      </div>
+      <SectionHeading title="Accès rapides" /><div className="quick-links"><QuickLink href="/athlete/progress" icon={<BarChart3 />} label="Ma progression" /><QuickLink href="/athlete/profile" icon={<UserRound />} label="Mon profil" /></div>
     </AthleteShell>
   );
 }
