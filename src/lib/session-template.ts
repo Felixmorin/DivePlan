@@ -22,7 +22,7 @@ export const sessionTemplatePayloadSchema = z.object({
 export type SessionTemplatePayload = z.infer<typeof sessionTemplatePayloadSchema>;
 
 type Week = { id: string; clubId: string; groupId: string; startDate: Date; title: string; status: string };
-type Dive = { id: string; poolSectionId: string; diveCode: string; diveName: string; position: string; repetitions: number; notes: string | null; order: number };
+type Dive = { id: string; poolSectionId: string; diveCode: string; diveName: string; position: string; repetitions: number; notes: string | null; postSessionModified: boolean; order: number };
 type Section = { id: string; poolTrainingId: string; height: SessionPoolHeight; label: string | null; order: number; dives: Dive[] };
 type Pool = { blockId: string; sections: Section[] };
 type Dryland = { blockId: string; exerciseId: string; sets: number | null; reps: number | null; duration: number | null; notes: string | null; order: number };

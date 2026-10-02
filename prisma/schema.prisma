@@ -377,6 +377,7 @@ model PoolDive {
   position      String
   repetitions   Int
   notes         String?
+  postSessionModified Boolean @default(false)
   order         Int
   poolSection   PoolSection      @relation(fields: [poolSectionId], references: [id], onDelete: Cascade)
   logs          AthleteDiveLog[]

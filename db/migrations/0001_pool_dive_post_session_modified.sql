@@ -1,0 +1,2 @@
+ALTER TABLE "PoolDive"
+ADD COLUMN "postSessionModified" BOOLEAN NOT NULL DEFAULT FALSE;

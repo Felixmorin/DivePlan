@@ -67,7 +67,7 @@ export function PoolSectionEditor({
               <Button type="submit" variant="action" disabled={pending}>{pending ? "Enregistrement…" : "Enregistrer les changements"}</Button>
               {state.success && <span role="status" className="text-sm font-semibold text-[var(--color-success)]">Le changement a bien été fait.</span>}
             </div>
-          </form> : <p className="mt-5 rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm text-[var(--color-ink-muted)]">Le plan est modifiable avant le démarrage ou pendant la séance.</p>}
+          </form> : <p className="mt-5 rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm text-[var(--color-ink-muted)]">Le programme de plongeons peut être modifié avant le démarrage, pendant la séance ou après qu’un athlète l’a terminée.</p>}
 
           {actualCorrections.length > 0 && <div className="mt-6 border-t border-[var(--color-border)] pt-4">
             <h3 className="font-black">Corrections du réalisé</h3>

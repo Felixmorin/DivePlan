@@ -551,14 +551,17 @@ export async function updatePoolSectionLine(_previousState: { success: boolean }
   if (!sessionId || !sectionId) throw new Error("Ligne piscine introuvable.");
 
   await withTransaction(async (tx) => {
-    const section = (await tx.query<{ id: string; height: SessionPoolHeight; label: string | null; blockId: string; poolTrainingId: string }>(
-      `SELECT ps.id,ps.height,ps.label,ps."poolTrainingId",b.id AS "blockId" FROM "PoolSection" ps
+    const section = (await tx.query<{ id: string; height: SessionPoolHeight; label: string | null; blockId: string; poolTrainingId: string; hasCompleted: boolean }>(
+      `SELECT ps.id,ps.height,ps.label,ps."poolTrainingId",b.id AS "blockId",
+       EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c.status='COMPLETED') AS "hasCompleted"
+       FROM "PoolSection" ps
        JOIN "PoolTraining" pt ON pt."blockId"=ps."poolTrainingId"
        JOIN "SessionBlock" b ON b.id=pt."blockId"
        JOIN "TrainingSession" s ON s.id=b."sessionId"
        JOIN "TrainingWeek" w ON w.id=s."weekId"
        WHERE ps.id=$1 AND s.id=$2 AND w."clubId"=$3 AND s.status='READY'
        AND (EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c.status='IN_PROGRESS')
+         OR EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c.status='COMPLETED')
          OR (NOT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND (c."startedAt" IS NOT NULL OR c.status<>'NOT_STARTED'))
            AND NOT EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id)
            AND NOT EXISTS (SELECT 1 FROM "AthleteExerciseLog" l WHERE l."sessionId"=s.id)))`,
@@ -566,7 +569,7 @@ export async function updatePoolSectionLine(_previousState: { success: boolean }
     )).rows[0];
     if (!section) throw new Error("Cette ligne piscine n'est plus modifiable.");
 
-    const dives = (await tx.query<{ id: string; repetitions: number; order: number }>(`SELECT id,repetitions,"order" FROM "PoolDive" WHERE "poolSectionId"=$1 ORDER BY "order"`, [sectionId])).rows;
+    const dives = (await tx.query<{ id: string; diveCode: string; repetitions: number; order: number }>(`SELECT id,"diveCode",repetitions,"order" FROM "PoolDive" WHERE "poolSectionId"=$1 ORDER BY "order"`, [sectionId])).rows;
     const diveCodes = formData.getAll("diveCodes").map((value) => String(value).trim().toUpperCase());
     const repetitionValues = formData.getAll("repetitions").map((value) => String(value).trim());
     const contexts = formData.getAll("diveContexts").map((value) => String(value).trim());
@@ -580,7 +583,7 @@ export async function updatePoolSectionLine(_previousState: { success: boolean }
       if (!/^[0-9A-Z]{2,8}$/.test(diveCode) || !Number.isInteger(repetitions) || repetitions < 1 || repetitions > 500 || !context || validatePoolListRow({ id: dive.id, context, diveCodes: [diveCode], repetitions: [repetitions] }).errors.length > 0) {
         throw new Error("Vérifie la hauteur, le code et les répétitions de chaque plongeon.");
       }
-      return { ...dive, diveCode, context, repetitions };
+      return { ...dive, originalDiveCode: dive.diveCode, originalRepetitions: dive.repetitions, diveCode, context, repetitions };
     });
 
     const previousContext = section.label ?? (section.height === PoolHeight.ONE_METER ? "1m" : section.height === PoolHeight.THREE_METER ? "3m" : section.height === PoolHeight.PLATFORM ? "Plateforme" : "Section personnalisée");
@@ -604,7 +607,8 @@ export async function updatePoolSectionLine(_previousState: { success: boolean }
         await tx.query(`INSERT INTO "PoolSection" (id,"poolTrainingId",height,label,"order") VALUES ($1,$2,$3,$4,$5)`, [targetSectionId, section.poolTrainingId, poolHeightFromContext(context), context, nextOrder]);
       }
       for (const dive of groupDives) {
-        await tx.query(`UPDATE "PoolDive" SET "poolSectionId"=$1,"diveCode"=$2,"diveName"=$2,repetitions=$3 WHERE id=$4`, [targetSectionId, dive.diveCode, dive.repetitions, dive.id]);
+        const postSessionChange = section.hasCompleted && (dive.diveCode !== dive.originalDiveCode || dive.repetitions !== dive.originalRepetitions || dive.context !== previousContext);
+        await tx.query(`UPDATE "PoolDive" SET "poolSectionId"=$1,"diveCode"=$2,"diveName"=$2,repetitions=$3,"postSessionModified"="postSessionModified" OR $4 WHERE id=$5`, [targetSectionId, dive.diveCode, dive.repetitions, postSessionChange, dive.id]);
         nextVolume += Math.max(1, countPoolContexts(context)) * dive.repetitions;
       }
     }

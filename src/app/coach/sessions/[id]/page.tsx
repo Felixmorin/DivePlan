@@ -255,14 +255,14 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                     return <tr key={section.id} className="border-t border-[var(--color-border)]">
                       <td className="p-3 font-black">{context}</td>
                       <td className="p-3 font-bold">
-                        <div>{section.dives.map((dive) => dive.diveCode).join(", ")}</div>
+                        <div className="flex flex-wrap gap-x-2">{section.dives.map((dive) => <span key={dive.id} className={dive.postSessionModified ? "text-red-600" : ""}>{dive.diveCode}</span>)}</div>
                         {actualCorrections.length > 0 && <div className="mt-2 space-y-1 text-xs font-bold text-red-600">
                           {actualCorrections.map((correction) => <div key={`${correction.athleteId}-${correction.diveId}`}>{correction.firstName} · {correction.repetitions}/{correction.plannedRepetitions} · {correction.diveCode}</div>)}
                         </div>}
                       </td>
-                      <td className="p-3">{section.dives.map((dive) => dive.repetitions).join(", ")}</td>
+                      <td className="p-3"><div className="flex flex-wrap gap-x-2">{section.dives.map((dive) => <span key={dive.id} className={dive.postSessionModified ? "text-red-600 font-bold" : ""}>{dive.repetitions}</span>)}</div></td>
                       <td className="p-3 text-right font-black">{multiplier * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)}</td>
-                      <td className="p-2 text-center"><PoolSectionEditor sessionId={session.id} sectionId={section.id} context={context} dives={section.dives.map(({ id, diveCode, repetitions }) => ({ id, diveCode, repetitions }))} actualCorrections={actualCorrections} canEditPlan={session.status === "READY" && (!hasStarted || session.completions.some((completion) => completion.status === "IN_PROGRESS"))} /></td>
+                      <td className="p-2 text-center"><PoolSectionEditor sessionId={session.id} sectionId={section.id} context={context} dives={section.dives.map(({ id, diveCode, repetitions }) => ({ id, diveCode, repetitions }))} actualCorrections={actualCorrections} canEditPlan={session.status === "READY" && (!hasStarted || session.completions.some((completion) => completion.status === "IN_PROGRESS" || completion.status === "COMPLETED"))} /></td>
                     </tr>;
                   })}</tbody><tfoot className="border-t-2 border-[var(--color-navy)] bg-[var(--color-surface-raised)] font-black"><tr><td className="p-3" colSpan={3}>Total général</td><td className="p-3 text-right">{block.estimatedVolume}</td><td /></tr></tfoot></table></div>
                 </details>}
