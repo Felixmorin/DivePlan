@@ -1,10 +1,8 @@
-import type * as React from "react";
 import Link from "next/link";
-import { Activity, CalendarClock, Dumbbell, Plus, Trash2, UserPlus } from "lucide-react";
+import { Plus, Trash2, UserPlus } from "lucide-react";
 import { deleteAthlete } from "@/app/coach/athletes/actions";
 import { CreateAthleteAccountForm } from "@/app/coach/athletes/create-athlete-account-form";
 import { CoachShell } from "@/components/coach/coach-shell";
-import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { StatusPill } from "@/components/training/status-pill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -49,15 +47,27 @@ export default async function AthletesPage() {
   type AthleteListResult = { id: string; firstName: string; lastName: string; avatar: string | null; level: string; groupName: string | null; active: boolean; lastActivity: string | null; completedSessions: number; volume: number; averageVolume: number | null };
   const [athletesResult, groupsResult] = await Promise.all([
     query<AthleteListResult>(
-      `SELECT a.id, u."firstName", u."lastName", u.avatar, a.level, g.name AS "groupName", a.active,
-         (SELECT s.title FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id = c."sessionId"
-          WHERE c."athleteId" = a.id AND c.status = 'COMPLETED' ORDER BY c."completedAt" DESC LIMIT 1) AS "lastActivity",
-         (SELECT count(*)::int FROM "AthleteSessionCompletion" c WHERE c."athleteId" = a.id AND c.status = 'COMPLETED') AS "completedSessions",
-         COALESCE((SELECT sum(l."repetitionsCompleted")::int FROM "AthleteDiveLog" l WHERE l."athleteId" = a.id), 0) AS volume,
-         CASE WHEN (SELECT count(*) FROM "AthleteSessionCompletion" c WHERE c."athleteId" = a.id AND c.status = 'COMPLETED') = 0 THEN NULL
-          ELSE COALESCE((SELECT sum(l."repetitionsCompleted")::numeric FROM "AthleteDiveLog" l WHERE l."athleteId" = a.id), 0) /
-            (SELECT count(*)::numeric FROM "AthleteSessionCompletion" c WHERE c."athleteId" = a.id AND c.status = 'COMPLETED') END AS "averageVolume"
+      `WITH completion_stats AS (
+         SELECT "athleteId", count(*) FILTER (WHERE status = 'COMPLETED')::int AS completed_sessions
+         FROM "AthleteSessionCompletion" GROUP BY "athleteId"
+       ), latest_activity AS (
+         SELECT DISTINCT ON (c."athleteId") c."athleteId", s.title
+         FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id = c."sessionId"
+         WHERE c.status = 'COMPLETED'
+         ORDER BY c."athleteId", c."completedAt" DESC NULLS LAST, c."startedAt" DESC NULLS LAST
+       ), volume_stats AS (
+         SELECT "athleteId", sum("repetitionsCompleted")::int AS volume
+         FROM "AthleteDiveLog" GROUP BY "athleteId"
+       )
+       SELECT a.id, u."firstName", u."lastName", u.avatar, a.level, g.name AS "groupName", a.active,
+         latest_activity.title AS "lastActivity", COALESCE(completion_stats.completed_sessions, 0) AS "completedSessions",
+         COALESCE(volume_stats.volume, 0) AS volume,
+         CASE WHEN COALESCE(completion_stats.completed_sessions, 0) = 0 THEN NULL
+           ELSE COALESCE(volume_stats.volume, 0)::numeric / completion_stats.completed_sessions END AS "averageVolume"
        FROM "Athlete" a JOIN "User" u ON u.id = a."userId" LEFT JOIN "TrainingGroup" g ON g.id = a."groupId"
+       LEFT JOIN completion_stats ON completion_stats."athleteId" = a.id
+       LEFT JOIN latest_activity ON latest_activity."athleteId" = a.id
+       LEFT JOIN volume_stats ON volume_stats."athleteId" = a.id
        WHERE a."clubId" = $1 ORDER BY g.name ASC NULLS LAST, u."firstName" ASC`, [clubId]
     ),
     query<{ id: string; name: string }>(`SELECT id, name FROM "TrainingGroup" WHERE "clubId" = $1 ORDER BY name ASC`, [clubId])
@@ -67,16 +77,14 @@ export default async function AthletesPage() {
   const groups = groupsResult.rows;
   const athleteIds = athletes.map((athlete) => athlete.id);
   const sessions = athleteIds.length ? await query<{ athleteId: string; id: string; title: string; date: Date; status: string }>(
-    `WITH candidates AS (
-       SELECT s.id, s.title, s.date, s.status FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id = s."weekId"
-       WHERE w."clubId" = $1 AND s.status = 'READY' AND s.date >= $2
-         AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
-                     WHERE b."sessionId" = s.id AND a."athleteId" = ANY($3::text[]))
-       ORDER BY s.date ASC LIMIT 20
-     )
-     SELECT a."athleteId", c.id, c.title, c.date, c.status FROM candidates c
-     JOIN "SessionBlock" b ON b."sessionId" = c.id JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
-     WHERE a."athleteId" = ANY($3::text[]) ORDER BY c.date ASC`,
+    `SELECT DISTINCT ON (assignment."athleteId") assignment."athleteId", s.id, s.title, s.date, s.status
+     FROM "TrainingSession" s
+     JOIN "TrainingWeek" w ON w.id = s."weekId"
+     JOIN "SessionBlock" block ON block."sessionId" = s.id
+     JOIN "SessionBlockAssignment" assignment ON assignment."sessionBlockId" = block.id
+     WHERE w."clubId" = $1 AND s.status = 'READY' AND s.date >= $2
+       AND assignment."athleteId" = ANY($3::text[])
+     ORDER BY assignment."athleteId", s.date ASC, s.id`,
     [clubId, startOfMontrealDay(), athleteIds]
   ) : { rows: [] as Array<{ athleteId: string; id: string; title: string; date: Date; status: string }> };
 
@@ -190,52 +198,24 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
             <CardTitle>Liste active</CardTitle>
             <CardDescription>{rows.length} athletes visibles selon le role connecte.</CardDescription>
           </div>
-          <AthleteAvatarGroup ids={rows.map((row) => row.id)} athletes={rows} limit={8} />
+          <span className="text-sm font-bold text-[var(--color-ink-muted)]">{rows.length} athlètes</span>
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="hidden lg:block">
-          <table className="w-full border-collapse text-left text-sm">
-            <thead className="bg-[var(--color-surface-raised)] text-xs font-black uppercase text-[var(--color-ink-muted)]">
-              <tr>
-                <th className="px-5 py-3">Athlete</th>
-                <th className="px-4 py-3">Groupe</th>
-                <th className="px-4 py-3">Prochaine seance</th>
-                <th className="px-4 py-3">Activite</th>
-                <th className="px-5 py-3 text-right">Volume</th>
-                <th className="px-5 py-3 text-right">Volume moyen / entraînement</th>
-                <th className="px-5 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-border)]">
-              {rows.map((row) => (
-                <tr key={row.id} className="transition duration-[var(--duration-fast)] hover:bg-[var(--color-surface-raised)]">
-                  <td className="px-5 py-4"><Identity row={row} /></td>
-                  <td className="px-4 py-4"><Badge variant="outline">{row.groupName}</Badge></td>
-                  <td className="px-4 py-4"><NextSession nextSession={row.nextSession} demo={demo} /></td>
-                  <td className="px-4 py-4"><ActivitySummary row={row} /></td>
-                  <td className="px-5 py-4 text-right text-lg font-black">{row.volume}</td>
-                  <td className="px-5 py-4 text-right text-lg font-black">{row.averageVolume === null ? "—" : row.averageVolume.toFixed(1)}</td>
-                  <td className="px-5 py-4 text-right"><DeleteAthleteButton athleteId={row.id} demo={demo} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="hidden grid-cols-[minmax(15rem,1.3fr)_minmax(7rem,.7fr)_minmax(13rem,1fr)_minmax(11rem,1fr)_6rem_9rem_7rem] border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-xs font-black uppercase text-[var(--color-ink-muted)] lg:grid">
+          <span>Athlète</span><span>Groupe</span><span>Prochaine séance</span><span>Activité</span><span className="text-right">Volume</span><span className="text-right">Moy. / séance</span><span className="text-right">Actions</span>
         </div>
-
-        <div className="divide-y divide-[var(--color-border)] lg:hidden">
+        <div className="divide-y divide-[var(--color-border)]">
           {rows.map((row) => (
-            <div key={row.id} className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <Identity row={row} />
-                <Badge variant={row.active ? "success" : "outline"}>{row.active ? "Actif" : "Inactif"}</Badge>
-              </div>
-              <div className="mt-4 grid gap-3 text-sm">
-                <MobileMetric icon={<Dumbbell className="h-4 w-4" />} label="Groupe" value={row.groupName} />
-                <MobileMetric icon={<CalendarClock className="h-4 w-4" />} label="Prochaine" value={row.nextSession ? row.nextSession.title : "Aucune seance publiee"} />
-                <MobileMetric icon={<Activity className="h-4 w-4" />} label="Activite" value={`${row.completedSessions} completees · ${row.volume} reps`} />
-              </div>
-              <div className="mt-4"><DeleteAthleteButton athleteId={row.id} demo={demo} /></div>
+            <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 p-4 transition duration-[var(--duration-fast)] hover:bg-[var(--color-surface-raised)] lg:grid-cols-[minmax(15rem,1.3fr)_minmax(7rem,.7fr)_minmax(13rem,1fr)_minmax(11rem,1fr)_6rem_9rem_7rem] lg:px-5">
+              <div className="min-w-0"><Identity row={row} /></div>
+              <div className="lg:hidden"><Badge variant={row.active ? "success" : "outline"}>{row.active ? "Actif" : "Inactif"}</Badge></div>
+              <div className="col-span-2 lg:col-span-1"><Badge variant="outline">{row.groupName}</Badge></div>
+              <div className="col-span-2 lg:col-span-1"><NextSession nextSession={row.nextSession} demo={demo} /></div>
+              <div className="col-span-2 lg:col-span-1"><ActivitySummary row={row} /></div>
+              <div className="text-lg font-black lg:text-right"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Volume</span>{row.volume}</div>
+              <div className="text-lg font-black lg:text-right"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Moyenne</span>{row.averageVolume === null ? "—" : row.averageVolume.toFixed(1)}</div>
+              <div className="col-span-2 lg:col-span-1 lg:text-right"><DeleteAthleteButton athleteId={row.id} demo={demo} /></div>
             </div>
           ))}
         </div>
@@ -295,15 +275,6 @@ function ActivitySummary({ row }: { row: AthleteRow }) {
     <div className="space-y-1">
       <div className="font-black text-[var(--color-ink)]">{row.completedSessions} seances completees</div>
       <div className="text-xs font-bold text-[var(--color-ink-muted)]">{row.lastActivity ?? "Aucun historique disponible"}</div>
-    </div>
-  );
-}
-
-function MobileMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-[var(--radius-ui)] bg-[var(--color-surface-raised)] px-3 py-2">
-      <span className="flex items-center gap-2 text-xs font-black uppercase text-[var(--color-ink-muted)]">{icon}{label}</span>
-      <span className="min-w-0 truncate text-right font-bold text-[var(--color-ink)]">{value}</span>
     </div>
   );
 }
