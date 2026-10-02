@@ -544,7 +544,7 @@ export async function updateActualSessionDive(_previousState: { success: boolean
   return { success: true };
 }
 
-export async function updatePoolSectionLine(formData: FormData) {
+export async function updatePoolSectionLine(_previousState: { success: boolean }, formData: FormData) {
   const { clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
   const sectionId = String(formData.get("sectionId") ?? "");
@@ -613,6 +613,7 @@ export async function updatePoolSectionLine(formData: FormData) {
 
   revalidatePath(`/coach/sessions/${sessionId}`);
   revalidatePath(`/athlete/session/${sessionId}`);
+  return { success: true };
 }
 
 export async function setAthleteSessionAbsence(formData: FormData) {
