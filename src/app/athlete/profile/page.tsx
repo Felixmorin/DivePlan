@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Award, Building2, ChevronRight, Edit3, LogOut, Medal, Star, UserRound, Waves } from "lucide-react";
+import { Building2, ChevronRight, Edit3, LogOut, Medal, Star, UserRound, Waves } from "lucide-react";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { CompetitionList } from "@/components/athlete/competition-list";
+import { MilestonesDialog } from "@/components/athlete/milestones-dialog";
 import { ProfileForm } from "@/components/athlete/profile-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 import { query } from "@/lib/db";
-import { avatarUrlForPage } from "@/lib/avatar";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { MILESTONES } from "@/lib/milestones";
 
@@ -37,7 +37,13 @@ export default async function ProfilePage() {
   return (
     <AthleteShell>
       <header className="mb-5 pt-2">
-        <h1 className="text-[2rem] font-black leading-none tracking-tight">Profil</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-[2rem] font-black leading-none tracking-tight">Profil</h1>
+          <MilestonesDialog milestones={milestoneResult.rows.flatMap((earned) => {
+            const milestone = Object.values(MILESTONES).find((item) => item.key === earned.key);
+            return milestone ? [{ ...milestone, awardedAt: earned.awardedAt.toISOString() }] : [];
+          })} />
+        </div>
       </header>
 
       <section className="profile-hero relative overflow-hidden rounded-[1.4rem] border border-cyan-300/25 bg-[#092238] p-5 shadow-[0_20px_55px_rgba(0,0,0,0.3)]">
@@ -66,20 +72,6 @@ export default async function ProfilePage() {
         <span className="flex-1"><span className="block text-base font-black">Golden rep</span></span>
         <ChevronRight className="h-5 w-5 text-amber-200/70" />
       </Link>
-
-      <section aria-label="Milestones" className="mt-7">
-        <div className="mb-3 flex items-center gap-2"><Award className="h-5 w-5 text-amber-300" /><h2 className="text-xl font-black">Mes milestones</h2></div>
-        <div className="space-y-2">
-          {Object.values(MILESTONES).map((milestone) => {
-            const earned = milestoneResult.rows.find((item) => item.key === milestone.key);
-            return <article key={milestone.key} className={`flex items-center gap-3 rounded-[1.2rem] border p-4 ${earned ? "border-amber-300/30 bg-amber-400/10" : "border-white/8 bg-[#0b1e30] opacity-55"}`}>
-              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${earned ? "bg-amber-300 text-[#281500]" : "bg-white/8 text-white/45"}`}><Medal className="h-6 w-6" /></span>
-              <span className="min-w-0 flex-1"><span className="block font-black">{milestone.title}</span><span className="mt-0.5 block text-xs leading-5 text-white/55">{milestone.description}</span></span>
-              <span className="shrink-0 text-right text-[10px] font-bold text-white/45">{earned ? new Intl.DateTimeFormat("fr-CA", { dateStyle: "medium", timeZone: "America/Toronto" }).format(earned.awardedAt) : "À débloquer"}</span>
-            </article>;
-          })}
-        </div>
-      </section>
 
       <section aria-label="Résumé de la semaine" className="mt-3 rounded-[1.2rem] border border-[var(--color-club-red)]/25 bg-[var(--color-athlete-panel)] px-4 py-3">
         <p className="text-sm font-semibold text-white/58">Cette semaine,</p>
@@ -117,7 +109,7 @@ export default async function ProfilePage() {
               <span className="flex-1">Modifier mon profil</span>
               <ChevronRight className="h-5 w-5 text-white/45 transition group-open:rotate-90" />
             </summary>
-            <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} avatar={avatarUrl ?? avatarUrlForPage(athlete.user.avatar)} avatarValue={athlete.user.avatar?.startsWith("data:image/") ? null : athlete.user.avatar} />
+            <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} />
           </details>
           <form action={signOutAthlete}>
             <button type="submit" className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-base font-semibold text-rose-300 transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
