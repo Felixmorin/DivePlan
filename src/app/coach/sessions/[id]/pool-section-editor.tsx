@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ActualDiveCorrectionForm } from "./actual-dive-correction-form";
 
 type Dive = { id: string; diveCode: string; repetitions: number };
-type ActualCorrection = { athleteId: string; firstName: string; diveId: string; diveCode: string; repetitions: number };
+type ActualCorrection = { athleteId: string; firstName: string; diveId: string; diveCode: string; repetitions: number; plannedRepetitions: number };
 
 export function PoolSectionEditor({
   sessionId,
