@@ -607,8 +607,8 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                               <div className="space-y-2">
                                 {section.dives.map((dive) => (
                                   <div key={dive.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/5 px-3 py-2">
-                                    <div className="min-w-0"><span className="font-bold">{dive.code}</span><span className="ml-2 text-sm text-white/68">{dive.name}</span></div>
-                                    <span className="shrink-0 text-xs font-bold text-white/55">{dive.repetitions} rep.</span>
+                                    <div className="min-w-0"><span className={`font-bold ${dive.actualCode && dive.actualCode !== dive.code ? "text-red-400" : ""}`}>{dive.actualCode ?? dive.code}</span>{dive.actualCode ? <span className={`ml-2 text-xs font-bold ${dive.actualCode !== dive.code ? "text-red-400" : "text-white/55"}`}>corrigé</span> : <span className="ml-2 text-sm text-white/68">{dive.name}</span>}</div>
+                                    <span className={`shrink-0 text-xs font-bold ${dive.actualRepetitions !== null && dive.actualRepetitions !== dive.repetitions ? "text-red-400" : "text-white/55"}`}>{dive.actualRepetitions !== null && dive.actualRepetitions !== dive.repetitions ? dive.actualRepetitions : dive.repetitions} rep.</span>
                                   </div>
                                 ))}
                               </div>
@@ -772,7 +772,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                   <div key={dive.id} className="rounded-2xl border border-white/10 bg-[var(--color-athlete-panel)] p-4">
                     <div className="grid grid-cols-[64px_1fr_auto] items-center gap-3">
                       <span className="flex min-h-14 w-16 items-center justify-center rounded-2xl bg-[var(--color-athlete-panel-2)] px-1 text-center text-xs font-black leading-tight text-[var(--color-action)]">{activeStep.section.label}</span>
-                      <div className="min-w-0"><div className="text-3xl font-black leading-none">{dive.code}</div><div className="mt-1 truncate text-sm font-semibold text-white/68">{dive.name}</div></div>
+                      <div className="min-w-0"><div className={`text-3xl font-black leading-none ${dive.actualCode && dive.actualCode !== dive.code ? "text-red-400" : ""}`}>{dive.actualCode ?? dive.code}</div>{dive.actualCode && dive.actualCode !== dive.code ? <div className="mt-1 text-xs font-bold text-red-400">Plongeon corrigé</div> : <div className="mt-1 truncate text-sm font-semibold text-white/68">{dive.name}</div>}{dive.actualRepetitions !== null && dive.actualRepetitions !== dive.repetitions && <div className="mt-1 text-xs font-bold text-red-400">{dive.actualRepetitions} rep. corrigées</div>}</div>
                       <div className="flex items-center gap-2">
                         <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${diveNotes[dive.id] ? "text-[#60a5fa]" : "text-white/45"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}>
                           <FilePenLine className="h-5 w-5" />
