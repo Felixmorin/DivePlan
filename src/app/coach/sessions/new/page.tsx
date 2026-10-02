@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
+import { avatarUrlForPage } from "@/lib/avatar";
 import { parseSessionTemplatePayload } from "@/lib/session-template";
 import type { SessionPoolHeight } from "@/lib/session-template";
 import Link from "next/link";
@@ -43,7 +44,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     query<{sessionId:string;sessionTitle:string;blockId:string;title:string;duration:number;position:number}>(`WITH recent AS (SELECT s.id,s.title,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "PoolTraining" p ON p."blockId"=b.id WHERE b."sessionId"=s.id) ORDER BY s.date DESC LIMIT 8) SELECT r.id AS "sessionId",r.title AS "sessionTitle",b.id AS "blockId",b.title,b.duration,b.position FROM recent r JOIN "SessionBlock" b ON b."sessionId"=r.id JOIN "PoolTraining" p ON p."blockId"=b.id ORDER BY r.date DESC,b.position ASC`,[clubId])
   ]);
   const groups=groupsR.rows;
-  const athletes=athletesR.rows.map(a=>({id:a.id,groupId:a.groupId,level:a.level,user:{firstName:a.firstName,lastName:a.lastName,avatar:a.avatar}}));
+  const athletes=athletesR.rows.map(a=>({id:a.id,groupId:a.groupId,level:a.level,user:{firstName:a.firstName,lastName:a.lastName,avatar:avatarUrlForPage(a.avatar)}}));
   const drylandLibrary=drylandR.rows;
   const template=templateR?.rows[0]??null;
   const planningEvents=eventsR.rows;

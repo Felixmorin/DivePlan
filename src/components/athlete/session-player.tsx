@@ -151,12 +151,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   }, [activeTiming?.openedAt, block.id, onOpenBlock, reviewing, session.id, started]);
 
   useEffect(() => {
-    if (!started || reviewing) return;
-    const interval = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, [reviewing, started]);
-
-  useEffect(() => {
     if (started || canStart) return;
     const delay = Math.min(30_000, Math.max(250, new Date(session.date).getTime() - Date.now()));
     const timeout = window.setTimeout(() => setNow(Date.now()), delay);

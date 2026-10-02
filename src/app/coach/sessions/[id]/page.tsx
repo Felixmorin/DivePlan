@@ -2,8 +2,9 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
 import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
-import { PoolProgressRefresh, PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
+import { PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
 import { CoachShell } from "@/components/coach/coach-shell";
+import { avatarUrlForPage } from "@/lib/avatar";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       id: assignment.athlete.id,
       firstName: assignment.athlete.user.firstName,
       lastName: assignment.athlete.user.lastName,
-      avatar: assignment.athlete.user.avatar
+      avatar: avatarUrlForPage(assignment.athlete.user.avatar)
     }))
   );
   const uniqueAthletes = Array.from(new Map(athletes.map((athlete) => [athlete.id, athlete])).values());
@@ -101,7 +102,6 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           </form>
         </div>
       </div>
-      <PoolProgressRefresh enabled={session.status === "READY"} />
       {hasStarted && (
         <div className="mb-4 flex items-start gap-2 rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

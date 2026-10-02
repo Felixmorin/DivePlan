@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
+import { avatarUrlForPage } from "@/lib/avatar";
 import { getAthleteProgressTotals, type AthleteProgressTotals } from "@/lib/athlete-session";
 import { countPoolContexts } from "@/lib/pool-list";
 import { getAthleteSessionPreviewStats, type AthleteSessionPreviewStats } from "@/lib/monitoring";
@@ -114,7 +115,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     return {id:completion.sessionId,title:completion.title,date:completion.date,status:completion.status,rating:completion.rating,note:completion.note,poolPlanned,poolActual,blocks};
   });
   const profile: AthleteProfile = {
-    id:athlete.id,firstName:athlete.firstName,lastName:athlete.lastName,avatar:athlete.avatar,level:athlete.level,active:athlete.active,groupName:athlete.groupName??"Sans groupe",birthDate:athlete.birthDate,
+    id:athlete.id,firstName:athlete.firstName,lastName:athlete.lastName,avatar:avatarUrlForPage(athlete.avatar),level:athlete.level,active:athlete.active,groupName:athlete.groupName??"Sans groupe",birthDate:athlete.birthDate,
     volume:diveRows.rows.reduce((sum,log)=>sum+log.repetitionsCompleted,0),completedSessions:completionRows.rows.filter(row=>row.status==="COMPLETED").length,
     nextSession:nextSessionRows.rows[0],recentSessions,
     skills:skillsRows.rows.map(row=>({code:row.code,name:row.name,status:row.status,progress:row.progress,trainings:row.trainings,repetitions:row.repetitions})),
@@ -139,7 +140,7 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
         id: athlete.id,
         firstName: athlete.firstName,
         lastName: athlete.lastName,
-        avatar: athlete.avatar,
+        avatar: avatarUrlForPage(athlete.avatar),
         level: athlete.level,
         active: athlete.status !== "surveiller",
         groupName: "Provincial",

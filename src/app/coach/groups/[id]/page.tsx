@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
+import { avatarUrlForPage } from "@/lib/avatar";
 import { formatMontrealDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
 
   const group = { id: firstRow.groupId, name: firstRow.groupName };
   const athletes = result.rows.filter((row) => row.id !== null).map((row) => ({
-    id: row.id, level: row.level, firstName: row.firstName, lastName: row.lastName, avatar: row.avatar,
+    id: row.id, level: row.level, firstName: row.firstName, lastName: row.lastName, avatar: avatarUrlForPage(row.avatar),
     watch: row.status === "IN_PROGRESS" || row.status === "SKIPPED",
     lastActivity: row.sessionTitle && row.sessionDate ? `${row.sessionTitle} · ${formatMontrealDate(row.sessionDate)}` : "Aucune activite",
     recentVolume: Number(row.recentVolume)

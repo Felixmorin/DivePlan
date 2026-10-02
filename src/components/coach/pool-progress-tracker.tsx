@@ -1,24 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { Check, Circle, Waves } from "lucide-react";
 import { countPoolContexts } from "@/lib/pool-list";
 
 type Athlete = { id: string; firstName: string; lastName: string };
 type Dive = { id: string; diveCode: string; repetitions: number };
-
-export function PoolProgressRefresh({ enabled }: { enabled: boolean }) {
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!enabled) return;
-    const timer = window.setInterval(() => router.refresh(), 10000);
-    return () => window.clearInterval(timer);
-  }, [enabled, router]);
-
-  return null;
-}
 
 export function PoolProgressTracker({
   athletes,

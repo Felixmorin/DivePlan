@@ -34,7 +34,7 @@ export default async function GroupsPage() {
        (SELECT json_build_object('title', s.title, 'date', s.date, 'duration', s.duration, 'status', s.status)
         FROM "TrainingWeek" w JOIN "TrainingSession" s ON s."weekId" = w.id
         WHERE w."groupId" = g.id AND s.date >= $2 ORDER BY s.date ASC LIMIT 1) AS "nextSession",
-       COALESCE((SELECT json_agg(json_build_object('id', a.id, 'firstName', au."firstName", 'lastName', au."lastName", 'avatar', au.avatar,
+       COALESCE((SELECT json_agg(json_build_object('id', a.id, 'firstName', au."firstName", 'lastName', au."lastName", 'avatar', CASE WHEN au.avatar LIKE 'data:image/%' THEN NULL ELSE au.avatar END,
           'hasOpenCompletion', EXISTS(SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."athleteId" = a.id AND c.status IN ('IN_PROGRESS', 'SKIPPED')))
           ORDER BY au."firstName") FROM "Athlete" a JOIN "User" au ON au.id = a."userId" WHERE a."groupId" = g.id AND a.active = true), '[]'::json) AS athletes
        FROM "TrainingGroup" g JOIN "Coach" c ON c.id = g."coachId" JOIN "User" cu ON cu.id = c."userId"

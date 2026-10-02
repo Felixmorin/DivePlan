@@ -8,6 +8,7 @@ import { ProfileForm } from "@/components/athlete/profile-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 import { query } from "@/lib/db";
+import { avatarUrlForPage } from "@/lib/avatar";
 
 export const dynamic = "force-dynamic";
 
@@ -98,7 +99,7 @@ export default async function ProfilePage() {
               <span className="flex-1">Modifier mon profil</span>
               <ChevronRight className="h-5 w-5 text-white/45 transition group-open:rotate-90" />
             </summary>
-            <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} avatar={athlete.user.avatar} />
+            <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} avatar={avatarUrlForPage(athlete.user.avatar)} />
           </details>
           <form action={signOutAthlete}>
             <button type="submit" className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-base font-semibold text-rose-300 transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">

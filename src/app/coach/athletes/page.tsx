@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
+import { avatarUrlForPage } from "@/lib/avatar";
 import { formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +89,7 @@ export default async function AthletesPage() {
       id: athlete.id,
       firstName: athlete.firstName,
       lastName: athlete.lastName,
-      avatar: athlete.avatar,
+      avatar: avatarUrlForPage(athlete.avatar),
       level: athlete.level,
       groupName: athlete.groupName ?? "Sans groupe",
       active: athlete.active,
@@ -113,7 +114,7 @@ function DemoAthletesPage() {
     id: athlete.id,
     firstName: athlete.firstName,
     lastName: athlete.lastName,
-    avatar: athlete.avatar,
+    avatar: avatarUrlForPage(athlete.avatar),
     level: athlete.level,
     groupName: "Provincial",
     active: athlete.status !== "surveiller",
