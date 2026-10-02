@@ -8,6 +8,7 @@ import { getCurrentAthlete } from "@/lib/athlete-session";
 import { getAssignedSessionBlocks, persistAthleteProgress, type AthleteProgressPayload } from "@/lib/athlete-progress";
 import { isSessionStartAvailable, SESSION_NOT_STARTED_MESSAGE } from "@/lib/session-availability";
 import { z } from "zod";
+import { MILESTONES, type MilestoneKey } from "@/lib/milestones";
 
 export type CompleteSessionPayload = AthleteProgressPayload;
 
@@ -233,7 +234,7 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
 
   await assertSessionStartAvailable(payload.sessionId);
 
-  await persistAthleteProgress(payload, athlete.id, assignedBlocks, async (tx) => {
+  const earnedMilestones = await persistAthleteProgress(payload, athlete.id, assignedBlocks, async (tx): Promise<MilestoneKey[]> => {
     const completedAt = new Date();
     await tx.query(
       `UPDATE "AthleteBlockTiming" t SET "closedAt" = $1 FROM "SessionBlock" b
@@ -245,6 +246,40 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
        WHERE "athleteId" = $4 AND "sessionId" = $5`,
       [completedAt, payload.sessionFeedback?.rating?.trim() || null, payload.sessionFeedback?.note?.trim() || null, athlete.id, payload.sessionId]
     );
+    const totalResult = await tx.query<{ total: string }>(`SELECT COALESCE(sum("repetitionsCompleted"), 0)::text AS total FROM "AthleteDiveLog" WHERE "athleteId" = $1`, [athlete.id]);
+    const earned: MilestoneKey[] = [];
+    if (Number(totalResult.rows[0]?.total ?? 0) >= 500) {
+      const personal = await tx.query(
+        `INSERT INTO "AthleteMilestone" (id, "athleteId", key) VALUES ($1,$2,$3) ON CONFLICT ("athleteId", key) DO NOTHING RETURNING key`,
+        [randomUUID(), athlete.id, MILESTONES.repetitions500.key]
+      );
+      if (personal.rowCount) earned.push(MILESTONES.repetitions500.key);
+      await tx.query(`SELECT id FROM "Club" WHERE id = $1 FOR UPDATE`, [athlete.clubId]);
+      const winner = await tx.query(`SELECT 1 FROM "AthleteMilestone" m JOIN "Athlete" a ON a.id = m."athleteId" WHERE a."clubId" = $1 AND m.key = $2 LIMIT 1`, [athlete.clubId, MILESTONES.first500.key]);
+      if (!winner.rowCount) {
+        const first = await tx.query(
+          `INSERT INTO "AthleteMilestone" (id, "athleteId", key) VALUES ($1,$2,$3) ON CONFLICT ("athleteId", key) DO NOTHING RETURNING key`,
+          [randomUUID(), athlete.id, MILESTONES.first500.key]
+        );
+        if (first.rowCount) earned.push(MILESTONES.first500.key);
+      }
+    }
+    const allCompetitionDivesDone = await tx.query(
+      `SELECT 1 WHERE EXISTS (SELECT 1 FROM "CompetitionDive" WHERE "athleteId" = $1)
+       AND NOT EXISTS (SELECT 1 FROM "CompetitionDive" c WHERE c."athleteId" = $1 AND (
+         SELECT COALESCE(sum(l."repetitionsCompleted"), 0) FROM "AthleteDiveLog" l
+         JOIN "PoolDive" d ON d.id = l."poolDiveId" JOIN "PoolSection" s ON s.id = d."poolSectionId"
+         WHERE l."athleteId" = $1 AND d."diveCode" = c."diveCode" AND s.height = c.height
+       ) < 5)`, [athlete.id]
+    );
+    if (allCompetitionDivesDone.rowCount) {
+      const result = await tx.query(
+        `INSERT INTO "AthleteMilestone" (id, "athleteId", key) VALUES ($1,$2,$3) ON CONFLICT ("athleteId", key) DO NOTHING RETURNING key`,
+        [randomUUID(), athlete.id, MILESTONES.competition5.key]
+      );
+      if (result.rowCount) earned.push(MILESTONES.competition5.key);
+    }
+    return earned;
   });
 
   await trackEvent({
@@ -258,6 +293,8 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   revalidatePath("/athlete");
   revalidatePath("/athlete/progress");
   revalidatePath(`/athlete/session/${payload.sessionId}`);
+  revalidatePath("/athlete/profile");
+  return (earnedMilestones ?? []).map((key) => ({ key, ...Object.values(MILESTONES).find((milestone) => milestone.key === key)! }));
 }
 
 async function assertSessionStartAvailable(sessionId: string) {
