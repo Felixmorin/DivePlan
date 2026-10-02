@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, ChevronRight, Edit3, LogOut, Medal, Star, UserRound, Waves } from "lucide-react";
+import { Award, Building2, ChevronRight, Edit3, LogOut, Medal, Star, UserRound, Waves } from "lucide-react";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { CompetitionList } from "@/components/athlete/competition-list";
@@ -10,6 +10,7 @@ import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthle
 import { query } from "@/lib/db";
 import { avatarUrlForPage } from "@/lib/avatar";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
+import { MILESTONES } from "@/lib/milestones";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +20,13 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const [totals, weekSummary, confidenceResult] = await Promise.all([
+  const [totals, weekSummary, confidenceResult, milestoneResult] = await Promise.all([
     getAthleteProgressTotals(athlete.id),
     getAthleteCurrentWeekSummary(athlete.id),
     query<{ competitionDiveId: string; diveCode: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; rating: number; evaluator: "COACH" | "ATHLETE"; evaluatedAt: Date }>(
       `SELECT "competitionDiveId", "diveCode", height, rating, evaluator, "evaluatedAt" FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId" = $1 AND evaluator = 'ATHLETE' ORDER BY "evaluatedAt" ASC`, [athlete.id]
-    )
+    ),
+    query<{ key: string; awardedAt: Date }>(`SELECT key, "awardedAt" FROM "AthleteMilestone" WHERE "athleteId" = $1 ORDER BY "awardedAt"`, [athlete.id])
   ]);
   const confidenceRows = confidenceResult.rows;
   const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);
@@ -64,6 +66,20 @@ export default async function ProfilePage() {
         <span className="flex-1"><span className="block text-base font-black">Golden rep</span></span>
         <ChevronRight className="h-5 w-5 text-amber-200/70" />
       </Link>
+
+      <section aria-label="Milestones" className="mt-7">
+        <div className="mb-3 flex items-center gap-2"><Award className="h-5 w-5 text-amber-300" /><h2 className="text-xl font-black">Mes milestones</h2></div>
+        <div className="space-y-2">
+          {Object.values(MILESTONES).map((milestone) => {
+            const earned = milestoneResult.rows.find((item) => item.key === milestone.key);
+            return <article key={milestone.key} className={`flex items-center gap-3 rounded-[1.2rem] border p-4 ${earned ? "border-amber-300/30 bg-amber-400/10" : "border-white/8 bg-[#0b1e30] opacity-55"}`}>
+              <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${earned ? "bg-amber-300 text-[#281500]" : "bg-white/8 text-white/45"}`}><Medal className="h-6 w-6" /></span>
+              <span className="min-w-0 flex-1"><span className="block font-black">{milestone.title}</span><span className="mt-0.5 block text-xs leading-5 text-white/55">{milestone.description}</span></span>
+              <span className="shrink-0 text-right text-[10px] font-bold text-white/45">{earned ? new Intl.DateTimeFormat("fr-CA", { dateStyle: "medium", timeZone: "America/Toronto" }).format(earned.awardedAt) : "À débloquer"}</span>
+            </article>;
+          })}
+        </div>
+      </section>
 
       <section aria-label="Résumé de la semaine" className="mt-3 rounded-[1.2rem] border border-[var(--color-club-red)]/25 bg-[var(--color-athlete-panel)] px-4 py-3">
         <p className="text-sm font-semibold text-white/58">Cette semaine,</p>

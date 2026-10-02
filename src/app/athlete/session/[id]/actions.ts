@@ -294,7 +294,7 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   revalidatePath("/athlete/progress");
   revalidatePath(`/athlete/session/${payload.sessionId}`);
   revalidatePath("/athlete/profile");
-  return (earnedMilestones ?? []).map((key) => ({ key, ...Object.values(MILESTONES).find((milestone) => milestone.key === key)! }));
+  return (earnedMilestones ?? []).map((key) => Object.values(MILESTONES).find((milestone) => milestone.key === key)!);
 }
 
 async function assertSessionStartAvailable(sessionId: string) {

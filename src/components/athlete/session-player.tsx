@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import type { AthleteSessionView } from "@/lib/athlete-session";
+import type { MilestoneKey } from "@/lib/milestones";
 import { formatMontrealTime } from "@/lib/timezone";
 import { isSessionStartAvailable, SESSION_EARLY_START_MINUTES } from "@/lib/session-availability";
 
@@ -24,7 +25,7 @@ type SessionPlayerProps = {
   onOpenBlock: (sessionId: string, blockId: string) => Promise<void>;
   onCloseBlock: (sessionId: string, blockId: string) => Promise<void>;
   onSaveProgress: (payload: SaveAthleteProgressPayload) => Promise<void>;
-  onComplete: (payload: CompleteSessionPayload) => Promise<void>;
+  onComplete: (payload: CompleteSessionPayload) => Promise<Array<{ key: MilestoneKey; title: string; description: string }>>;
   onSaveDiveNote: (sessionId: string, poolDiveId: string, note: string) => Promise<void>;
   onSaveCompetitionEvaluation: (input: { sessionId: string; ratings: Array<{ competitionDiveId: string; rating: number }> }) => Promise<void>;
 };
@@ -46,6 +47,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const [reviewing, setReviewing] = useState(session.completionStatus === "COMPLETED");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [earnedMilestones, setEarnedMilestones] = useState<Array<{ key: MilestoneKey; title: string; description: string }>>([]);
   const [dirty, setDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const feedbackSaveTimeouts = useRef<Record<string, number | undefined>>({});
@@ -524,10 +526,15 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     window.clearTimeout(finalFeedbackSaveTimeout.current);
     startTransition(async () => {
       try {
-        await onComplete(buildSessionProgressPayload(session.id, blocks, exerciseChecksRef.current, diveChecksRef.current, pageFeedbackRef.current, finalFeedbackRef.current));
+        const awards = await onComplete(buildSessionProgressPayload(session.id, blocks, exerciseChecksRef.current, diveChecksRef.current, pageFeedbackRef.current, finalFeedbackRef.current));
         setDirty(false);
         setSaveStatus("saved");
-        router.push("/athlete/progress");
+        if (awards.length) {
+          setEarnedMilestones(awards);
+          window.setTimeout(() => router.push("/athlete/progress"), 4500);
+        } else {
+          router.push("/athlete/progress");
+        }
       } catch {
         setError("L'enregistrement a echoue. Verifie la connexion et reessaie.");
       }
@@ -827,6 +834,15 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         </div>
       </div>
       {evaluationOpen && <CompetitionEvaluationDialog dives={session.competitionDives} ratings={evaluationRatings} pending={evaluationPending} error={error} onChange={(id, rating) => setEvaluationRatings((currentRatings) => ({ ...currentRatings, [id]: rating }))} onSave={saveCompetitionEvaluation} />}
+      {earnedMilestones.length > 0 && <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-[#04111de8] p-5 text-center backdrop-blur-sm" role="status" aria-live="polite">
+        <div className="milestone-confetti" aria-hidden="true">{Array.from({ length: 28 }, (_, index) => <i key={index} style={{ left: `${(index * 37) % 100}%`, animationDelay: `${(index % 9) * -0.19}s`, backgroundColor: ["#facc15", "#22d3ee", "#fb7185", "#a3e635", "#c084fc"][index % 5] }} />)}</div>
+        <div className="relative z-10 max-w-sm animate-[milestone-pop_500ms_cubic-bezier(.2,.9,.3,1.3)]">
+          <div className="text-7xl" aria-hidden="true">🎉</div>
+          <p className="mt-4 text-xs font-black uppercase tracking-[.22em] text-amber-300">Nouveau milestone</p>
+          {earnedMilestones.map((milestone) => <div key={milestone.key} className="mt-3 rounded-2xl border border-amber-200/25 bg-white/8 p-4"><h2 className="text-2xl font-black">{milestone.title}</h2><p className="mt-2 text-sm leading-6 text-white/70">{milestone.description}</p></div>)}
+          <p className="mt-4 text-sm font-semibold text-white/55">Ton souvenir est enregistré dans ton profil.</p>
+        </div>
+      </div>}
     </AthleteShell>
   );
 }

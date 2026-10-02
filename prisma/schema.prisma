@@ -136,6 +136,18 @@ model Athlete {
   planningEvents   PlanningEvent[]
   competitionDives CompetitionDive[]
   competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
+  milestones       AthleteMilestone[]
+}
+
+model AthleteMilestone {
+  id          String   @id @default(cuid())
+  athleteId   String
+  key         String
+  awardedAt   DateTime @default(now())
+  athlete     Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, key])
+  @@index([key, awardedAt])
 }
 
 model CompetitionDive {

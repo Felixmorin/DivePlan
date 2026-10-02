@@ -61,12 +61,12 @@ export async function getAssignedSessionBlocks(sessionId: string, athleteId: str
   });
 }
 
-export async function persistAthleteProgress(
+export async function persistAthleteProgress<T = void>(
   payload: AthleteProgressPayload,
   athleteId: string,
   assignedBlocks: AssignedSessionBlock[],
-  afterPersist?: (tx: PoolClient) => Promise<void>
-) {
+  afterPersist?: (tx: PoolClient) => Promise<T>
+): Promise<T | undefined> {
   const validExerciseIds = new Set(assignedBlocks.flatMap((block) => block.drylandExercises.map((exercise) => exercise.exerciseId)));
   const validDiveIds = new Set(assignedBlocks.flatMap((block) => block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.id)) ?? []));
   const feedbackProvided = payload.sessionFeedback !== undefined;
@@ -82,7 +82,7 @@ export async function persistAthleteProgress(
     note: normalizeText(item.note)
   }));
 
-  await withTransaction(async (tx) => {
+  return withTransaction(async (tx) => {
     if (exerciseLogs.length) {
       await tx.query(
         `INSERT INTO "AthleteExerciseLog" (id, "athleteId", "sessionId", "exerciseId", completed, rating, note)
@@ -108,7 +108,7 @@ export async function persistAthleteProgress(
          note = CASE WHEN $6 THEN EXCLUDED.note ELSE "AthleteSessionCompletion".note END`,
       [athleteId, payload.sessionId, new Date(), rating, note, feedbackProvided]
     );
-    await afterPersist?.(tx);
+    return await afterPersist?.(tx);
   });
 }
 

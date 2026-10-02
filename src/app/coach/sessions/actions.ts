@@ -506,8 +506,8 @@ export async function updateSessionDive(formData: FormData) {
   if (mode === "actual") {
     if (!athleteId) throw new Error("Athlète introuvable.");
     const authorized = await query<{ id: string }>(
-      `SELECT d.id FROM "PoolDive" d JOIN "PoolSection" ps ON ps.id=d."poolSectionId" JOIN "PoolTraining" pt ON pt.blockId=ps."poolTrainingId"
-       JOIN "SessionBlock" b ON b.id=pt.blockId JOIN "TrainingSession" s ON s.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
+      `SELECT d.id FROM "PoolDive" d JOIN "PoolSection" ps ON ps.id=d."poolSectionId" JOIN "PoolTraining" pt ON pt."blockId"=ps."poolTrainingId"
+       JOIN "SessionBlock" b ON b.id=pt."blockId" JOIN "TrainingSession" s ON s.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
        JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id AND a."athleteId"=$6
        JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=a."athleteId" AND c.status='COMPLETED'
        WHERE d.id=$5 AND s.id=$3 AND w."clubId"=$4`, [diveCode, repetitions, sessionId, clubId, poolDiveId, athleteId]
@@ -522,8 +522,8 @@ export async function updateSessionDive(formData: FormData) {
   } else if (mode === "planned") {
     const result = await query(
       `UPDATE "PoolDive" d SET "diveCode"=$1,"diveName"=$1,repetitions=$2
-       FROM "PoolSection" ps JOIN "PoolTraining" pt ON pt.blockId=ps."poolTrainingId"
-       JOIN "SessionBlock" b ON b.id=pt.blockId JOIN "TrainingSession" s ON s.id=b."sessionId"
+       FROM "PoolSection" ps JOIN "PoolTraining" pt ON pt."blockId"=ps."poolTrainingId"
+       JOIN "SessionBlock" b ON b.id=pt."blockId" JOIN "TrainingSession" s ON s.id=b."sessionId"
        JOIN "TrainingWeek" w ON w.id=s."weekId"
        WHERE d."poolSectionId"=ps.id AND d.id=$3 AND s.id=$4 AND w."clubId"=$5 AND s.status='READY'
        AND EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c.status='IN_PROGRESS')`,
