@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
-import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence, updateSessionDive } from "@/app/coach/sessions/actions";
-import { ActualDiveCorrectionForm } from "./actual-dive-correction-form";
+import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
+import { PoolSectionEditor } from "./pool-section-editor";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
 import { CoachShell } from "@/components/coach/coach-shell";
@@ -243,30 +243,10 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 {block.drylandExercises.length > 0 && <div className="grid gap-2 md:grid-cols-3">{block.drylandExercises.map((item) => <div key={`${item.exerciseId}-${item.order}`} className="rounded-2xl bg-[var(--color-surface-raised)] p-3"><div className="font-bold">{item.exercise.name}</div><div className="text-sm text-[var(--color-ink-muted)]">{item.sets ?? 1} x {item.reps ?? `${item.duration ?? 30} sec`}</div></div>)}</div>}
                 {block.poolTraining && <details className="mt-3">
                   <summary className="cursor-pointer rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-ink-muted)]">Liste de plongeons ({block.poolTraining.sections.reduce((sum, section) => sum + section.dives.length, 0)} plongeons · {block.estimatedVolume} répétitions)</summary>
-                  <div className="overflow-x-auto rounded-2xl border border-[var(--color-border)]"><table className="w-full min-w-[620px] text-sm"><thead className="bg-[var(--color-navy)] text-left text-white"><tr><th className="p-3">Hauteur(s)</th><th className="p-3">Plongeons</th><th className="p-3">Repetitions</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{block.poolTraining.sections.map((section) => { const multiplier = Math.max(1, countPoolContexts(section.label ?? "")); return <tr key={section.id} className="border-t border-[var(--color-border)]"><td className="p-3 font-black">{section.label ?? section.height}</td><td className="p-3 font-bold">{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td className="p-3">{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="p-3 text-right font-black">{multiplier * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)}</td></tr>; })}</tbody><tfoot className="border-t-2 border-[var(--color-navy)] bg-[var(--color-surface-raised)] font-black"><tr><td className="p-3" colSpan={3}>Total general</td><td className="p-3 text-right">{block.estimatedVolume}</td></tr></tfoot></table></div>
+                  <div className="overflow-x-auto rounded-2xl border border-[var(--color-border)]"><table className="w-full min-w-[680px] text-sm"><thead className="bg-[var(--color-navy)] text-left text-white"><tr><th className="p-3">Hauteur(s)</th><th className="p-3">Plongeons</th><th className="p-3">Répétitions</th><th className="p-3 text-right">Total</th><th className="p-3 text-center">Modifier</th></tr></thead><tbody>{block.poolTraining.sections.map((section) => { const context = section.label ?? poolHeightContext(section.height); const multiplier = Math.max(1, countPoolContexts(context)); const actualCorrections = session.completions.filter((completion) => completion.status === "COMPLETED" && block.assignments.some((assignment) => assignment.athleteId === completion.athleteId)).flatMap((completion) => section.dives.map((dive) => { const log = session.diveLogs.find((item) => item.athleteId === completion.athleteId && item.poolDiveId === dive.id); return { athleteId: completion.athleteId, firstName: completion.athlete.user.firstName, diveId: dive.id, diveCode: log?.actualDiveCode ?? dive.diveCode, repetitions: log?.repetitionsCompleted ?? 0 }; })); return <tr key={section.id} className="border-t border-[var(--color-border)]"><td className="p-3 font-black">{context}</td><td className="p-3 font-bold">{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td className="p-3">{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="p-3 text-right font-black">{multiplier * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)}</td><td className="p-2 text-center"><PoolSectionEditor sessionId={session.id} sectionId={section.id} context={context} dives={section.dives.map(({ id, diveCode, repetitions }) => ({ id, diveCode, repetitions }))} actualCorrections={actualCorrections} canEditPlan={session.status === "READY" && (!hasStarted || session.completions.some((completion) => completion.status === "IN_PROGRESS"))} /></td></tr>; })}</tbody><tfoot className="border-t-2 border-[var(--color-navy)] bg-[var(--color-surface-raised)] font-black"><tr><td className="p-3" colSpan={3}>Total général</td><td className="p-3 text-right">{block.estimatedVolume}</td><td /></tr></tfoot></table></div>
                 </details>}
                   {block.poolTraining?.sections.map((section) => (
-                    <div key={`pool-tools-${section.id}`} className="mt-4 space-y-3">
-                    {section.dives.map((dive) => <div key={dive.id} className="rounded-xl border border-[var(--color-border)] p-3">
-                      <form action={updateSessionDive} className="flex flex-wrap items-end gap-2">
-                        <input type="hidden" name="sessionId" value={session.id} /><input type="hidden" name="poolDiveId" value={dive.id} /><input type="hidden" name="mode" value="planned" />
-                        <label className="grid gap-1 text-xs font-bold">Plongeon prévu<input name="diveCode" defaultValue={dive.diveCode} maxLength={8} required className="h-10 w-28 rounded-lg border border-[var(--color-border)] px-2" /></label>
-                        <label className="grid gap-1 text-xs font-bold">Volume prévu<input name="repetitions" type="number" min="0" max="500" defaultValue={dive.repetitions} required className="h-10 w-24 rounded-lg border border-[var(--color-border)] px-2" /></label>
-                        <Button size="sm" variant="outline">Ajuster le plan</Button>
-                      </form>
-                      {session.completions.filter((completion) => completion.status === "COMPLETED" && block.assignments.some((assignment) => assignment.athleteId === completion.athleteId)).map((completion) => {
-                        const log = session.diveLogs.find((item) => item.athleteId === completion.athleteId && item.poolDiveId === dive.id);
-                        return <ActualDiveCorrectionForm
-                          key={completion.athleteId}
-                          sessionId={session.id}
-                          poolDiveId={dive.id}
-                          athleteId={completion.athleteId}
-                          firstName={completion.athlete.user.firstName}
-                          diveCode={log?.actualDiveCode ?? dive.diveCode}
-                          repetitions={log?.repetitionsCompleted ?? 0}
-                        />;
-                      })}
-                    </div>)}
+                    <div key={`pool-tools-${section.id}`} className="mt-4">
                     <PoolProgressTracker
                       key={`progress-${section.id}`}
                       sectionLabel={section.label ?? section.height}
@@ -305,6 +285,13 @@ function ResultSummaryTile({ label, value, tone }: { label: string; value: strin
       <div className="mt-2 text-3xl font-black text-[var(--color-ink)]">{value}</div>
     </div>
   );
+}
+
+function poolHeightContext(height: string) {
+  if (height === "ONE_METER") return "1m";
+  if (height === "THREE_METER") return "3m";
+  if (height === "PLATFORM") return "Plateforme";
+  return "Section personnalisée";
 }
 
 function progressTone(progress: number, hasResults: boolean): "success" | "warning" | "neutral" {

@@ -1,6 +1,7 @@
 import { Award, Medal, Trophy } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { MilestonePreviewButton } from "@/components/coach/milestone-preview-button";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { MILESTONES } from "@/lib/milestones";
@@ -21,10 +22,11 @@ export default async function CoachMilestonesPage() {
   const awards = result?.rows ?? [];
 
   return <CoachShell active="Milestones">
-    <header className="mb-6">
-      <p className="text-xs font-black uppercase tracking-[.18em] text-[var(--color-brand-strong)]">Progression des athlètes</p>
+    <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div><p className="text-xs font-black uppercase tracking-[.18em] text-[var(--color-brand-strong)]">Progression des athlètes</p>
       <h1 className="mt-1 text-3xl font-black">Milestones</h1>
-      <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-ink-muted)]">Suis les réussites du club. Les répétitions comptabilisées sont celles réellement complétées et enregistrées par les athlètes.</p>
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-ink-muted)]">Suis les réussites du club. Les répétitions comptabilisées sont celles réellement complétées et enregistrées par les athlètes.</p></div>
+      <MilestonePreviewButton />
     </header>
     <div className="grid gap-4 xl:grid-cols-3">
       {Object.values(MILESTONES).map((milestone) => {
