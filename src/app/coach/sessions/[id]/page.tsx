@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
-import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
+import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence, updateSessionDive } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
 import { CoachShell } from "@/components/coach/coach-shell";
@@ -245,6 +245,25 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   <div className="overflow-x-auto rounded-2xl border border-[var(--color-border)]"><table className="w-full min-w-[620px] text-sm"><thead className="bg-[var(--color-navy)] text-left text-white"><tr><th className="p-3">Hauteur(s)</th><th className="p-3">Plongeons</th><th className="p-3">Repetitions</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{block.poolTraining.sections.map((section) => { const multiplier = Math.max(1, countPoolContexts(section.label ?? "")); return <tr key={section.id} className="border-t border-[var(--color-border)]"><td className="p-3 font-black">{section.label ?? section.height}</td><td className="p-3 font-bold">{section.dives.map((dive) => dive.diveCode).join(", ")}</td><td className="p-3">{section.dives.map((dive) => dive.repetitions).join(", ")}</td><td className="p-3 text-right font-black">{multiplier * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)}</td></tr>; })}</tbody><tfoot className="border-t-2 border-[var(--color-navy)] bg-[var(--color-surface-raised)] font-black"><tr><td className="p-3" colSpan={3}>Total general</td><td className="p-3 text-right">{block.estimatedVolume}</td></tr></tfoot></table></div>
                 </details>}
                   {block.poolTraining?.sections.map((section) => (
+                    <div key={`pool-tools-${section.id}`} className="mt-4 space-y-3">
+                    {section.dives.map((dive) => <div key={dive.id} className="rounded-xl border border-[var(--color-border)] p-3">
+                      <form action={updateSessionDive} className="flex flex-wrap items-end gap-2">
+                        <input type="hidden" name="sessionId" value={session.id} /><input type="hidden" name="poolDiveId" value={dive.id} /><input type="hidden" name="mode" value="planned" />
+                        <label className="grid gap-1 text-xs font-bold">Plongeon prévu<input name="diveCode" defaultValue={dive.diveCode} maxLength={8} required className="h-10 w-28 rounded-lg border border-[var(--color-border)] px-2" /></label>
+                        <label className="grid gap-1 text-xs font-bold">Volume prévu<input name="repetitions" type="number" min="0" max="500" defaultValue={dive.repetitions} required className="h-10 w-24 rounded-lg border border-[var(--color-border)] px-2" /></label>
+                        <Button size="sm" variant="outline">Ajuster le plan</Button>
+                      </form>
+                      {session.completions.filter((completion) => completion.status === "COMPLETED" && block.assignments.some((assignment) => assignment.athleteId === completion.athleteId)).map((completion) => {
+                        const log = session.diveLogs.find((item) => item.athleteId === completion.athleteId && item.poolDiveId === dive.id);
+                        return <form key={completion.athleteId} action={updateSessionDive} className="mt-3 flex flex-wrap items-end gap-2 border-t border-[var(--color-border)] pt-3">
+                          <input type="hidden" name="sessionId" value={session.id} /><input type="hidden" name="poolDiveId" value={dive.id} /><input type="hidden" name="athleteId" value={completion.athleteId} /><input type="hidden" name="mode" value="actual" />
+                          <span className="mr-2 text-sm font-bold">{completion.athlete.user.firstName} · Réalisé</span>
+                          <label className="grid gap-1 text-xs font-bold">Plongeon effectué<input name="diveCode" defaultValue={log?.actualDiveCode ?? dive.diveCode} maxLength={8} required className="h-10 w-28 rounded-lg border border-[var(--color-border)] px-2" /></label>
+                          <label className="grid gap-1 text-xs font-bold">Répétitions effectuées<input name="repetitions" type="number" min="0" max="500" defaultValue={log?.repetitionsCompleted ?? 0} required className="h-10 w-24 rounded-lg border border-[var(--color-border)] px-2" /></label>
+                          <Button size="sm" variant="outline">Corriger le réalisé</Button>
+                        </form>;
+                      })}
+                    </div>)}
                     <PoolProgressTracker
                       key={`progress-${section.id}`}
                       sectionLabel={section.label ?? section.height}
@@ -254,6 +273,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                       dives={section.dives.map(({ id, diveCode, repetitions }) => ({ id, diveCode, repetitions }))}
                       logs={session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted, goldenRepetitions }) => ({ athleteId, poolDiveId, repetitionsCompleted, goldenRepetitions }))}
                     />
+                    </div>
                   ))}
               </CardContent>
             </Card>

@@ -210,6 +210,12 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
     throw new Error("Cette seance n'est pas assignee a l'athlete courant.");
   }
 
+  const hasRecordedWork = payload.exercises.some((exercise) => exercise.completed)
+    || payload.dives.some((dive) => dive.repetitionsCompleted > 0);
+  if (hasRecordedWork && !payload.sessionFeedback?.rating?.trim()) {
+    throw new Error("Choisis ton ressenti final avant d’enregistrer la séance.");
+  }
+
   const evaluationSessionResult = await query<{ id: string }>(
     `SELECT s.id FROM "TrainingSession" s WHERE s.id = $1 AND (s."competitionEvaluationAtStart" = true OR EXISTS (
        SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id AND b."competitionEvaluation" = true AND a."athleteId" = $2

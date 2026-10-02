@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import type { AthleteSessionView } from "@/lib/athlete-session";
 import { formatMontrealTime } from "@/lib/timezone";
-import { isSessionStartAvailable } from "@/lib/session-availability";
+import { isSessionStartAvailable, SESSION_EARLY_START_MINUTES } from "@/lib/session-availability";
 
 const blockRatings = ["Pas bien", "Difficile", "Moyen", "Bien", "Très bien"];
 const finalRatings = ["Pas bien", "Difficile", "Moyen", "Bien", "Très bien"];
@@ -64,7 +64,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const [diveNotes, setDiveNotes] = useState<Record<string, string>>(() => Object.fromEntries(blocks.flatMap((block) => block.poolSections.flatMap((section) => section.dives.map((dive) => [dive.id, dive.personalNote ?? ""])) )));
   const previewTracked = useRef(false);
   const [finalFeedback, setFinalFeedback] = useState(() => ({
-    rating: session.finalRating ?? "Moyen",
+    rating: session.finalRating ?? "",
     note: session.finalNote ?? ""
   }));
   const [exerciseChecks, setExerciseChecks] = useState<ExerciseChecks>(() =>
@@ -108,10 +108,15 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const isPoolBlock = block.poolSections.length > 0;
   const isLastBlockStep = !isPoolBlock || stepIndex === blockSteps.length - 1;
   const feedback = pageFeedback[pageFeedbackKey(block.id, stepIndex)] ?? { rating: "", note: "" };
-  const hasFeedback = Boolean(feedback.rating || feedback.note.trim());
+  const hasFeedback = Boolean(feedback.rating);
+  const hasWorkInCurrentStep = activeStep?.kind === "pool"
+    ? activeStep.section.dives.some((dive) => (diveChecks[dive.id] ?? []).some((state) => state > 0))
+    : block.exercises.some((exercise) => exerciseChecks[exercise.id]);
+  const feedbackRequired = hasWorkInCurrentStep;
   const hasZeroRepDive = activeStep?.kind === "pool" && activeStep.section.dives.every((dive) => (diveChecks[dive.id] ?? []).filter((state) => state > 0).length === 0);
   const totalItems = useMemo(() => countSessionItems(blocks), [blocks]);
   const completedItems = countCompletedItems(blocks, exerciseChecks, diveChecks);
+  const hasRecordedWork = completedItems > 0;
   const poolDives = useMemo(
     () => blocks.flatMap((sessionBlock) => sessionBlock.poolSections.flatMap((section) => section.dives.map((dive) => ({ ...dive, sectionLabel: section.label })))),
     [blocks]
@@ -410,7 +415,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   }
 
   function nextStep() {
-    if (!hasFeedback) return;
+    if (feedbackRequired && !hasFeedback) return;
 
     if (isPoolBlock && stepIndex < blockSteps.length - 1) {
       setStepIndex(stepIndex + 1);
@@ -432,7 +437,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   }
 
   function finishTraining() {
-    if (!hasFeedback && !hasZeroRepDive) return;
+    if (feedbackRequired && !hasFeedback) return;
     if (evaluationRequired && session.competitionDives.length > 0 && !evaluationComplete && session.competitionEvaluationBlockIds.some((id) => blocks.findIndex((item) => item.id === id) > current)) {
       setError("Continue jusqu’au bloc prévu pour répondre à l’évaluation.");
       return;
@@ -505,6 +510,10 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   }
 
   function completeSession() {
+    if (hasRecordedWork && !finalFeedback.rating) {
+      setError("Choisis ton ressenti final avant d’enregistrer la séance.");
+      return;
+    }
     if (evaluationRequired && session.competitionDives.length > 0 && !evaluationComplete) {
       setEvaluationOpen(true);
       setError("Réponds à tous les plongeons avant de terminer l’entraînement.");
@@ -544,7 +553,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
           {!canStart && (
             <div className="mt-4 flex items-start gap-3 rounded-2xl border border-white/10 bg-white/8 p-4 text-sm leading-6 text-white/72">
               <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-action)]" />
-              <div><div className="font-black text-white">Disponible à {formatMontrealTime(session.date)}</div><p>Tu peux consulter l’aperçu maintenant, mais la séance ne pourra pas être démarrée avant l’heure prévue.</p></div>
+              <div><div className="font-black text-white">Disponible à {formatMontrealTime(new Date(new Date(session.date).getTime() - SESSION_EARLY_START_MINUTES * 60_000))}</div><p>Tu peux consulter l’aperçu maintenant. Le démarrage est possible jusqu’à 5 minutes avant l’heure prévue ({formatMontrealTime(session.date)}).</p></div>
             </div>
           )}
           <section className="mt-4 rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
@@ -625,7 +634,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
           <section className="builder-pulse rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 text-center shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-success)] text-white"><CheckCircle2 className="h-8 w-8" /></div>
             <h1 className="mt-5 text-3xl font-black leading-none">Séance terminée</h1>
-            <p className="mt-3 text-sm leading-6 text-white/68">Verifie ton ressenti et enregistre la completion definitivement.</p>
+            <p className="mt-3 text-sm leading-6 text-white/68">{hasRecordedWork ? "Choisis ton ressenti final puis enregistre la séance." : "Aucun exercice ou plongeon complété : tu peux enregistrer la séance sans ressenti."}</p>
           </section>
           <div className="grid grid-cols-2 gap-2">
             <StartStat label="Blocs" value={`${completedBlocks}/${blocks.length}`} />
@@ -654,7 +663,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
               </div>
             </section>
           )}
-          <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
+          {hasRecordedWork && <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-black"><NotebookPen className="h-4 w-4 text-[var(--color-action)]" /> Ressenti final</div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {finalRatings.map((rating) => (
@@ -662,7 +671,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
               ))}
             </div>
             <Textarea className="mt-3 min-h-28 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note pour ton coach" value={finalFeedback.note} onChange={(event) => updateFinalFeedback({ note: event.target.value })} />
-          </section>
+          </section>}
           {error && <ErrorBanner message={error} />}
           <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
             <div className="mx-auto flex max-w-[430px] gap-2">
@@ -805,7 +814,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
             {blockRatings.map((rating) => <Button key={rating} type="button" size="sm" variant="dark" className={feedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFeedback({ rating })}>{rating}</Button>)}
           </div>
           <Textarea className="mt-3 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note rapide (facultatif)" value={feedback.note} onChange={(event) => updateFeedback({ note: event.target.value })} />
-          {!hasFeedback && !hasZeroRepDive && <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">Choisis ton ressenti avant de continuer.</p>}
+          {feedbackRequired && !hasFeedback && <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">Choisis ton ressenti avant de continuer.</p>}
         </section>
 
         {error && <ErrorBanner message={error} />}
@@ -813,7 +822,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
           <div className="mx-auto grid max-w-[430px] grid-cols-[1fr_1.35fr] gap-2">
             <Button type="button" variant="outline" className="h-14 bg-transparent text-white" disabled={current === 0 && stepIndex === 0} onClick={previousStep}><ChevronLeft className="h-5 w-5" /> Precedent</Button>
-            <Button type="button" variant="action" className="h-14 rounded-2xl" disabled={!hasFeedback && !hasZeroRepDive} onClick={hasZeroRepDive ? finishTraining : nextStep}>{hasZeroRepDive || (current === blocks.length - 1 && isLastBlockStep) ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
+            <Button type="button" variant="action" className="h-14 rounded-2xl" disabled={feedbackRequired && !hasFeedback} onClick={hasZeroRepDive ? finishTraining : nextStep}>{hasZeroRepDive || (current === blocks.length - 1 && isLastBlockStep) ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
           </div>
         </div>
       </div>

@@ -491,6 +491,54 @@ export async function markAthleteSessionCompleted(formData: FormData) {
   revalidatePath(`/coach/athletes/${athleteId}`);
 }
 
+export async function updateSessionDive(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const poolDiveId = String(formData.get("poolDiveId") ?? "");
+  const athleteId = String(formData.get("athleteId") ?? "");
+  const mode = String(formData.get("mode") ?? "planned");
+  const diveCode = String(formData.get("diveCode") ?? "").trim().toUpperCase();
+  const repetitions = Number(formData.get("repetitions"));
+  if (!sessionId || !poolDiveId || !/^[0-9A-Z]{2,8}$/.test(diveCode) || !Number.isInteger(repetitions) || repetitions < 0 || repetitions > 500) {
+    throw new Error("Vérifie le code du plongeon et son volume (0 à 500 répétitions).");
+  }
+
+  if (mode === "actual") {
+    if (!athleteId) throw new Error("Athlète introuvable.");
+    const authorized = await query<{ id: string }>(
+      `SELECT d.id FROM "PoolDive" d JOIN "PoolSection" ps ON ps.id=d."poolSectionId" JOIN "PoolTraining" pt ON pt.blockId=ps."poolTrainingId"
+       JOIN "SessionBlock" b ON b.id=pt.blockId JOIN "TrainingSession" s ON s.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
+       JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id AND a."athleteId"=$6
+       JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=a."athleteId" AND c.status='COMPLETED'
+       WHERE d.id=$5 AND s.id=$3 AND w."clubId"=$4`, [diveCode, repetitions, sessionId, clubId, poolDiveId, athleteId]
+    );
+    if (!authorized.rowCount) throw new Error("Seule une séance terminée peut être corrigée ici.");
+    await query(
+      `INSERT INTO "AthleteDiveLog" (id,"athleteId","sessionId","poolDiveId","actualDiveCode","repetitionsCompleted","goldenRepetitions",rating)
+       VALUES ($1,$2,$3,$4,$5,$6,0,'Coach') ON CONFLICT ("athleteId","sessionId","poolDiveId")
+       DO UPDATE SET "actualDiveCode"=EXCLUDED."actualDiveCode","repetitionsCompleted"=EXCLUDED."repetitionsCompleted"`,
+      [randomUUID(), athleteId, sessionId, poolDiveId, diveCode, repetitions]
+    );
+  } else if (mode === "planned") {
+    const result = await query(
+      `UPDATE "PoolDive" d SET "diveCode"=$1,"diveName"=$1,repetitions=$2
+       FROM "PoolSection" ps JOIN "PoolTraining" pt ON pt.blockId=ps."poolTrainingId"
+       JOIN "SessionBlock" b ON b.id=pt.blockId JOIN "TrainingSession" s ON s.id=b."sessionId"
+       JOIN "TrainingWeek" w ON w.id=s."weekId"
+       WHERE d."poolSectionId"=ps.id AND d.id=$3 AND s.id=$4 AND w."clubId"=$5 AND s.status='READY'
+       AND EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c.status='IN_PROGRESS')`,
+      [diveCode, repetitions, poolDiveId, sessionId, clubId]
+    );
+    if (!result.rowCount) throw new Error("Le plongeon est modifiable pendant une séance en cours.");
+  } else {
+    throw new Error("Mode de modification invalide.");
+  }
+
+  revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath(`/athlete/session/${sessionId}`);
+  revalidatePath("/athlete/progress");
+}
+
 export async function setAthleteSessionAbsence(formData: FormData) {
   const { clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");

@@ -69,15 +69,15 @@ export async function persistAthleteProgress(
 ) {
   const validExerciseIds = new Set(assignedBlocks.flatMap((block) => block.drylandExercises.map((exercise) => exercise.exerciseId)));
   const validDiveIds = new Set(assignedBlocks.flatMap((block) => block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.id)) ?? []));
-  const repetitionsByDiveId = new Map(assignedBlocks.flatMap((block) => block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => [dive.id, dive.repetitions] as const)) ?? []));
   const feedbackProvided = payload.sessionFeedback !== undefined;
   const rating = feedbackProvided ? normalizeText(payload.sessionFeedback?.rating ?? null) : null;
   const note = feedbackProvided ? normalizeText(payload.sessionFeedback?.note ?? null) : null;
   const exerciseLogs = payload.exercises.filter((item) => validExerciseIds.has(item.exerciseId));
   const diveLogs = payload.dives.filter((item) => validDiveIds.has(item.poolDiveId)).map((item) => ({
     ...item,
-    repetitionsCompleted: Math.max(0, Math.min(item.repetitionsCompleted, repetitionsByDiveId.get(item.poolDiveId) ?? 0)),
-    goldenRepetitions: Math.max(0, Math.min(item.goldenRepetitions, item.repetitionsCompleted, repetitionsByDiveId.get(item.poolDiveId) ?? 0)),
+    // Athletes may add extra reps during a session; retain all completed work.
+    repetitionsCompleted: Math.max(0, Math.min(item.repetitionsCompleted, 500)),
+    goldenRepetitions: Math.max(0, Math.min(item.goldenRepetitions, item.repetitionsCompleted, 500)),
     rating: normalizeText(item.rating) ?? "moyen",
     note: normalizeText(item.note)
   }));

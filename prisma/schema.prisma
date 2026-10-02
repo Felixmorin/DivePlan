@@ -441,6 +441,7 @@ model AthleteDiveLog {
   sessionId            String
   poolDiveId           String
   familyOverride       String?
+  actualDiveCode       String?
   repetitionsCompleted Int
   goldenRepetitions    Int               @default(0)
   rating               String

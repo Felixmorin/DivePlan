@@ -1,0 +1,1 @@
+ALTER TABLE "AthleteDiveLog" ADD COLUMN "actualDiveCode" TEXT;

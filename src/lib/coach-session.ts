@@ -15,7 +15,7 @@ type CoachSession = Omit<SessionSnapshot,"week"|"blocks"> & {
   }>;
   completions:Array<{athleteId:string;sessionId:string;status:"NOT_STARTED"|"IN_PROGRESS"|"COMPLETED"|"SKIPPED";startedAt:Date|null;completedAt:Date|null;rating:string|null;note:string|null;athlete:CoachAthlete}>;
   absences:Array<{athleteId:string}>;
-  diveLogs:Array<{id:string;athleteId:string;sessionId:string;poolDiveId:string;familyOverride:string|null;repetitionsCompleted:number;goldenRepetitions:number;rating:string;note:string|null;timestamp:Date;athlete:CoachAthlete;poolDive:Record<string,unknown>}>
+  diveLogs:Array<{id:string;athleteId:string;sessionId:string;poolDiveId:string;familyOverride:string|null;actualDiveCode:string|null;repetitionsCompleted:number;goldenRepetitions:number;rating:string;note:string|null;timestamp:Date;athlete:CoachAthlete;poolDive:Record<string,unknown>}>
   exerciseLogs:Array<{id:string;athleteId:string;sessionId:string;exerciseId:string;completed:boolean;rating:string|null;note:string|null;athlete:CoachAthlete;exercise:{name:string}}>
 };
 
