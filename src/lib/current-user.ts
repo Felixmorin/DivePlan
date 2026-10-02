@@ -2,7 +2,6 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { query } from "@/lib/db";
-import { completeExpiredTrainingSessions } from "@/lib/session-status";
 
 export const getCurrentUser = cache(async () => {
   const session = await auth();
@@ -73,10 +72,6 @@ export const getCurrentUser = cache(async () => {
     },
     athlete: row.athleteId === null ? null : { id: row.athleteId, userId: row.id, clubId: row.clubId!, groupId: row.athleteGroupId, birthDate: row.birthDate!, level: row.level!, active: row.active! }
   } : null;
-
-  if (user) {
-    await completeExpiredTrainingSessions();
-  }
 
   return user;
 });

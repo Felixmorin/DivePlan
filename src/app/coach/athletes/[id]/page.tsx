@@ -17,6 +17,7 @@ import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { avatarUrlForPage } from "@/lib/avatar";
+import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { getAthleteProgressTotals, type AthleteProgressTotals } from "@/lib/athlete-session";
 import { countPoolContexts } from "@/lib/pool-list";
 import { getAthleteSessionPreviewStats, type AthleteSessionPreviewStats } from "@/lib/monitoring";
@@ -58,6 +59,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
 
   const athlete=(await query<{id:string;userId:string;firstName:string;lastName:string;avatar:string|null;level:string;active:boolean;groupId:string|null;groupName:string|null;birthDate:Date|null}>(`SELECT a.id,a."userId",u."firstName",u."lastName",u.avatar,a.level,a.active,a."groupId",g.name AS "groupName",a."birthDate" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a.id=$1 AND a."clubId"=$2`,[id,clubId])).rows[0];
   if(!athlete) notFound();
+  const [athleteAvatarUrl] = await resolveAvatarUrls([athlete.avatar]);
   const today=startOfMontrealDay();
   const seasonStartYear=today.getMonth()>=8?today.getFullYear():today.getFullYear()-1;
   const seasonStart=parseMontrealSessionDate(`${seasonStartYear}-09-01`,"00:00");
@@ -115,7 +117,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     return {id:completion.sessionId,title:completion.title,date:completion.date,status:completion.status,rating:completion.rating,note:completion.note,poolPlanned,poolActual,blocks};
   });
   const profile: AthleteProfile = {
-    id:athlete.id,firstName:athlete.firstName,lastName:athlete.lastName,avatar:avatarUrlForPage(athlete.avatar),level:athlete.level,active:athlete.active,groupName:athlete.groupName??"Sans groupe",birthDate:athlete.birthDate,
+    id:athlete.id,firstName:athlete.firstName,lastName:athlete.lastName,avatar:athleteAvatarUrl ?? avatarUrlForPage(athlete.avatar),level:athlete.level,active:athlete.active,groupName:athlete.groupName??"Sans groupe",birthDate:athlete.birthDate,
     volume:diveRows.rows.reduce((sum,log)=>sum+log.repetitionsCompleted,0),completedSessions:completionRows.rows.filter(row=>row.status==="COMPLETED").length,
     nextSession:nextSessionRows.rows[0],recentSessions,
     skills:skillsRows.rows.map(row=>({code:row.code,name:row.name,status:row.status,progress:row.progress,trainings:row.trainings,repetitions:row.repetitions})),

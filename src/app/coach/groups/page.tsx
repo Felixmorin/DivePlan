@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { requireCoach } from "@/lib/current-user";
 import { athletes as demoAthletes, demoSession } from "@/lib/data";
 import { query } from "@/lib/db";
+import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { addMontrealDays, formatMontrealDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export default async function GroupsPage() {
        (SELECT json_build_object('title', s.title, 'date', s.date, 'duration', s.duration, 'status', s.status)
         FROM "TrainingWeek" w JOIN "TrainingSession" s ON s."weekId" = w.id
         WHERE w."groupId" = g.id AND s.date >= $2 ORDER BY s.date ASC LIMIT 1) AS "nextSession",
-       COALESCE((SELECT json_agg(json_build_object('id', a.id, 'firstName', au."firstName", 'lastName', au."lastName", 'avatar', CASE WHEN au.avatar LIKE 'data:image/%' THEN NULL ELSE au.avatar END,
+       COALESCE((SELECT json_agg(json_build_object('id', a.id, 'firstName', au."firstName", 'lastName', au."lastName", 'avatar', au.avatar,
           'hasOpenCompletion', EXISTS(SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."athleteId" = a.id AND c.status IN ('IN_PROGRESS', 'SKIPPED')))
           ORDER BY au."firstName") FROM "Athlete" a JOIN "User" au ON au.id = a."userId" WHERE a."groupId" = g.id AND a.active = true), '[]'::json) AS athletes
        FROM "TrainingGroup" g JOIN "Coach" c ON c.id = g."coachId" JOIN "User" cu ON cu.id = c."userId"
@@ -46,7 +47,14 @@ export default async function GroupsPage() {
        WHERE a."clubId" = $1 AND a.active = true ORDER BY u."firstName" ASC, u."lastName" ASC`, [clubId]
     )
   ]);
-  const groups = groupsResult.rows;
+  const rawGroups = groupsResult.rows;
+  const allGroupAvatars = rawGroups.flatMap((group) => group.athletes.map((athlete) => athlete.avatar));
+  const signedGroupAvatars = await resolveAvatarUrls(allGroupAvatars);
+  let avatarIndex = 0;
+  const groups = rawGroups.map((group) => ({
+    ...group,
+    athletes: group.athletes.map((athlete) => ({ ...athlete, avatar: signedGroupAvatars[avatarIndex++] }))
+  }));
   const allAthletes = athletesResult.rows;
 
   const assignmentGroups = groups.map((group) => ({ id: group.id, name: group.name }));

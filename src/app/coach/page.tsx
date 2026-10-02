@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { athletes, demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
-import { avatarUrlForPage } from "@/lib/avatar";
+import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, sameMontrealDay, startOfMontrealDay, startOfMontrealWeek } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +54,8 @@ export default async function CoachDashboard() {
     query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" WHERE w."clubId"=$1 AND s.date>$2 ORDER BY s.date ASC LIMIT 1`,[clubId,today]),
     query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" WHERE w."clubId"=$1 AND s.date<=$2 ORDER BY s.date DESC LIMIT 1`,[clubId,today])
   ]);
-  const activeAthletes=athleteRows.rows.map(a=>({id:a.id,user:{firstName:a.firstName,lastName:a.lastName,avatar:avatarUrlForPage(a.avatar)},group:a.groupName?{name:a.groupName}:null}));
+  const athleteAvatarUrls = await resolveAvatarUrls(athleteRows.rows.map((athlete) => athlete.avatar));
+  const activeAthletes=athleteRows.rows.map((a,index)=>({id:a.id,user:{firstName:a.firstName,lastName:a.lastName,avatar:athleteAvatarUrls[index]},group:a.groupName?{name:a.groupName}:null}));
   const rawSessions=await loadDashboardSessions([...weekSessionRows.rows,...nextRows.rows,...latestRows.rows]);
   const nextScheduledSession=nextRows.rows[0]?rawSessions.find(s=>s.id===nextRows.rows[0].id):null;
   const latestScheduledSession=latestRows.rows[0]?rawSessions.find(s=>s.id===latestRows.rows[0].id):null;

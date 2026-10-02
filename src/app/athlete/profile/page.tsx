@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 import { query } from "@/lib/db";
 import { avatarUrlForPage } from "@/lib/avatar";
+import { resolveAvatarUrls } from "@/lib/avatar-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export default async function ProfilePage() {
     )
   ]);
   const confidenceRows = confidenceResult.rows;
+  const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);
   const coachName = athlete.group?.coach.user
     ? `${athlete.group.coach.user.firstName} ${athlete.group.coach.user.lastName}`
     : "Équipe d’entraîneurs";
@@ -39,7 +41,7 @@ export default async function ProfilePage() {
       <section className="profile-hero relative overflow-hidden rounded-[1.4rem] border border-cyan-300/25 bg-[#092238] p-5 shadow-[0_20px_55px_rgba(0,0,0,0.3)]">
         <div className="relative z-10 flex items-center gap-4">
           <Avatar className="h-24 w-24 shrink-0 border-2 border-cyan-200 bg-[#06101d] shadow-[0_0_0_4px_rgba(34,211,238,0.08)]">
-            <AvatarImage src={athlete.user.avatar ?? undefined} />
+            <AvatarImage src={avatarUrl ?? undefined} />
             <AvatarFallback>{athlete.user.firstName[0]}{athlete.user.lastName[0]}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
@@ -99,7 +101,7 @@ export default async function ProfilePage() {
               <span className="flex-1">Modifier mon profil</span>
               <ChevronRight className="h-5 w-5 text-white/45 transition group-open:rotate-90" />
             </summary>
-            <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} avatar={avatarUrlForPage(athlete.user.avatar)} />
+            <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} avatar={avatarUrl ?? avatarUrlForPage(athlete.user.avatar)} avatarValue={athlete.user.avatar?.startsWith("data:image/") ? null : athlete.user.avatar} />
           </details>
           <form action={signOutAthlete}>
             <button type="submit" className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-base font-semibold text-rose-300 transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">

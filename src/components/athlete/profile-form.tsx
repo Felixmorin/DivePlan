@@ -10,11 +10,12 @@ type ProfileFormProps = {
   firstName: string;
   lastName: string;
   avatar: string | null;
+  avatarValue: string | null;
 };
 
 const MAX_IMAGE_SIZE = 900_000;
 
-export function ProfileForm({ firstName, lastName, avatar }: ProfileFormProps) {
+export function ProfileForm({ firstName, lastName, avatar, avatarValue }: ProfileFormProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarData, setAvatarData] = useState("");
   const [preview, setPreview] = useState(avatar ?? "");
@@ -64,6 +65,7 @@ export function ProfileForm({ firstName, lastName, avatar }: ProfileFormProps) {
       {error ? <p role="alert" className="text-sm font-semibold text-rose-300">{error}</p> : null}
 
       <input type="hidden" name="avatar" value={avatarData} readOnly />
+      <input type="hidden" name="avatarUrl" value={avatarData ? "" : avatarValue ?? ""} readOnly />
       <Button type="submit" className="w-full">Enregistrer</Button>
     </form>
   );

@@ -97,6 +97,20 @@ Ouvrir [http://localhost:3000](http://localhost:3000).
 | `NEXT_PUBLIC_ENABLE_DEMO_ROUTES` | Met à `true` les pages de démonstration prévues à cet effet. Laisser `false` en production. |
 | `PILOT_SEED_PASSWORD` | Mot de passe initial facultatif des comptes créés par le seed pilote. Valeur par défaut : `diveplan-pilot`. |
 | `CRON_SECRET` | Secret Bearer exigé par la route de clôture automatique des séances. |
+| `SUPABASE_URL` | URL du projet Supabase utilisé pour le stockage des photos. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Clé serveur secrète utilisée uniquement pour téléverser les photos et créer leurs URL signées. Ne jamais préfixer par `NEXT_PUBLIC_`. |
+| `SUPABASE_AVATAR_BUCKET` | Nom du bucket privé des photos; valeur par défaut : `avatars`. |
+
+Le stockage des photos nécessite un bucket Supabase Storage **privé** nommé `avatars` (ou le nom indiqué par `SUPABASE_AVATAR_BUCKET`). Les photos sont enregistrées comme objets; la base ne contient que leur référence. L’application génère des URL signées temporaires pour les afficher. Ajouter `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` aux variables d’environnement locales et Vercel avant d’activer les téléversements.
+
+Pour migrer les photos base64 déjà présentes, commencer par une simulation en lecture seule, puis lancer explicitement l’écriture après vérification :
+
+```bash
+npm run avatars:migrate
+npm run avatars:migrate -- --apply
+```
+
+La migration met à jour les lignes dont la valeur n’a pas changé depuis la lecture et remplace la chaîne base64 de la colonne `avatar` par une référence d’objet.
 
 En développement seulement, une connexion de démonstration est disponible : `coach@diveplan.local` / `diveplan-demo`. Elle n’est pas disponible en production.
 
@@ -180,10 +194,11 @@ Les blocs piscine contiennent des sections par hauteur et des plongeons avec leu
 | `npm run test` | Lance les tests unitaires présents dans `src`. |
 | `npm run db:seed:pilot` | Ajoute ou met à jour les données du pilote sans vider les tables. |
 | `npm run db:seed` | Réinitialise les données applicatives avec le seed de démonstration. |
+| `npm run avatars:migrate` | Compte les photos base64 à migrer; ajouter `-- --apply` pour téléverser les fichiers et mettre à jour la base. |
 
 ## Déploiement Vercel
 
-Configurer les variables d’environnement requises dans Vercel, en particulier `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL` et `CRON_SECRET`. `NEXT_PUBLIC_APP_URL` doit correspondre à l’URL publique si elle est utilisée par l’environnement. Garder `NEXT_PUBLIC_ENABLE_DEMO_ROUTES=false` en production.
+Configurer les variables d’environnement requises dans Vercel, en particulier `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL` et `CRON_SECRET`. Pour activer le téléversement des avatars, configurer aussi `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY`. `NEXT_PUBLIC_APP_URL` doit correspondre à l’URL publique si elle est utilisée par l’environnement. Garder `NEXT_PUBLIC_ENABLE_DEMO_ROUTES=false` en production.
 
 Les migrations SQL doivent être relues et appliquées explicitement dans l’environnement cible, indépendamment du build. Les seeds utilisent `DATABASE_URL` uniquement lorsqu’ils sont lancés explicitement.
 

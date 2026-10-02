@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
-import { avatarUrlForPage } from "@/lib/avatar";
+import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { parseSessionTemplatePayload } from "@/lib/session-template";
 import type { SessionPoolHeight } from "@/lib/session-template";
 import Link from "next/link";
@@ -44,12 +44,66 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     query<{sessionId:string;sessionTitle:string;blockId:string;title:string;duration:number;position:number}>(`WITH recent AS (SELECT s.id,s.title,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "PoolTraining" p ON p."blockId"=b.id WHERE b."sessionId"=s.id) ORDER BY s.date DESC LIMIT 8) SELECT r.id AS "sessionId",r.title AS "sessionTitle",b.id AS "blockId",b.title,b.duration,b.position FROM recent r JOIN "SessionBlock" b ON b."sessionId"=r.id JOIN "PoolTraining" p ON p."blockId"=b.id ORDER BY r.date DESC,b.position ASC`,[clubId])
   ]);
   const groups=groupsR.rows;
-  const athletes=athletesR.rows.map(a=>({id:a.id,groupId:a.groupId,level:a.level,user:{firstName:a.firstName,lastName:a.lastName,avatar:avatarUrlForPage(a.avatar)}}));
+  const athleteAvatarUrls = await resolveAvatarUrls(athletesR.rows.map((athlete) => athlete.avatar));
+  const athletes=athletesR.rows.map((a,index)=>({id:a.id,groupId:a.groupId,level:a.level,user:{firstName:a.firstName,lastName:a.lastName,avatar:athleteAvatarUrls[index]}}));
   const drylandLibrary=drylandR.rows;
   const template=templateR?.rows[0]??null;
   const planningEvents=eventsR.rows;
-  const recentPoolSessions:( {id:string;blocks:{id:string;title:string;duration:number;assignments:{athleteId:string}[];poolTraining:{sections:{height:SessionPoolHeight;label:string|null;dives:{diveCode:string;diveName:string;position:string;repetitions:number;notes:string|null;order:number}[]}[]}|null}[]} )[]=[];
-  for(const row of recentR.rows){let session=recentPoolSessions.find(s=>s.id===row.sessionId);if(!session){session={id:row.sessionId,blocks:[]};recentPoolSessions.push(session);}const block={id:row.blockId,title:row.title,duration:row.duration,assignments:(await query<{athleteId:string}>(`SELECT "athleteId" FROM "SessionBlockAssignment" WHERE "sessionBlockId"=$1`,[row.blockId])).rows,poolTraining:{sections:[] as {height:SessionPoolHeight;label:string|null;dives:{diveCode:string;diveName:string;position:string;repetitions:number;notes:string|null;order:number}[]}[]}};const sections=(await query<{id:string;height:SessionPoolHeight;label:string|null}>(`SELECT id,height,label FROM "PoolSection" WHERE "poolTrainingId"=$1 ORDER BY "order"`,[row.blockId])).rows;for(const section of sections)block.poolTraining.sections.push({...section,dives:(await query<{diveCode:string;diveName:string;position:string;repetitions:number;notes:string|null;order:number}>(`SELECT "diveCode","diveName",position,repetitions,notes,"order" FROM "PoolDive" WHERE "poolSectionId"=$1 ORDER BY "order"`,[section.id])).rows});session.blocks.push(block);}
+  type PoolSectionRow = { id: string; poolTrainingId: string; height: SessionPoolHeight; label: string | null };
+  type PoolDiveRow = { poolSectionId: string; diveCode: string; diveName: string; position: string; repetitions: number; notes: string | null; order: number };
+  const blockIds = [...new Set(recentR.rows.map((row) => row.blockId))];
+  const [assignmentsR, sectionsR] = blockIds.length > 0 ? await Promise.all([
+    query<{ sessionBlockId: string; athleteId: string }>(`SELECT "sessionBlockId", "athleteId" FROM "SessionBlockAssignment" WHERE "sessionBlockId" = ANY($1::text[])`, [blockIds]),
+    query<PoolSectionRow>(`SELECT id, "poolTrainingId", height, label FROM "PoolSection" WHERE "poolTrainingId" = ANY($1::text[]) ORDER BY "order"`, [blockIds])
+  ]) : [{ rows: [] }, { rows: [] }];
+  const sectionIds = sectionsR.rows.map((section) => section.id);
+  const divesR = sectionIds.length > 0
+    ? await query<PoolDiveRow>(`SELECT "poolSectionId", "diveCode", "diveName", position, repetitions, notes, "order" FROM "PoolDive" WHERE "poolSectionId" = ANY($1::text[]) ORDER BY "order"`, [sectionIds])
+    : { rows: [] };
+  const assignmentsByBlock = new Map<string, { athleteId: string }[]>();
+  for (const assignment of assignmentsR.rows) {
+    const blockAssignments = assignmentsByBlock.get(assignment.sessionBlockId) ?? [];
+    blockAssignments.push({ athleteId: assignment.athleteId });
+    assignmentsByBlock.set(assignment.sessionBlockId, blockAssignments);
+  }
+  const divesBySection = new Map<string, PoolDiveRow[]>();
+  for (const dive of divesR.rows) {
+    const sectionDives = divesBySection.get(dive.poolSectionId) ?? [];
+    sectionDives.push(dive);
+    divesBySection.set(dive.poolSectionId, sectionDives);
+  }
+  const sectionsByBlock = new Map<string, PoolSectionRow[]>();
+  for (const section of sectionsR.rows) {
+    const blockSections = sectionsByBlock.get(section.poolTrainingId) ?? [];
+    blockSections.push(section);
+    sectionsByBlock.set(section.poolTrainingId, blockSections);
+  }
+  const sessionsById = new Map<string, { id: string; blocks: { id: string; title: string; duration: number; assignments: { athleteId: string }[]; poolTraining: { sections: { height: SessionPoolHeight; label: string | null; dives: Omit<PoolDiveRow, "poolSectionId">[] }[] } | null }[] }>();
+  for (const row of recentR.rows) {
+    const session = sessionsById.get(row.sessionId) ?? { id: row.sessionId, blocks: [] };
+    session.blocks.push({
+      id: row.blockId,
+      title: row.title,
+      duration: row.duration,
+      assignments: assignmentsByBlock.get(row.blockId) ?? [],
+      poolTraining: {
+        sections: (sectionsByBlock.get(row.blockId) ?? []).map((section) => ({
+          height: section.height,
+          label: section.label,
+          dives: (divesBySection.get(section.id) ?? []).map((dive) => ({
+            diveCode: dive.diveCode,
+            diveName: dive.diveName,
+            position: dive.position,
+            repetitions: dive.repetitions,
+            notes: dive.notes,
+            order: dive.order
+          }))
+        }))
+      }
+    });
+    sessionsById.set(row.sessionId, session);
+  }
+  const recentPoolSessions = [...sessionsById.values()];
   const poolBlocks = recentPoolSessions.flatMap((session) => session.blocks).filter((block) => block.poolTraining).slice(0, 3);
   const initialTemplate = template
     ? {

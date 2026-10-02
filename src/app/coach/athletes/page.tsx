@@ -15,6 +15,7 @@ import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { avatarUrlForPage } from "@/lib/avatar";
+import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +63,7 @@ export default async function AthletesPage() {
     query<{ id: string; name: string }>(`SELECT id, name FROM "TrainingGroup" WHERE "clubId" = $1 ORDER BY name ASC`, [clubId])
   ]);
   const athletes = athletesResult.rows;
+  const athleteAvatarUrls = await resolveAvatarUrls(athletes.map((athlete) => athlete.avatar));
   const groups = groupsResult.rows;
   const athleteIds = athletes.map((athlete) => athlete.id);
   const sessions = athleteIds.length ? await query<{ athleteId: string; id: string; title: string; date: Date; status: string }>(
@@ -85,11 +87,11 @@ export default async function AthletesPage() {
     }
   });
 
-  const rows: AthleteRow[] = athletes.map((athlete) => ({
+  const rows: AthleteRow[] = athletes.map((athlete, index) => ({
       id: athlete.id,
       firstName: athlete.firstName,
       lastName: athlete.lastName,
-      avatar: avatarUrlForPage(athlete.avatar),
+      avatar: athleteAvatarUrls[index] ?? avatarUrlForPage(athlete.avatar),
       level: athlete.level,
       groupName: athlete.groupName ?? "Sans groupe",
       active: athlete.active,

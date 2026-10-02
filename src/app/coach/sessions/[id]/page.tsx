@@ -4,7 +4,7 @@ import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionComp
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
 import { CoachShell } from "@/components/coach/coach-shell";
-import { avatarUrlForPage } from "@/lib/avatar";
+import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
 import { Badge } from "@/components/ui/badge";
@@ -19,15 +19,17 @@ export const dynamic = "force-dynamic";
 export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getCoachSession(id);
-  const athletes = session.blocks.flatMap((block) =>
+  const rawAthletes = session.blocks.flatMap((block) =>
     block.assignments.map((assignment) => ({
       id: assignment.athlete.id,
       firstName: assignment.athlete.user.firstName,
       lastName: assignment.athlete.user.lastName,
-      avatar: avatarUrlForPage(assignment.athlete.user.avatar)
+      avatar: assignment.athlete.user.avatar
     }))
   );
-  const uniqueAthletes = Array.from(new Map(athletes.map((athlete) => [athlete.id, athlete])).values());
+  const distinctAthletes = Array.from(new Map(rawAthletes.map((athlete) => [athlete.id, athlete])).values());
+  const athleteAvatarUrls = await resolveAvatarUrls(distinctAthletes.map((athlete) => athlete.avatar));
+  const uniqueAthletes = distinctAthletes.map((athlete, index) => ({ ...athlete, avatar: athleteAvatarUrls[index] }));
   const athleteAverageReps = await getAthleteAverageRepsByTraining(uniqueAthletes.map((athlete) => athlete.id), session.id);
   const athleteAverageGoldenReps = await getAthleteAverageGoldenRepsByTraining(uniqueAthletes.map((athlete) => athlete.id), session.id);
   const hasStarted =
