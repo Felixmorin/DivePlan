@@ -553,14 +553,15 @@ export async function updatePoolSectionLine(_previousState: { success: boolean }
   await withTransaction(async (tx) => {
     const section = (await tx.query<{ id: string; height: SessionPoolHeight; label: string | null; blockId: string; poolTrainingId: string; hasCompleted: boolean }>(
       `SELECT ps.id,ps.height,ps.label,ps."poolTrainingId",b.id AS "blockId",
-       EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c.status='COMPLETED') AS "hasCompleted"
+       (s.status='COMPLETED' OR EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c.status='COMPLETED')) AS "hasCompleted"
        FROM "PoolSection" ps
        JOIN "PoolTraining" pt ON pt."blockId"=ps."poolTrainingId"
        JOIN "SessionBlock" b ON b.id=pt."blockId"
        JOIN "TrainingSession" s ON s.id=b."sessionId"
        JOIN "TrainingWeek" w ON w.id=s."weekId"
-       WHERE ps.id=$1 AND s.id=$2 AND w."clubId"=$3 AND s.status='READY'
-       AND (EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c.status='IN_PROGRESS')
+       WHERE ps.id=$1 AND s.id=$2 AND w."clubId"=$3 AND s.status IN ('READY','COMPLETED')
+       AND (s.status='COMPLETED'
+         OR EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c.status='IN_PROGRESS')
          OR EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c.status='COMPLETED')
          OR (NOT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND (c."startedAt" IS NOT NULL OR c.status<>'NOT_STARTED'))
            AND NOT EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id)
