@@ -539,6 +539,11 @@ export async function updateSessionDive(formData: FormData) {
   revalidatePath("/athlete/progress");
 }
 
+export async function updateActualSessionDive(_previousState: { success: boolean }, formData: FormData) {
+  await updateSessionDive(formData);
+  return { success: true };
+}
+
 export async function setAthleteSessionAbsence(formData: FormData) {
   const { clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");

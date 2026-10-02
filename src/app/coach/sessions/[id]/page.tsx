@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
 import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence, updateSessionDive } from "@/app/coach/sessions/actions";
+import { ActualDiveCorrectionForm } from "./actual-dive-correction-form";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
 import { CoachShell } from "@/components/coach/coach-shell";
@@ -255,13 +256,15 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                       </form>
                       {session.completions.filter((completion) => completion.status === "COMPLETED" && block.assignments.some((assignment) => assignment.athleteId === completion.athleteId)).map((completion) => {
                         const log = session.diveLogs.find((item) => item.athleteId === completion.athleteId && item.poolDiveId === dive.id);
-                        return <form key={completion.athleteId} action={updateSessionDive} className="mt-3 flex flex-wrap items-end gap-2 border-t border-[var(--color-border)] pt-3">
-                          <input type="hidden" name="sessionId" value={session.id} /><input type="hidden" name="poolDiveId" value={dive.id} /><input type="hidden" name="athleteId" value={completion.athleteId} /><input type="hidden" name="mode" value="actual" />
-                          <span className="mr-2 text-sm font-bold">{completion.athlete.user.firstName} · Réalisé</span>
-                          <label className="grid gap-1 text-xs font-bold">Plongeon effectué<input name="diveCode" defaultValue={log?.actualDiveCode ?? dive.diveCode} maxLength={8} required className="h-10 w-28 rounded-lg border border-[var(--color-border)] px-2" /></label>
-                          <label className="grid gap-1 text-xs font-bold">Répétitions effectuées<input name="repetitions" type="number" min="0" max="500" defaultValue={log?.repetitionsCompleted ?? 0} required className="h-10 w-24 rounded-lg border border-[var(--color-border)] px-2" /></label>
-                          <Button size="sm" variant="outline">Corriger le réalisé</Button>
-                        </form>;
+                        return <ActualDiveCorrectionForm
+                          key={completion.athleteId}
+                          sessionId={session.id}
+                          poolDiveId={dive.id}
+                          athleteId={completion.athleteId}
+                          firstName={completion.athlete.user.firstName}
+                          diveCode={log?.actualDiveCode ?? dive.diveCode}
+                          repetitions={log?.repetitionsCompleted ?? 0}
+                        />;
                       })}
                     </div>)}
                     <PoolProgressTracker
