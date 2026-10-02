@@ -330,13 +330,22 @@ a {
 .milestone-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .milestone-confetti i {
   position: absolute;
-  top: -12px;
+  bottom: -14px;
   width: 8px;
   height: 14px;
   border-radius: 2px;
-  animation: milestone-fall 2.8s linear infinite;
+  animation: milestone-burst 2.1s cubic-bezier(.12,.7,.3,1) infinite;
+  will-change: transform, opacity;
 }
-@keyframes milestone-fall {
-  to { transform: translate3d(22px, 110vh, 0) rotate(720deg); }
+.milestone-confetti i:nth-child(odd) { left: 0; }
+.milestone-confetti i:nth-child(even) { right: 0; }
+.milestone-confetti i:nth-child(4n + 1) { --burst-x: 36vw; }
+.milestone-confetti i:nth-child(4n + 2) { --burst-x: -36vw; }
+.milestone-confetti i:nth-child(4n + 3) { --burst-x: 20vw; }
+.milestone-confetti i:nth-child(4n) { --burst-x: -20vw; }
+@keyframes milestone-burst {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(0deg) scale(.6); }
+  10% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(var(--burst-x), -105vh, 0) rotate(760deg) scale(1); }
 }
 
