@@ -508,9 +508,9 @@ export async function updateSessionDive(formData: FormData) {
     const authorized = await query<{ id: string }>(
       `SELECT d.id FROM "PoolDive" d JOIN "PoolSection" ps ON ps.id=d."poolSectionId" JOIN "PoolTraining" pt ON pt."blockId"=ps."poolTrainingId"
        JOIN "SessionBlock" b ON b.id=pt."blockId" JOIN "TrainingSession" s ON s.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
-       JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id AND a."athleteId"=$6
+       JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id AND a."athleteId"=$1
        JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=a."athleteId" AND c.status='COMPLETED'
-       WHERE d.id=$5 AND s.id=$3 AND w."clubId"=$4`, [diveCode, repetitions, sessionId, clubId, poolDiveId, athleteId]
+       WHERE d.id=$2 AND s.id=$3 AND w."clubId"=$4`, [athleteId, poolDiveId, sessionId, clubId]
     );
     if (!authorized.rowCount) throw new Error("Seule une séance terminée peut être corrigée ici.");
     await query(
