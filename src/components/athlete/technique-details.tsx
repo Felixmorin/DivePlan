@@ -13,7 +13,9 @@ type TechniqueItem = {
 type SkillDive = {
   category: string;
   code: string;
+  name?: string;
   height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
+  heightLabel?: string | null;
   volume: number;
 };
 
@@ -77,7 +79,7 @@ function DiveVolumeRow({ dive, athleteId, updateFamilyAction, removeDiveAction }
   const [editing, setEditing] = useState(false);
   const families = ["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"];
   return <div className="technique-dive">
-    <span><strong>{dive.code}</strong>{!athleteId && <small> · {heightLabel(dive.height)}</small>}</span><b>{dive.volume}</b>
+    <span><strong>{dive.code}</strong>{dive.height === "CUSTOM" && dive.heightLabel && <small className="ml-1 text-xs font-semibold text-[var(--color-ink-muted)]">({dive.heightLabel})</small>}{!athleteId && <small> · {heightLabel(dive.height)}</small>}</span><b>{dive.volume}</b>
     {athleteId && (updateFamilyAction || removeDiveAction) && <details className="relative ml-auto">
       <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-coach-bg)]" aria-label={`Options du plongeon ${dive.code}`}><MoreHorizontal size={19} /></summary>
       <div className="absolute right-0 top-9 z-20 w-36 rounded-xl border border-[var(--color-border)] bg-white p-1 shadow-xl">
@@ -94,6 +96,7 @@ function DiveVolumeRow({ dive, athleteId, updateFamilyAction, removeDiveAction }
         <p className="mt-1 text-sm text-[var(--color-ink-muted)]">Choisissez sa famille.</p>
         <form action={updateFamilyAction} className="mt-5 space-y-4">
           <input type="hidden" name="athleteId" value={athleteId} /><input type="hidden" name="diveCode" value={dive.code} /><input type="hidden" name="height" value={dive.height} />
+          <div><label className="mb-1 block text-sm font-bold" htmlFor={`edit-name-${athleteId}-${dive.height}-${dive.code}`}>Nom du plongeon</label><input id={`edit-name-${athleteId}-${dive.height}-${dive.code}`} name="diveName" type="text" required maxLength={80} defaultValue={dive.name ?? ""} className="w-full rounded-xl border border-[var(--color-border)] bg-white px-3 py-2 text-sm font-semibold" /></div>
           <label className="block text-sm font-bold" htmlFor={`edit-family-${athleteId}-${dive.height}-${dive.code}`}>Famille</label>
           <select id={`edit-family-${athleteId}-${dive.height}-${dive.code}`} name="family" defaultValue={dive.category} className="w-full rounded-xl border border-[var(--color-border)] bg-white px-3 py-2 text-sm font-semibold">{families.map((family) => <option key={family} value={family}>{family}</option>)}</select>
           <div className="flex justify-end gap-2"><button type="button" onClick={() => setEditing(false)} className="rounded-xl border border-[var(--color-border)] px-4 py-2 text-sm font-bold">Annuler</button><button type="submit" className="rounded-xl bg-[var(--color-brand)] px-4 py-2 text-sm font-black text-white">Enregistrer</button></div>

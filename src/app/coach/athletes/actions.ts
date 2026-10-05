@@ -63,7 +63,8 @@ const athleteDiveFamilySchema = z.object({
   athleteId: z.string().min(1),
   diveCode: z.string().trim().min(1).max(12),
   height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM, PoolHeight.CUSTOM]),
-  family: z.enum(["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"])
+  family: z.enum(["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"]),
+  diveName: z.string().trim().min(1).max(80)
 });
 
 type CsvAthlete = {
@@ -418,7 +419,8 @@ export async function updateAthleteDiveFamily(formData: FormData) {
     athleteId: formData.get("athleteId"),
     diveCode: formData.get("diveCode"),
     height: formData.get("height"),
-    family: formData.get("family")
+    family: formData.get("family"),
+    diveName: formData.get("diveName")
   });
 
   if (!parsed.success) {
@@ -432,9 +434,9 @@ export async function updateAthleteDiveFamily(formData: FormData) {
   }
 
   await query(
-    `UPDATE "AthleteDiveLog" l SET "familyOverride" = $1 FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId"
-     WHERE l."poolDiveId" = d.id AND l."athleteId" = $2 AND d."diveCode" = $3 AND s.height = $4`,
-    [parsed.data.family, athlete.id, parsed.data.diveCode, parsed.data.height]
+    `UPDATE "AthleteDiveLog" l SET "familyOverride" = $1, "actualDiveName" = $2 FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId"
+     WHERE l."poolDiveId" = d.id AND l."athleteId" = $3 AND d."diveCode" = $4 AND s.height = $5`,
+    [parsed.data.family, parsed.data.diveName, athlete.id, parsed.data.diveCode, parsed.data.height]
   );
 
   revalidatePath(`/coach/athletes/${athlete.id}`);

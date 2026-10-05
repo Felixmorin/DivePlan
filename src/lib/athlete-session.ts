@@ -88,7 +88,7 @@ export type AthleteProgressTotals = {
   weeklyChartData: Array<{ name: string; volume: number }>;
   monthlyChartData: Array<{ name: string; volume: number }>;
   skillData: Array<{ name: string; volume: number }>;
-  skillDives: Array<{ category: string; code: string; name: string; height: PoolHeight; volume: number }>;
+  skillDives: Array<{ category: string; code: string; name: string; height: PoolHeight; heightLabel: string | null; volume: number }>;
   skillCategories: string[];
 };
 
@@ -213,13 +213,13 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     query<{sessionId:string;completedAt:Date|null;rating:string|null;focus:string;duration:number}>(`SELECT c."sessionId",c."completedAt",c.rating,s.focus,s.duration FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" WHERE c."athleteId"=$1 AND c.status='COMPLETED' ORDER BY c."completedAt" DESC NULLS LAST`,[athleteId]),
     query<{count:number}>(`SELECT COUNT(DISTINCT s.id)::int AS count FROM "TrainingSession" s WHERE EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1)`,[athleteId]),
     query<{date:Date;duration:number}>(`SELECT s.date,s.duration FROM "TrainingSession" s WHERE s.date <= NOW() AND s.status IN ('READY','COMPLETED') AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1) AND NOT EXISTS (SELECT 1 FROM "AthleteSessionAbsence" absence WHERE absence."athleteId"=$1 AND absence."sessionId"=s.id)`,[athleteId]),
-    query<{sessionId:string;repetitionsCompleted:number;familyOverride:string|null;timestamp:Date;diveCode:string;diveName:string;height:PoolHeight}>(`SELECT l."sessionId",l."repetitionsCompleted",l."familyOverride",l.timestamp,d."diveCode",d."diveName",s.height FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1`,[athleteId]),
+    query<{sessionId:string;repetitionsCompleted:number;familyOverride:string|null;timestamp:Date;diveCode:string;diveName:string;height:PoolHeight;heightLabel:string|null}>(`SELECT l."sessionId",l."repetitionsCompleted",l."familyOverride",l.timestamp,d."diveCode",COALESCE(l."actualDiveName",d."diveName") AS "diveName",s.height,s.label AS "heightLabel" FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1`,[athleteId]),
     query<{count:number}>(`SELECT COUNT(*)::int AS count FROM "AthleteExerciseLog" WHERE "athleteId"=$1 AND completed=true`,[athleteId]),
     query<{category:string}>(`SELECT DISTINCT s.category FROM "AthleteSkill" a JOIN "Skill" s ON s.id=a."skillId" WHERE a."athleteId"=$1`,[athleteId])
   ]);
   const completedSessions=completionRows.rows.map(row=>({...row,session:{focus:row.focus,duration:row.duration}}));
   const assignedSessions=assignedResult.rows[0]?.count??0;
-  const diveLogs=diveRows.rows.map(row=>({...row,poolDive:{diveCode:row.diveCode,diveName:row.diveName,poolSection:{height:row.height}}}));
+  const diveLogs=diveRows.rows.map(row=>({...row,poolDive:{diveCode:row.diveCode,diveName:row.diveName,poolSection:{height:row.height,label:row.heightLabel}}}));
   const completedExercises=exerciseResult.rows[0]?.count??0;
 
   const familyLabels: Record<string, string> = {
@@ -237,7 +237,7 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     ["Vrille", 0],
     ["Equilibre", 0]
   ]);
-  const skillDives = new Map<string, { category: string; code: string; name: string; height: PoolHeight; volume: number }>();
+  const skillDives = new Map<string, { category: string; code: string; name: string; height: PoolHeight; heightLabel: string | null; volume: number }>();
   const dailyTotals = new Map<string, { date: Date; volume: number }>();
   const sessionVolumes = new Map<string, number>();
 
@@ -246,13 +246,15 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     const label = log.familyOverride ?? familyLabels[log.poolDive.diveCode.charAt(0)] ?? "Equilibre";
     chartTotals.set(label, (chartTotals.get(label) ?? 0) + log.repetitionsCompleted);
     const height = log.poolDive.poolSection.height;
-    const diveKey = `${height}:${label}:${log.poolDive.diveCode}`;
+    const heightLabel = height === "CUSTOM" ? log.poolDive.poolSection.label : null;
+    const diveKey = `${height}:${heightLabel ?? ""}:${label}:${log.poolDive.diveCode}`;
     const currentDive = skillDives.get(diveKey);
     skillDives.set(diveKey, {
       category: label,
       code: log.poolDive.diveCode,
       name: log.poolDive.diveName,
       height,
+      heightLabel,
       volume: (currentDive?.volume ?? 0) + log.repetitionsCompleted
     });
 
