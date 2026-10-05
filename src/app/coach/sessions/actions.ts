@@ -616,23 +616,23 @@ export async function updatePoolSectionLine(_previousState: { success: boolean }
       }
       for (const dive of groupDives) {
         const postSessionChange = section.hasCompleted && (dive.diveCode !== dive.originalDiveCode || dive.repetitions !== dive.originalRepetitions || dive.context !== previousContext);
-        await tx.query(`UPDATE "PoolDive" SET "poolSectionId"=$1,"diveCode"=$2,"diveName"=$2,repetitions=$3,"postSessionModified"="postSessionModified" OR $4 WHERE id=$5`, [targetSectionId, dive.diveCode, dive.repetitions, postSessionChange, dive.id]);
-        if (postSessionChange && (dive.diveCode !== dive.originalDiveCode || dive.repetitions !== dive.originalRepetitions)) {
-          // Carry list corrections into completed athletes' realized logs when those logs
-          // still match the old plan. Preserve any per-athlete realized correction.
+        const plannedRepetitions = section.hasCompleted ? dive.originalRepetitions : dive.repetitions;
+        await tx.query(`UPDATE "PoolDive" SET "poolSectionId"=$1,"diveCode"=$2,"diveName"=$2,repetitions=$3,"postSessionModified"="postSessionModified" OR $4 WHERE id=$5`, [targetSectionId, dive.diveCode, plannedRepetitions, postSessionChange, dive.id]);
+        if (section.hasCompleted && dive.repetitions !== dive.originalRepetitions) {
+          // In a completed session this field is the realized repetition count.
+          // Keep the plan above intact and save the correction for each completed assignee.
           await tx.query(
-            `UPDATE "AthleteDiveLog" l
-             SET "actualDiveCode"=$1,"repetitionsCompleted"=$2
-             FROM "SessionBlockAssignment" a,"AthleteSessionCompletion" c
-             WHERE l."sessionId"=$3 AND l."poolDiveId"=$4
-               AND a."sessionBlockId"=$5 AND a."athleteId"=l."athleteId"
-               AND c."sessionId"=l."sessionId" AND c."athleteId"=l."athleteId" AND c.status='COMPLETED'
-               AND l."repetitionsCompleted"=$6
-               AND (l."actualDiveCode" IS NULL OR l."actualDiveCode"=$7)`,
-            [dive.diveCode, dive.repetitions, sessionId, dive.id, section.blockId, dive.originalRepetitions, dive.originalDiveCode]
+            `INSERT INTO "AthleteDiveLog" (id,"athleteId","sessionId","poolDiveId","actualDiveCode","repetitionsCompleted","goldenRepetitions",rating)
+             SELECT gen_random_uuid()::text,a."athleteId",$1,$2,$5,$3,0,'Coach'
+             FROM "SessionBlockAssignment" a
+             JOIN "AthleteSessionCompletion" c ON c."athleteId"=a."athleteId" AND c."sessionId"=$1 AND c.status='COMPLETED'
+             WHERE a."sessionBlockId"=$4
+             ON CONFLICT ("athleteId","sessionId","poolDiveId")
+             DO UPDATE SET "actualDiveCode"=COALESCE("AthleteDiveLog"."actualDiveCode",EXCLUDED."actualDiveCode"),"repetitionsCompleted"=EXCLUDED."repetitionsCompleted"`,
+            [sessionId, dive.id, dive.repetitions, section.blockId, dive.diveCode]
           );
         }
-        nextVolume += Math.max(1, countPoolContexts(context)) * dive.repetitions;
+        nextVolume += Math.max(1, countPoolContexts(context)) * plannedRepetitions;
       }
     }
     await tx.query(`UPDATE "SessionBlock" SET "estimatedVolume"=GREATEST(0,"estimatedVolume"+$1-$2) WHERE id=$3`, [nextVolume, previousVolume, section.blockId]);
