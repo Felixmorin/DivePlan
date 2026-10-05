@@ -44,9 +44,9 @@ export function CoachCompetitionEvaluationForm({ athleteId, dives }: { athleteId
   }
 
   return (
-    <section className="rounded-[var(--radius-panel)] border border-[var(--color-border)] bg-white p-5">
-      <h2 className="text-xl font-black">Mon évaluation</h2>
-      <p className="mt-1 text-sm leading-6 text-[var(--color-ink-muted)]">Évalue ta confiance en chacun des plongeons de compétition de l’athlète. 0 = pas du tout confiant · 5 = très confiant.</p>
+    <details className="group rounded-[var(--radius-panel)] border border-[var(--color-border)] bg-white p-5">
+      <summary className="cursor-pointer list-none text-xl font-black marker:hidden">Mon évaluation<span aria-hidden="true" className="float-right text-sm text-[var(--color-ink-muted)] transition-transform group-open:rotate-90">›</span></summary>
+      <div className="pt-3">
       {dives.length === 0 ? <p className="mt-4 rounded-xl bg-[var(--color-surface-raised)] p-4 text-sm font-semibold text-[var(--color-ink-muted)]">Ajoute des plongeons à sa liste de compétition avant de faire une évaluation.</p> : (
         <div className="mt-4 space-y-5">
           {groupedDives.map((group) => <section key={group.height} className="border-t-2 border-[var(--color-brand)]/30 pt-4 first:border-t-0 first:pt-0">
@@ -68,6 +68,7 @@ export function CoachCompetitionEvaluationForm({ athleteId, dives }: { athleteId
         {saved && <span role="status" className="text-sm font-bold text-emerald-700">Évaluation enregistrée.</span>}
         {error && <span role="alert" className="text-sm font-bold text-rose-700">{error}</span>}
       </div>
-    </section>
+      </div>
+    </details>
   );
 }
