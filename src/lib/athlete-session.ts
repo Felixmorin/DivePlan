@@ -246,7 +246,7 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     const label = log.familyOverride ?? familyLabels[log.poolDive.diveCode.charAt(0)] ?? "Equilibre";
     chartTotals.set(label, (chartTotals.get(label) ?? 0) + log.repetitionsCompleted);
     const height = log.poolDive.poolSection.height;
-    const heightLabel = height === "CUSTOM" ? log.poolDive.poolSection.label : null;
+    const heightLabel = log.poolDive.poolSection.label;
     const diveKey = `${height}:${heightLabel ?? ""}:${label}:${log.poolDive.diveCode}`;
     const currentDive = skillDives.get(diveKey);
     skillDives.set(diveKey, {

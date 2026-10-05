@@ -79,7 +79,7 @@ function DiveVolumeRow({ dive, athleteId, updateFamilyAction, removeDiveAction }
   const [editing, setEditing] = useState(false);
   const families = ["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"];
   return <div className="technique-dive">
-    <span><strong>{dive.code}</strong>{dive.height === "CUSTOM" && dive.heightLabel && <small className="ml-1 text-xs font-semibold text-[var(--color-ink-muted)]">({dive.heightLabel})</small>}{!athleteId && <small> · {heightLabel(dive.height)}</small>}</span><b>{dive.volume}</b>
+    <span><strong>{dive.code}</strong>{dive.heightLabel && <small className="ml-1 text-xs font-semibold text-[var(--color-ink-muted)]">({dive.heightLabel})</small>}{!athleteId && <small> · {heightLabel(dive.height)}</small>}</span><b>{dive.volume}</b>
     {athleteId && (updateFamilyAction || removeDiveAction) && <details className="relative ml-auto">
       <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-coach-bg)]" aria-label={`Options du plongeon ${dive.code}`}><MoreHorizontal size={19} /></summary>
       <div className="absolute right-0 top-9 z-20 w-36 rounded-xl border border-[var(--color-border)] bg-white p-1 shadow-xl">
@@ -111,7 +111,7 @@ function heightLabel(height: SkillDive["height"]) {
 }
 
 function displayHeight(dive: SkillDive): SkillDive["height"] {
-  if (dive.height === "CUSTOM" && /^(3mt|3m|5m|7[,.]5m|10m)$/.test((dive.heightLabel ?? "").toLowerCase().replace(/\s+/g, ""))) {
+  if (/^(3mt|3m|5m|7[,.]5m|10m)$/.test((dive.heightLabel ?? "").toLowerCase().replace(/\s+/g, ""))) {
     return "PLATFORM";
   }
   return dive.height;
