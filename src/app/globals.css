@@ -343,6 +343,12 @@ a {
 .milestone-confetti i:nth-child(4n + 2) { --burst-x: -36vw; }
 .milestone-confetti i:nth-child(4n + 3) { --burst-x: 20vw; }
 .milestone-confetti i:nth-child(4n) { --burst-x: -20vw; }
+@media (prefers-reduced-motion: reduce) {
+  .milestone-confetti i {
+    animation-duration: 2.1s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
 @keyframes milestone-burst {
   0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(0deg) scale(.6); }
   10% { opacity: 1; }
