@@ -430,7 +430,7 @@ function AthleteProgress({ profile }: { profile: AthleteProfile }) {
         <CardContent><ProgressChart data={profile.progress.chartData} sessionData={profile.progress.sessionChartData} weeklyData={profile.progress.weeklyChartData} monthlyData={profile.progress.monthlyChartData} /></CardContent>
       </Card>
       <Card>
-        <CardContent className="p-5"><TechniqueDetails technique={technique} skillDives={profile.progress.skillDives} athleteId={profile.id} updateFamilyAction={updateAthleteDiveFamily} removeDiveAction={removeAthleteDiveFromVolume} /></CardContent>
+        <CardContent className="p-5"><TechniqueDetails technique={technique} skillDives={profile.progress.skillDives} athleteId={profile.id} updateFamilyAction={updateAthleteDiveFamily} removeDiveAction={removeAthleteDiveFromVolume} splitByHeight /></CardContent>
       </Card>
     </div>
   );
