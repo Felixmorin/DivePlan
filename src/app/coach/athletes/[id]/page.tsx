@@ -194,9 +194,9 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
             { name: "Equilibre", volume: 0 }
           ],
           skillDives: [
-            { category: "Arriere", code: "201B", name: "Arriere carpe", height: "ONE_METER", volume: 18 },
-            { category: "Renverse", code: "301C", name: "Retour groupe", height: "THREE_METER", volume: 12 },
-            { category: "Avant", code: "101C", name: "Avant groupe", height: "ONE_METER", volume: 31 }
+            { category: "Arriere", code: "201B", name: "Arriere carpe", height: "ONE_METER", heightLabel: null, volume: 18 },
+            { category: "Renverse", code: "301C", name: "Retour groupe", height: "THREE_METER", heightLabel: null, volume: 12 },
+            { category: "Avant", code: "101C", name: "Avant groupe", height: "ONE_METER", heightLabel: null, volume: 31 }
           ]
         },
         previewStats: { total: 4, today: 1, days: Array.from({ length: 7 }, (_, index) => ({ date: parseMontrealSessionDate(`2026-08-${String(18 + index).padStart(2, "0")}`), count: index === 1 ? 1 : index === 3 ? 2 : 0 })) },
