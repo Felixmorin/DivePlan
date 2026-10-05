@@ -858,22 +858,26 @@ function CompetitionEvaluationDialog({ dives, ratings, pending, error, onChange,
   if (dives.length === 0) return null;
   const complete = dives.every((dive) => ratings[dive.id] !== undefined);
   const heightLabels: Record<string, string> = { ONE_METER: "1 m", THREE_METER: "3 m", PLATFORM: "Plateforme", CUSTOM: "Autre" };
+  const groupedDives = Object.entries(heightLabels).map(([height, label]) => ({ height, label, dives: dives.filter((dive) => dive.height === height) })).filter((group) => group.dives.length > 0);
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-3 backdrop-blur-sm sm:items-center" role="presentation">
       <section role="dialog" aria-modal="true" aria-labelledby="confidence-evaluation-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[1.5rem] border border-white/12 bg-[#0b1e30] p-5 text-white shadow-2xl">
         <h2 id="confidence-evaluation-title" className="text-2xl font-black">Confiance en tes plongeons</h2>
-        <p className="mt-2 text-sm leading-6 text-white/65">Pour chaque plongeon, choisis ton niveau de confiance. 1 = très peu confiant · 5 = très confiant.</p>
-        <div className="mt-5 space-y-3">
-          {dives.map((dive) => (
-            <fieldset key={dive.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-              <legend className="px-1 text-sm font-black">{dive.code} <span className="ml-1 font-semibold text-white/45">· {heightLabels[dive.height] ?? dive.height}</span></legend>
-              <div className="mt-2 grid grid-cols-5 gap-2">
-                {[1, 2, 3, 4, 5].map((rating) => <label key={rating} className={`flex h-11 cursor-pointer items-center justify-center rounded-xl border text-sm font-black transition ${ratings[dive.id] === rating ? "border-cyan-200 bg-cyan-300 text-[#06101d]" : "border-white/12 bg-[#06101d] text-white/70"}`}>
-                  <input type="radio" name={`confidence-${dive.id}`} value={rating} checked={ratings[dive.id] === rating} onChange={() => onChange(dive.id, rating)} className="sr-only" />{rating}
-                </label>)}
-              </div>
-            </fieldset>
-          ))}
+        <p className="mt-2 text-sm leading-6 text-white/65">Pour chaque plongeon, choisis ton niveau de confiance. 0 = pas du tout confiant · 5 = très confiant.</p>
+        <div className="mt-5 space-y-6">
+          {groupedDives.map((group) => <section key={group.height} className="border-t-2 border-cyan-300/35 pt-4 first:border-t-0 first:pt-0">
+            <h3 className="mb-3 text-base font-black text-cyan-100">{group.label}</h3>
+            <div className="space-y-3">{group.dives.map((dive) => (
+              <fieldset key={dive.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                <legend className="px-1 text-sm font-black">{dive.code}</legend>
+                <div className="mt-2 grid grid-cols-6 gap-2">
+                  {[0, 1, 2, 3, 4, 5].map((rating) => <label key={rating} className={`flex h-11 cursor-pointer items-center justify-center rounded-xl border text-sm font-black transition ${ratings[dive.id] === rating ? "border-cyan-200 bg-cyan-300 text-[#06101d]" : "border-white/12 bg-[#06101d] text-white/70"}`}>
+                    <input type="radio" name={`confidence-${dive.id}`} value={rating} checked={ratings[dive.id] === rating} onChange={() => onChange(dive.id, rating)} className="sr-only" />{rating}
+                  </label>)}
+                </div>
+              </fieldset>
+            ))}</div>
+          </section>)}
         </div>
         {error && <p role="alert" className="mt-3 text-sm font-semibold text-rose-300">{error}</p>}
         <Button type="button" variant="action" className="mt-5 h-12 w-full" disabled={!complete || pending} onClick={onSave}>{pending ? "Enregistrement…" : "Enregistrer l’évaluation"}</Button>

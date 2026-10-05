@@ -80,7 +80,7 @@ export function CompetitionConfidenceChart({ data, initialDiveId, athleteView = 
               <LineChart data={chartData} margin={{ top: 12, right: 16, left: 8, bottom: 18 }}>
                 <CartesianGrid stroke="rgba(137,160,180,.2)" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} label={{ value: "Date d’évaluation", position: "insideBottom", offset: -12, fontSize: 11 }} />
-                <YAxis domain={[1, 5]} ticks={[1, 2, 3, 4, 5]} allowDecimals={false} width={34} label={{ value: "Note (1 à 5)", angle: -90, position: "insideLeft", fontSize: 11 }} />
+                <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} allowDecimals={false} width={34} label={{ value: "Note (0 à 5)", angle: -90, position: "insideLeft", fontSize: 11 }} />
                 <Tooltip formatter={(value, name) => [value, series.find((item) => item.key === name)?.label ?? name]} labelFormatter={(label) => `Évaluation · ${label}`} />
                 {series.map((item) => <Line key={item.key} type="linear" dataKey={item.key} name={item.label} stroke={colors[dives.findIndex((dive) => dive.id === item.diveId) % colors.length]} strokeWidth={2.5} strokeDasharray={item.evaluator === "COACH" ? "6 4" : undefined} connectNulls dot={{ r: 4 }} activeDot={{ r: 6 }} />)}
               </LineChart>

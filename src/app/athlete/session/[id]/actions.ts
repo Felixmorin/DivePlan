@@ -22,7 +22,7 @@ const diveNoteSchema = z.object({
 
 const competitionEvaluationSchema = z.object({
   sessionId: z.string().min(1),
-  ratings: z.array(z.object({ competitionDiveId: z.string().min(1), rating: z.number().int().min(1).max(5) })).min(1)
+  ratings: z.array(z.object({ competitionDiveId: z.string().min(1), rating: z.number().int().min(0).max(5) })).min(1)
 });
 
 export async function saveCompetitionDiveEvaluation(input: z.infer<typeof competitionEvaluationSchema>) {

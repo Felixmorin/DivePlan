@@ -56,7 +56,7 @@ const competitionDiveOrderSchema = z.object({
 
 const coachCompetitionEvaluationSchema = z.object({
   athleteId: z.string().min(1),
-  ratings: z.array(z.object({ competitionDiveId: z.string().min(1), rating: z.number().int().min(1).max(5) })).min(1)
+  ratings: z.array(z.object({ competitionDiveId: z.string().min(1), rating: z.number().int().min(0).max(5) })).min(1)
 });
 
 const athleteDiveFamilySchema = z.object({
