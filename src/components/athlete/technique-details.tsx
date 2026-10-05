@@ -111,7 +111,7 @@ function heightLabel(height: SkillDive["height"]) {
 }
 
 function displayHeight(dive: SkillDive): SkillDive["height"] {
-  if (/^(3mt|3m|5m|7[,.]5m|10m)$/.test((dive.heightLabel ?? "").toLowerCase().replace(/\s+/g, ""))) {
+  if (/^(3mt|5m|7[,.]5m|10m)$/.test((dive.heightLabel ?? "").toLowerCase().replace(/\s+/g, ""))) {
     return "PLATFORM";
   }
   return dive.height;
