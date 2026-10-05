@@ -112,7 +112,7 @@ export default async function AthletesPage() {
 
   return (
     <CoachShell active="Athletes">
-      <DirectoryHeader title="Athletes" description="Reperer rapidement les groupes, statuts et prochaines seances." actionHref="/coach/sessions/new" actionLabel="Creer une seance" />
+      <DirectoryHeader title="Athletes" description="Voir les athlètes et leurs informations" actionHref="/coach/sessions/new" actionLabel="Creer une seance" />
       <AthleteAccountCard groups={groups} />
       <AthleteDirectory rows={rows} />
     </CoachShell>
@@ -148,7 +148,6 @@ function DirectoryHeader({ title, description, actionHref, actionLabel }: { titl
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Annuaire coach</p>
         <h1 className="mt-2 text-3xl font-black text-[var(--color-ink)]">{title}</h1>
         <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{description}</p>
       </div>
@@ -169,7 +168,6 @@ function AthleteAccountCard({ groups, demo = false }: { groups: AthleteGroup[]; 
           </div>
           <div>
             <CardTitle>Créer un compte athlète</CardTitle>
-            <CardDescription>Remets-lui son nom d’utilisateur et son mot de passe temporaire. Il devra choisir son propre mot de passe à sa première connexion.</CardDescription>
           </div>
         </div>
       </CardHeader>
@@ -196,7 +194,7 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Liste active</CardTitle>
-            <CardDescription>{rows.length} athletes visibles selon le role connecte.</CardDescription>
+            <CardDescription>{rows.length} athletes</CardDescription>
           </div>
           <span className="text-sm font-bold text-[var(--color-ink-muted)]">{rows.length} athlètes</span>
         </div>
