@@ -64,7 +64,7 @@ const athleteDiveFamilySchema = z.object({
   diveCode: z.string().trim().min(1).max(12),
   height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM, PoolHeight.CUSTOM]),
   family: z.enum(["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"]),
-  diveName: z.string().trim().min(1).max(80)
+  diveName: z.string().trim().min(1).max(80).nullish()
 });
 
 type CsvAthlete = {
@@ -434,7 +434,7 @@ export async function updateAthleteDiveFamily(formData: FormData) {
   }
 
   await query(
-    `UPDATE "AthleteDiveLog" l SET "familyOverride" = $1, "actualDiveName" = $2 FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId"
+    `UPDATE "AthleteDiveLog" l SET "familyOverride" = $1, "actualDiveName" = COALESCE($2, l."actualDiveName") FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId"
      WHERE l."poolDiveId" = d.id AND l."athleteId" = $3 AND d."diveCode" = $4 AND s.height = $5`,
     [parsed.data.family, parsed.data.diveName, athlete.id, parsed.data.diveCode, parsed.data.height]
   );
