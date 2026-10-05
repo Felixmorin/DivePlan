@@ -55,7 +55,7 @@ export function TechniqueDetails({ technique, skillDives, athleteId, updateFamil
             {expanded && (() => {
               const familyDives = divesByCategory.get(label) ?? [];
               const heights: SkillDive["height"][] = ["ONE_METER", "THREE_METER", "PLATFORM", "CUSTOM"];
-              const columns = splitByHeight ? heights.map((height) => ({ height, dives: familyDives.filter((dive) => dive.height === height) })) : [{ height: null, dives: familyDives }];
+              const columns = splitByHeight ? heights.map((height) => ({ height, dives: familyDives.filter((dive) => displayHeight(dive) === height) })) : [{ height: null, dives: familyDives }];
               return <div className={splitByHeight ? "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" : "technique-dives"} aria-label={`Plongeons de la catégorie ${label}`}>
                 {familyDives.length > 0 ? columns.map(({ height, dives }) => <div key={height ?? "all"} className={splitByHeight ? "min-w-0 rounded-xl border border-[var(--color-border)] bg-white/70 p-3" : "contents"}>
                   {height && <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-[var(--color-ink-muted)]">{heightLabel(height)}</h4>}
@@ -108,5 +108,12 @@ function DiveVolumeRow({ dive, athleteId, updateFamilyAction, removeDiveAction }
 
 function heightLabel(height: SkillDive["height"]) {
   return height === "ONE_METER" ? "1 m" : height === "THREE_METER" ? "3 m" : height === "PLATFORM" ? "Plateforme" : "Autre";
+}
+
+function displayHeight(dive: SkillDive): SkillDive["height"] {
+  if (dive.height === "CUSTOM" && /^(3mt|3m|5m|7[,.]5m|10m)$/.test((dive.heightLabel ?? "").toLowerCase().replace(/\s+/g, ""))) {
+    return "PLATFORM";
+  }
+  return dive.height;
 }
 
