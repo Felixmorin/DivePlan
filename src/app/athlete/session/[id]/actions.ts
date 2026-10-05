@@ -264,6 +264,24 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
         if (first.rowCount) earned.push(MILESTONES.first500.key);
       }
     }
+    const recentSessions = await tx.query<{ repetitions: string }>(
+      `SELECT COALESCE(sum(l."repetitionsCompleted"), 0)::text AS repetitions
+       FROM "AthleteSessionCompletion" c
+       LEFT JOIN "AthleteDiveLog" l ON l."athleteId" = c."athleteId" AND l."sessionId" = c."sessionId"
+       WHERE c."athleteId" = $1 AND c.status = 'COMPLETED'
+       GROUP BY c."sessionId", c."completedAt"
+       ORDER BY c."completedAt" DESC
+       LIMIT 5`,
+      [athlete.id]
+    );
+    const recentSessionRepetitions = recentSessions.rows.map((row) => Number(row.repetitions));
+    if (recentSessionRepetitions.length === 5 && recentSessionRepetitions.reduce((sum, repetitions) => sum + repetitions, 0) / 5 >= 35) {
+      const result = await tx.query(
+        `INSERT INTO "AthleteMilestone" (id, "athleteId", key) VALUES ($1,$2,$3) ON CONFLICT ("athleteId", key) DO NOTHING RETURNING key`,
+        [randomUUID(), athlete.id, MILESTONES.sessionAverage35.key]
+      );
+      if (result.rowCount) earned.push(MILESTONES.sessionAverage35.key);
+    }
     const allCompetitionDivesDone = await tx.query(
       `SELECT 1 WHERE EXISTS (SELECT 1 FROM "CompetitionDive" WHERE "athleteId" = $1)
        AND NOT EXISTS (SELECT 1 FROM "CompetitionDive" c WHERE c."athleteId" = $1 AND (

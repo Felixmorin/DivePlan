@@ -489,6 +489,9 @@ export async function markAthleteSessionCompleted(formData: FormData) {
   revalidatePath("/coach/athletes");
   revalidatePath(`/coach/sessions/${sessionId}`);
   revalidatePath(`/coach/athletes/${athleteId}`);
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/progress");
+  revalidatePath("/athlete/profile");
 }
 
 export async function updateSessionDive(formData: FormData) {
@@ -535,6 +538,10 @@ export async function updateSessionDive(formData: FormData) {
   }
 
   revalidatePath(`/coach/sessions/${sessionId}`);
+  if (mode === "actual") {
+    revalidatePath("/coach/athletes");
+    revalidatePath(`/coach/athletes/${athleteId}`);
+  }
   revalidatePath(`/athlete/session/${sessionId}`);
   revalidatePath("/athlete/progress");
 }
@@ -637,6 +644,9 @@ export async function setAthleteSessionAbsence(formData: FormData) {
 
   revalidatePath(`/coach/sessions/${sessionId}`);
   revalidatePath(`/coach/athletes/${athleteId}`);
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/progress");
+  revalidatePath("/athlete/profile");
 }
 
 export async function deleteTrainingSession(formData: FormData) {

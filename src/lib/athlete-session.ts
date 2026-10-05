@@ -209,9 +209,10 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
 export async function getAthleteProgressTotals(athleteId: string): Promise<AthleteProgressTotals> {
   const weekStart = startOfMontrealWeek();
   const weekEnd = addMontrealDays(weekStart, 7);
-  const [completionRows, assignedResult, diveRows, exerciseResult, skillRows] = await Promise.all([
+  const [completionRows, assignedResult, attendanceRows, diveRows, exerciseResult, skillRows] = await Promise.all([
     query<{sessionId:string;completedAt:Date|null;rating:string|null;focus:string;duration:number}>(`SELECT c."sessionId",c."completedAt",c.rating,s.focus,s.duration FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" WHERE c."athleteId"=$1 AND c.status='COMPLETED' ORDER BY c."completedAt" DESC NULLS LAST`,[athleteId]),
     query<{count:number}>(`SELECT COUNT(DISTINCT s.id)::int AS count FROM "TrainingSession" s WHERE EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1)`,[athleteId]),
+    query<{date:Date;duration:number}>(`SELECT s.date,s.duration FROM "TrainingSession" s WHERE s.date <= NOW() AND s.status IN ('READY','COMPLETED') AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1) AND NOT EXISTS (SELECT 1 FROM "AthleteSessionAbsence" absence WHERE absence."athleteId"=$1 AND absence."sessionId"=s.id)`,[athleteId]),
     query<{sessionId:string;repetitionsCompleted:number;familyOverride:string|null;timestamp:Date;diveCode:string;diveName:string;height:PoolHeight}>(`SELECT l."sessionId",l."repetitionsCompleted",l."familyOverride",l.timestamp,d."diveCode",d."diveName",s.height FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1`,[athleteId]),
     query<{count:number}>(`SELECT COUNT(*)::int AS count FROM "AthleteExerciseLog" WHERE "athleteId"=$1 AND completed=true`,[athleteId]),
     query<{category:string}>(`SELECT DISTINCT s.category FROM "AthleteSkill" a JOIN "Skill" s ON s.id=a."skillId" WHERE a."athleteId"=$1`,[athleteId])
@@ -263,7 +264,7 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     });
   }
 
-  const completedMinutes = completedSessions.reduce((sum, completion) => sum + completion.session.duration, 0);
+  const completedMinutes = attendanceRows.rows.reduce((sum, session) => sum + session.duration, 0);
   const totalDiveRepetitions = diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0);
   const thisWeekSessions = completedSessions.filter((completion) => {
     const completedAt = completion.completedAt;
@@ -284,7 +285,12 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     completedMinutes,
     thisWeekSessions: thisWeekSessions.length,
     thisWeekDiveRepetitions: thisWeekDiveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0),
-    thisWeekMinutes: thisWeekSessions.reduce((sum, completion) => sum + completion.session.duration, 0),
+    thisWeekMinutes: attendanceRows.rows
+      .filter((session) => {
+        const scheduledAt = new Date(session.date);
+        return scheduledAt >= weekStart && scheduledAt < weekEnd;
+      })
+      .reduce((sum, session) => sum + session.duration, 0),
     completionRate,
     recentNote: completedSessions[0]?.session.focus || "Complete une seance pour generer une tendance.",
     chartData: dailyData
@@ -333,7 +339,7 @@ export async function getAthleteGoldenReps(athleteId: string): Promise<AthleteGo
 export async function getAthleteCurrentWeekSummary(athleteId: string): Promise<AthleteCurrentWeekSummary> {
   const weekStart = startOfMontrealWeek();
   const weekEnd = addMontrealDays(weekStart, 7);
-  const {rows:sessions}=await query<{date:Date;duration:number;completionStatus:string|null;volume:number}>(`SELECT s.date,s.duration,c.status AS "completionStatus",COALESCE((SELECT SUM(l."repetitionsCompleted") FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id AND l."athleteId"=$1),0)::int AS volume FROM "TrainingSession" s LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$1 WHERE s.date >= $2 AND s.date < $3 AND s.status<>'DRAFT' AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1)`,[athleteId,weekStart,weekEnd]);
+  const {rows:sessions}=await query<{date:Date;duration:number;completionStatus:string|null;present:boolean;volume:number}>(`SELECT s.date,s.duration,c.status AS "completionStatus",NOT EXISTS (SELECT 1 FROM "AthleteSessionAbsence" absence WHERE absence."athleteId"=$1 AND absence."sessionId"=s.id) AS present,COALESCE((SELECT SUM(l."repetitionsCompleted") FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id AND l."athleteId"=$1),0)::int AS volume FROM "TrainingSession" s LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$1 WHERE s.date >= $2 AND s.date < $3 AND s.status IN ('READY','COMPLETED') AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1)`,[athleteId,weekStart,weekEnd]);
   const completed = sessions.filter((session) => session.completionStatus === "COMPLETED").length;
   const completedSessions = sessions.filter((session) => session.completionStatus === "COMPLETED");
 
@@ -342,7 +348,9 @@ export async function getAthleteCurrentWeekSummary(athleteId: string): Promise<A
     completed,
     remaining: Math.max(0, sessions.length - completed),
     plannedMinutes: sessions.reduce((sum, session) => sum + session.duration, 0),
-    completedMinutes: completedSessions.reduce((sum, session) => sum + session.duration, 0),
+    completedMinutes: sessions
+      .filter((session) => session.present && session.date <= new Date())
+      .reduce((sum, session) => sum + session.duration, 0),
     volume: sessions
       .filter((session) => session.date <= new Date())
       .reduce((sum, session) => sum + session.volume, 0)
