@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Activity, ChevronDown, Goal, Trash2, Waves } from "lucide-react";
+import { Activity, ChevronDown, Goal, MoreHorizontal, Waves } from "lucide-react";
 
 type TechniqueItem = {
   label: string;
@@ -74,7 +74,33 @@ function DiveVolumeRow({ dive, athleteId, updateFamilyAction, removeDiveAction }
   updateFamilyAction?: (formData: FormData) => void | Promise<void>;
   removeDiveAction?: (formData: FormData) => void | Promise<void>;
 }) {
-  return <div className="technique-dive"><span><strong>{dive.code}</strong>{!athleteId && <small> · {heightLabel(dive.height)}</small>}</span><b>{dive.volume}</b>{athleteId && updateFamilyAction && <form action={updateFamilyAction} className="flex items-center gap-2"><input type="hidden" name="athleteId" value={athleteId} /><input type="hidden" name="diveCode" value={dive.code} /><input type="hidden" name="height" value={dive.height} /><label className="sr-only" htmlFor={`family-${athleteId}-${dive.height}-${dive.code}`}>Famille du plongeon {dive.code}</label><select id={`family-${athleteId}-${dive.height}-${dive.code}`} name="family" defaultValue={dive.category} className="rounded-lg border border-[var(--color-border)] bg-white px-2 py-1 text-xs font-bold">{["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"].map((family) => <option key={family} value={family}>{family}</option>)}</select><button type="submit" className="rounded-lg bg-[var(--color-brand)] px-2 py-1 text-xs font-black text-white">Corriger</button></form>}{athleteId && removeDiveAction && <form action={removeDiveAction} onSubmit={(event) => { if (!window.confirm(`Supprimer le plongeon ${dive.code} et son volume enregistré pour cet athlète ?`)) event.preventDefault(); }}><input type="hidden" name="athleteId" value={athleteId} /><input type="hidden" name="diveCode" value={dive.code} /><input type="hidden" name="height" value={dive.height} /><button type="submit" className="rounded-lg p-2 text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)]" aria-label={`Supprimer le plongeon ${dive.code} de ${heightLabel(dive.height)}`} title="Supprimer ce plongeon et son volume"><Trash2 size={16} /></button></form>}</div>;
+  const [editing, setEditing] = useState(false);
+  const families = ["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"];
+  return <div className="technique-dive">
+    <span><strong>{dive.code}</strong>{!athleteId && <small> · {heightLabel(dive.height)}</small>}</span><b>{dive.volume}</b>
+    {athleteId && (updateFamilyAction || removeDiveAction) && <details className="relative ml-auto">
+      <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-coach-bg)]" aria-label={`Options du plongeon ${dive.code}`}><MoreHorizontal size={19} /></summary>
+      <div className="absolute right-0 top-9 z-20 w-36 rounded-xl border border-[var(--color-border)] bg-white p-1 shadow-xl">
+        {updateFamilyAction && <button type="button" onClick={() => setEditing(true)} className="w-full rounded-lg px-3 py-2 text-left text-sm font-bold hover:bg-[var(--color-coach-bg)]">Modifier</button>}
+        {removeDiveAction && <form action={removeDiveAction} onSubmit={(event) => { if (!window.confirm(`Supprimer le plongeon ${dive.code} et son volume enregistré pour cet athlète ?`)) event.preventDefault(); }}>
+          <input type="hidden" name="athleteId" value={athleteId} /><input type="hidden" name="diveCode" value={dive.code} /><input type="hidden" name="height" value={dive.height} />
+          <button type="submit" className="w-full rounded-lg px-3 py-2 text-left text-sm font-bold text-[var(--color-danger)] hover:bg-red-50">Supprimer</button>
+        </form>}
+      </div>
+    </details>}
+    {editing && athleteId && updateFamilyAction && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(false); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby={`edit-dive-title-${athleteId}-${dive.height}-${dive.code}`} className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-white p-5 shadow-2xl">
+        <h3 id={`edit-dive-title-${athleteId}-${dive.height}-${dive.code}`} className="text-lg font-black">Modifier le plongeon {dive.code}</h3>
+        <p className="mt-1 text-sm text-[var(--color-ink-muted)]">Choisissez sa famille.</p>
+        <form action={updateFamilyAction} className="mt-5 space-y-4">
+          <input type="hidden" name="athleteId" value={athleteId} /><input type="hidden" name="diveCode" value={dive.code} /><input type="hidden" name="height" value={dive.height} />
+          <label className="block text-sm font-bold" htmlFor={`edit-family-${athleteId}-${dive.height}-${dive.code}`}>Famille</label>
+          <select id={`edit-family-${athleteId}-${dive.height}-${dive.code}`} name="family" defaultValue={dive.category} className="w-full rounded-xl border border-[var(--color-border)] bg-white px-3 py-2 text-sm font-semibold">{families.map((family) => <option key={family} value={family}>{family}</option>)}</select>
+          <div className="flex justify-end gap-2"><button type="button" onClick={() => setEditing(false)} className="rounded-xl border border-[var(--color-border)] px-4 py-2 text-sm font-bold">Annuler</button><button type="submit" className="rounded-xl bg-[var(--color-brand)] px-4 py-2 text-sm font-black text-white">Enregistrer</button></div>
+        </form>
+      </section>
+    </div>}
+  </div>;
 }
 
 function heightLabel(height: SkillDive["height"]) {
