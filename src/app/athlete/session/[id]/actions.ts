@@ -9,6 +9,7 @@ import { getAssignedSessionBlocks, persistAthleteProgress, type AthleteProgressP
 import { isSessionStartAvailable, SESSION_NOT_STARTED_MESSAGE } from "@/lib/session-availability";
 import { z } from "zod";
 import { MILESTONES, type MilestoneKey } from "@/lib/milestones";
+import { getClubMilestones } from "@/lib/milestone-data";
 
 export type CompleteSessionPayload = AthleteProgressPayload;
 
@@ -312,7 +313,8 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   revalidatePath("/athlete/progress");
   revalidatePath(`/athlete/session/${payload.sessionId}`);
   revalidatePath("/athlete/profile");
-  return (earnedMilestones ?? []).map((key) => Object.values(MILESTONES).find((milestone) => milestone.key === key)!);
+  const milestoneText = await getClubMilestones(athlete.clubId);
+  return (earnedMilestones ?? []).map((key) => milestoneText.find((milestone) => milestone.key === key)!);
 }
 
 async function assertSessionStartAvailable(sessionId: string) {

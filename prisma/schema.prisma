@@ -79,6 +79,17 @@ model Club {
   events         AppEvent[]
   templates      SessionTemplate[]
   planningEvents PlanningEvent[]
+  milestones     ClubMilestone[]
+}
+
+model ClubMilestone {
+  clubId      String
+  key         String
+  title       String
+  description String
+  club        Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@id([clubId, key])
 }
 
 model User {

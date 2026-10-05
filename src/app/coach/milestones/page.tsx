@@ -5,6 +5,8 @@ import { MilestonePreviewButton } from "@/components/coach/milestone-preview-but
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { MILESTONES } from "@/lib/milestones";
+import { getClubMilestones } from "@/lib/milestone-data";
+import { saveMilestoneText } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +15,15 @@ type AwardRow = { key: string; athleteId: string; firstName: string; lastName: s
 export default async function CoachMilestonesPage() {
   const { clubId } = await requireCoach();
   const isDemo = clubId === "dev-club";
-  const result = isDemo ? null : await query<AwardRow>(
-    `SELECT m.key, a.id AS "athleteId", u."firstName", u."lastName", g.name AS "groupName", m."awardedAt"
+  const [result, milestones] = await Promise.all([
+    isDemo ? Promise.resolve(null) : query<AwardRow>(
+      `SELECT m.key, a.id AS "athleteId", u."firstName", u."lastName", g.name AS "groupName", m."awardedAt"
      FROM "AthleteMilestone" m JOIN "Athlete" a ON a.id = m."athleteId"
      JOIN "User" u ON u.id = a."userId" LEFT JOIN "TrainingGroup" g ON g.id = a."groupId"
-     WHERE a."clubId" = $1 ORDER BY m."awardedAt" DESC, u."lastName", u."firstName"`, [clubId]
-  );
+       WHERE a."clubId" = $1 ORDER BY m."awardedAt" DESC, u."lastName", u."firstName"`, [clubId]
+    ),
+    getClubMilestones(clubId)
+  ]);
   const awards = result?.rows ?? [];
 
   return <CoachShell active="Milestones">
@@ -26,10 +31,10 @@ export default async function CoachMilestonesPage() {
       <div><p className="text-xs font-black uppercase tracking-[.18em] text-[var(--color-brand-strong)]">Progression des athlètes</p>
       <h1 className="mt-1 text-3xl font-black">Milestones</h1>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-ink-muted)]">Suis les réussites du club. Les répétitions comptabilisées sont celles réellement complétées et enregistrées par les athlètes.</p></div>
-      <MilestonePreviewButton />
+      <MilestonePreviewButton milestone={milestones.find((milestone) => milestone.key === MILESTONES.repetitions500.key)!} />
     </header>
     <div className="grid gap-4 xl:grid-cols-3">
-      {Object.values(MILESTONES).map((milestone) => {
+      {milestones.map((milestone) => {
         const holders = awards.filter((award) => award.key === milestone.key);
         return <Card key={milestone.key} className="overflow-hidden border-[var(--color-border)]">
           <CardHeader className="pb-3">
@@ -40,6 +45,12 @@ export default async function CoachMilestonesPage() {
             <CardDescription>{milestone.description}</CardDescription>
           </CardHeader>
           <CardContent>
+            {isDemo ? <p className="mb-4 text-xs text-[var(--color-ink-muted)]">Modifiable avec un compte club.</p> : <form action={saveMilestoneText} className="mb-5 space-y-3 rounded-xl border border-[var(--color-border)] p-3">
+              <input type="hidden" name="key" value={milestone.key} />
+              <label className="block text-xs font-bold">Titre<input name="title" required maxLength={100} defaultValue={milestone.title} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm text-[var(--color-ink)]" /></label>
+              <label className="block text-xs font-bold">Description<textarea name="description" required maxLength={500} defaultValue={milestone.description} rows={3} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm text-[var(--color-ink)]" /></label>
+              <button type="submit" className="rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white">Enregistrer le texte</button>
+            </form>}
             <div className="mb-3 flex items-center gap-2 text-sm font-black text-[var(--color-ink)]"><Award className="h-4 w-4 text-amber-500" />{isDemo ? "1 réussite (exemple)" : `${holders.length} réussite${holders.length === 1 ? "" : "s"}`}</div>
             {holders.length ? <ul className="space-y-2">
               {holders.map((holder) => <li key={`${holder.athleteId}-${holder.key}`} className="flex items-center justify-between gap-3 rounded-xl bg-[var(--color-coach-bg)] px-3 py-2.5">

@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
-import { MILESTONES } from "@/lib/milestones";
+import { getClubMilestones } from "@/lib/milestone-data";
 
 export const dynamic = "force-dynamic";
 
@@ -20,13 +20,14 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const [totals, weekSummary, confidenceResult, milestoneResult] = await Promise.all([
+  const [totals, weekSummary, confidenceResult, milestoneResult, milestones] = await Promise.all([
     getAthleteProgressTotals(athlete.id),
     getAthleteCurrentWeekSummary(athlete.id),
     query<{ competitionDiveId: string; diveCode: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; rating: number; evaluator: "COACH" | "ATHLETE"; evaluatedAt: Date }>(
       `SELECT "competitionDiveId", "diveCode", height, rating, evaluator, "evaluatedAt" FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId" = $1 AND evaluator = 'ATHLETE' ORDER BY "evaluatedAt" ASC`, [athlete.id]
     ),
-    query<{ key: string; awardedAt: Date }>(`SELECT key, "awardedAt" FROM "AthleteMilestone" WHERE "athleteId" = $1 ORDER BY "awardedAt"`, [athlete.id])
+    query<{ key: string; awardedAt: Date }>(`SELECT key, "awardedAt" FROM "AthleteMilestone" WHERE "athleteId" = $1 ORDER BY "awardedAt"`, [athlete.id]),
+    getClubMilestones(athlete.clubId)
   ]);
   const confidenceRows = confidenceResult.rows;
   const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);
@@ -40,7 +41,7 @@ export default async function ProfilePage() {
         <div className="flex items-center justify-between">
           <h1 className="text-[2rem] font-black leading-none tracking-tight">Profil</h1>
           <MilestonesDialog milestones={milestoneResult.rows.flatMap((earned) => {
-            const milestone = Object.values(MILESTONES).find((item) => item.key === earned.key);
+            const milestone = milestones.find((item) => item.key === earned.key);
             return milestone ? [{ ...milestone, awardedAt: earned.awardedAt.toISOString() }] : [];
           })} />
         </div>
