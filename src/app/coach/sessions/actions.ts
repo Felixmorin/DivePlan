@@ -617,6 +617,21 @@ export async function updatePoolSectionLine(_previousState: { success: boolean }
       for (const dive of groupDives) {
         const postSessionChange = section.hasCompleted && (dive.diveCode !== dive.originalDiveCode || dive.repetitions !== dive.originalRepetitions || dive.context !== previousContext);
         await tx.query(`UPDATE "PoolDive" SET "poolSectionId"=$1,"diveCode"=$2,"diveName"=$2,repetitions=$3,"postSessionModified"="postSessionModified" OR $4 WHERE id=$5`, [targetSectionId, dive.diveCode, dive.repetitions, postSessionChange, dive.id]);
+        if (postSessionChange && (dive.diveCode !== dive.originalDiveCode || dive.repetitions !== dive.originalRepetitions)) {
+          // Carry list corrections into completed athletes' realized logs when those logs
+          // still match the old plan. Preserve any per-athlete realized correction.
+          await tx.query(
+            `UPDATE "AthleteDiveLog" l
+             SET "actualDiveCode"=$1,"repetitionsCompleted"=$2
+             FROM "SessionBlockAssignment" a,"AthleteSessionCompletion" c
+             WHERE l."sessionId"=$3 AND l."poolDiveId"=$4
+               AND a."sessionBlockId"=$5 AND a."athleteId"=l."athleteId"
+               AND c."sessionId"=l."sessionId" AND c."athleteId"=l."athleteId" AND c.status='COMPLETED'
+               AND l."repetitionsCompleted"=$6
+               AND (l."actualDiveCode" IS NULL OR l."actualDiveCode"=$7)`,
+            [dive.diveCode, dive.repetitions, sessionId, dive.id, section.blockId, dive.originalRepetitions, dive.originalDiveCode]
+          );
+        }
         nextVolume += Math.max(1, countPoolContexts(context)) * dive.repetitions;
       }
     }
@@ -624,7 +639,10 @@ export async function updatePoolSectionLine(_previousState: { success: boolean }
   });
 
   revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath("/coach/athletes");
+  revalidatePath("/coach/athletes/[id]", "page");
   revalidatePath(`/athlete/session/${sessionId}`);
+  revalidatePath("/athlete/progress");
   return { success: true };
 }
 
