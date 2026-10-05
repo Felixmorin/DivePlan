@@ -52,8 +52,8 @@ export function CompetitionConfidenceChart({ data, initialDiveId, athleteView = 
   }, [visiblePoints]);
 
   return (
-    <Card className={athleteView ? "border-cyan-200/15 bg-[#0b1e30] text-white" : ""}>
-      <CardHeader><CardTitle className="my-6">{athleteView ? "Évolution de ma confiance" : "Évolution de la confiance en compétition"}</CardTitle></CardHeader>
+    <Card className={`my-6 ${athleteView ? "border-cyan-200/15 bg-[#0b1e30] text-white" : ""}`}>
+      <CardHeader><CardTitle>{athleteView ? "Évolution de ma confiance" : "Évolution de la confiance en compétition"}</CardTitle></CardHeader>
       <CardContent>
         <div className="mb-4 grid gap-3 sm:grid-cols-2">
           <label className="text-xs font-bold text-current/65">Hauteur
