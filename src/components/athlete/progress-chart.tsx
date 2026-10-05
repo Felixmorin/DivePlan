@@ -8,10 +8,11 @@ type ProgressChartProps = {
   sessionData?: Array<{ name: string; volume: number; finalRating: string | null }>;
   weeklyData?: Array<{ name: string; volume: number }>;
   monthlyData?: Array<{ name: string; volume: number }>;
+  initialPeriod?: "day" | "week" | "month" | "session-rating";
 };
 
-export function ProgressChart({ data, sessionData = [], weeklyData = [], monthlyData = [] }: ProgressChartProps) {
-  const [period, setPeriod] = useState<"day" | "week" | "month" | "session-rating">("day");
+export function ProgressChart({ data, sessionData = [], weeklyData = [], monthlyData = [], initialPeriod = "day" }: ProgressChartProps) {
+  const [period, setPeriod] = useState<"day" | "week" | "month" | "session-rating">(initialPeriod);
   const isSessionRating = period === "session-rating";
   const chartData = period === "week" ? weeklyData : period === "month" ? monthlyData : isSessionRating ? sessionData : data;
 
@@ -19,7 +20,7 @@ export function ProgressChart({ data, sessionData = [], weeklyData = [], monthly
     <div>
       <div className="trend-chart-toolbar">
         <label htmlFor="trend-period">Afficher</label>
-        <select id="trend-period" className="select-button" value={period} onChange={(event) => setPeriod(event.target.value as "day" | "week" | "month")}>
+        <select id="trend-period" className="select-button" value={period} onChange={(event) => setPeriod(event.target.value as "day" | "week" | "month" | "session-rating")}>
           <option value="day">Par jour</option>
           <option value="week">Moyenne / semaine</option>
           <option value="month">Moyenne / mois</option>
