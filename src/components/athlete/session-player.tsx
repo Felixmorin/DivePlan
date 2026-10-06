@@ -1021,6 +1021,8 @@ function getResumeStepIndex(session: AthleteSessionView, blockIndex: number) {
 
   const nextIncompleteIndex = block.poolSections.findIndex((section) =>
     section.dives.some((dive) => dive.completedRepetitions < dive.repetitions)
+    || (section.dives.some((dive) => dive.completedRepetitions > 0)
+      && !section.dives.some((dive) => dive.rating))
   );
   return nextIncompleteIndex >= 0 ? nextIncompleteIndex : Math.max(0, block.poolSections.length - 1);
 }
