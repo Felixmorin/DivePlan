@@ -6,8 +6,6 @@ import { PlanningEventEditor } from "@/components/coach/planning-event-editor";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { athletes as demoAthletes, demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
@@ -179,13 +177,13 @@ function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = 
 
   return (
     <CoachShell active="Planning">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Planning {period.mode === "week" ? "hebdomadaire" : "mensuel"}</p>
-          <h1 className="mt-2 text-3xl font-black">{periodLabel(period)}</h1>
-          <p className="mt-1 text-[var(--color-ink-muted)]">Vue par jour, statuts de publication et volume disponible.</p>
+          <p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand-strong)]">Planning {period.mode === "week" ? "hebdomadaire" : "mensuel"}</p>
+          <h1 className="mt-1 text-3xl font-black">Planning</h1>
+          <p className="mt-1 text-sm font-medium text-[var(--color-ink-muted)]">{periodLabel(period)}</p>
         </div>
-        <Button asChild variant="action"><Link href={demo ? "/coach/sessions/demo" : "/coach/sessions/new"}><CalendarPlus className="h-4 w-4" /> {demo ? "Voir la demo" : "Nouvelle séance"}</Link></Button>
+        <PlanningEventForm targets={targets} demo={demo} />
       </div>
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -213,14 +211,11 @@ function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = 
         )}
       </div>
 
-      <PlanningEventForm targets={targets} demo={demo} />
-
-      {sessions.length === 0 && events.length === 0 ? (
-        <EmptyState title={period.mode === "week" ? "Aucune séance cette semaine" : "Aucune séance ce mois-ci"} description="Ajoute une séance pour commencer la planification." action={<Button asChild variant="action"><Link href="/coach/sessions/new">Créer une séance</Link></Button>} />
-      ) : period.mode === "month" ? (
+      {period.mode === "month" ? (
         <MonthCalendar period={period} sessions={sessions} events={events} activeSessionIds={activeSessionIds} targets={targets} weekStartsOn={weekStartsOn} demo={demo} />
       ) : (
-        <div className="grid gap-3 lg:grid-cols-7">
+        <div className="overflow-x-auto rounded-2xl border border-[var(--color-border)] bg-white shadow-[var(--shadow-soft)]">
+          <div className="grid min-w-[980px] grid-cols-7 gap-px bg-[var(--color-border)]">
           {weekDays(period.weekStart).map((day) => (
             <DayColumn
               key={day.key}
@@ -232,6 +227,7 @@ function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = 
               demo={demo}
             />
           ))}
+          </div>
         </div>
       )}
     </CoachShell>
@@ -250,30 +246,27 @@ function PlanningModeLink({ mode, active, period, weekStartsOn, children }: { mo
   );
 }
 
-function DayColumn({ day, sessions, events, activeSessionIds, targets, demo, compact = false }: { day: { key: number | string; label: string; date: Date }; sessions: PlanningSession[]; events: PlanningEvent[]; activeSessionIds: Set<string>; targets: PlanningTarget[]; demo: boolean; compact?: boolean }) {
+function DayColumn({ day, sessions, events, activeSessionIds, targets, demo }: { day: { key: number | string; label: string; date: Date }; sessions: PlanningSession[]; events: PlanningEvent[]; activeSessionIds: Set<string>; targets: PlanningTarget[]; demo: boolean }) {
   return (
-    <Card className={compact ? "min-h-0" : "min-h-0 lg:min-h-96"}>
-      <CardContent className="p-4">
-        <div className="mb-4 flex items-center justify-between gap-3 border-b border-[var(--color-border)] pb-3">
+    <div className={`min-h-[420px] bg-white ${sameMontrealDay(day.date, new Date()) ? "bg-[var(--color-action)]/[0.035]" : ""}`}>
+      <div className="sticky top-0 z-10 flex min-h-[58px] flex-col items-center justify-center border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2 py-2 text-center">
           <div>
-            <div className="text-lg font-black lg:text-base">{day.label}</div>
+            <div className="text-sm font-black">{day.label}</div>
             <div className="text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealDate(day.date, { day: "2-digit", month: "short" })}</div>
           </div>
-          <span className="rounded-full bg-[var(--color-surface-raised)] px-2.5 py-1 text-xs font-black text-[var(--color-ink-muted)]">{sessions.length + events.length || "Repos"}</span>
-        </div>
+      </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2 p-2">
           {sessions.map((session) => <PlanningSessionCard key={session.id} session={session} active={activeSessionIds.has(session.id)} demo={demo} />)}
           {events.map((event) => <PlanningEventCard key={event.id} event={event} targets={targets} demo={demo} />)}
           {sessions.length === 0 && events.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-[var(--color-border-strong)] p-4">
-              <div className="text-sm font-black text-[var(--color-ink-muted)]">Jour libre</div>
-              <Link href="/coach/sessions/new" className="mt-2 inline-flex min-h-11 items-center text-sm font-black text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">Préparer une séance</Link>
+            <div className="flex min-h-28 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--color-border-strong)] p-3 text-center">
+              <div className="text-xs font-black text-[var(--color-ink-muted)]">Jour libre</div>
+              <Link href="/coach/sessions/new" className="mt-2 inline-flex min-h-9 items-center text-xs font-bold text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">Ajouter une séance</Link>
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 
