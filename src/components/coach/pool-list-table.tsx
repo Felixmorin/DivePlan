@@ -42,11 +42,6 @@ export function PoolListTable({ rows, onChange, inputName }: { rows: PoolListRow
                       if (!description.includes(":")) return;
                       const parsed = parseQuickPoolLine(description, row.repetitions.join(", "), row.id).row;
                       replace(index, parsed);
-                      setDescriptionDrafts((drafts) => {
-                        const next = { ...drafts };
-                        delete next[row.id];
-                        return next;
-                      });
                     }} />
                     {validation.heightCount > 1 && <p className="mt-1 text-xs font-bold text-[var(--block-pool-fg)]">Chaque plongeon sera execute aux {validation.heightCount} hauteurs indiquees.</p>}
                     {validation.errors.length > 0 && <p className="mt-1 text-xs font-semibold text-[var(--color-danger)]">{validation.errors.join(" ")}</p>}
