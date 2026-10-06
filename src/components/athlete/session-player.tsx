@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, FilePenLine, Play, Plus, RotateCcw, Save } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, FilePenLine, Layers, Play, Plus, RotateCcw, Save, Waves, X } from "lucide-react";
 import type { CompleteSessionPayload, SaveAthleteProgressPayload } from "@/app/athlete/session/[id]/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -122,9 +122,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     () => blocks.flatMap((sessionBlock) => sessionBlock.poolSections.flatMap((section) => section.dives.map((dive) => ({ ...dive, sectionLabel: section.label })))),
     [blocks]
   );
-  const plannedPoolReps = poolDives.reduce((sum, dive) => sum + dive.repetitions, 0);
   const completedPoolReps = poolDives.reduce((sum, dive) => sum + (diveChecks[dive.id] ?? []).filter((state) => state > 0).length, 0);
-  const hasPoolDives = poolDives.length > 0;
   const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : Math.round(((current + 1) / blocks.length) * 100);
   const blockRemaining = countBlockRemaining(block, exerciseChecks, diveChecks);
   const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
@@ -653,38 +651,23 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       <AthleteShell hideNav className="session-player-light">
         <div className="space-y-4">
           <button type="button" onClick={leaveSession} className="flex min-h-11 items-center gap-2 rounded-xl px-1 text-sm font-bold text-white/62 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowLeft className="h-4 w-4" /> Quitter</button>
-          <section className="builder-pulse rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 text-center shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-success)] text-white"><CheckCircle2 className="h-8 w-8" /></div>
-            <h1 className="mt-5 text-3xl font-black leading-none">Séance terminée</h1>
-            <p className="mt-3 text-sm leading-6 text-white/68">{hasRecordedWork ? "Choisis ton ressenti final puis enregistre la séance." : "Aucun exercice ou plongeon complété : tu peux enregistrer la séance sans ressenti."}</p>
+          <header className="relative -mx-4 flex items-center justify-between px-4 pb-2 pt-1">
+            <button type="button" onClick={leaveSession} className="min-h-10 rounded-xl px-1 text-sm font-bold text-[var(--color-action)]">Quitter</button>
+            <div className="w-44">
+              <div className="mb-1 text-center text-xs font-bold">Bloc {blocks.length}/{blocks.length}</div>
+              <Progress value={100} className="h-2 bg-slate-200" />
+            </div>
+            <span className="w-10" aria-hidden="true" />
+          </header>
+          <section className="rounded-[2rem] bg-white px-4 pb-4 pt-5 text-center">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-success)] text-[#06133a]"><CheckCircle2 className="h-10 w-10" /></div>
+            <h1 className="mt-3 text-3xl font-black leading-tight">Séance terminée</h1>
+            <p className="mx-auto mt-1 max-w-xs text-sm leading-5 text-white/68">Super travail aujourd’hui !<br />Tu progresses à chaque séance.</p>
           </section>
           <div className="grid grid-cols-2 gap-2">
-            <StartStat label="Blocs" value={`${completedBlocks}/${blocks.length}`} />
-            <StartStat label="Plongeons" value={`${completedPoolReps}/${plannedPoolReps}`} />
+            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white p-3"><Layers className="h-8 w-8 shrink-0 text-[var(--color-action)]" /><div><div className="text-2xl font-black">{completedBlocks}/{blocks.length}</div><div className="text-sm text-white/68">blocs</div></div></div>
+            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white p-3"><Waves className="h-8 w-8 shrink-0 text-[var(--color-action)]" /><div><div className="text-2xl font-black">{completedPoolReps}</div><div className="text-sm text-white/68">plongeons</div></div></div>
           </div>
-          <SaveIndicator status={saveStatus} />
-          {hasPoolDives && (
-            <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="text-sm font-black text-white/72">Récapitulatif des plongeons</div>
-                <div className="text-sm font-black text-[var(--color-action)]">{completedPoolReps}/{plannedPoolReps}</div>
-              </div>
-              <div className="space-y-2">
-                {poolDives.map((dive) => {
-                  const completed = (diveChecks[dive.id] ?? []).filter((state) => state > 0).length;
-                  return (
-                    <div key={dive.id} className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--color-athlete-bg)] px-3 py-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-black">{dive.code} · {dive.name}</div>
-                        <div className="mt-1 text-xs font-semibold text-white/45">{dive.sectionLabel}</div>
-                      </div>
-                      <div className="shrink-0 text-right text-lg font-black">{completed}/{dive.repetitions}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
           {hasRecordedWork && <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
             <div className="mb-3 text-lg font-black">Comment tu te sens ?</div>
             <div className="grid grid-cols-5 gap-1.5">
@@ -697,11 +680,11 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
             </div>
             <Textarea className="mt-3 min-h-16 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Ajouter une note personnelle (optionnel)" value={finalFeedback.note} onChange={(event) => updateFinalFeedback({ note: event.target.value })} />
           </section>}
+          {!hasRecordedWork && <p className="text-center text-sm text-white/68">Tu peux enregistrer la séance sans ressenti.</p>}
           {error && <ErrorBanner message={error} />}
           <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
             <div className="mx-auto flex max-w-[430px] gap-2">
-              <Button type="button" variant="outline" className="flex-1 bg-transparent text-white" onClick={previousStep}>Modifier</Button>
-              <Button type="button" variant="action" className="h-14 flex-[1.4] rounded-2xl" disabled={isPending} onClick={completeSession}><Save className="h-5 w-5" /> {isPending ? "Enregistrement..." : "Enregistrer"}</Button>
+              <Button type="button" variant="action" className="h-14 w-full rounded-2xl" disabled={isPending} onClick={completeSession}><Save className="h-5 w-5" /> {isPending ? "Enregistrement..." : "Enregistrer la séance"}</Button>
             </div>
           </div>
         </div>
@@ -713,44 +696,33 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   return (
     <AthleteShell hideNav className="session-player-light">
       <div className="space-y-4">
-        <header className="sticky top-0 z-20 -mx-4 bg-[var(--color-athlete-bg)]/96 px-4 pb-3 pt-2 backdrop-blur">
-          <div className="flex items-center justify-between gap-3">
-            <button type="button" onClick={leaveSession} className="flex min-h-11 items-center gap-2 rounded-xl px-1 text-sm font-bold text-white/62 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowLeft className="h-4 w-4" /> Quitter</button>
-            <div className="flex items-center gap-3">
-              <button type="button" aria-expanded={sessionPreviewOpen} aria-controls="active-session-preview" onClick={() => setSessionPreviewOpen((open) => !open)} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-2 text-xs font-bold text-white/55 transition hover:bg-white/6 hover:text-white/85 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><Eye className="h-4 w-4 text-[var(--color-action)]" /> Aperçu</button>
-              <div className="flex flex-col items-end gap-1">
-              <div className="text-right text-xs font-bold text-white/45">Bloc {current + 1}/{blocks.length}</div>
-              <SaveIndicator status={saveStatus} compact />
-              </div>
+        <header className="sticky top-0 z-30 -mx-4 bg-white/95 px-4 pb-3 pt-2 backdrop-blur">
+          <div className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <button type="button" onClick={leaveSession} className="min-h-10 justify-self-start rounded-xl px-1 text-sm font-bold text-[var(--color-action)]">Quitter</button>
+            <div className="w-44">
+              <div className="mb-1 text-center text-xs font-bold">Bloc {current + 1}/{blocks.length}</div>
+              <Progress value={progress} className="h-2 bg-slate-200" />
             </div>
+            <button type="button" aria-label="Aperçu des blocs" aria-expanded={sessionPreviewOpen} aria-controls="active-session-preview" onClick={() => setSessionPreviewOpen((open) => !open)} className="flex h-10 w-10 items-center justify-center justify-self-end rounded-xl border border-[var(--color-action)] text-[var(--color-action)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><Eye className="h-5 w-5" /></button>
+            {sessionPreviewOpen && <div className="absolute right-0 top-12 z-40 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_16px_45px_rgba(15,35,65,.22)]" id="active-session-preview" role="dialog" aria-label="Aperçu des blocs">
+              <div className="mb-2 flex items-center justify-between"><h2 className="font-black">Aperçu des blocs ({blocks.length})</h2><button type="button" aria-label="Fermer l’aperçu" className="rounded-lg p-1 text-slate-500" onClick={() => setSessionPreviewOpen(false)}><X className="h-5 w-5" /></button></div>
+              <ol className="max-h-[65vh] overflow-y-auto">
+                {blocks.map((previewBlock, index) => {
+                  const isCurrent = index === current;
+                  const isComplete = countBlockRemaining(previewBlock, exerciseChecks, diveChecks) === 0;
+                  return <li key={previewBlock.id} className="flex items-center gap-2 border-t border-slate-100 py-1.5 first:border-0">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black ${isCurrent ? "bg-[var(--color-action)] text-white" : isComplete ? "bg-[var(--color-success)] text-[#06133a]" : "bg-slate-100 text-slate-700"}`}>{isComplete && !isCurrent ? <CheckCircle2 className="h-4 w-4" /> : index + 1}</span>
+                    <span className={`min-w-0 flex-1 truncate text-sm ${isCurrent ? "font-black text-[#0b1640]" : "text-slate-600"}`}>{previewBlock.title}</span>
+                    {isCurrent && <span className="rounded-full bg-[var(--color-action)] px-2.5 py-1 text-xs font-bold text-white">En cours</span>}
+                  </li>;
+                })}
+              </ol>
+            </div>}
+            <div className="absolute right-12 top-1/2 -translate-y-1/2"><SaveIndicator status={saveStatus} compact /></div>
           </div>
-          <Progress value={progress} className="mt-2 h-2 bg-white/10" />
         </header>
 
-        {sessionPreviewOpen && <section id="active-session-preview" className="rounded-2xl border border-white/10 bg-[var(--color-athlete-panel)] p-3" aria-label="Aperçu de l’entraînement">
-          <div className="mb-2 flex items-center gap-2 px-1 text-xs font-black text-white/65"><Eye className="h-4 w-4 text-[var(--color-action)]" /> Aperçu de l’entraînement</div>
-          <div className="space-y-2">
-            {blocks.map((previewBlock, index) => <details key={previewBlock.id} open={expandedPreviewBlocks.has(previewBlock.id)} onToggle={(event) => {
-              const isOpen = event.currentTarget.open;
-              setExpandedPreviewBlocks((previous) => {
-                const next = new Set(previous);
-                if (isOpen) next.add(previewBlock.id);
-                else next.delete(previewBlock.id);
-                return next;
-              });
-            }} className="rounded-xl bg-[var(--color-athlete-bg)] px-3 py-2">
-              <summary className="min-h-10 cursor-pointer py-2 text-sm font-black marker:text-white/40">{index + 1}. {previewBlock.title}<span className="ml-2 text-xs font-semibold text-white/45">{previewBlock.exercises.length} exercice(s) · {previewBlock.poolSections.reduce((sum, section) => sum + section.dives.length, 0)} plongeon(s)</span></summary>
-              <div className="space-y-2 border-t border-white/8 pb-1 pt-3">
-                {previewBlock.description && <p className="whitespace-pre-line text-sm leading-5 text-white/62">{previewBlock.description}</p>}
-                {previewBlock.exercises.map((exercise) => <div key={exercise.id} className="flex items-start gap-2 text-sm"><Dumbbell className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-action)]" /><span><span className="font-bold">{exercise.name}</span><span className="ml-2 text-xs text-white/50">{formatExercisePrescription(exercise)}</span></span></div>)}
-                {previewBlock.poolSections.map((section) => <div key={section.id}><div className="mb-1 text-xs font-black uppercase tracking-wide text-white/45">{section.label}</div>{section.dives.map((dive) => <div key={dive.id} className="flex justify-between gap-2 py-1 text-sm"><span><b>{dive.code}</b> · {dive.name}</span><span className="shrink-0 text-xs text-white/55">{dive.repetitions} rep.</span></div>)}</div>)}
-                {previewBlock.exercises.length === 0 && previewBlock.poolSections.length === 0 && <p className="text-sm text-white/48">Aucun exercice détaillé pour ce bloc.</p>}
-              </div>
-            </details>)}
-          </div>
-        </section>}
-
-        <section className="rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
+        <section className={`rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 ${isPoolBlock ? "hidden" : "shadow-[0_24px_70px_rgba(0,0,0,0.32)]"}`}>
           <div className="flex items-center justify-between gap-3">
             <BlockTypeBadge type={block.type} />
           </div>
@@ -766,8 +738,9 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         </section>
 
         <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-bg)] p-3">
+          {isPoolBlock && <h1 className="mb-3 px-1 text-3xl font-black leading-tight">{block.title}</h1>}
           <div className="mb-3 flex justify-end">
-            <Button type="button" size="sm" variant="outline" className="border-white/15 bg-transparent text-white hover:bg-white/10 hover:text-white" onClick={completeCurrentPage}>
+            <Button type="button" size="sm" variant="outline" className="!border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" onClick={completeCurrentPage}>
               <CheckCircle2 className="h-4 w-4" /> Tout complété
             </Button>
           </div>
@@ -792,15 +765,12 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                 const completed = checks.filter((state) => state > 0).length;
                 const golden = checks.filter((state) => state === 2).length;
                 return (
-                  <div key={dive.id} className="rounded-2xl border border-white/10 bg-[var(--color-athlete-panel)] p-4">
-                    <div className="grid grid-cols-[64px_1fr_auto] items-center gap-3">
-                      <span className="flex min-h-14 w-16 items-center justify-center rounded-2xl bg-[var(--color-athlete-panel-2)] px-1 text-center text-xs font-black leading-tight text-[var(--color-action)]">{activeStep.section.label}</span>
-                      <div className="min-w-0"><div className={`text-3xl font-black leading-none ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "text-red-400" : ""}`}>{dive.postSessionModified ? dive.code : dive.actualCode ?? dive.code}</div>{dive.postSessionModified ? <div className="mt-1 text-xs font-bold text-red-400">Modifié après séance · {dive.repetitions} rep.</div> : dive.actualCode && dive.actualCode !== dive.code ? <div className="mt-1 text-xs font-bold text-red-400">Plongeon corrigé</div> : <div className="mt-1 truncate text-sm font-semibold text-white/68">{dive.name}</div>}{!dive.postSessionModified && dive.actualRepetitions !== null && dive.actualRepetitions !== dive.repetitions && <div className="mt-1 text-xs font-bold text-red-400">{dive.actualRepetitions} rep. corrigées</div>}</div>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${diveNotes[dive.id] ? "text-[#60a5fa]" : "text-white/45"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}>
-                          <FilePenLine className="h-5 w-5" />
-                        </button>
-                        <div className="text-right"><div className="text-2xl font-black">{completed}/{checks.length}</div><div className="text-xs font-bold uppercase text-white/45">reps{golden > 0 ? ` · ${golden} gold` : ""}</div></div>
+                  <div key={dive.id} className="rounded-2xl border border-white/10 bg-white p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0"><div className={`truncate text-lg font-black ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "text-red-500" : ""}`}>{dive.postSessionModified ? dive.code : dive.actualCode ?? dive.code} <span className="text-base font-bold text-slate-700">{dive.name}</span></div><div className="mt-0.5 text-sm text-slate-500">{activeStep.section.label} · {dive.repetitions} répétition{dive.repetitions === 1 ? "" : "s"}{golden > 0 ? ` · ${golden} étoile${golden > 1 ? "s" : ""}` : ""}</div></div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-black text-[#0b1640]">{completed}/{checks.length}</span>
+                        <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-9 w-9 items-center justify-center rounded-lg ${diveNotes[dive.id] ? "text-[var(--color-action)]" : "text-slate-500"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}><FilePenLine className="h-5 w-5" /></button>
                       </div>
                     </div>
                     {openDiveNote === dive.id && (
@@ -813,21 +783,19 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                         </div>
                       </div>
                     )}
-                    <div className="mt-4 grid grid-cols-5 gap-2">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {checks.map((state, index) => (
-                        <button key={index} type="button" onClick={() => toggleDiveRep(dive.id, index)} className={`flex h-12 items-center justify-center rounded-2xl border text-sm font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${state === 2 ? "border-amber-300 bg-amber-400 text-[#281500]" : state === 1 ? "border-[var(--color-success)] bg-[var(--color-success)] text-white" : "border-white/10 bg-[var(--color-athlete-bg)] text-white/62"} ${pulseKey === `${dive.id}-${index}` ? "builder-pulse" : ""}`} aria-label={`Repetition ${index + 1}${state === 2 ? ", golden" : state === 1 ? ", complétée" : ""}`}>
+                        <button key={index} type="button" onClick={() => toggleDiveRep(dive.id, index)} className={`flex h-10 w-10 items-center justify-center rounded-full border text-sm font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${state === 2 ? "border-amber-300 bg-amber-400 text-[#281500]" : state === 1 ? "border-[var(--color-success)] bg-[var(--color-success)] text-[#06133a]" : "border-slate-300 bg-white text-slate-500"} ${pulseKey === `${dive.id}-${index}` ? "builder-pulse" : ""}`} aria-label={`Répétition ${index + 1}${state === 2 ? ", étoile" : state === 1 ? ", complétée" : ""}`}>
                           {state === 2 ? "★" : state === 1 ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
                         </button>
                       ))}
                     </div>
-                    <button type="button" onClick={() => addDiveRep(dive.id)} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-black text-[var(--color-action)] transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
-                      <Plus className="h-4 w-4" /> Ajouter une rep
+                    <div className="mt-2 flex justify-end gap-2">
+                    <button type="button" disabled={checks.length <= dive.repetitions} onClick={() => removeDiveRep(dive.id, dive.repetitions)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-lg font-bold text-slate-700 disabled:opacity-40" aria-label={`Retirer une répétition à ${dive.code}`}>−</button>
+                    <button type="button" onClick={() => addDiveRep(dive.id)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-lg font-bold text-[#0878ff]" aria-label={`Ajouter une répétition à ${dive.code}`}>
+                      <Plus className="h-4 w-4" />
                     </button>
-                    {checks.length > dive.repetitions && (
-                      <button type="button" onClick={() => removeDiveRep(dive.id, dive.repetitions)} className="ml-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-black text-white/62 transition hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
-                        Retirer une rep
-                      </button>
-                    )}
+                    </div>
                   </div>
                 );
               })}
