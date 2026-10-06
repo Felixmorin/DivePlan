@@ -802,7 +802,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                     </div>
                     {openDiveNote === dive.id && (
                       <div className="mt-3 rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-athlete-bg)] p-3">
-                        <div className="text-sm font-black">Ma note sur {dive.code}</div>
+                        <div className="text-sm font-black">Note personnelle sur {dive.code}</div>
                         <Textarea className="mt-2 min-h-24 border-white/10 bg-[var(--color-athlete-panel)] text-white placeholder:text-white/38" placeholder="Ajoute un commentaire pour te rappeler ce plongeon..." value={diveNoteDraft} onChange={(event) => setDiveNoteDraft(event.target.value)} />
                         <div className="mt-2 flex justify-end gap-2">
                           <Button type="button" size="sm" variant="outline" className="bg-transparent text-white" onClick={() => setOpenDiveNote(null)}>Annuler</Button>
