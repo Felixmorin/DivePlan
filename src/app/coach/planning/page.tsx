@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { athletes as demoAthletes, demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
+import { completeExpiredTrainingSessions } from "@/lib/session-status";
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, parseMontrealSessionDate, sameMontrealDay, startOfMontrealWeek, toMontrealDateInputValue, toMontrealDateTimeInputValue } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +74,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
   if (clubId === "dev-club") {
     return <DemoPlanningPage period={period} weekStartsOn={weekStartsOn} />;
   }
+  await completeExpiredTrainingSessions();
 
   const [sessionRows,eventRows,groupsResult,athleteRows]=await Promise.all([
     query<{id:string;title:string;focus:string;date:Date;duration:number;status:string;planningEventId:string|null}>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,period.rangeStart,period.rangeEnd]),
@@ -262,7 +264,7 @@ function DayColumn({ day, sessions, events, activeSessionIds, targets, demo, com
 
         <div className="space-y-3">
           {sessions.map((session) => <PlanningSessionCard key={session.id} session={session} active={activeSessionIds.has(session.id)} demo={demo} />)}
-          {events.map((event) => <PlanningEventCard key={event.id} event={event} targets={targets} />)}
+          {events.map((event) => <PlanningEventCard key={event.id} event={event} targets={targets} demo={demo} />)}
           {sessions.length === 0 && events.length === 0 && (
             <div className="rounded-2xl border border-dashed border-[var(--color-border-strong)] p-4">
               <div className="text-sm font-black text-[var(--color-ink-muted)]">Jour libre</div>
@@ -300,7 +302,7 @@ function MonthCalendar({ period, sessions, events, activeSessionIds, targets, we
               </div>
               <div className="space-y-1.5">
                 {daySessions.slice(0, 2).map((session) => <MonthSessionItem key={session.id} session={session} active={activeSessionIds.has(session.id)} demo={demo} />)}
-                {dayEvents.slice(0, 3).map((event) => <MonthEventItem key={event.id} event={event} targets={targets} />)}
+                {dayEvents.slice(0, 3).map((event) => <MonthEventItem key={event.id} event={event} targets={targets} demo={demo} />)}
                 {daySessions.length + dayEvents.length > 5 && <div className="text-[11px] font-black text-[var(--color-ink-muted)]">+{daySessions.length + dayEvents.length - 5}</div>}
               </div>
             </div>
@@ -341,7 +343,7 @@ function PlanningSessionCard({ session, active, demo }: { session: PlanningSessi
   );
 }
 
-function PlanningEventCard({ event, targets }: { event: PlanningEvent; targets: PlanningTarget[] }) {
+function PlanningEventCard({ event, targets, demo }: { event: PlanningEvent; targets: PlanningTarget[]; demo: boolean }) {
   const target = event.groupId ? `group:${event.groupId}` : event.athleteId ? `athlete:${event.athleteId}` : "club";
   return (
     <article className={`rounded-2xl border p-3 ${eventTone(event.type)}`}>
@@ -356,6 +358,7 @@ function PlanningEventCard({ event, targets }: { event: PlanningEvent; targets: 
         <div>{event.athleteName ?? event.groupName ?? "Club complet"}</div>
       </div>
       {event.notes && <p className="mt-2 text-sm leading-5 opacity-80">{event.notes}</p>}
+      {event.type === "TRAINING_SCHEDULE" && <Button asChild size="sm" variant="outline" className="mt-3 w-full justify-between"><Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/new?planningEventId=${event.id}`}>{demo ? "Voir la séance démo" : "Créer la séance"}<CalendarPlus className="h-4 w-4" /></Link></Button>}
     </article>
   );
 }
@@ -370,12 +373,13 @@ function MonthSessionItem({ session, active, demo }: { session: PlanningSession;
   );
 }
 
-function MonthEventItem({ event, targets }: { event: PlanningEvent; targets: PlanningTarget[] }) {
+function MonthEventItem({ event, targets, demo }: { event: PlanningEvent; targets: PlanningTarget[]; demo: boolean }) {
   const target = event.groupId ? `group:${event.groupId}` : event.athleteId ? `athlete:${event.athleteId}` : "club";
   return (
     <div className={`rounded-lg border px-2 py-1.5 text-xs font-black leading-tight ${eventTone(event.type)}`}>
       <div className="flex items-start justify-between gap-1"><span className="block text-[10px] font-bold opacity-70">{formatMontrealTime(event.startsAt)} · {eventTypeLabel(event.type)}</span><PlanningEventEditor compact event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), endsAt: event.endsAt ? toMontrealDateTimeInputValue(event.endsAt) : "", target }} targets={targets} /></div>
       <div>{event.title}</div>
+      {event.type === "TRAINING_SCHEDULE" && <Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/new?planningEventId=${event.id}`} className="mt-1 inline-flex min-h-8 items-center gap-1 text-[11px] font-black underline">{demo ? "Séance démo" : "Créer la séance"}</Link>}
     </div>
   );
 }

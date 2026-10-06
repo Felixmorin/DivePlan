@@ -109,7 +109,7 @@ export default async function CoachDashboard() {
 
       <div className="grid gap-5 xl:grid-cols-[1.45fr_0.85fr]">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={dashboardAthletes} />
-        <QuickReadCard href={primarySession ? `/coach/sessions/${primarySession.id}` : "/coach/sessions"} />
+        <QuickReadCard sessions={sessions} schedules={schedules} session={primarySession} activeSessionIds={activeSessionIds} />
       </div>
 
       <section className="mt-6">
@@ -198,7 +198,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
 
       <div className="grid gap-5 xl:grid-cols-[1.45fr_0.85fr]">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={athletes} demo />
-        <QuickReadCard href="/coach/sessions/demo" />
+        <QuickReadCard sessions={sessions} schedules={[]} session={primarySession} activeSessionIds={activeSessionIds} demo />
       </div>
 
       <section className="mt-6">
@@ -336,20 +336,53 @@ function WeekDayCard({ day, sessions, schedules, activeSessionIds, demo = false 
   );
 }
 
-function QuickReadCard({ href }: { href: string }) {
+function QuickReadCard({ sessions, schedules, session, activeSessionIds, demo = false }: {
+  sessions: DashboardSession[];
+  schedules: DashboardSchedule[];
+  session?: DashboardSession;
+  activeSessionIds: Set<string>;
+  demo?: boolean;
+}) {
+  const weekStart = startOfMontrealWeek(new Date());
+  const weekEnd = addMontrealDays(weekStart, 7);
+  const weekSessions = sessions.filter((item) => item.date >= weekStart && item.date < weekEnd);
+  const sessionCount = weekSessions.length;
+  const athleteCount = new Set(weekSessions.flatMap((item) => uniqueAssignedIds(item.blocks))).size;
+  const totalMinutes = weekSessions.reduce((total, item) => total + item.duration, 0);
+  const needsPreparation = weekSessions.filter((item) => item.status === "DRAFT").length;
+  const schedulesWithoutSession = schedules.filter((item) => !item.sessionId).length;
+  const currentStatus = session && activeSessionIds.has(session.id) ? "IN_PROGRESS" : session?.status;
+  const nextAction = session
+    ? currentStatus === "DRAFT"
+      ? { label: "Préparer la séance", detail: session.title, href: demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}/edit` }
+      : currentStatus === "IN_PROGRESS"
+        ? { label: "Suivre la séance", detail: session.title, href: demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}` }
+        : currentStatus === "COMPLETED"
+          ? { label: "Consulter le bilan", detail: session.title, href: demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}` }
+        : { label: "Ouvrir la séance", detail: session.title, href: demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}` }
+    : { label: "Planifier une séance", detail: "Aucune séance à venir", href: "/coach/sessions/new" };
+
   return (
     <Card>
-      <CardHeader><CardTitle>Lecture rapide</CardTitle></CardHeader>
+      <CardHeader><CardTitle>Votre semaine de coaching</CardTitle></CardHeader>
       <CardContent className="space-y-5">
         <div>
           <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Cette semaine</p>
-          <p className="mt-2 text-lg font-black"><strong>2</strong> séances · <strong>3</strong> athlètes · <strong>239 min</strong></p>
+          <p className="mt-2 text-lg font-black"><strong>{sessionCount}</strong> séance{sessionCount > 1 ? "s" : ""} · <strong>{athleteCount}</strong> athlète{athleteCount > 1 ? "s" : ""} · <strong>{totalMinutes}</strong> min planifiées</p>
         </div>
         <div className="border-t border-[var(--color-border)] pt-4">
-          <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Prochaine action</p>
-          <p className="mt-2 font-black">Début saison 2 <span className="font-semibold text-[var(--color-ink-muted)]">— aujourd&apos;hui, 18 h 45</span></p>
+          <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Prochaine étape</p>
+          <p className="mt-2 font-black">{nextAction.label}</p>
+          <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{nextAction.detail}</p>
+          {(needsPreparation > 0 || schedulesWithoutSession > 0) && (
+            <p className="mt-3 rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm font-bold text-[var(--color-ink-muted)]">
+              {needsPreparation > 0 && `${needsPreparation} séance${needsPreparation > 1 ? "s" : ""} à préparer`}
+              {needsPreparation > 0 && schedulesWithoutSession > 0 && " · "}
+              {schedulesWithoutSession > 0 && `${schedulesWithoutSession} entraînement${schedulesWithoutSession > 1 ? "s" : ""} sans séance`}
+            </p>
+          )}
           <Button asChild variant="outline" className="mt-4 w-full justify-between">
-            <Link href={href}>Ouvrir la séance <span aria-hidden="true">→</span></Link>
+            <Link href={nextAction.href}>{nextAction.label} <span aria-hidden="true">→</span></Link>
           </Button>
         </div>
       </CardContent>

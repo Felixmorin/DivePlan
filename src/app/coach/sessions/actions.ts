@@ -132,7 +132,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
   }
 
   const planningEvent = data.planningEventId
-    ? (await query<{id:string;startsAt:Date}>(`SELECT id,"startsAt" FROM "PlanningEvent" WHERE id=$1 AND "clubId"=$2 AND "groupId"=$3 AND type='TRAINING_SCHEDULE'`,[data.planningEventId,clubId,data.groupId])).rows[0] ?? null
+    ? (await query<{id:string;startsAt:Date}>(`SELECT id,"startsAt" FROM "PlanningEvent" WHERE id=$1 AND "clubId"=$2 AND ("groupId"=$3 OR "groupId" IS NULL) AND type='TRAINING_SCHEDULE'`,[data.planningEventId,clubId,data.groupId])).rows[0] ?? null
     : null;
   if (data.planningEventId && !planningEvent) throw new Error("Horaire d'entraînement introuvable pour ce groupe.");
   if (planningEvent && toMontrealDateInputValue(planningEvent.startsAt) !== data.date) {

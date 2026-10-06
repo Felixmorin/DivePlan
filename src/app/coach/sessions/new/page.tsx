@@ -13,15 +13,15 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewSessionPage({ searchParams }: { searchParams: Promise<{ templateId?: string; exerciseId?: string }> }) {
+export default async function NewSessionPage({ searchParams }: { searchParams: Promise<{ templateId?: string; exerciseId?: string; planningEventId?: string }> }) {
   const { clubId } = await requireCoach();
-  const { templateId, exerciseId } = await searchParams;
+  const { templateId, exerciseId, planningEventId } = await searchParams;
   if (clubId === "dev-club") {
     return (
       <CoachShell active="Seances">
         <div className="mb-6">
-          <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Builder</p>
-          <h1 className="mt-2 text-3xl font-black">Nouvelle seance</h1>
+          <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Séance</p>
+          <h1 className="mt-2 text-3xl font-black">Nouvelle séance</h1>
           <p className="mt-1 text-[var(--color-ink-muted)]">Mode demo local sans PostgreSQL.</p>
         </div>
         <Card>
@@ -117,12 +117,12 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
   return (
     <CoachShell active="Seances">
       <div className="mb-6">
-        <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Builder</p>
-        <h1 className="mt-2 text-3xl font-black">Nouvelle seance</h1>
-        <p className="mt-1 text-[var(--color-ink-muted)]">Construire une seance complete en quelques minutes, avec blocs partageables et assignations fines.</p>
+        <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Séance</p>
+        <h1 className="mt-2 text-3xl font-black">Nouvelle séance</h1>
+        <p className="mt-1 text-[var(--color-ink-muted)]">Planifie, compose les blocs, répartis les athlètes, puis vérifie avant publication.</p>
       </div>
-      {groups.length === 0 || athletes.length === 0 || drylandLibrary.length === 0 ? (
-        <EmptyState title="Donnees requises manquantes" description="Le builder a besoin d'un groupe, d'athletes actifs et d'exercices dryland pour publier une seance." action={<Button asChild><Link href="/coach/athletes">Verifier les athletes</Link></Button>} />
+      {groups.length === 0 || athletes.length === 0 ? (
+        <EmptyState title="Prépare l’effectif avant de créer une séance" description="Ajoute au moins un groupe et un athlète actif. Tu pourras ensuite composer une séance piscine, dryland ou mixte." action={<Button asChild><Link href="/coach/athletes">Gérer les athlètes</Link></Button>} />
       ) : (
         <SessionBuilder
           athletes={athletes.map((athlete) => ({
@@ -165,6 +165,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
             })) ?? []
           }))}
           initialTemplate={initialTemplate}
+          initialPlanningEventId={planningEventId}
           initialExerciseId={exerciseId}
           onCreate={createTrainingSession}
           onCreateExercise={createDrylandExercise}

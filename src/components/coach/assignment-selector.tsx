@@ -16,7 +16,7 @@ type AssignableAthlete = {
 };
 
 export function AssignmentSelector({ selected, onChange, athletes = demoAthletes }: { selected: string[]; onChange: (ids: string[]) => void; athletes?: AssignableAthlete[] }) {
-  const [mode, setMode] = useState<"group" | "subgroup" | "athletes" | "single">("athletes");
+  const [mode, setMode] = useState<"group" | "athletes" | "single">("athletes");
   const selectedText = useMemo(() => `${selected.length} athlete${selected.length > 1 ? "s" : ""}`, [selected.length]);
   const selectedAthletes = athletes.filter((athlete) => selected.includes(athlete.id));
 
@@ -42,7 +42,6 @@ export function AssignmentSelector({ selected, onChange, athletes = demoAthletes
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant={mode === "group" ? "default" : "outline"} onClick={setAll}>Groupe entier</Button>
-          <Button type="button" size="sm" variant={mode === "subgroup" ? "default" : "outline"} onClick={() => { setMode("subgroup"); onChange(athletes.slice(0, 3).map((athlete) => athlete.id)); }}>Sous-groupe</Button>
           <Button type="button" size="sm" variant={mode === "athletes" ? "default" : "outline"} onClick={() => setMode("athletes")}>Athletes</Button>
           <Button type="button" size="sm" variant={mode === "single" ? "default" : "outline"} onClick={() => { setMode("single"); onChange(selected.slice(0, 1)); }}>Individuel</Button>
         </div>
