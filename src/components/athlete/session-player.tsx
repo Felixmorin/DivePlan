@@ -39,8 +39,8 @@ type SaveStatus = "saved" | "saving" | "error";
 export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onCloseBlock, onSaveProgress, onComplete, onSaveDiveNote, onSaveCompetitionEvaluation }: SessionPlayerProps) {
   const router = useRouter();
   const blocks = session.blocks;
-  const [current, setCurrent] = useState(0);
-  const [stepIndex, setStepIndex] = useState(0);
+  const [current, setCurrent] = useState(() => getResumeBlockIndex(session));
+  const [stepIndex, setStepIndex] = useState(() => getResumeStepIndex(session, getResumeBlockIndex(session)));
   const [started, setStarted] = useState(session.completionStatus === "IN_PROGRESS" || session.completionStatus === "COMPLETED");
   const [blockTimings, setBlockTimings] = useState(() => Object.fromEntries(blocks.map((item) => [item.id, { openedAt: item.openedAt, closedAt: item.closedAt }])));
   const [now, setNow] = useState(() => Date.now());
@@ -1000,6 +1000,29 @@ function buildSessionProgressPayload(
       )
     )
   };
+}
+
+function getResumeBlockIndex(session: AthleteSessionView) {
+  if (session.completionStatus !== "IN_PROGRESS") return 0;
+
+  const activeBlockIndex = session.blocks.findIndex((block) => block.openedAt && !block.closedAt);
+  if (activeBlockIndex >= 0) return activeBlockIndex;
+
+  const nextIncompleteIndex = session.blocks.findIndex((block) =>
+    block.exercises.some((exercise) => !exercise.completed)
+    || block.poolSections.some((section) => section.dives.some((dive) => dive.completedRepetitions < dive.repetitions))
+  );
+  return nextIncompleteIndex >= 0 ? nextIncompleteIndex : Math.max(0, session.blocks.length - 1);
+}
+
+function getResumeStepIndex(session: AthleteSessionView, blockIndex: number) {
+  const block = session.blocks[blockIndex];
+  if (session.completionStatus !== "IN_PROGRESS" || !block || block.poolSections.length === 0) return 0;
+
+  const nextIncompleteIndex = block.poolSections.findIndex((section) =>
+    section.dives.some((dive) => dive.completedRepetitions < dive.repetitions)
+  );
+  return nextIncompleteIndex >= 0 ? nextIncompleteIndex : Math.max(0, block.poolSections.length - 1);
 }
 
 function StartStat({ label, value }: { label: string; value: string | number }) {
