@@ -51,6 +51,29 @@
   box-sizing: border-box;
 }
 
+/* Focused, high contrast session player inspired by the athlete session mockups. */
+.session-player-light {
+  --color-athlete-bg: #ffffff;
+  --color-athlete-panel: #ffffff;
+  --color-athlete-panel-2: #e8f7fb;
+  --color-action: #0878ff;
+  --color-action-strong: #0565db;
+  --color-success: #48d9c3;
+  --focus-ring: 0 0 0 3px rgba(8, 120, 255, .25);
+  background: #f4f8fc !important;
+  color: #0b1640 !important;
+}
+.session-player-light .text-white { color: #0b1640 !important; }
+.session-player-light [class*="text-white/"] { color: #395a83 !important; }
+.session-player-light button.text-white,
+.session-player-light .bg-\[var\(--color-action\)\].text-white,
+.session-player-light .bg-\[var\(--color-success\)\].text-white { color: #fff !important; }
+.session-player-light [class*="border-white/"] { border-color: #d9e5f0 !important; }
+.session-player-light [class*="bg-white/"] { background-color: #f1f6fa !important; }
+.session-player-light .bg-\[var\(--color-athlete-bg\)\] { background-color: #f8fbfe !important; }
+.session-player-light .bg-\[var\(--color-athlete-panel\)\] { background-color: #fff !important; }
+.session-player-light .athlete-header p { color: #395a83; }
+
 body {
   margin: 0;
   background: var(--background);

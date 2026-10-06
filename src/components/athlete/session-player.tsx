@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, FilePenLine, NotebookPen, Play, Plus, RotateCcw, Save } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Circle, Clock3, Dumbbell, Eye, FilePenLine, Play, Plus, RotateCcw, Save } from "lucide-react";
 import type { CompleteSessionPayload, SaveAthleteProgressPayload } from "@/app/athlete/session/[id]/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -558,7 +558,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
 
   if (!started) {
     return (
-      <AthleteShell hideNav>
+      <AthleteShell hideNav className="session-player-light">
         <div className="flex min-h-[calc(100vh-2rem)] flex-col justify-between">
           <button type="button" onClick={leaveSession} className="mb-4 flex min-h-11 items-center gap-2 self-start rounded-xl px-1 text-sm font-bold text-white/62 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowLeft className="h-4 w-4" /> Retour</button>
           <section className="rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
@@ -650,7 +650,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
 
   if (reviewing) {
     return (
-      <AthleteShell hideNav>
+      <AthleteShell hideNav className="session-player-light">
         <div className="space-y-4">
           <button type="button" onClick={leaveSession} className="flex min-h-11 items-center gap-2 rounded-xl px-1 text-sm font-bold text-white/62 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowLeft className="h-4 w-4" /> Quitter</button>
           <section className="builder-pulse rounded-[2rem] border border-white/10 bg-[var(--color-athlete-panel)] p-5 text-center shadow-[0_24px_70px_rgba(0,0,0,0.32)]">
@@ -686,13 +686,16 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
             </section>
           )}
           {hasRecordedWork && <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-black"><NotebookPen className="h-4 w-4 text-[var(--color-action)]" /> Ressenti final</div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {finalRatings.map((rating) => (
-                <Button key={rating} type="button" variant="dark" className={finalFeedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFinalFeedback({ rating })}>{rating}</Button>
+            <div className="mb-3 text-lg font-black">Comment tu te sens ?</div>
+            <div className="grid grid-cols-5 gap-1.5">
+              {finalRatings.map((rating, index) => (
+                <button key={rating} type="button" aria-pressed={finalFeedback.rating === rating} className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-center transition ${finalFeedback.rating === rating ? "bg-blue-50 ring-2 ring-[var(--color-action)]" : "hover:bg-slate-50"}`} onClick={() => updateFinalFeedback({ rating })}>
+                  <span className={`flex h-10 w-10 items-center justify-center rounded-full text-2xl ${["bg-red-200", "bg-orange-200", "bg-slate-200", "bg-green-200", "bg-emerald-300"][index]}`} aria-hidden="true">{["☹", "🙁", "😐", "🙂", "😄"][index]}</span>
+                  <span className="text-[10px] font-semibold leading-tight text-slate-600">{["Très fatigué", "Fatigué", "Moyen", "Bien", "Super"][index]}</span>
+                </button>
               ))}
             </div>
-            <Textarea className="mt-3 min-h-28 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note pour ton coach" value={finalFeedback.note} onChange={(event) => updateFinalFeedback({ note: event.target.value })} />
+            <Textarea className="mt-3 min-h-16 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Ajouter une note personnelle (optionnel)" value={finalFeedback.note} onChange={(event) => updateFinalFeedback({ note: event.target.value })} />
           </section>}
           {error && <ErrorBanner message={error} />}
           <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
@@ -708,7 +711,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   }
 
   return (
-    <AthleteShell hideNav>
+    <AthleteShell hideNav className="session-player-light">
       <div className="space-y-4">
         <header className="sticky top-0 z-20 -mx-4 bg-[var(--color-athlete-bg)]/96 px-4 pb-3 pt-2 backdrop-blur">
           <div className="flex items-center justify-between gap-3">
