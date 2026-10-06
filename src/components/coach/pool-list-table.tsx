@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { parseQuickPoolLine, poolListTotal, validatePoolListRow, type PoolListRow } from "@/lib/pool-list";
 
 export function PoolListTable({ rows, onChange, inputName }: { rows: PoolListRow[]; onChange: (rows: PoolListRow[]) => void; inputName?: string }) {
+  const [descriptionDrafts, setDescriptionDrafts] = useState<Record<string, string>>({});
+
   function replace(index: number, row: PoolListRow) {
     onChange(rows.map((current, currentIndex) => currentIndex === index ? row : current));
   }
@@ -34,10 +36,17 @@ export function PoolListTable({ rows, onChange, inputName }: { rows: PoolListRow
               return (
                 <tr key={row.id} className="border-t border-[var(--color-border)] align-top">
                   <td className="p-3">
-                    <Input aria-label={`Description ligne ${index + 1}`} value={`${row.context}${row.context ? ": " : ""}${row.diveCodes.join(", ")}`} placeholder="1m-3m : 101C, 101B, 103B" onChange={(event) => {
-                      if (!event.target.value.includes(":")) return;
-                      const parsed = parseQuickPoolLine(event.target.value, row.repetitions.join(", "), row.id).row;
+                    <Input aria-label={`Description ligne ${index + 1}`} value={descriptionDrafts[row.id] ?? `${row.context}${row.context ? ": " : ""}${row.diveCodes.join(", ")}`} placeholder="1m-3m : 101C, 101B, 103B" onChange={(event) => {
+                      const description = event.target.value;
+                      setDescriptionDrafts((drafts) => ({ ...drafts, [row.id]: description }));
+                      if (!description.includes(":")) return;
+                      const parsed = parseQuickPoolLine(description, row.repetitions.join(", "), row.id).row;
                       replace(index, parsed);
+                      setDescriptionDrafts((drafts) => {
+                        const next = { ...drafts };
+                        delete next[row.id];
+                        return next;
+                      });
                     }} />
                     {validation.heightCount > 1 && <p className="mt-1 text-xs font-bold text-[var(--block-pool-fg)]">Chaque plongeon sera execute aux {validation.heightCount} hauteurs indiquees.</p>}
                     {validation.errors.length > 0 && <p className="mt-1 text-xs font-semibold text-[var(--color-danger)]">{validation.errors.join(" ")}</p>}
