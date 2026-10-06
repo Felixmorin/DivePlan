@@ -240,7 +240,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   const publicationIssues = getPublicationIssues({ drylandBlocks, poolBlocks: activePoolBlocks });
   const reviewBlocks = [
     ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title, type: "dryland" as const, assigned: block.athleteIds, content: `${block.exerciseIds.length} exercice${block.exerciseIds.length === 1 ? "" : "s"}` })),
-    ...activePoolBlocks.map((block) => ({ id: block.id, title: block.title, type: "pool" as const, assigned: effectivePoolAssignments[block.id] ?? [], content: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes de plongeons` }))
+    ...activePoolBlocks.map((block) => ({ id: block.id, title: block.title, type: "pool" as const, assigned: effectivePoolAssignments[block.id] ?? [], content: `${block.sections.reduce((sum, section) => sum + sectionVolume(section), 0)} répétitions` }))
   ];
   const evaluationChoices = useMemo(() => [
     { value: "none", label: "Aucune évaluation" },
