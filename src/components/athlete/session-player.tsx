@@ -15,7 +15,6 @@ import type { MilestoneKey } from "@/lib/milestones";
 import { formatMontrealTime } from "@/lib/timezone";
 import { isSessionStartAvailable, SESSION_EARLY_START_MINUTES } from "@/lib/session-availability";
 
-const blockRatings = ["Pas bien", "Difficile", "Moyen", "Bien", "Très bien"];
 const finalRatings = ["Pas bien", "Difficile", "Moyen", "Bien", "Très bien"];
 
 type SessionPlayerProps = {
@@ -30,7 +29,6 @@ type SessionPlayerProps = {
   onSaveCompetitionEvaluation: (input: { sessionId: string; ratings: Array<{ competitionDiveId: string; rating: number }> }) => Promise<void>;
 };
 
-type PageFeedback = Record<string, { rating: string; note: string }>;
 type DiveRepState = 0 | 1 | 2;
 type DiveChecks = Record<string, DiveRepState[]>;
 type ExerciseChecks = Record<string, boolean>;
@@ -50,7 +48,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const [earnedMilestones, setEarnedMilestones] = useState<Array<{ key: MilestoneKey; title: string; description: string }>>([]);
   const [dirty, setDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
-  const feedbackSaveTimeouts = useRef<Record<string, number | undefined>>({});
   const finalFeedbackSaveTimeout = useRef<number | undefined>(undefined);
   const saveVersion = useRef(0);
   const [pulseKey, setPulseKey] = useState<string | null>(null);
@@ -84,21 +81,8 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       )
     )
   );
-  const [pageFeedback, setPageFeedback] = useState<PageFeedback>(() =>
-    Object.fromEntries(
-      blocks.flatMap((block) => {
-        const pages = block.poolSections.length > 0 ? block.poolSections : [null];
-        return pages.map((section, pageIndex) => {
-          const firstExercise = section ? undefined : block.exercises.find((exercise) => exercise.rating || exercise.note);
-          const firstDive = section?.dives.find((dive) => dive.feedbackCompleted && (dive.rating || dive.note));
-          return [pageFeedbackKey(block.id, pageIndex), { rating: firstExercise?.rating ?? firstDive?.rating ?? "", note: firstExercise?.note ?? firstDive?.note ?? "" }];
-        });
-      })
-    )
-  );
   const exerciseChecksRef = useRef(exerciseChecks);
   const diveChecksRef = useRef(diveChecks);
-  const pageFeedbackRef = useRef(pageFeedback);
   const finalFeedbackRef = useRef(finalFeedback);
   const finalFeedbackTouchedRef = useRef(false);
   const block = blocks[current];
@@ -109,12 +93,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const activeStep = blockSteps[stepIndex];
   const isPoolBlock = block.poolSections.length > 0;
   const isLastBlockStep = !isPoolBlock || stepIndex === blockSteps.length - 1;
-  const feedback = pageFeedback[pageFeedbackKey(block.id, stepIndex)] ?? { rating: "", note: "" };
-  const hasFeedback = Boolean(feedback.rating);
-  const hasWorkInCurrentStep = activeStep?.kind === "pool"
-    ? activeStep.section.dives.some((dive) => (diveChecks[dive.id] ?? []).some((state) => state > 0))
-    : block.exercises.some((exercise) => exerciseChecks[exercise.id]);
-  const feedbackRequired = hasWorkInCurrentStep;
   const totalItems = useMemo(() => countSessionItems(blocks), [blocks]);
   const completedItems = countCompletedItems(blocks, exerciseChecks, diveChecks);
   const hasRecordedWork = completedItems > 0;
@@ -173,10 +151,9 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         pageIndex: number,
         exercises: ExerciseChecks,
         dives: DiveChecks,
-        feedbackByPage: PageFeedback,
       version = ++saveVersion.current
     ) => {
-      const payload = buildBlockProgressPayload(session.id, sessionBlock, pageIndex, exercises, dives, feedbackByPage);
+      const payload = buildBlockProgressPayload(session.id, sessionBlock, pageIndex, exercises, dives);
       if (payload.exercises.length === 0 && payload.dives.length === 0 && !payload.sessionFeedback) {
         if (version === saveVersion.current) {
           setDirty(false);
@@ -203,7 +180,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       blocks,
       exerciseChecksRef.current,
       diveChecksRef.current,
-      pageFeedbackRef.current,
       finalFeedbackTouchedRef.current ? finalFeedbackRef.current : undefined
     );
     const body = JSON.stringify(payload);
@@ -237,13 +213,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     };
   }, [dirty, reviewing, saveProgressBeforePageHide]);
 
-  useEffect(() => {
-    const timeouts = feedbackSaveTimeouts.current;
-    return () => {
-      Object.values(timeouts).forEach((timeout) => window.clearTimeout(timeout));
-      window.clearTimeout(finalFeedbackSaveTimeout.current);
-    };
-  }, []);
+  useEffect(() => () => window.clearTimeout(finalFeedbackSaveTimeout.current), []);
 
   function pulse(key: string) {
     setPulseKey(key);
@@ -285,7 +255,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     setExerciseChecks((previous) => {
       const next = { ...previous, [exerciseId]: !previous[exerciseId] };
       exerciseChecksRef.current = next;
-      void saveProgressForBlock(block, stepIndex, next, diveChecksRef.current, pageFeedbackRef.current, version).catch(() => {
+      void saveProgressForBlock(block, stepIndex, next, diveChecksRef.current, version).catch(() => {
         setDirty(true);
         if (version === saveVersion.current) setSaveStatus("error");
         setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
@@ -309,7 +279,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         })
       };
       diveChecksRef.current = next;
-      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, pageFeedbackRef.current, version).catch(() => {
+      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, version).catch(() => {
         setDirty(true);
         if (version === saveVersion.current) setSaveStatus("error");
         setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
@@ -325,7 +295,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       const next = { ...previous, [diveId]: [...currentChecks, 1 as DiveRepState] };
       pulse(`${diveId}-${currentChecks.length}`);
       diveChecksRef.current = next;
-      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, pageFeedbackRef.current, version).catch(() => {
+      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, version).catch(() => {
         setDirty(true);
         if (version === saveVersion.current) setSaveStatus("error");
         setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
@@ -346,7 +316,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       }
       diveChecksRef.current = next;
       setDiveChecks(next);
-      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, pageFeedbackRef.current, version).catch(() => {
+      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, version).catch(() => {
         setDirty(true);
         if (version === saveVersion.current) setSaveStatus("error");
         setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
@@ -357,7 +327,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     const next = { ...exerciseChecksRef.current, ...Object.fromEntries(block.exercises.map((exercise) => [exercise.id, true])) };
     exerciseChecksRef.current = next;
     setExerciseChecks(next);
-    void saveProgressForBlock(block, stepIndex, next, diveChecksRef.current, pageFeedbackRef.current, version).catch(() => {
+    void saveProgressForBlock(block, stepIndex, next, diveChecksRef.current, version).catch(() => {
       setDirty(true);
       if (version === saveVersion.current) setSaveStatus("error");
       setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
@@ -372,30 +342,12 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
 
       const next = { ...previous, [diveId]: currentChecks.slice(0, -1) };
       diveChecksRef.current = next;
-      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, pageFeedbackRef.current, version).catch(() => {
+      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, version).catch(() => {
         setDirty(true);
         if (version === saveVersion.current) setSaveStatus("error");
         setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
       });
       return next;
-    });
-  }
-
-  function updateFeedback(next: Partial<{ rating: string; note: string }>) {
-    const version = markDirty();
-    const feedbackKey = pageFeedbackKey(block.id, stepIndex);
-    setPageFeedback((previous) => {
-      const nextFeedbackByPage = { ...previous, [feedbackKey]: { ...feedback, ...next } };
-      pageFeedbackRef.current = nextFeedbackByPage;
-      window.clearTimeout(feedbackSaveTimeouts.current[feedbackKey]);
-      feedbackSaveTimeouts.current[feedbackKey] = window.setTimeout(() => {
-        void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, diveChecksRef.current, nextFeedbackByPage, version).catch(() => {
-          setDirty(true);
-          if (version === saveVersion.current) setSaveStatus("error");
-          setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
-        });
-      }, 650);
-      return nextFeedbackByPage;
     });
   }
 
@@ -407,7 +359,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       finalFeedbackRef.current = nextFeedback;
       window.clearTimeout(finalFeedbackSaveTimeout.current);
       finalFeedbackSaveTimeout.current = window.setTimeout(() => {
-        const payload = buildSessionProgressPayload(session.id, blocks, exerciseChecksRef.current, diveChecksRef.current, pageFeedbackRef.current, nextFeedback);
+        const payload = buildSessionProgressPayload(session.id, blocks, exerciseChecksRef.current, diveChecksRef.current, nextFeedback);
         void onSaveProgress(payload).then(() => {
           if (version === saveVersion.current) {
             setDirty(false);
@@ -430,8 +382,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   }
 
   function nextStep() {
-    if (feedbackRequired && !hasFeedback) return;
-
     if (isPoolBlock && stepIndex < blockSteps.length - 1) {
       setStepIndex(stepIndex + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -446,21 +396,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       return;
     }
 
-    closeBlock(block.id);
-    setReviewing(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function finishTraining() {
-    if (feedbackRequired && !hasFeedback) return;
-    if (evaluationRequired && session.competitionDives.length > 0 && !evaluationComplete && session.competitionEvaluationBlockIds.some((id) => blocks.findIndex((item) => item.id === id) > current)) {
-      setError("Continue jusqu’au bloc prévu pour répondre à l’évaluation.");
-      return;
-    }
-    if (evaluationRequired && session.competitionDives.length > 0 && !evaluationComplete) {
-      setEvaluationOpen(true);
-      return;
-    }
     closeBlock(block.id);
     setReviewing(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -535,11 +470,10 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       return;
     }
     setError(null);
-    Object.values(feedbackSaveTimeouts.current).forEach((timeout) => window.clearTimeout(timeout));
     window.clearTimeout(finalFeedbackSaveTimeout.current);
     startTransition(async () => {
       try {
-        const awards = await onComplete(buildSessionProgressPayload(session.id, blocks, exerciseChecksRef.current, diveChecksRef.current, pageFeedbackRef.current, finalFeedbackRef.current));
+        const awards = await onComplete(buildSessionProgressPayload(session.id, blocks, exerciseChecksRef.current, diveChecksRef.current, finalFeedbackRef.current));
         setDirty(false);
         setSaveStatus("saved");
         if (awards.length) {
@@ -650,7 +584,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     return (
       <AthleteShell hideNav className="session-player-light">
         <div className="space-y-4">
-          <button type="button" onClick={leaveSession} className="flex min-h-11 items-center gap-2 rounded-xl px-1 text-sm font-bold text-white/62 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowLeft className="h-4 w-4" /> Quitter</button>
           <header className="relative -mx-4 flex items-center justify-between px-4 pb-2 pt-1">
             <button type="button" onClick={leaveSession} className="min-h-10 rounded-xl px-1 text-sm font-bold text-[var(--color-action)]">Quitter</button>
             <div className="w-44">
@@ -683,7 +616,8 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
           {!hasRecordedWork && <p className="text-center text-sm text-white/68">Tu peux enregistrer la séance sans ressenti.</p>}
           {error && <ErrorBanner message={error} />}
           <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
-            <div className="mx-auto flex max-w-[430px] gap-2">
+            <div className="mx-auto flex max-w-[430px] flex-col gap-2">
+              <Button type="button" variant="outline" className="h-12 w-full !border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" onClick={previousStep}>Modifier la séance</Button>
               <Button type="button" variant="action" className="h-14 w-full rounded-2xl" disabled={isPending} onClick={completeSession}><Save className="h-5 w-5" /> {isPending ? "Enregistrement..." : "Enregistrer la séance"}</Button>
             </div>
           </div>
@@ -702,6 +636,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
             <div className="w-44">
               <div className="mb-1 text-center text-xs font-bold">Bloc {current + 1}/{blocks.length}</div>
               <Progress value={progress} className="h-2 bg-slate-200" />
+              <div className="mt-1 flex justify-center"><SaveIndicator status={saveStatus} compact /></div>
             </div>
             <button type="button" aria-label="Aperçu des blocs" aria-expanded={sessionPreviewOpen} aria-controls="active-session-preview" onClick={() => setSessionPreviewOpen((open) => !open)} className="flex h-10 w-10 items-center justify-center justify-self-end rounded-xl border border-[var(--color-action)] text-[var(--color-action)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><Eye className="h-5 w-5" /></button>
             {sessionPreviewOpen && <div className="absolute right-0 top-12 z-40 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_16px_45px_rgba(15,35,65,.22)]" id="active-session-preview" role="dialog" aria-label="Aperçu des blocs">
@@ -718,7 +653,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                 })}
               </ol>
             </div>}
-            <div className="absolute right-12 top-1/2 -translate-y-1/2"><SaveIndicator status={saveStatus} compact /></div>
           </div>
         </header>
 
@@ -767,7 +701,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                 return (
                   <div key={dive.id} className="rounded-2xl border border-white/10 bg-white p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0"><div className={`truncate text-lg font-black ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "text-red-500" : ""}`}>{dive.postSessionModified ? dive.code : dive.actualCode ?? dive.code} <span className="text-base font-bold text-slate-700">{dive.name}</span></div><div className="mt-0.5 text-sm text-slate-500">{activeStep.section.label} · {dive.repetitions} répétition{dive.repetitions === 1 ? "" : "s"}{golden > 0 ? ` · ${golden} étoile${golden > 1 ? "s" : ""}` : ""}</div></div>
+                      <div className="min-w-0"><div className={`truncate text-lg font-black ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "text-red-500" : ""}`}>{dive.postSessionModified ? dive.code : dive.actualCode ?? dive.code} <span className="text-base font-bold text-slate-700">{dive.name}</span></div><div className="mt-0.5 text-sm text-slate-500">{activeStep.section.label} · {dive.repetitions} répétition{dive.repetitions === 1 ? "" : "s"}{golden > 0 ? ` · ${golden} golden rep${golden > 1 ? "s" : ""}` : ""}</div></div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-black text-[#0b1640]">{completed}/{checks.length}</span>
                         <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-9 w-9 items-center justify-center rounded-lg ${diveNotes[dive.id] ? "text-[var(--color-action)]" : "text-slate-500"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}><FilePenLine className="h-5 w-5" /></button>
@@ -778,7 +712,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                         <div className="text-sm font-black">Note personnelle sur {dive.code}</div>
                         <Textarea className="mt-2 min-h-24 border-white/10 bg-[var(--color-athlete-panel)] text-white placeholder:text-white/38" placeholder="Ajoute un commentaire pour te rappeler ce plongeon..." value={diveNoteDraft} onChange={(event) => setDiveNoteDraft(event.target.value)} />
                         <div className="mt-2 flex justify-end gap-2">
-                          <Button type="button" size="sm" variant="outline" className="bg-transparent text-white" onClick={() => setOpenDiveNote(null)}>Annuler</Button>
+                          <Button type="button" size="sm" variant="outline" className="!border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" onClick={() => setOpenDiveNote(null)}>Annuler</Button>
                           <Button type="button" size="sm" variant="action" disabled={isNotePending} onClick={() => saveDiveNote(dive.id)}>{isNotePending ? "Sauvegarde..." : "Enregistrer"}</Button>
                         </div>
                       </div>
@@ -803,21 +737,12 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
           )}
         </section>
 
-        <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] p-4">
-          <div className="mb-3 text-sm font-black text-white/72">Ressenti du bloc</div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {blockRatings.map((rating) => <Button key={rating} type="button" size="sm" variant="dark" className={feedback.rating === rating ? "bg-[var(--color-action)] text-white hover:bg-[var(--color-action-strong)]" : ""} onClick={() => updateFeedback({ rating })}>{rating}</Button>)}
-          </div>
-          <Textarea className="mt-3 border-white/10 bg-[var(--color-athlete-bg)] text-white placeholder:text-white/38" placeholder="Note rapide (facultatif)" value={feedback.note} onChange={(event) => updateFeedback({ note: event.target.value })} />
-          {feedbackRequired && !hasFeedback && <p className="mt-2 text-sm font-semibold text-[var(--color-action)]">Choisis ton ressenti avant de continuer.</p>}
-        </section>
-
         {error && <ErrorBanner message={error} />}
 
         <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
           <div className="mx-auto grid max-w-[430px] grid-cols-[1fr_1.35fr] gap-2">
-            <Button type="button" variant="outline" className="h-14 bg-transparent text-white" disabled={current === 0 && stepIndex === 0} onClick={previousStep}><ChevronLeft className="h-5 w-5" /> Precedent</Button>
-            <Button type="button" variant="action" className="h-14 rounded-2xl" disabled={feedbackRequired && !hasFeedback} onClick={nextStep}>{current === blocks.length - 1 && isLastBlockStep ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
+            <Button type="button" variant="outline" className="h-14 !border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" disabled={current === 0 && stepIndex === 0} onClick={previousStep}><ChevronLeft className="h-5 w-5" /> Précédent</Button>
+            <Button type="button" variant="action" className="h-14 rounded-2xl" onClick={nextStep}>{current === blocks.length - 1 && isLastBlockStep ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
           </div>
         </div>
       </div>
@@ -899,19 +824,13 @@ function countBlockRemaining(block: AthleteSessionView["blocks"][number], exerci
   return Math.max(0, total - complete);
 }
 
-function pageFeedbackKey(blockId: string, pageIndex: number) {
-  return `${blockId}:${pageIndex}`;
-}
-
 function buildBlockProgressPayload(
   sessionId: string,
   block: AthleteSessionView["blocks"][number],
   pageIndex: number,
   exercises: ExerciseChecks,
-  dives: DiveChecks,
-  feedbackByPage: PageFeedback
+  dives: DiveChecks
 ): SaveAthleteProgressPayload {
-  const feedback = feedbackByPage[pageFeedbackKey(block.id, pageIndex)] ?? { rating: "Moyen", note: "" };
   const section = block.poolSections[pageIndex];
 
   return {
@@ -919,16 +838,16 @@ function buildBlockProgressPayload(
     exercises: section ? [] : block.exercises.map((exercise) => ({
       exerciseId: exercise.id,
       completed: exercises[exercise.id] ?? false,
-      rating: feedback.rating,
-      note: feedback.note
+      rating: null,
+      note: null
     })),
     dives: section ? section.dives.map((dive) => ({
         poolDiveId: dive.id,
         repetitionsCompleted: (dives[dive.id] ?? []).filter((state) => state > 0).length,
         goldenRepetitions: (dives[dive.id] ?? []).filter((state) => state === 2).length,
-        feedbackCompleted: Boolean(feedback.rating),
-        rating: feedback.rating,
-        note: feedback.note
+        feedbackCompleted: false,
+        rating: null,
+        note: null
       })) : []
   };
 }
@@ -938,36 +857,29 @@ function buildSessionProgressPayload(
   blocks: AthleteSessionView["blocks"],
   exercises: ExerciseChecks,
   dives: DiveChecks,
-  feedbackByPage: PageFeedback,
   sessionFeedback?: { rating: string; note: string }
 ): SaveAthleteProgressPayload {
   return {
     sessionId,
     sessionFeedback,
     exercises: blocks.flatMap((block) =>
-      block.poolSections.length > 0 ? [] : block.exercises.map((exercise) => {
-        const feedback = feedbackByPage[pageFeedbackKey(block.id, 0)] ?? { rating: "Moyen", note: "" };
-
-        return {
+      block.poolSections.length > 0 ? [] : block.exercises.map((exercise) => ({
           exerciseId: exercise.id,
           completed: exercises[exercise.id] ?? false,
-          rating: feedback.rating,
-          note: feedback.note
-        };
-      })
+          rating: null,
+          note: null
+        }))
     ),
     dives: blocks.flatMap((block) =>
-      block.poolSections.flatMap((section, pageIndex) =>
+      block.poolSections.flatMap((section) =>
         section.dives.map((dive) => {
-          const feedback = feedbackByPage[pageFeedbackKey(block.id, pageIndex)] ?? { rating: "Moyen", note: "" };
-
           return {
             poolDiveId: dive.id,
             repetitionsCompleted: (dives[dive.id] ?? []).filter((state) => state > 0).length,
             goldenRepetitions: (dives[dive.id] ?? []).filter((state) => state === 2).length,
-            feedbackCompleted: Boolean(feedback.rating),
-            rating: feedback.rating,
-            note: feedback.note
+            feedbackCompleted: false,
+            rating: null,
+            note: null
           };
         })
       )
@@ -994,8 +906,6 @@ function getResumeStepIndex(session: AthleteSessionView, blockIndex: number) {
 
   const nextIncompleteIndex = block.poolSections.findIndex((section) =>
     section.dives.some((dive) => dive.completedRepetitions < dive.repetitions)
-    || (section.dives.some((dive) => dive.completedRepetitions > 0)
-      && !section.dives.some((dive) => dive.feedbackCompleted))
   );
   return nextIncompleteIndex >= 0 ? nextIncompleteIndex : Math.max(0, block.poolSections.length - 1);
 }
