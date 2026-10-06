@@ -34,7 +34,7 @@ export function PoolListTable({ rows, onChange, inputName }: { rows: PoolListRow
               return (
                 <tr key={row.id} className="border-t border-[var(--color-border)] align-top">
                   <td className="p-3">
-                    <Input aria-label={`Description ligne ${index + 1}`} defaultValue={`${row.context}${row.context ? ": " : ""}${row.diveCodes.join(", ")}`} placeholder="1m-3m : 101C, 101B, 103B" onChange={(event) => {
+                    <Input aria-label={`Description ligne ${index + 1}`} value={`${row.context}${row.context ? ": " : ""}${row.diveCodes.join(", ")}`} placeholder="1m-3m : 101C, 101B, 103B" onChange={(event) => {
                       if (!event.target.value.includes(":")) return;
                       const parsed = parseQuickPoolLine(event.target.value, row.repetitions.join(", "), row.id).row;
                       replace(index, parsed);
@@ -42,7 +42,7 @@ export function PoolListTable({ rows, onChange, inputName }: { rows: PoolListRow
                     {validation.heightCount > 1 && <p className="mt-1 text-xs font-bold text-[var(--block-pool-fg)]">Chaque plongeon sera execute aux {validation.heightCount} hauteurs indiquees.</p>}
                     {validation.errors.length > 0 && <p className="mt-1 text-xs font-semibold text-[var(--color-danger)]">{validation.errors.join(" ")}</p>}
                   </td>
-                  <td className="p-3"><Input aria-label={`Repetitions ligne ${index + 1}`} defaultValue={row.repetitions.map((value) => Number.isNaN(value) ? "" : value).join(", ")} placeholder="2, 3, 1" onChange={(event) => replace(index, parseQuickPoolLine(`${row.context}: ${row.diveCodes.join(", ")}`, event.target.value, row.id).row)} /></td>
+                  <td className="p-3"><Input aria-label={`Repetitions ligne ${index + 1}`} value={row.repetitions.map((value) => Number.isNaN(value) ? "" : value).join(", ")} placeholder="2, 3, 1" onChange={(event) => replace(index, parseQuickPoolLine(`${row.context}: ${row.diveCodes.join(", ")}`, event.target.value, row.id).row)} /></td>
                   <td className={cn("p-3 text-right text-lg font-black", validation.errors.length > 0 && "text-[var(--color-danger)]")}>{validation.total}</td>
                   <td className="p-3"><div className="flex justify-end gap-1">
                     <IconButton label="Monter" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp /></IconButton>
