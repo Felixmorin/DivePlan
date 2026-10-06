@@ -469,6 +469,7 @@ model AthleteDiveLog {
   actualDiveName       String?
   repetitionsCompleted Int
   goldenRepetitions    Int               @default(0)
+  feedbackCompleted   Boolean           @default(false)
   rating               String
   note                 String?
   timestamp            DateTime        @default(now())

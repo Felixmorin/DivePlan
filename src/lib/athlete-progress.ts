@@ -6,7 +6,7 @@ export type AthleteProgressPayload = {
   sessionId: string;
   sessionFeedback?: { rating: string | null; note: string | null };
   exercises: Array<{ exerciseId: string; completed: boolean; rating: string | null; note: string | null }>;
-  dives: Array<{ poolDiveId: string; repetitionsCompleted: number; goldenRepetitions: number; rating: string | null; note: string | null }>;
+  dives: Array<{ poolDiveId: string; repetitionsCompleted: number; goldenRepetitions: number; feedbackCompleted: boolean; rating: string | null; note: string | null }>;
 };
 
 type ExerciseBlockItem = { blockId: string; exerciseId: string; sets: number | null; reps: number | null; duration: number | null; notes: string | null; order: number };
@@ -94,10 +94,10 @@ export async function persistAthleteProgress<T = void>(
     if (diveLogs.length) {
       const now = new Date();
       await tx.query(
-        `INSERT INTO "AthleteDiveLog" (id, "athleteId", "sessionId", "poolDiveId", "repetitionsCompleted", "goldenRepetitions", rating, note, timestamp)
-         SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::int[], $6::int[], $7::text[], $8::text[], $9::timestamptz[])
-         ON CONFLICT ("athleteId", "sessionId", "poolDiveId") DO UPDATE SET "repetitionsCompleted" = EXCLUDED."repetitionsCompleted", "goldenRepetitions" = EXCLUDED."goldenRepetitions", rating = EXCLUDED.rating, note = EXCLUDED.note, timestamp = EXCLUDED.timestamp`,
-        [diveLogs.map(() => randomUUID()), diveLogs.map(() => athleteId), diveLogs.map(() => payload.sessionId), diveLogs.map((item) => item.poolDiveId), diveLogs.map((item) => item.repetitionsCompleted), diveLogs.map((item) => item.goldenRepetitions), diveLogs.map((item) => item.rating), diveLogs.map((item) => normalizeText(item.note)), diveLogs.map(() => now)]
+        `INSERT INTO "AthleteDiveLog" (id, "athleteId", "sessionId", "poolDiveId", "repetitionsCompleted", "goldenRepetitions", "feedbackCompleted", rating, note, timestamp)
+         SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::int[], $6::int[], $7::boolean[], $8::text[], $9::text[], $10::timestamptz[])
+         ON CONFLICT ("athleteId", "sessionId", "poolDiveId") DO UPDATE SET "repetitionsCompleted" = EXCLUDED."repetitionsCompleted", "goldenRepetitions" = EXCLUDED."goldenRepetitions", "feedbackCompleted" = EXCLUDED."feedbackCompleted", rating = EXCLUDED.rating, note = EXCLUDED.note, timestamp = EXCLUDED.timestamp`,
+        [diveLogs.map(() => randomUUID()), diveLogs.map(() => athleteId), diveLogs.map(() => payload.sessionId), diveLogs.map((item) => item.poolDiveId), diveLogs.map((item) => item.repetitionsCompleted), diveLogs.map((item) => item.goldenRepetitions), diveLogs.map((item) => item.feedbackCompleted), diveLogs.map((item) => item.rating), diveLogs.map((item) => normalizeText(item.note)), diveLogs.map(() => now)]
       );
     }
     await tx.query(

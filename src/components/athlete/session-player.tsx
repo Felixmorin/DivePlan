@@ -90,7 +90,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         const pages = block.poolSections.length > 0 ? block.poolSections : [null];
         return pages.map((section, pageIndex) => {
           const firstExercise = section ? undefined : block.exercises.find((exercise) => exercise.rating || exercise.note);
-          const firstDive = section?.dives.find((dive) => dive.rating || dive.note);
+          const firstDive = section?.dives.find((dive) => dive.feedbackCompleted && (dive.rating || dive.note));
           return [pageFeedbackKey(block.id, pageIndex), { rating: firstExercise?.rating ?? firstDive?.rating ?? "", note: firstExercise?.note ?? firstDive?.note ?? "" }];
         });
       })
@@ -955,6 +955,7 @@ function buildBlockProgressPayload(
         poolDiveId: dive.id,
         repetitionsCompleted: (dives[dive.id] ?? []).filter((state) => state > 0).length,
         goldenRepetitions: (dives[dive.id] ?? []).filter((state) => state === 2).length,
+        feedbackCompleted: Boolean(feedback.rating),
         rating: feedback.rating,
         note: feedback.note
       })) : []
@@ -993,6 +994,7 @@ function buildSessionProgressPayload(
             poolDiveId: dive.id,
             repetitionsCompleted: (dives[dive.id] ?? []).filter((state) => state > 0).length,
             goldenRepetitions: (dives[dive.id] ?? []).filter((state) => state === 2).length,
+            feedbackCompleted: Boolean(feedback.rating),
             rating: feedback.rating,
             note: feedback.note
           };
@@ -1022,7 +1024,7 @@ function getResumeStepIndex(session: AthleteSessionView, blockIndex: number) {
   const nextIncompleteIndex = block.poolSections.findIndex((section) =>
     section.dives.some((dive) => dive.completedRepetitions < dive.repetitions)
     || (section.dives.some((dive) => dive.completedRepetitions > 0)
-      && !section.dives.some((dive) => dive.rating))
+      && !section.dives.some((dive) => dive.feedbackCompleted))
   );
   return nextIncompleteIndex >= 0 ? nextIncompleteIndex : Math.max(0, block.poolSections.length - 1);
 }
