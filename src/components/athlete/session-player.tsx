@@ -764,8 +764,8 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
 
         <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-bg)] p-3">
           <div className="mb-3 flex justify-end">
-            <Button type="button" size="sm" variant="outline" className="border-white/15 bg-transparent text-white" onClick={completeCurrentPage}>
-              <CheckCircle2 className="h-4 w-4" /> Complete all
+            <Button type="button" size="sm" variant="outline" className="border-white/15 bg-transparent text-white hover:bg-white/10 hover:text-white" onClick={completeCurrentPage}>
+              <CheckCircle2 className="h-4 w-4" /> Tout complété
             </Button>
           </div>
           {!isPoolBlock && block.exercises.length > 0 && (
