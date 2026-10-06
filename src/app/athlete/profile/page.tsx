@@ -65,7 +65,7 @@ export default async function ProfilePage() {
       <section aria-label="Statistiques du profil" className="mt-4 grid grid-cols-3 divide-x divide-white/10 rounded-[1.4rem] border border-white/10 bg-[#0b1e30] px-2 py-5 text-center shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
         <ProfileStat icon={<Medal className="h-5 w-5" />} label="Séances" value={totals.completedSessions} />
         <ProfileStat icon={<Waves className="h-5 w-5" />} label="Plongeons" value={totals.totalDiveRepetitions} />
-        <ProfileStat icon={<span className="text-base font-black">min</span>} label="Entraînement" value={totals.completedMinutes} />
+        <ProfileStat icon={<span className="text-base font-black">h</span>} label="Entraînement" value={formatTrainingHours(totals.completedMinutes)} />
       </section>
 
       <Link href="/athlete/profile/golden-reps" className="mt-4 flex min-h-16 items-center gap-3 rounded-[1.2rem] border border-amber-300/25 bg-gradient-to-r from-amber-400/15 to-transparent px-4 transition hover:border-amber-300/50 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
@@ -129,7 +129,11 @@ function ProfileMeta({ icon, label }: { icon: React.ReactNode; label: string }) 
   return <p className="mt-1.5 flex items-center gap-2 truncate text-sm font-medium text-white/65">{icon}<span className="truncate">{label}</span></p>;
 }
 
-function ProfileStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function formatTrainingHours(minutes: number) {
+  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
+}
+
+function ProfileStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number | string }) {
   return (
     <div className="px-1">
       <div className="mx-auto flex h-7 items-center justify-center text-cyan-300">{icon}</div>
