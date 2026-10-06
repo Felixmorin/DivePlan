@@ -1051,7 +1051,9 @@ function poolRowsToSections(rows: PoolListRow[], existing: BuilderPoolSection[])
     const repetitions = row.repetitions.length === 1 ? row.diveCodes.map(() => row.repetitions[0]) : row.repetitions;
     return {
       height: inferPoolHeight(row.context),
-      label: row.context || null,
+      // Keep an explicitly cleared context empty; null means the default label
+      // should be shown for a new custom section.
+      label: row.context,
       dives: row.diveCodes.map((diveCode, order) => {
         const previousDive = previous?.dives.find((dive) => dive.diveCode === diveCode);
         return {
