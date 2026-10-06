@@ -459,6 +459,18 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     });
   }
 
+  function navigateToBlock(blockIndex: number) {
+    const targetBlock = blocks[blockIndex];
+    if (!targetBlock) return;
+    const firstIncompleteSection = targetBlock.poolSections.findIndex((section) =>
+      section.dives.some((dive) => (diveChecks[dive.id] ?? []).filter((state) => state > 0).length < dive.repetitions)
+    );
+    setCurrent(blockIndex);
+    setStepIndex(firstIncompleteSection >= 0 ? firstIncompleteSection : 0);
+    setSessionPreviewOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function completeSession() {
     if (hasRecordedWork && !finalFeedback.rating) {
       setError("Choisis ton ressenti final avant d’enregistrer la séance.");
@@ -607,7 +619,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
               {finalRatings.map((rating, index) => (
                 <button key={rating} type="button" aria-pressed={finalFeedback.rating === rating} className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-center transition ${finalFeedback.rating === rating ? "bg-blue-50 ring-2 ring-[var(--color-action)]" : "hover:bg-slate-50"}`} onClick={() => updateFinalFeedback({ rating })}>
                   <span className={`flex h-10 w-10 items-center justify-center rounded-full text-2xl ${["bg-red-200", "bg-orange-200", "bg-slate-200", "bg-green-200", "bg-emerald-300"][index]}`} aria-hidden="true">{["☹", "🙁", "😐", "🙂", "😄"][index]}</span>
-                  <span className="text-[10px] font-semibold leading-tight text-slate-600">{["Très fatigué", "Fatigué", "Moyen", "Bien", "Super"][index]}</span>
+                  <span className="text-[10px] font-semibold leading-tight text-slate-600">{rating}</span>
                 </button>
               ))}
             </div>
@@ -645,10 +657,12 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                 {blocks.map((previewBlock, index) => {
                   const isCurrent = index === current;
                   const isComplete = countBlockRemaining(previewBlock, exerciseChecks, diveChecks) === 0;
-                  return <li key={previewBlock.id} className="flex items-center gap-2 border-t border-slate-100 py-1.5 first:border-0">
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black ${isCurrent ? "bg-[var(--color-action)] text-white" : isComplete ? "bg-[var(--color-success)] text-[#06133a]" : "bg-slate-100 text-slate-700"}`}>{isComplete && !isCurrent ? <CheckCircle2 className="h-4 w-4" /> : index + 1}</span>
-                    <span className={`min-w-0 flex-1 truncate text-sm ${isCurrent ? "font-black text-[#0b1640]" : "text-slate-600"}`}>{previewBlock.title}</span>
-                    {isCurrent && <span className="rounded-full bg-[var(--color-action)] px-2.5 py-1 text-xs font-bold text-white">En cours</span>}
+                  return <li key={previewBlock.id} className="border-t border-slate-100 first:border-0">
+                    <button type="button" onClick={() => navigateToBlock(index)} className="flex w-full items-center gap-2 py-1.5 text-left hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-action)]">
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black ${isCurrent ? "bg-[var(--color-action)] text-white" : isComplete ? "bg-[var(--color-success)] text-[#06133a]" : "bg-slate-100 text-slate-700"}`}>{isComplete && !isCurrent ? <CheckCircle2 className="h-4 w-4" /> : index + 1}</span>
+                      <span className={`min-w-0 flex-1 truncate text-sm ${isCurrent ? "font-black text-[#0b1640]" : "text-slate-600"}`}>{previewBlock.title}</span>
+                      {isCurrent && <span className="rounded-full bg-[var(--color-action)] px-2.5 py-1 text-xs font-bold text-white">En cours</span>}
+                    </button>
                   </li>;
                 })}
               </ol>
