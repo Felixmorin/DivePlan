@@ -83,7 +83,7 @@ export async function saveAthleteDiveNote(sessionId: string, poolDiveId: string,
   if (!data.note) {
     await query(`DELETE FROM "AthleteDiveNote" WHERE "athleteId" = $1 AND "poolDiveId" = $2`, [athlete.id, data.poolDiveId]);
   } else {
-    await query(`INSERT INTO "AthleteDiveNote" ("athleteId", "poolDiveId", note) VALUES ($1, $2, $3)
+    await query(`INSERT INTO "AthleteDiveNote" ("athleteId", "poolDiveId", note, "createdAt", "updatedAt") VALUES ($1, $2, $3, now(), now())
       ON CONFLICT ("athleteId", "poolDiveId") DO UPDATE SET note = EXCLUDED.note, "updatedAt" = now()`, [athlete.id, data.poolDiveId, data.note]);
   }
 
