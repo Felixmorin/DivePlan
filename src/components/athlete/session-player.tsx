@@ -93,7 +93,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const activeStep = blockSteps[stepIndex];
   const isPoolBlock = block.poolSections.length > 0;
   const isLastBlockStep = !isPoolBlock || stepIndex === blockSteps.length - 1;
-  const totalItems = useMemo(() => countSessionItems(blocks), [blocks]);
   const completedItems = countCompletedItems(blocks, exerciseChecks, diveChecks);
   const hasRecordedWork = completedItems > 0;
   const poolDives = useMemo(
@@ -101,7 +100,9 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     [blocks]
   );
   const completedPoolReps = poolDives.reduce((sum, dive) => sum + (diveChecks[dive.id] ?? []).filter((state) => state > 0).length, 0);
-  const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : Math.round(((current + 1) / blocks.length) * 100);
+  const totalPages = blocks.reduce((sum, item) => sum + Math.max(1, item.poolSections.length), 0);
+  const pagesBeforeCurrentBlock = blocks.slice(0, current).reduce((sum, item) => sum + Math.max(1, item.poolSections.length), 0);
+  const progress = totalPages > 0 ? Math.round(((pagesBeforeCurrentBlock + stepIndex + 1) / totalPages) * 100) : 0;
   const blockRemaining = countBlockRemaining(block, exerciseChecks, diveChecks);
   const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
   const canStart = isSessionStartAvailable(session.date, new Date(now));
