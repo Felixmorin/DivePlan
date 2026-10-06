@@ -119,7 +119,6 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
       <div className="mb-6">
         <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Séance</p>
         <h1 className="mt-2 text-3xl font-black">Nouvelle séance</h1>
-        <p className="mt-1 text-[var(--color-ink-muted)]">Planifie, compose les blocs, répartis les athlètes, puis vérifie avant publication.</p>
       </div>
       {groups.length === 0 || athletes.length === 0 ? (
         <EmptyState title="Prépare l’effectif avant de créer une séance" description="Ajoute au moins un groupe et un athlète actif. Tu pourras ensuite composer une séance piscine, dryland ou mixte." action={<Button asChild><Link href="/coach/athletes">Gérer les athlètes</Link></Button>} />

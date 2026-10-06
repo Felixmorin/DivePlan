@@ -115,7 +115,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     ? activeStep.section.dives.some((dive) => (diveChecks[dive.id] ?? []).some((state) => state > 0))
     : block.exercises.some((exercise) => exerciseChecks[exercise.id]);
   const feedbackRequired = hasWorkInCurrentStep;
-  const hasZeroRepDive = activeStep?.kind === "pool" && activeStep.section.dives.every((dive) => (diveChecks[dive.id] ?? []).filter((state) => state > 0).length === 0);
   const totalItems = useMemo(() => countSessionItems(blocks), [blocks]);
   const completedItems = countCompletedItems(blocks, exerciseChecks, diveChecks);
   const hasRecordedWork = completedItems > 0;
@@ -337,17 +336,33 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     });
   }
 
-  function markDiveSkipped(diveId: string) {
+  function completeCurrentPage() {
     const version = markDirty();
-    setDiveChecks((previous) => {
-      const next: DiveChecks = { ...previous, [diveId]: (previous[diveId] ?? []).map((): DiveRepState => 0) };
+    if (activeStep?.kind === "pool") {
+      const next: DiveChecks = { ...diveChecksRef.current };
+      for (const dive of activeStep.section.dives) {
+        const checks = next[dive.id] ?? [];
+        next[dive.id] = Array.from({ length: Math.max(dive.repetitions, checks.length) }, (_, index) =>
+          checks[index] === 2 ? 2 : 1
+        );
+      }
       diveChecksRef.current = next;
+      setDiveChecks(next);
       void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, pageFeedbackRef.current, version).catch(() => {
         setDirty(true);
         if (version === saveVersion.current) setSaveStatus("error");
         setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
       });
-      return next;
+      return;
+    }
+
+    const next = { ...exerciseChecksRef.current, ...Object.fromEntries(block.exercises.map((exercise) => [exercise.id, true])) };
+    exerciseChecksRef.current = next;
+    setExerciseChecks(next);
+    void saveProgressForBlock(block, stepIndex, next, diveChecksRef.current, pageFeedbackRef.current, version).catch(() => {
+      setDirty(true);
+      if (version === saveVersion.current) setSaveStatus("error");
+      setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
     });
   }
 
@@ -748,6 +763,11 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         </section>
 
         <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-bg)] p-3">
+          <div className="mb-3 flex justify-end">
+            <Button type="button" size="sm" variant="outline" className="border-white/15 bg-transparent text-white" onClick={completeCurrentPage}>
+              <CheckCircle2 className="h-4 w-4" /> Complete all
+            </Button>
+          </div>
           {!isPoolBlock && block.exercises.length > 0 && (
             <div className="space-y-3">
               {block.exercises.map((exercise) => {
@@ -800,9 +820,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                     <button type="button" onClick={() => addDiveRep(dive.id)} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-black text-[var(--color-action)] transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
                       <Plus className="h-4 w-4" /> Ajouter une rep
                     </button>
-                    <button type="button" onClick={() => markDiveSkipped(dive.id)} aria-pressed={completed === 0} className={`ml-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-black transition hover:bg-white/8 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${completed === 0 ? "text-[var(--color-action)]" : "text-white/62"}`}>
-                      0 rep
-                    </button>
                     {checks.length > dive.repetitions && (
                       <button type="button" onClick={() => removeDiveRep(dive.id, dive.repetitions)} className="ml-2 inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm font-black text-white/62 transition hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
                         Retirer une rep
@@ -829,7 +846,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
         <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
           <div className="mx-auto grid max-w-[430px] grid-cols-[1fr_1.35fr] gap-2">
             <Button type="button" variant="outline" className="h-14 bg-transparent text-white" disabled={current === 0 && stepIndex === 0} onClick={previousStep}><ChevronLeft className="h-5 w-5" /> Precedent</Button>
-            <Button type="button" variant="action" className="h-14 rounded-2xl" disabled={feedbackRequired && !hasFeedback} onClick={hasZeroRepDive ? finishTraining : nextStep}>{hasZeroRepDive || (current === blocks.length - 1 && isLastBlockStep) ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
+            <Button type="button" variant="action" className="h-14 rounded-2xl" disabled={feedbackRequired && !hasFeedback} onClick={nextStep}>{current === blocks.length - 1 && isLastBlockStep ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
           </div>
         </div>
       </div>

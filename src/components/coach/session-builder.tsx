@@ -157,10 +157,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     duration: templateCooldown?.duration ?? 8,
     description: templateCooldown?.description ?? ""
   });
-  const initialEvaluationBlock = [...drylandBlocks, ...activePoolBlocks].find((block) => block.competitionEvaluation);
-  const [evaluationPlacement, setEvaluationPlacement] = useState(() => initialTemplate?.payload.competitionEvaluationAtStart
-    ? "start"
-    : initialEvaluationBlock ? `block:${initialEvaluationBlock.id}` : "none");
+  const [evaluationPlacement, setEvaluationPlacement] = useState("none");
   const [flashBlock, setFlashBlock] = useState<string | null>(null);
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -242,8 +239,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   const canPublish = canPublishSession({ visibleAthletes, groups, time: watched.time ?? "", drylandBlocks, poolBlocks: activePoolBlocks, poolAssignmentValues });
   const publicationIssues = getPublicationIssues({ drylandBlocks, poolBlocks: activePoolBlocks });
   const reviewBlocks = [
-    ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title, type: "dryland" as const, duration: block.duration, athletes: block.athleteIds.length, content: `${block.exerciseIds.length} exercice${block.exerciseIds.length === 1 ? "" : "s"}` })),
-    ...activePoolBlocks.map((block) => ({ id: block.id, title: block.title, type: "pool" as const, duration: block.duration, athletes: (effectivePoolAssignments[block.id] ?? []).length, content: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes de plongeons` }))
+    ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title, type: "dryland" as const, assigned: block.athleteIds, content: `${block.exerciseIds.length} exercice${block.exerciseIds.length === 1 ? "" : "s"}` })),
+    ...activePoolBlocks.map((block) => ({ id: block.id, title: block.title, type: "pool" as const, assigned: effectivePoolAssignments[block.id] ?? [], content: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes de plongeons` }))
   ];
   const evaluationChoices = useMemo(() => [
     { value: "none", label: "Aucune évaluation" },
@@ -497,6 +494,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
               athleteCount={allAssignedIds.length}
               validationIssues={publicationIssues}
               blocks={reviewBlocks}
+              athletes={visibleAthletes}
             />
           )}
         </div>
@@ -508,10 +506,16 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
           athleteCount={allAssignedIds.length}
           unassignedCount={unassignedBlocks.length}
           totalVolume={totalVolume}
+          step={step}
+          isPending={isPending}
+          canPublish={canPublish}
+          onBack={() => setStep(Math.max(0, step - 1))}
+          onSaveDraft={() => publishSession("DRAFT")}
+          onPublish={() => publishSession("READY")}
         />
       </div>
 
-      <div className="mt-6 hidden items-center justify-between gap-3 lg:flex">
+      <div className={cn("mt-6 hidden items-center justify-between gap-3 lg:flex", step === 3 && "xl:hidden")}>
         <Button type="button" variant="outline" disabled={step === 0 || isPending} onClick={() => setStep(step - 1)}>Retour</Button>
         {step < 3 ? (
           <Button type="button" variant="action" disabled={isPending} onClick={() => void advanceTo(Math.min(3, step + 1))}>Continuer <ChevronDown className="h-4 w-4 -rotate-90" /></Button>
@@ -841,7 +845,7 @@ function AssignmentsStep(props: { athletes: BuilderAthlete[]; drylandBlocks: Bui
   );
 }
 
-function PublicationStep({ title, groupName, scheduleName, date, time, totalVolume, unassignedBlocks, selectedExercises, athleteCount, validationIssues, blocks }: { title: string; groupName: string; scheduleName: string; date: string; time: string; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number; validationIssues: string[]; blocks: Array<{ id: string; title: string; type: "dryland" | "pool"; duration: number; athletes: number; content: string }> }) {
+function PublicationStep({ title, groupName, scheduleName, date, time, totalVolume, unassignedBlocks, selectedExercises, athleteCount, validationIssues, blocks, athletes }: { title: string; groupName: string; scheduleName: string; date: string; time: string; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number; validationIssues: string[]; blocks: Array<{ id: string; title: string; type: "dryland" | "pool"; assigned: string[]; content: string }>; athletes: BuilderAthlete[] }) {
   return (
     <Card>
       <CardHeader><CardTitle>Vérifier avant de publier</CardTitle><p className="text-sm text-[var(--color-ink-muted)]">Les athlètes recevront le plan dès sa publication.</p></CardHeader>
@@ -859,7 +863,7 @@ function PublicationStep({ title, groupName, scheduleName, date, time, totalVolu
         </div>
         <div className="space-y-2">
           <h3 className="font-black">Contenu de la séance</h3>
-          {blocks.map((block) => <div key={block.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] p-3"><div className="flex min-w-0 items-center gap-2"><BlockTypeBadge type={block.type} /><span className="truncate font-bold">{block.title}</span></div><span className="text-sm text-[var(--color-ink-muted)]">{block.content} · {block.duration} min · {block.athletes} athlète{block.athletes === 1 ? "" : "s"}</span></div>)}
+          {blocks.map((block) => <div key={block.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] p-3"><div className="flex min-w-0 items-center gap-2"><BlockTypeBadge type={block.type} /><span className="truncate font-bold">{block.title}</span></div><div className="flex items-center gap-3"><span className="text-sm text-[var(--color-ink-muted)]">{block.content}</span><AthleteAvatarGroup ids={block.assigned} athletes={athletes} limit={8} /></div></div>)}
           {blocks.length === 0 && <p className="rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm text-[var(--color-ink-muted)]">Aucun bloc ajouté.</p>}
         </div>
         {unassignedBlocks > 0 && <WarningText>{unassignedBlocks} bloc{unassignedBlocks > 1 ? "s" : ""} sans athlète assigné. Retourne à l’étape Assigner pour les corriger.</WarningText>}
@@ -873,7 +877,7 @@ function PublicationStep({ title, groupName, scheduleName, date, time, totalVolu
   );
 }
 
-function SummaryPanel(props: { title: string; date: string; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number }) {
+function SummaryPanel(props: { title: string; date: string; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number; step: number; isPending: boolean; canPublish: boolean; onBack: () => void; onSaveDraft: () => void; onPublish: () => void }) {
   return (
     <aside className="hidden xl:block">
       <Card className="sticky top-6">
@@ -892,7 +896,13 @@ function SummaryPanel(props: { title: string; date: string; blockCount: number; 
           <SummaryMetric icon={Users} label="Athlètes concernés" value={props.athleteCount} />
           <SummaryMetric icon={AlertTriangle} label="Blocs sans athlètes" value={props.unassignedCount} tone={props.unassignedCount > 0 ? "warning" : "default"} />
           <SummaryMetric icon={Waves} label="Volume estimé" value={props.totalVolume} />
-          <div className="rounded-2xl bg-[var(--color-surface-raised)] p-3 text-xs font-semibold text-[var(--color-ink-muted)]">Tu peux avancer dans le formulaire; ce résumé reste à jour pendant la préparation.</div>
+          {props.step === 3 && <div className="space-y-2 border-t border-[var(--color-border)] pt-4">
+            <Button type="button" variant="outline" className="w-full" disabled={props.isPending} onClick={props.onBack}>Retour</Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={props.isPending || !props.canPublish} onClick={props.onSaveDraft}><FileText className="h-4 w-4" /> Brouillon privé</Button>
+              <Button type="button" variant="action" size="sm" disabled={props.isPending || !props.canPublish} onClick={props.onPublish}>{props.isPending ? "Publication…" : "Publier la séance"}<Send className="h-4 w-4" /></Button>
+            </div>
+          </div>}
         </CardContent>
       </Card>
     </aside>
