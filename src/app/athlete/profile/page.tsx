@@ -82,7 +82,10 @@ export default async function ProfilePage() {
       </section>
 
       <section className="mt-7">
-        <NotificationSettings />
+        <h2 className="mb-3 text-xl font-black">Préférences</h2>
+        <div className="space-y-3">
+          <NotificationSettings />
+        </div>
       </section>
 
       <section className="mt-7">
