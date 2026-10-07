@@ -204,6 +204,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   }, [athleteIds, poolAssignments]);
   const individualPoolBlocks = activePoolBlocks.flatMap((block) => (effectivePoolAssignments[block.id] ?? []).map((athleteId) => ({
     ...block,
+    sourceBlockId: block.id,
     id: `${block.id}-${athleteId}`,
     athleteIds: [athleteId],
     sections: poolRowsToSections(poolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)] ?? poolSectionsToRows(block.sections), block.sections)
@@ -500,9 +501,9 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       poolBlocks: individualPoolBlocks.map((block) => ({
               title: block.title,
               duration: block.duration,
-              athleteIds: effectivePoolAssignments[block.id] ?? [],
+              athleteIds: block.athleteIds,
               sections: block.sections,
-              competitionEvaluation: effectiveEvaluationPlacement === `block:${block.id}`
+              competitionEvaluation: effectiveEvaluationPlacement === `block:${block.sourceBlockId}`
             }))
           });
           window.localStorage.removeItem(draftKey);
