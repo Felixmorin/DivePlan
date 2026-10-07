@@ -112,7 +112,7 @@ type SessionBuilderProps = {
   onCreateExercise: (input: QuickExerciseInput) => Promise<BuilderExercise>;
 };
 
-const steps = ["Planifier", "Composer", "Assigner", "Vérifier"];
+const steps = ["Démarrer", "Contenu", "Organisation", "Aperçu", "Publier"];
 
 export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvents, poolBlocks, initialTemplate, initialPlanningEventId, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
   const [step, setStep] = useState(0);
@@ -435,7 +435,18 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-5">
-          {step === 0 && <DetailsStep form={form} selectedGroupId={watched.groupId ?? ""} selectedDate={watched.date ?? ""} selectedPlanningEventId={watched.planningEventId ?? ""} selectedTime={watched.time ?? ""} groups={groups} planningEvents={planningEvents} evaluationPlacement={effectiveEvaluationPlacement} evaluationChoices={evaluationChoices} onEvaluationPlacementChange={setEvaluationPlacement} />}
+          {step === 0 && <>
+            <section className="space-y-4">
+              <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 1 sur 5</p><h2 className="mt-1 text-2xl font-black">Démarrer la séance</h2><p className="mt-1 text-sm text-[var(--color-ink-muted)]">Choisis un point de départ, puis renseigne les détails du groupe.</p></div>
+              <div className="grid gap-3 lg:grid-cols-3">
+                <button type="button" onClick={() => setStep(1)} className="rounded-2xl border border-[var(--color-border)] bg-white p-4 text-left transition hover:border-[var(--color-brand)]"><span className="text-lg font-black">À partir d’un modèle</span><span className="mt-1 block text-sm text-[var(--color-ink-muted)]">{initialTemplate ? `Modèle chargé : ${initialTemplate.name}` : "Choisis un modèle depuis la bibliothèque pour préremplir la séance."}</span></button>
+                <button type="button" onClick={() => setStep(1)} className="rounded-2xl border border-[var(--color-border)] bg-white p-4 text-left transition hover:border-[var(--color-brand)]"><span className="text-lg font-black">Reprendre une séance</span><span className="mt-1 block text-sm text-[var(--color-ink-muted)]">Tu peux réutiliser les listes piscine récentes dans l’étape Contenu.</span></button>
+                <button type="button" onClick={() => setStep(1)} className="rounded-2xl border border-[var(--color-brand)] bg-[var(--color-brand)]/5 p-4 text-left transition"><span className="text-lg font-black">＋ Partir de zéro</span><span className="mt-1 block text-sm text-[var(--color-ink-muted)]">Crée une séance vide et construis-la étape par étape.</span></button>
+              </div>
+            </section>
+            <DetailsStep form={form} selectedGroupId={watched.groupId ?? ""} selectedDate={watched.date ?? ""} selectedPlanningEventId={watched.planningEventId ?? ""} selectedTime={watched.time ?? ""} groups={groups} planningEvents={planningEvents} evaluationPlacement={effectiveEvaluationPlacement} evaluationChoices={evaluationChoices} onEvaluationPlacementChange={setEvaluationPlacement} />
+            <div className="rounded-2xl bg-[var(--color-brand)]/10 p-3 text-sm text-[var(--color-ink-muted)]"><Users className="mr-2 inline h-4 w-4" />Les listes et les blocs resteront modifiables avant la publication.</div>
+          </>}
           {step === 1 && (
             <div className="space-y-8">
               <div className="rounded-[var(--radius-panel)] bg-[var(--color-navy)] p-5 text-white">
@@ -481,7 +492,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
               onAssignPoolBlock={assignPoolBlock}
             />
           )}
-          {step === 3 && (
+          {(step === 3 || step === 4) && (
             <PublicationStep
               title={watched.title ?? ""}
               groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe à choisir"}
@@ -509,16 +520,16 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
           step={step}
           isPending={isPending}
           canPublish={canPublish}
-          onBack={() => setStep(Math.max(0, step - 1))}
+              onBack={() => setStep(Math.max(0, step - 1))}
           onSaveDraft={() => publishSession("DRAFT")}
-          onPublish={() => publishSession("READY")}
+              onPublish={() => publishSession("READY")}
         />
       </div>
 
-      <div className={cn("mt-6 hidden items-center justify-between gap-3 lg:flex", step === 3 && "xl:hidden")}>
+      <div className={cn("mt-6 hidden items-center justify-between gap-3 lg:flex", step === 4 && "xl:hidden")}>
         <Button type="button" variant="outline" disabled={step === 0 || isPending} onClick={() => setStep(step - 1)}>Retour</Button>
-        {step < 3 ? (
-          <Button type="button" variant="action" disabled={isPending} onClick={() => void advanceTo(Math.min(3, step + 1))}>Continuer <ChevronDown className="h-4 w-4 -rotate-90" /></Button>
+        {step < 4 ? (
+          <Button type="button" variant="action" disabled={isPending} onClick={() => void advanceTo(Math.min(4, step + 1))}>Continuer <ChevronDown className="h-4 w-4 -rotate-90" /></Button>
         ) : (
           <div className="flex gap-2"><Button type="button" variant="outline" disabled={isPending || !canPublish} onClick={() => publishSession("DRAFT")}><FileText className="h-4 w-4" /> Brouillon privé</Button><Button type="button" variant="action" disabled={isPending || !canPublish} onClick={() => publishSession("READY")}>{isPending ? "Publication…" : "Publier la séance"}<Send className="h-4 w-4" /></Button></div>
         )}
@@ -526,9 +537,9 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border)] bg-white/95 p-3 shadow-[0_-16px_34px_rgba(7,20,35,0.12)] backdrop-blur lg:hidden">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <Button type="button" variant="outline" disabled={step === 0 || isPending} onClick={() => setStep(step - 1)}>Retour</Button>
-          {step === 3 && <Button type="button" variant="outline" size="sm" disabled={isPending || !canPublish} onClick={() => publishSession("DRAFT")} aria-label="Enregistrer comme brouillon privé"><FileText className="h-4 w-4" /> Brouillon</Button>}
-          <Button type="button" variant={step === 3 ? "action" : "default"} disabled={isPending || (step === 3 && !canPublish)} onClick={() => (step === 3 ? publishSession("READY") : void advanceTo(Math.min(3, step + 1)))}>
-            {step === 3 ? (isPending ? "Publication…" : "Publier") : "Continuer"}
+          {step === 4 && <Button type="button" variant="outline" size="sm" disabled={isPending || !canPublish} onClick={() => publishSession("DRAFT")} aria-label="Enregistrer comme brouillon privé"><FileText className="h-4 w-4" /> Brouillon</Button>}
+          <Button type="button" variant={step === 4 ? "action" : "default"} disabled={isPending || (step === 4 && !canPublish)} onClick={() => (step === 4 ? publishSession("READY") : void advanceTo(Math.min(4, step + 1)))}>
+            {step === 4 ? (isPending ? "Publication…" : "Publier") : "Continuer"}
           </Button>
         </div>
       </div>
@@ -539,7 +550,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
 function Stepper({ current, onStepChange }: { current: number; onStepChange: (step: number) => void }) {
   return (
     <div className="mb-6 overflow-x-auto">
-      <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid min-w-[560px] grid-cols-5 gap-2">
         {steps.map((label, index) => (
           <button key={label} type="button" onClick={() => onStepChange(index)} className={cn("flex min-h-12 items-center gap-3 rounded-2xl border px-3 text-left text-sm font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", current === index ? "border-[var(--color-navy)] bg-[var(--color-navy)] text-white" : "border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] hover:border-[var(--color-brand)]")}>
             <span className={cn("flex h-7 w-7 items-center justify-center rounded-full text-xs", current === index ? "bg-[var(--color-brand)] text-[var(--color-navy)]" : "bg-[var(--color-surface-raised)]")}>{index + 1}</span>
@@ -896,7 +907,7 @@ function SummaryPanel(props: { title: string; date: string; blockCount: number; 
           <SummaryMetric icon={Users} label="Athlètes concernés" value={props.athleteCount} />
           <SummaryMetric icon={AlertTriangle} label="Blocs sans athlètes" value={props.unassignedCount} tone={props.unassignedCount > 0 ? "warning" : "default"} />
           <SummaryMetric icon={Waves} label="Volume estimé" value={props.totalVolume} />
-          {props.step === 3 && <div className="space-y-2 border-t border-[var(--color-border)] pt-4">
+          {props.step === 4 && <div className="space-y-2 border-t border-[var(--color-border)] pt-4">
             <Button type="button" variant="outline" className="w-full" disabled={props.isPending} onClick={props.onBack}>Retour</Button>
             <div className="grid grid-cols-2 gap-2">
               <Button type="button" variant="outline" size="sm" disabled={props.isPending || !props.canPublish} onClick={props.onSaveDraft}><FileText className="h-4 w-4" /> Brouillon privé</Button>
