@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Activity, AlertTriangle, ArrowDown, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronUp, Clock3, Dumbbell, FileText, Leaf, MoreHorizontal, Plus, Search, Send, Trash2, Users, Waves } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronUp, Clock3, Copy, Dumbbell, FileText, Leaf, MoreHorizontal, Plus, Search, Send, Trash2, Users, Waves } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -147,6 +147,9 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   const [poolAssignments, setPoolAssignments] = useState(() =>
     Object.fromEntries(activePoolBlocks.map((block) => [block.id, (block.athleteIds.length > 0 ? block.athleteIds : initialAthleteIds).filter((id) => initialAthleteIds.includes(id))]))
   );
+  const [poolRowsByAthleteBlock, setPoolRowsByAthleteBlock] = useState<Record<string, PoolListRow[]>>(() => Object.fromEntries(
+    activePoolBlocks.flatMap((block) => (block.athleteIds.length > 0 ? block.athleteIds : initialAthleteIds).filter((id) => initialAthleteIds.includes(id)).map((athleteId) => [poolAthleteBlockKey(athleteId, block.id), poolSectionsToRows(block.sections)]))
+  ));
   const templateWarmup = templateBlocks.find((block) => block.type === "WARMUP");
   const templateCooldown = templateBlocks.find((block) => block.type === "COOLDOWN");
   const [warmup, setWarmup] = useState({
@@ -195,16 +198,35 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     const validIds = new Set(athleteIds);
     return Object.fromEntries(Object.entries(poolAssignments).map(([blockId, ids]) => [blockId, ids.filter((id) => validIds.has(id))])) as Record<string, string[]>;
   }, [athleteIds, poolAssignments]);
+  const individualPoolBlocks = activePoolBlocks.flatMap((block) => (effectivePoolAssignments[block.id] ?? []).map((athleteId) => ({
+    ...block,
+    id: `${block.id}-${athleteId}`,
+    athleteIds: [athleteId],
+    sections: poolRowsToSections(poolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)] ?? poolSectionsToRows(block.sections), block.sections)
+  })));
+  useEffect(() => {
+    setPoolRowsByAthleteBlock((current) => {
+      const next = { ...current };
+      for (const block of activePoolBlocks) {
+        for (const athleteId of effectivePoolAssignments[block.id] ?? []) {
+          const key = poolAthleteBlockKey(athleteId, block.id);
+          if (!next[key]) next[key] = poolSectionsToRows(block.sections);
+        }
+      }
+      return next;
+    });
+  }, [activePoolBlocks, effectivePoolAssignments]);
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(draftKey);
       if (raw) {
-        const draft = JSON.parse(raw) as { values?: Partial<FormValues>; drylandBlocks?: BuilderDrylandBlock[]; poolBlocks?: BuilderPoolBlock[]; poolAssignments?: Record<string, string[]>; warmup?: OptionalBlock; cooldown?: OptionalBlock; contentOrder?: string[]; evaluationPlacement?: string };
+        const draft = JSON.parse(raw) as { values?: Partial<FormValues>; drylandBlocks?: BuilderDrylandBlock[]; poolBlocks?: BuilderPoolBlock[]; poolAssignments?: Record<string, string[]>; poolRowsByAthleteBlock?: Record<string, PoolListRow[]>; warmup?: OptionalBlock; cooldown?: OptionalBlock; contentOrder?: string[]; evaluationPlacement?: string };
         queueMicrotask(() => {
           if (draft.values) form.reset({ ...form.getValues(), ...draft.values });
           if (draft.drylandBlocks) setDrylandBlocks(draft.drylandBlocks);
           if (draft.poolBlocks) setActivePoolBlocks(draft.poolBlocks);
           if (draft.poolAssignments) setPoolAssignments(draft.poolAssignments);
+          if (draft.poolRowsByAthleteBlock) setPoolRowsByAthleteBlock(draft.poolRowsByAthleteBlock);
           if (draft.warmup) setWarmup(draft.warmup);
           if (draft.cooldown) setCooldown(draft.cooldown);
           if (draft.contentOrder) setContentOrder(draft.contentOrder);
@@ -218,8 +240,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   }, [draftKey, form]);
   useEffect(() => {
     if (!restoredDraft.current) return;
-    window.localStorage.setItem(draftKey, JSON.stringify({ values: watched, drylandBlocks, poolBlocks: activePoolBlocks, poolAssignments, warmup, cooldown, contentOrder, evaluationPlacement }));
-  }, [activePoolBlocks, contentOrder, cooldown, draftKey, drylandBlocks, evaluationPlacement, form, poolAssignments, warmup, watched]);
+    window.localStorage.setItem(draftKey, JSON.stringify({ values: watched, drylandBlocks, poolBlocks: activePoolBlocks, poolAssignments, poolRowsByAthleteBlock, warmup, cooldown, contentOrder, evaluationPlacement }));
+  }, [activePoolBlocks, contentOrder, cooldown, draftKey, drylandBlocks, evaluationPlacement, form, poolAssignments, poolRowsByAthleteBlock, warmup, watched]);
   useEffect(() => {
     if (watched.planningEventId && !planningEvents.some((event) => event.id === watched.planningEventId && (!event.groupId || event.groupId === watched.groupId) && toMontrealDateInputValue(event.startsAt) === watched.date)) {
       form.setValue("planningEventId", "");
@@ -242,7 +264,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   const totalDuration = Math.min(600, Math.max(15,
     (warmup.enabled ? warmup.duration : 0) + (cooldown.enabled ? cooldown.duration : 0) + effectiveDrylandBlocks.reduce((sum, block) => sum + block.duration, 0) + activePoolBlocks.reduce((sum, block) => sum + block.duration, 0)
   ));
-  const poolVolume = activePoolBlocks.reduce((sum, block) => sum + block.sections.reduce((sectionSum, section) => sectionSum + sectionVolume(section), 0), 0);
+  const poolVolume = individualPoolBlocks.reduce((sum, block) => sum + block.sections.reduce((sectionSum, section) => sectionSum + sectionVolume(section), 0), 0);
   const dryVolume = effectiveDrylandBlocks.reduce((sum, block) => sum + block.exerciseIds.reduce((blockSum, exerciseId) => {
     const exercise = library.find((item) => item.id === exerciseId);
     const override = block.exerciseOverrides[exerciseId];
@@ -251,13 +273,20 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     return blockSum + repetitions * sets * block.athleteIds.length;
   }, 0), 0);
   const totalVolume = poolVolume + dryVolume;
-  const canPublish = canPublishSession({ visibleAthletes, groups, time: watched.time ?? "", drylandBlocks, poolBlocks: activePoolBlocks, poolAssignmentValues, hasOptionalBlock: warmup.enabled || cooldown.enabled });
-  const publicationIssues = getPublicationIssues({ drylandBlocks, poolBlocks: activePoolBlocks, hasOptionalBlock: warmup.enabled || cooldown.enabled });
+  const canPublish = canPublishSession({ visibleAthletes, groups, time: watched.time ?? "", drylandBlocks, poolBlocks: individualPoolBlocks, poolAssignmentValues, hasOptionalBlock: warmup.enabled || cooldown.enabled });
+  const publicationIssues = getPublicationIssues({ drylandBlocks, poolBlocks: individualPoolBlocks, hasOptionalBlock: warmup.enabled || cooldown.enabled });
   const reviewBlocks = [
-    ...(warmup.enabled ? [{ id: "warmup", title: warmup.title, type: "warmup" as const, assigned: athleteIds, content: `${warmup.duration} min` }] : []),
-    ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title, type: "dryland" as const, assigned: block.athleteIds, content: `${block.exerciseIds.length} exercice${block.exerciseIds.length === 1 ? "" : "s"}` })),
-    ...activePoolBlocks.map((block) => ({ id: block.id, title: block.title, type: "pool" as const, assigned: effectivePoolAssignments[block.id] ?? [], content: `${block.sections.reduce((sum, section) => sum + sectionVolume(section), 0)} répétitions` })),
-    ...(cooldown.enabled ? [{ id: "cooldown", title: cooldown.title, type: "cooldown" as const, assigned: athleteIds, content: `${cooldown.duration} min` }] : [])
+    ...(warmup.enabled ? [{ id: "warmup", title: warmup.title, type: "warmup" as const, assigned: athleteIds, duration: warmup.duration, content: `${warmup.duration} min · Prêt`, ready: true }] : []),
+    ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title, type: "dryland" as const, assigned: block.athleteIds, duration: block.duration, content: `${block.duration} min · ${block.athleteIds.length === athleteIds.length ? "Équipe entière" : `${block.athleteIds.length} athlètes`} · ${block.exerciseIds.length} exercices`, ready: block.title.trim().length > 0 && block.exerciseIds.length > 0 && block.athleteIds.length > 0 })),
+    ...activePoolBlocks.map((block) => {
+      const assigned = effectivePoolAssignments[block.id] ?? [];
+      const readyCount = assigned.filter((athleteId) => {
+        const rows = poolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)] ?? poolSectionsToRows(block.sections);
+        return rows.length > 0 && rows.every((row) => validatePoolListRow(row).errors.length === 0);
+      }).length;
+      return { id: block.id, title: block.title, type: "pool" as const, assigned, duration: block.duration, content: `${block.duration} min · ${assigned.length} listes individuelles · ${readyCount}/${assigned.length} prêtes`, ready: assigned.length > 0 && readyCount === assigned.length };
+    }),
+    ...(cooldown.enabled ? [{ id: "cooldown", title: cooldown.title, type: "cooldown" as const, assigned: athleteIds, duration: cooldown.duration, content: `${cooldown.duration} min · Prêt`, ready: true }] : [])
   ];
   const evaluationChoices = useMemo(() => [
     { value: "none", label: "Aucune évaluation" },
@@ -296,6 +325,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     setDrylandBlocks(nextDryland);
     setActivePoolBlocks(nextPool);
     setPoolAssignments(Object.fromEntries(nextPool.map((block) => [block.id, athleteIds])));
+    setPoolRowsByAthleteBlock(Object.fromEntries(nextPool.flatMap((block) => athleteIds.map((athleteId) => [poolAthleteBlockKey(athleteId, block.id), poolSectionsToRows(block.sections)]))));
     let dryIndex = 0;
     let poolIndex = 0;
     setContentOrder(blocks.map((block, index) => {
@@ -370,6 +400,10 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
       ...block,
       sections: poolRowsToSections(rows, block.sections)
     } : block));
+    setPoolRowsByAthleteBlock((current) => ({
+      ...current,
+      ...Object.fromEntries((effectivePoolAssignments[blockId] ?? []).map((athleteId) => [poolAthleteBlockKey(athleteId, blockId), rows]))
+    }));
     pulse(blockId);
   }
 
@@ -444,7 +478,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   }
 
   function publishSession(status: "READY" | "DRAFT" = "READY") {
-    const invalidPoolBlock = activePoolBlocks.find((block) => block.sections.length === 0 || poolSectionsToRows(block.sections).some((row) => validatePoolListRow(row).errors.length > 0));
+    const invalidPoolBlock = individualPoolBlocks.find((block) => block.sections.length === 0 || poolSectionsToRows(block.sections).some((row) => validatePoolListRow(row).errors.length > 0));
 
     if (invalidPoolBlock) {
       const invalidRow = poolSectionsToRows(invalidPoolBlock.sections).find((row) => validatePoolListRow(row).errors.length > 0);
@@ -468,7 +502,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
             cooldown: { ...cooldown, competitionEvaluation: false },
             evaluationPlacement: effectiveEvaluationPlacement,
             drylandBlocks: effectiveDrylandBlocks.map(({ id, title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides }) => ({ title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides, competitionEvaluation: effectiveEvaluationPlacement === `block:${id}` })),
-            poolBlocks: activePoolBlocks.map((block) => ({
+      poolBlocks: individualPoolBlocks.map((block) => ({
               title: block.title,
               duration: block.duration,
               athleteIds: effectivePoolAssignments[block.id] ?? [],
@@ -535,7 +569,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
       )}
       {publishError && <div role="alert" className="mb-5 rounded-2xl border border-[var(--color-danger)]/25 bg-red-50 p-4 text-sm font-semibold text-[var(--color-danger)]">{publishError}</div>}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className={cn("grid gap-6", step === 4 ? "xl:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.8fr)]" : "xl:grid-cols-[minmax(0,1fr)_360px]")}>
         <div className="space-y-5">
           {step === 0 && <>
             <section className="space-y-4">
@@ -596,23 +630,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
               onAssignPoolBlock={assignPoolBlock}
             />
           )}
-          {step === 3 && (
-            <PublicationStep
-              title={watched.title ?? ""}
-              groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe à choisir"}
-              scheduleName={planningEvents.find((event) => event.id === watched.planningEventId)?.title ?? "Aucun horaire lié"}
-              date={watched.date ?? ""}
-              time={watched.time ?? ""}
-              totalVolume={totalVolume}
-              unassignedBlocks={unassignedBlocks.length}
-              selectedExercises={selectedDrylandExercises}
-              athleteCount={allAssignedIds.length}
-              validationIssues={publicationIssues}
-              blocks={reviewBlocks}
-              athletes={visibleAthletes}
-            />
-          )}
-          {step === 4 && <PublishStep title={watched.title ?? "Nouvelle séance"} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe à choisir"} date={watched.date ?? ""} time={watched.time ?? ""} duration={totalDuration} athleteCount={visibleAthletes.length} blocks={reviewBlocks} issues={publicationIssues} poolReady={activePoolBlocks.every(poolBlockIsValid)} assignmentsReady={unassignedBlocks.length === 0} isPending={isPending} canPublish={canPublish} onEditContent={() => setStep(1)} onEditAthletes={() => setStep(2)} onSaveDraft={() => publishSession("DRAFT")} onPublish={() => publishSession("READY")} />}
+          {step === 3 && <PoolAthletesStep athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} duration={activePoolBlocks.reduce((sum, block) => sum + block.duration, 0)} blocks={activePoolBlocks} assignments={effectivePoolAssignments} rowsByAthleteBlock={poolRowsByAthleteBlock} recentBlocks={poolBlocks} onRowsChange={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} onCopyRows={(sourceId, targetId) => setPoolRowsByAthleteBlock((current) => ({ ...current, ...Object.fromEntries(activePoolBlocks.map((block) => [poolAthleteBlockKey(targetId, block.id), current[poolAthleteBlockKey(sourceId, block.id)] ?? poolSectionsToRows(block.sections)])) }))} onLoadRows={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} />}
+          {step === 4 && <PublishStep title={watched.title?.trim() || `${groups.find((group) => group.id === watched.groupId)?.name ?? "Séance"} · ${formatSessionDate(watched.date ?? "")}`} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe à choisir"} date={watched.date ?? ""} time={watched.time ?? ""} duration={totalDuration} athleteCount={visibleAthletes.length} blocks={reviewBlocks} issues={publicationIssues} poolReady={activePoolBlocks.length === 0 || individualPoolBlocks.every(poolBlockIsValid)} assignmentsReady={unassignedBlocks.length === 0} canPublish={canPublish} onEditBlock={(block) => setStep(block.type === "pool" ? 3 : block.type === "dryland" ? 1 : 1)} />}
         </div>
 
         <SummaryPanel
@@ -625,13 +644,19 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
           step={step}
           isPending={isPending}
           canPublish={canPublish}
+          poolReady={activePoolBlocks.length === 0 || individualPoolBlocks.every(poolBlockIsValid)}
+          assignmentsReady={unassignedBlocks.length === 0}
+          publicationIssues={publicationIssues}
+          poolVolume={poolVolume}
+          drylandExercises={selectedDrylandExercises}
+          duration={totalDuration}
               onBack={() => setStep(Math.max(0, step - 1))}
           onSaveDraft={() => publishSession("DRAFT")}
               onPublish={() => publishSession("READY")}
         />
       </div>
 
-      <div className={cn("mt-6 hidden items-center justify-between gap-3 lg:flex", step === 4 && "xl:hidden")}>
+      <div className="mt-6 hidden items-center justify-between gap-3 lg:flex">
         <Button type="button" variant="outline" disabled={step === 0 || isPending} onClick={() => setStep(step - 1)}>Retour</Button>
         {step < 4 ? (
           <Button type="button" variant="action" disabled={isPending} onClick={() => void advanceTo(Math.min(4, step + 1))}>Continuer <ChevronDown className="h-4 w-4 -rotate-90" /></Button>
@@ -969,6 +994,50 @@ function AssignmentsStep(props: { athletes: BuilderAthlete[]; drylandBlocks: Bui
   );
 }
 
+function PoolAthletesStep({ athletes, groupName, duration, blocks, assignments, rowsByAthleteBlock, recentBlocks, onRowsChange, onCopyRows, onLoadRows }: { athletes: BuilderAthlete[]; groupName: string; duration: number; blocks: BuilderPoolBlock[]; assignments: Record<string, string[]>; rowsByAthleteBlock: Record<string, PoolListRow[]>; recentBlocks: BuilderPoolBlock[]; onRowsChange: (athleteId: string, blockId: string, rows: PoolListRow[]) => void; onCopyRows: (sourceId: string, targetId: string) => void; onLoadRows: (athleteId: string, blockId: string, rows: PoolListRow[]) => void }) {
+  const [selectedAthleteId, setSelectedAthleteId] = useState(athletes[0]?.id ?? "");
+  const [copyTargetId, setCopyTargetId] = useState("");
+  const selectedAthlete = athletes.find((athlete) => athlete.id === selectedAthleteId) ?? athletes[0];
+  const athleteBlocks = selectedAthlete ? blocks.filter((block) => (assignments[block.id] ?? []).includes(selectedAthlete.id)) : [];
+  const readyAthleteCount = athletes.filter((athlete) => {
+    const assigned = blocks.filter((block) => (assignments[block.id] ?? []).includes(athlete.id));
+    return assigned.length > 0 && assigned.every((block) => {
+      const rows = rowsByAthleteBlock[poolAthleteBlockKey(athlete.id, block.id)] ?? poolSectionsToRows(block.sections);
+      return rows.length > 0 && rows.every((row) => validatePoolListRow(row).errors.length === 0);
+    });
+  }).length;
+  const totalVolume = athletes.reduce((total, athlete) => total + blocks.filter((block) => (assignments[block.id] ?? []).includes(athlete.id)).reduce((sum, block) => {
+    const rows = rowsByAthleteBlock[poolAthleteBlockKey(athlete.id, block.id)] ?? poolSectionsToRows(block.sections);
+    return sum + rows.reduce((rowSum, row) => rowSum + validatePoolListRow(row).total, 0);
+  }, 0), 0);
+  const selectedVolume = athleteBlocks.reduce((sum, block) => sum + (rowsByAthleteBlock[poolAthleteBlockKey(selectedAthlete?.id ?? "", block.id)] ?? poolSectionsToRows(block.sections)).reduce((rowSum, row) => rowSum + validatePoolListRow(row).total, 0), 0);
+  const selectedIndex = athletes.findIndex((athlete) => athlete.id === selectedAthlete?.id);
+
+  return <div className="space-y-4">
+    <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 4 sur 5</p><h2 className="mt-1 text-2xl font-black">Piscine · Listes des athlètes</h2><p className="mt-1 text-sm text-[var(--color-ink-muted)]">Prépare et vérifie la liste de plongeons de chaque athlète.</p></div>
+    <div className="rounded-2xl border border-[var(--color-border)] bg-white p-4 text-sm"><span className="font-bold">{groupName} · {athletes.length} athlètes</span><span className="mx-3 hidden text-[var(--color-border)] sm:inline">|</span><span className="ml-2 sm:ml-0">Durée piscine <strong>{duration} min</strong></span><span className="mx-3 hidden text-[var(--color-border)] sm:inline">|</span><span className="ml-2 sm:ml-0"><strong>{blocks.length} bloc{blocks.length === 1 ? "" : "s"}</strong></span></div>
+    <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Choisir un athlète">{athletes.map((athlete) => {
+      const assigned = blocks.filter((block) => (assignments[block.id] ?? []).includes(athlete.id));
+      const isReady = assigned.length > 0 && assigned.every((block) => {
+        const rows = rowsByAthleteBlock[poolAthleteBlockKey(athlete.id, block.id)] ?? poolSectionsToRows(block.sections);
+        return rows.length > 0 && rows.every((row) => validatePoolListRow(row).errors.length === 0);
+      });
+      return <button key={athlete.id} type="button" role="tab" aria-selected={selectedAthlete?.id === athlete.id} onClick={() => setSelectedAthleteId(athlete.id)} className={cn("shrink-0 rounded-xl border px-3 py-2 text-sm font-bold", selectedAthlete?.id === athlete.id ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-[var(--color-navy)]" : "border-[var(--color-border)] bg-white")}><span className={cn("mr-2 inline-block h-2.5 w-2.5 rounded-full", isReady ? "bg-[var(--color-success)]" : assigned.length ? "bg-[var(--color-brand)]" : "bg-slate-300")}/>{athlete.firstName}</button>;
+    })}</div>
+    {selectedAthlete && <Card><CardContent className="space-y-4 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-brand)]/15 font-black text-[var(--color-brand-strong)]">{selectedAthlete.firstName.slice(0, 1)}{selectedAthlete.lastName.slice(0, 1)}</div><div><h3 className="text-lg font-black">{selectedAthlete.firstName} {selectedAthlete.lastName}</h3><p className="text-sm text-[var(--color-ink-muted)]">{groupName}</p></div></div><div className="text-sm text-[var(--color-ink-muted)]">Volume individuel <strong className="text-[var(--color-ink)]">{selectedVolume} plongeons</strong></div></div>
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] pb-4">
+        <Button type="button" size="sm" variant="outline" disabled={athleteBlocks.length === 0} onClick={() => athleteBlocks.forEach((block) => onLoadRows(selectedAthlete.id, block.id, poolSectionsToRows(block.sections)))}><FileText className="h-4 w-4"/>Charger la liste complète</Button>
+        <details className="relative"><summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-bold"><Waves className="h-4 w-4"/>Charger une base<ChevronDown className="h-4 w-4"/></summary><div className="absolute left-0 z-20 mt-2 max-h-64 w-72 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white p-2 shadow-[var(--shadow-soft)]">{recentBlocks.length ? recentBlocks.map((base) => <button key={base.id} type="button" onClick={() => { const target = athleteBlocks[0]; if (target) onLoadRows(selectedAthlete.id, target.id, poolSectionsToRows(base.sections)); }} className="block w-full rounded-lg p-2 text-left text-sm hover:bg-[var(--color-surface-raised)]"><span className="font-bold">{base.title}</span><span className="block text-xs text-[var(--color-ink-muted)]">{base.sections.reduce((sum, section) => sum + section.dives.length, 0)} plongeons</span></button>) : <p className="p-2 text-sm text-[var(--color-ink-muted)]">Aucune base disponible</p>}</div></details>
+        <div className="ml-auto flex items-center gap-2"><select aria-label="Athlète destinataire" value={copyTargetId} onChange={(event) => setCopyTargetId(event.target.value)} className="h-10 max-w-36 rounded-xl border border-[var(--color-border)] bg-white px-2 text-sm"><option value="">Copier vers…</option>{athletes.filter((athlete) => athlete.id !== selectedAthlete.id).map((athlete) => <option key={athlete.id} value={athlete.id}>{athlete.firstName}</option>)}</select><Button type="button" size="sm" variant="outline" disabled={!copyTargetId} onClick={() => { onCopyRows(selectedAthlete.id, copyTargetId); setCopyTargetId(""); }}><Copy className="h-4 w-4"/>Copier</Button></div>
+      </div>
+      {athleteBlocks.length ? athleteBlocks.map((block) => <section key={block.id}><h4 className="mb-2 font-black">{block.title}</h4><PoolListTable rows={rowsByAthleteBlock[poolAthleteBlockKey(selectedAthlete.id, block.id)] ?? poolSectionsToRows(block.sections)} onChange={(rows) => onRowsChange(selectedAthlete.id, block.id, rows)}/></section>) : <p className="rounded-xl bg-[var(--color-surface-raised)] p-4 text-sm text-[var(--color-ink-muted)]">Aucun bloc piscine n’est assigné à cet athlète. Retourne à l’étape Dryland pour ajuster ses blocs.</p>}
+    </CardContent></Card>}
+    <div className="grid gap-2 sm:grid-cols-3"><SummaryMetric icon={Users} label="Listes prêtes" value={`${readyAthleteCount}/${athletes.length}`}/><SummaryMetric icon={Waves} label="Piscine" value={`${duration} min`}/><SummaryMetric icon={CalendarDays} label="Volume total" value={`${totalVolume} plongeons`}/></div>
+    <div className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-white p-2"><Button type="button" size="sm" variant="outline" disabled={selectedIndex <= 0} onClick={() => setSelectedAthleteId(athletes[selectedIndex - 1]?.id ?? "")}><ArrowLeft className="h-4 w-4"/>Athlète précédent</Button><span className="text-sm font-black">{selectedVolume} plongeons</span><Button type="button" size="sm" variant="outline" disabled={selectedIndex < 0 || selectedIndex >= athletes.length - 1} onClick={() => setSelectedAthleteId(athletes[selectedIndex + 1]?.id ?? "")}>Athlète suivant<ArrowRight className="h-4 w-4"/></Button></div>
+  </div>;
+}
+
 function PublicationStep({ title, groupName, scheduleName, date, time, totalVolume, unassignedBlocks, selectedExercises, athleteCount, validationIssues, blocks, athletes }: { title: string; groupName: string; scheduleName: string; date: string; time: string; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number; validationIssues: string[]; blocks: Array<{ id: string; title: string; type: "warmup" | "dryland" | "pool" | "cooldown"; assigned: string[]; content: string }>; athletes: BuilderAthlete[] }) {
   return (
     <Card>
@@ -1001,26 +1070,40 @@ function PublicationStep({ title, groupName, scheduleName, date, time, totalVolu
   );
 }
 
-function PublishStep(props: { title: string; groupName: string; date: string; time: string; duration: number; athleteCount: number; blocks: Array<{ id: string; title: string; type: "warmup" | "dryland" | "pool" | "cooldown"; assigned: string[]; content: string }>; issues: string[]; poolReady: boolean; assignmentsReady: boolean; isPending: boolean; canPublish: boolean; onEditContent: () => void; onEditAthletes: () => void; onSaveDraft: () => void; onPublish: () => void }) {
+function PublishStep(props: { title: string; groupName: string; date: string; time: string; duration: number; athleteCount: number; blocks: Array<{ id: string; title: string; type: "warmup" | "dryland" | "pool" | "cooldown"; assigned: string[]; duration: number; content: string; ready: boolean }>; issues: string[]; poolReady: boolean; assignmentsReady: boolean; canPublish: boolean; onEditBlock: (block: { type: "warmup" | "dryland" | "pool" | "cooldown" }) => void }) {
   const checks = [
-    { label: "Tous les blocs contiennent les informations requises", ready: props.issues.length === 0, edit: props.onEditContent },
-    { label: "Les listes piscine sont complètes", ready: props.poolReady, edit: props.onEditContent },
-    { label: "Les athlètes sont assignés", ready: props.assignmentsReady, edit: props.onEditAthletes }
+    { label: "Tous les blocs sont prêts", ready: props.issues.length === 0 },
+    { label: "Listes piscine complètes", ready: props.poolReady },
+    { label: "Athlètes assignés", ready: props.assignmentsReady },
+    { label: "Durée cohérente", ready: props.duration >= 15 && props.duration <= 600 }
   ];
   return <div className="space-y-4">
-    <Card><CardHeader><CardTitle>Aperçu de la séance</CardTitle><p className="text-sm text-[var(--color-ink-muted)]">Vérifie le plan qui sera partagé avec les athlètes.</p></CardHeader><CardContent className="space-y-4">
-      <div className="rounded-2xl bg-[var(--color-navy)] p-5 text-white"><h2 className="text-2xl font-black">{props.title || "Nouvelle séance"}</h2><p className="mt-2 text-sm text-white/75">{props.groupName} · {props.athleteCount} athlètes · {formatSessionDate(props.date)}{props.time ? ` · ${props.time}` : ""}</p><p className="mt-1 text-sm text-white/75">Durée estimée : {Math.floor(props.duration / 60) > 0 ? `${Math.floor(props.duration / 60)} h ` : ""}{props.duration % 60 ? `${props.duration % 60} min` : ""}</p></div>
-      <div className="space-y-2"><div className="flex items-center justify-between"><h3 className="font-black">Contenu de la séance</h3><button type="button" onClick={props.onEditContent} className="text-sm font-bold text-[var(--color-brand-strong)]">Modifier</button></div>
-        {props.blocks.map((block) => <div key={block.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] py-3"><div className="flex items-center gap-2"><BlockTypeBadge type={block.type} /><span className="font-bold">{block.title}</span></div><span className="text-sm text-[var(--color-ink-muted)]">{block.content} · {block.assigned.length} athlètes</span></div>)}
-        {props.blocks.length === 0 && <p className="rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm text-[var(--color-ink-muted)]">Aucun bloc ajouté.</p>}
-      </div>
+    <div><h2 className="text-2xl font-black">Aperçu de la séance</h2><p className="mt-1 text-sm text-[var(--color-ink-muted)]">Vérifie une dernière fois le plan avant de le partager.</p></div>
+    <Card><CardContent className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4 sm:p-5">
+      <div className="min-w-48 flex-1"><h3 className="text-xl font-black">{props.title}</h3><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-[var(--color-ink-muted)]"><span className="flex items-center gap-2"><Users className="h-4 w-4"/>{props.athleteCount} athlètes</span><span className="flex items-center gap-2"><Clock3 className="h-4 w-4"/>{formatDurationLabel(props.duration)}</span><span className="flex items-center gap-2"><CalendarDays className="h-4 w-4"/>{formatSessionDate(props.date)}{props.time ? ` · ${props.time}` : ""}</span></div><p className="mt-1 text-sm font-bold text-[var(--color-ink-muted)]">{props.groupName}</p></div>
     </CardContent></Card>
-    <Card><CardHeader><CardTitle>Vérifications avant publication</CardTitle></CardHeader><CardContent className="space-y-2">{checks.map((check) => <button key={check.label} type="button" onClick={check.edit} className="flex w-full items-center gap-3 rounded-xl bg-[var(--color-surface-raised)] p-3 text-left"><CheckCircle2 className={cn("h-5 w-5 shrink-0", check.ready ? "text-[var(--color-success)]" : "text-[var(--color-action)]")} /><span className="text-sm font-semibold">{check.label}</span><span className="ml-auto text-sm font-bold text-[var(--color-brand-strong)]">{check.ready ? "Prêt" : "Corriger"}</span></button>)}{props.issues.map((issue) => <p key={issue} className="text-sm font-semibold text-[var(--color-danger)]">{issue}</p>)}</CardContent></Card>
-    <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={props.isPending || !props.canPublish} onClick={props.onSaveDraft}><FileText className="h-4 w-4" /> Enregistrer comme brouillon</Button><Button type="button" variant="action" disabled={props.isPending || !props.canPublish} onClick={props.onPublish}>{props.isPending ? "Publication…" : "Publier la séance"}<Send className="h-4 w-4" /></Button></div>
+    <Card><CardHeader><CardTitle>Contenu de la séance</CardTitle></CardHeader><CardContent className="divide-y divide-[var(--color-border)] p-0">
+      {props.blocks.map((block) => <div key={block.id} className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5"><BlockTypeBadge type={block.type}/><div className="min-w-32 flex-1"><div className="font-black">{block.title}</div><div className="text-sm text-[var(--color-ink-muted)]">{block.content}</div></div><span className="flex items-center gap-2 text-sm font-semibold text-[var(--color-ink-muted)]"><Clock3 className="h-4 w-4"/>{block.duration} min</span><span className={cn("flex items-center gap-2 text-sm font-bold", block.ready ? "text-[var(--color-success)]" : "text-[var(--color-action-strong)]")}><CheckCircle2 className="h-5 w-5"/>{block.ready ? "Prêt" : "À corriger"}</span><button type="button" onClick={() => props.onEditBlock(block)} className="font-bold text-[var(--color-brand-strong)] hover:underline">Modifier</button></div>)}
+      {props.blocks.length === 0 && <p className="p-4 text-sm text-[var(--color-ink-muted)]">Aucun bloc ajouté.</p>}
+    </CardContent></Card>
+    <div className={cn("flex items-start gap-3 rounded-2xl border p-4", props.canPublish ? "border-[var(--color-success)]/20 bg-[var(--color-success-soft)] text-[var(--color-success)]" : "border-[var(--color-action)]/25 bg-[var(--color-action)]/10 text-[var(--color-action-strong)]")}><CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0"/><div><div className="font-black">{props.canPublish ? "Tout est prêt à publier" : "Quelques éléments restent à vérifier"}</div><p className="mt-1 text-sm">{props.canPublish ? "Les athlètes verront la séance après sa publication." : "Consulte les vérifications et utilise les liens Modifier pour compléter la séance."}</p></div></div>
+    <Card className="xl:hidden"><CardHeader><CardTitle>Vérifications</CardTitle></CardHeader><CardContent className="space-y-2">{checks.map((check) => <div key={check.label} className="flex items-center gap-3 rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold"><CheckCircle2 className={cn("h-5 w-5", check.ready ? "text-[var(--color-success)]" : "text-[var(--color-action)]")}/>{check.label}</div>)}</CardContent></Card>
   </div>;
 }
 
-function SummaryPanel(props: { title: string; date: string; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number; step: number; isPending: boolean; canPublish: boolean; onBack: () => void; onSaveDraft: () => void; onPublish: () => void }) {
+function SummaryPanel(props: { title: string; date: string; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number; poolVolume: number; drylandExercises: number; poolReady: boolean; assignmentsReady: boolean; publicationIssues: string[]; duration: number; step: number; isPending: boolean; canPublish: boolean; onBack: () => void; onSaveDraft: () => void; onPublish: () => void }) {
+  if (props.step === 4) {
+    const checks = [
+      { label: "Tous les blocs ont des athlètes", ready: props.assignmentsReady },
+      { label: "Listes piscine complètes", ready: props.poolReady },
+      { label: "Durée cohérente", ready: props.duration >= 15 && props.duration <= 600 },
+      { label: "Contenu complet", ready: props.publicationIssues.length === 0 }
+    ];
+    return <aside className="hidden space-y-4 xl:block">
+      <Card><CardHeader><CardTitle>Vérifications</CardTitle></CardHeader><CardContent className="space-y-2">{checks.map((check) => <div key={check.label} className="flex items-center gap-3 rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold"><CheckCircle2 className={cn("h-5 w-5 shrink-0", check.ready ? "text-[var(--color-success)]" : "text-[var(--color-action)]")}/>{check.label}</div>)}{props.publicationIssues.map((issue) => <p key={issue} className="text-sm font-semibold text-[var(--color-danger)]">{issue}</p>)}</CardContent></Card>
+      <Card><CardHeader><CardTitle>Charge de travail (résumé)</CardTitle></CardHeader><CardContent className="space-y-3"><SummaryMetric icon={Waves} label="Piscine" value={`${props.poolVolume} répétitions`}/><SummaryMetric icon={Dumbbell} label="Dryland" value={`${props.drylandExercises} exercices`}/></CardContent></Card>
+    </aside>;
+  }
   return (
     <aside className="hidden xl:block">
       <Card className="sticky top-6">
@@ -1111,6 +1194,13 @@ function formatSessionDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "Date à choisir";
   const [year, month, day] = value.split("-").map(Number);
   return new Intl.DateTimeFormat("fr-CA", { weekday: "short", day: "numeric", month: "short" }).format(new Date(year, month - 1, day));
+}
+
+function formatDurationLabel(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (!hours) return `${remainder} min`;
+  return remainder ? `${hours} h ${String(remainder).padStart(2, "0")}` : `${hours} h`;
 }
 
 function canPublishSession({ visibleAthletes, groups, time, drylandBlocks, poolBlocks, poolAssignmentValues, hasOptionalBlock }: {
@@ -1233,6 +1323,10 @@ function poolBlockIsValid(block: BuilderPoolBlock) {
 
 function uniqueIds(ids: string[]) {
   return Array.from(new Set(ids));
+}
+
+function poolAthleteBlockKey(athleteId: string, blockId: string) {
+  return `${athleteId}:${blockId}`;
 }
 
 function optionalNumber(value: FormDataEntryValue | null) {
