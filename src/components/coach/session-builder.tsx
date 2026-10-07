@@ -566,13 +566,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   return (
     <div className="pb-24 lg:pb-0">
       <Stepper current={step} onStepChange={(nextStep) => { void advanceTo(nextStep); }} />
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-white px-4 py-3 shadow-[var(--shadow-card)]">
-        <div>
-          <p className="text-sm font-black text-[var(--color-ink)]">{watched.title || "Nouvelle séance"}</p>
-          <p className="text-xs font-semibold text-[var(--color-ink-muted)]">{groups.find((group) => group.id === watched.groupId)?.name ?? "Choisis un groupe"} · {formatSessionDate(watched.date ?? "")}{watched.time ? ` · ${watched.time}` : " · Heure à choisir"}</p>
-        </div>
-        <span className="rounded-full bg-[var(--color-success-soft)] px-3 py-1 text-xs font-black text-[var(--color-success)]">Sauvegarde auto dans ce navigateur</span>
-      </div>
       {initialTemplate && (
         <div className="mb-5 rounded-[var(--radius-panel)] border border-[var(--color-brand)]/35 bg-[var(--color-brand)]/10 p-4">
           <div className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Modele charge</div>
@@ -640,17 +633,16 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
           )}
           {step === 2 && <div className="space-y-4">
             <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 3 sur 5</p><h2 className="mt-1 text-2xl font-black">Dryland</h2></div>
-            <DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} targetAthleteIds={drylandTargetAthleteIds} selectedBlockId={selectedDrylandBlockId} programMode={drylandProgramMode} flashBlock={flashBlock} onSelectBlock={setSelectedDrylandBlockId} onProgramModeChange={(mode) => { setDrylandProgramMode(mode); if (mode === "team") setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: drylandTargetAthleteIds }))); }} onTargetAthletesChange={(ids) => { setDrylandTargetAthleteIds(ids); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: ids }))); }} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onSaveAndContinue={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index >= 0 && index < effectiveDrylandBlocks.length - 1) setSelectedDrylandBlockId(effectiveDrylandBlocks[index + 1].id); else void advanceTo(3); }} onBack={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index > 0) setSelectedDrylandBlockId(effectiveDrylandBlocks[index - 1].id); }} onCreateExercise={addExercise}/>
+            <DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} warmup={warmup} onUpdateWarmup={(update) => setWarmup((current) => ({ ...current, ...update }))} onRemoveWarmup={() => { setWarmup((current) => ({ ...current, enabled: false })); setContentOrder((current) => current.filter((id) => id !== "warmup")); }} targetAthleteIds={drylandTargetAthleteIds} selectedBlockId={selectedDrylandBlockId} programMode={drylandProgramMode} flashBlock={flashBlock} onSelectBlock={setSelectedDrylandBlockId} onProgramModeChange={(mode) => { setDrylandProgramMode(mode); if (mode === "team") setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: drylandTargetAthleteIds }))); }} onTargetAthletesChange={(ids) => { setDrylandTargetAthleteIds(ids); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: ids }))); }} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onSaveAndContinue={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index >= 0 && index < effectiveDrylandBlocks.length - 1) setSelectedDrylandBlockId(effectiveDrylandBlocks[index + 1].id); else void advanceTo(3); }} onBack={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index > 0) setSelectedDrylandBlockId(effectiveDrylandBlocks[index - 1].id); }} onCreateExercise={addExercise}/>
           </div>}
-          {step === 3 && <div className="space-y-5">
-            <PoolStep poolBlocks={activePoolBlocks} recentBlocks={poolBlocks} flashBlock={flashBlock} onAddPoolBlock={addPoolBlock} onReusePoolBlock={reusePoolBlock} onRemovePoolBlock={removePoolBlock} onMoveBlock={movePoolBlock} onUpdatePoolBlock={updatePoolBlock} onUpdatePoolRows={updatePoolRows}/>
-          </div>}
+          {step === 3 && <PoolAthletesStep athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} averagePoolVolumeByAthlete={athletePoolAverageById} blocks={activePoolBlocks} assignments={effectivePoolAssignments} rowsByAthleteBlock={poolRowsByAthleteBlock} recentBlocks={poolBlocks} totalDuration={totalDuration} onRowsChange={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} onCopyRows={(sourceId, targetId) => setPoolRowsByAthleteBlock((current) => ({ ...current, ...Object.fromEntries(activePoolBlocks.map((block) => [poolAthleteBlockKey(targetId, block.id), current[poolAthleteBlockKey(sourceId, block.id)] ?? poolSectionsToRows(block.sections)])) }))} onLoadRows={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} onBack={() => setStep(2)} onContinue={() => void advanceTo(4)} />}
           {step === 4 && <PublishStep title={watched.title?.trim() || `${groups.find((group) => group.id === watched.groupId)?.name ?? "Séance"} · ${formatSessionDate(watched.date ?? "")}`} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe à choisir"} date={watched.date ?? ""} time={watched.time ?? ""} duration={totalDuration} athleteCount={visibleAthletes.length} athletes={visibleAthletes} blocks={reviewBlocks} issues={publicationIssues} poolReady={activePoolBlocks.length === 0 || individualPoolBlocks.every(poolBlockIsValid)} assignmentsReady={unassignedBlocks.length === 0} canPublish={canPublish} onEditBlock={(block) => setStep(block.type === "pool" ? 3 : block.type === "dryland" ? 1 : 1)} />}
         </div>
 
-        {step !== 2 && <SummaryPanel
+        {step !== 2 && step !== 3 && <SummaryPanel
               title={watched.title ?? "Nouvelle séance"}
           date={watched.date ?? ""}
+          time={watched.time ?? ""}
           blockCount={activePoolBlocks.length + drylandBlocks.length + Number(warmup.enabled) + Number(cooldown.enabled)}
           athleteCount={allAssignedIds.length}
           unassignedCount={unassignedBlocks.length}
@@ -671,7 +663,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
         />}
       </div>
 
-      {step !== 2 && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border)] bg-white/95 p-3 shadow-[0_-16px_34px_rgba(7,20,35,0.12)] backdrop-blur lg:hidden">
+      {step !== 2 && step !== 3 && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border)] bg-white/95 p-3 shadow-[0_-16px_34px_rgba(7,20,35,0.12)] backdrop-blur lg:hidden">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <Button type="button" variant="outline" disabled={step === 0 || isPending} onClick={() => setStep(step - 1)}>Retour</Button>
           {step === 4 && <Button type="button" variant="outline" size="sm" disabled={isPending || !canPublish} onClick={() => publishSession("DRAFT")} aria-label="Enregistrer comme brouillon privé"><FileText className="h-4 w-4" /> Brouillon</Button>}
@@ -748,6 +740,9 @@ function DrylandStep(props: {
   blocks: BuilderDrylandBlock[];
   athletes: BuilderAthlete[];
   groupName: string;
+  warmup: OptionalBlock;
+  onUpdateWarmup: (update: Partial<OptionalBlock>) => void;
+  onRemoveWarmup: () => void;
   targetAthleteIds: string[];
   selectedBlockId: string;
   programMode: "team" | "individual";
@@ -791,7 +786,9 @@ function DrylandStep(props: {
     });
   }
 
-  return <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white shadow-[var(--shadow-card)]">
+  return <div className="space-y-4">
+    {props.warmup.enabled && <Card><CardContent className="grid gap-3 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--block-warmup-bg)] text-[var(--block-warmup-fg)]"><Activity className="h-5 w-5"/></span><div className="grid gap-3 sm:grid-cols-2"><Input aria-label="Nom de l’échauffement" value={props.warmup.title} onChange={(event) => props.onUpdateWarmup({ title: event.target.value })} className="font-black"/><Textarea aria-label="Consignes de l’échauffement" value={props.warmup.description} onChange={(event) => props.onUpdateWarmup({ description: event.target.value })} placeholder="Consignes de l’échauffement" className="min-h-11 sm:col-span-1"/></div><Button type="button" variant="outline" size="sm" onClick={props.onRemoveWarmup}><Trash2 className="h-4 w-4"/><span className="hidden sm:inline">Retirer</span></Button></CardContent></Card>}
+    <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white shadow-[var(--shadow-card)]">
     <div className="grid min-h-[520px] lg:grid-cols-[245px_minmax(0,1fr)]">
       <aside className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between"><h3 className="font-black">Blocs dryland ({props.blocks.length})</h3><Button type="button" size="sm" variant="outline" aria-label="Ajouter un bloc dryland" onClick={props.onAddBlock}><Plus className="h-4 w-4"/></Button></div>
@@ -860,6 +857,7 @@ function DrylandStep(props: {
       <Button type="button" variant="outline" disabled={selectedIndex <= 0} onClick={props.onBack}><ArrowLeft className="h-4 w-4"/>Bloc précédent{selectedIndex > 0 && props.blocks[selectedIndex - 1] ? <span className="hidden sm:inline"> · {props.blocks[selectedIndex - 1].title}</span> : null}</Button>
       <div className="text-center text-xs font-semibold text-[var(--color-ink-muted)]">Étape 3 sur 5 · Dryland</div>
       <Button type="button" variant="action" onClick={props.onSaveAndContinue}>Enregistrer ce bloc et continuer<ArrowRight className="h-4 w-4"/><span className="hidden text-[10px] font-medium sm:inline">{nextBlock ? `Bloc suivant : ${nextBlock.title}` : "Continuer vers Piscine"}</span></Button>
+    </div>
     </div>
   </div>;
 }
@@ -1039,7 +1037,7 @@ function AssignmentsStep(props: { athletes: BuilderAthlete[]; drylandBlocks: Bui
   );
 }
 
-function PoolAthletesStep({ athletes, groupName, averagePoolVolumeByAthlete, blocks, assignments, rowsByAthleteBlock, recentBlocks, onRowsChange, onCopyRows, onLoadRows }: { athletes: BuilderAthlete[]; groupName: string; averagePoolVolumeByAthlete: Record<string, number>; blocks: BuilderPoolBlock[]; assignments: Record<string, string[]>; rowsByAthleteBlock: Record<string, PoolListRow[]>; recentBlocks: BuilderPoolBlock[]; onRowsChange: (athleteId: string, blockId: string, rows: PoolListRow[]) => void; onCopyRows: (sourceId: string, targetId: string) => void; onLoadRows: (athleteId: string, blockId: string, rows: PoolListRow[]) => void }) {
+function PoolAthletesStep({ athletes, groupName, averagePoolVolumeByAthlete, blocks, assignments, rowsByAthleteBlock, recentBlocks, totalDuration, onRowsChange, onCopyRows, onLoadRows, onBack, onContinue }: { athletes: BuilderAthlete[]; groupName: string; averagePoolVolumeByAthlete: Record<string, number>; blocks: BuilderPoolBlock[]; assignments: Record<string, string[]>; rowsByAthleteBlock: Record<string, PoolListRow[]>; recentBlocks: BuilderPoolBlock[]; totalDuration: number; onRowsChange: (athleteId: string, blockId: string, rows: PoolListRow[]) => void; onCopyRows: (sourceId: string, targetId: string) => void; onLoadRows: (athleteId: string, blockId: string, rows: PoolListRow[]) => void; onBack: () => void; onContinue: () => void }) {
   const [selectedAthleteId, setSelectedAthleteId] = useState(athletes[0]?.id ?? "");
   const [copyTargetId, setCopyTargetId] = useState("");
   const selectedAthlete = athletes.find((athlete) => athlete.id === selectedAthleteId) ?? athletes[0];
@@ -1058,27 +1056,53 @@ function PoolAthletesStep({ athletes, groupName, averagePoolVolumeByAthlete, blo
   const selectedVolume = athleteBlocks.reduce((sum, block) => sum + (rowsByAthleteBlock[poolAthleteBlockKey(selectedAthlete?.id ?? "", block.id)] ?? poolSectionsToRows(block.sections)).reduce((rowSum, row) => rowSum + validatePoolListRow(row).total, 0), 0);
   const selectedIndex = athletes.findIndex((athlete) => athlete.id === selectedAthlete?.id);
 
-  return <div className="space-y-4">
-    <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 4 sur 5</p><h2 className="mt-1 text-2xl font-black">Piscine · Listes des athlètes</h2><p className="mt-1 text-sm text-[var(--color-ink-muted)]">Prépare et vérifie la liste de plongeons de chaque athlète.</p></div>
-    <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Choisir un athlète">{athletes.map((athlete) => {
-      const assigned = blocks.filter((block) => (assignments[block.id] ?? []).includes(athlete.id));
-      const isReady = assigned.length > 0 && assigned.every((block) => {
-        const rows = rowsByAthleteBlock[poolAthleteBlockKey(athlete.id, block.id)] ?? poolSectionsToRows(block.sections);
-        return rows.length > 0 && rows.every((row) => validatePoolListRow(row).errors.length === 0);
-      });
-      return <button key={athlete.id} type="button" role="tab" aria-selected={selectedAthlete?.id === athlete.id} onClick={() => setSelectedAthleteId(athlete.id)} className={cn("shrink-0 rounded-xl border px-3 py-2 text-sm font-bold", selectedAthlete?.id === athlete.id ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-[var(--color-navy)]" : "border-[var(--color-border)] bg-white")}><span className={cn("mr-2 inline-block h-2.5 w-2.5 rounded-full", isReady ? "bg-[var(--color-success)]" : assigned.length ? "bg-[var(--color-brand)]" : "bg-slate-300")}/>{athlete.firstName}</button>;
-    })}</div>
-    {selectedAthlete && <Card><CardContent className="space-y-4 p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-brand)]/15 font-black text-[var(--color-brand-strong)]">{selectedAthlete.firstName.slice(0, 1)}{selectedAthlete.lastName.slice(0, 1)}</div><div><h3 className="text-lg font-black">{selectedAthlete.firstName} {selectedAthlete.lastName}</h3><p className="text-sm text-[var(--color-ink-muted)]">{groupName}</p></div></div><div className="text-right text-sm text-[var(--color-ink-muted)]"><div>Volume individuel <strong className="text-[var(--color-ink)]">{selectedVolume} plongeons</strong></div><div className="mt-1">Moyenne par entraînement <strong className="text-[var(--color-ink)]">{averagePoolVolumeByAthlete[selectedAthlete.id] === undefined ? "—" : `${averagePoolVolumeByAthlete[selectedAthlete.id]} plongeons`}</strong></div></div></div>
-      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] pb-4">
-        <Button type="button" size="sm" variant="outline" disabled={athleteBlocks.length === 0} onClick={() => athleteBlocks.forEach((block) => onLoadRows(selectedAthlete.id, block.id, poolSectionsToRows(block.sections)))}><FileText className="h-4 w-4"/>Charger la liste complète</Button>
-        <details className="relative"><summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-bold"><Waves className="h-4 w-4"/>Charger une base<ChevronDown className="h-4 w-4"/></summary><div className="absolute left-0 z-20 mt-2 max-h-64 w-72 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white p-2 shadow-[var(--shadow-soft)]">{recentBlocks.length ? recentBlocks.map((base) => <button key={base.id} type="button" onClick={() => { const target = athleteBlocks[0]; if (target) onLoadRows(selectedAthlete.id, target.id, poolSectionsToRows(base.sections)); }} className="block w-full rounded-lg p-2 text-left text-sm hover:bg-[var(--color-surface-raised)]"><span className="font-bold">{base.title}</span><span className="block text-xs text-[var(--color-ink-muted)]">{base.sections.reduce((sum, section) => sum + section.dives.length, 0)} plongeons</span></button>) : <p className="p-2 text-sm text-[var(--color-ink-muted)]">Aucune base disponible</p>}</div></details>
-        <div className="ml-auto flex items-center gap-2"><select aria-label="Athlète destinataire" value={copyTargetId} onChange={(event) => setCopyTargetId(event.target.value)} className="h-10 max-w-36 rounded-xl border border-[var(--color-border)] bg-white px-2 text-sm"><option value="">Copier vers…</option>{athletes.filter((athlete) => athlete.id !== selectedAthlete.id).map((athlete) => <option key={athlete.id} value={athlete.id}>{athlete.firstName}</option>)}</select><Button type="button" size="sm" variant="outline" disabled={!copyTargetId} onClick={() => { onCopyRows(selectedAthlete.id, copyTargetId); setCopyTargetId(""); }}><Copy className="h-4 w-4"/>Copier</Button></div>
+  const readyForSelected = athleteBlocks.length > 0 && athleteBlocks.every((block) => {
+    const rows = rowsByAthleteBlock[poolAthleteBlockKey(selectedAthlete?.id ?? "", block.id)] ?? poolSectionsToRows(block.sections);
+    return rows.length > 0 && rows.every((row) => validatePoolListRow(row).errors.length === 0);
+  });
+  const selectAthlete = (athleteId: string) => setSelectedAthleteId(athleteId);
+
+  return <div className="space-y-4 pb-3">
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 4 sur 5</p><h2 className="mt-1 text-2xl font-black">Piscine · Listes des athlètes</h2><p className="mt-1 text-sm text-[var(--color-ink-muted)]">{groupName} · {athletes.length} athlètes · {totalDuration} min</p></div>
+      <span className="rounded-full bg-white px-3 py-2 text-xs font-bold text-[var(--color-ink-muted)]">{readyAthleteCount}/{athletes.length} listes prêtes</span>
+    </div>
+    <div className="grid gap-3 lg:grid-cols-[228px_minmax(0,1fr)]">
+      <aside className="hidden rounded-2xl border border-[var(--color-border)] bg-white p-3 lg:block">
+        <h3 className="px-2 pb-2 font-black">Athlètes <span className="text-[var(--color-ink-muted)]">({readyAthleteCount}/{athletes.length})</span></h3>
+        <div className="space-y-1" role="tablist" aria-label="Choisir un athlète" aria-orientation="vertical">{athletes.map((athlete) => {
+          const assigned = blocks.filter((block) => (assignments[block.id] ?? []).includes(athlete.id));
+          const isReady = assigned.length > 0 && assigned.every((block) => {
+            const rows = rowsByAthleteBlock[poolAthleteBlockKey(athlete.id, block.id)] ?? poolSectionsToRows(block.sections);
+            return rows.length > 0 && rows.every((row) => validatePoolListRow(row).errors.length === 0);
+          });
+          const active = selectedAthlete?.id === athlete.id;
+          return <button key={athlete.id} type="button" role="tab" aria-selected={active} onClick={() => selectAthlete(athlete.id)} className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition", active ? "bg-[var(--color-brand)]/10 text-[var(--color-brand-strong)]" : "hover:bg-[var(--color-surface-raised)]")}><span className={cn("h-3 w-3 shrink-0 rounded-full", isReady ? "bg-[var(--color-success)]" : assigned.length ? "bg-[var(--color-brand)]" : "bg-slate-300")}/><span className="min-w-0 flex-1 truncate">{athlete.firstName} {athlete.lastName}</span>{active && <ChevronRight className="h-4 w-4"/>}</button>;
+        })}</div>
+      </aside>
+      <div className="min-w-0 space-y-3">
+        <div className="flex gap-2 overflow-x-auto pb-1 lg:hidden" role="tablist" aria-label="Choisir un athlète">{athletes.map((athlete) => {
+          const assigned = blocks.filter((block) => (assignments[block.id] ?? []).includes(athlete.id));
+          const isReady = assigned.length > 0 && assigned.every((block) => {
+            const rows = rowsByAthleteBlock[poolAthleteBlockKey(athlete.id, block.id)] ?? poolSectionsToRows(block.sections);
+            return rows.length > 0 && rows.every((row) => validatePoolListRow(row).errors.length === 0);
+          });
+          return <button key={athlete.id} type="button" role="tab" aria-selected={selectedAthlete?.id === athlete.id} onClick={() => selectAthlete(athlete.id)} className={cn("flex shrink-0 items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-bold", selectedAthlete?.id === athlete.id ? "border-[var(--color-brand)] bg-[var(--color-brand)]/10 text-[var(--color-brand-strong)]" : "border-[var(--color-border)]")}><span className={cn("h-2.5 w-2.5 rounded-full", isReady ? "bg-[var(--color-success)]" : assigned.length ? "bg-[var(--color-brand)]" : "bg-slate-300")}/>{athlete.firstName}</button>;
+        })}</div>
+        {selectedAthlete ? <Card><CardContent className="space-y-4 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-brand)] text-lg font-black text-white">{selectedAthlete.firstName.slice(0, 1)}{selectedAthlete.lastName.slice(0, 1)}</div><div><h3 className="text-lg font-black">{selectedAthlete.firstName} {selectedAthlete.lastName}</h3><p className="text-sm text-[var(--color-ink-muted)]">{groupName}</p></div></div><div className="flex flex-wrap gap-2 text-sm"><span className="rounded-lg bg-[var(--color-brand)]/10 px-3 py-2 font-bold text-[var(--color-brand-strong)]">{selectedVolume} plongeons</span><span className="rounded-lg bg-[var(--color-surface-raised)] px-3 py-2 text-[var(--color-ink-muted)]">Moyenne / entraînement <strong className="text-[var(--color-ink)]">{averagePoolVolumeByAthlete[selectedAthlete.id] === undefined ? "—" : `${averagePoolVolumeByAthlete[selectedAthlete.id]}`}</strong></span></div></div>
+          <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] pb-4">
+            <Button type="button" size="sm" variant="outline" disabled={athleteBlocks.length === 0} onClick={() => athleteBlocks.forEach((block) => onLoadRows(selectedAthlete.id, block.id, poolSectionsToRows(block.sections)))}><FileText className="h-4 w-4"/>Charger la liste complète</Button>
+            <details className="relative"><summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-bold"><Waves className="h-4 w-4"/>Charger une base<ChevronDown className="h-4 w-4"/></summary><div className="absolute left-0 z-20 mt-2 max-h-64 w-72 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white p-2 shadow-[var(--shadow-soft)]">{recentBlocks.length ? recentBlocks.map((base) => <button key={base.id} type="button" onClick={() => { const target = athleteBlocks[0]; if (target) onLoadRows(selectedAthlete.id, target.id, poolSectionsToRows(base.sections)); }} className="block w-full rounded-lg p-2 text-left text-sm hover:bg-[var(--color-surface-raised)]"><span className="font-bold">{base.title}</span><span className="block text-xs text-[var(--color-ink-muted)]">{base.sections.reduce((sum, section) => sum + section.dives.length, 0)} plongeons</span></button>) : <p className="p-2 text-sm text-[var(--color-ink-muted)]">Aucune base disponible</p>}</div></details>
+            <div className="flex items-center gap-2 sm:ml-auto"><select aria-label="Athlète destinataire" value={copyTargetId} onChange={(event) => setCopyTargetId(event.target.value)} className="h-10 max-w-36 rounded-xl border border-[var(--color-border)] bg-white px-2 text-sm"><option value="">Copier vers…</option>{athletes.filter((athlete) => athlete.id !== selectedAthlete.id).map((athlete) => <option key={athlete.id} value={athlete.id}>{athlete.firstName}</option>)}</select><Button type="button" size="sm" variant="outline" disabled={!copyTargetId} onClick={() => { onCopyRows(selectedAthlete.id, copyTargetId); setCopyTargetId(""); }}><Copy className="h-4 w-4"/><span className="hidden sm:inline">Copier</span></Button></div>
+          </div>
+          {athleteBlocks.length ? athleteBlocks.map((block) => <section key={block.id}><h4 className="mb-2 font-black">{block.title}</h4><PoolListTable rows={rowsByAthleteBlock[poolAthleteBlockKey(selectedAthlete.id, block.id)] ?? poolSectionsToRows(block.sections)} onChange={(rows) => onRowsChange(selectedAthlete.id, block.id, rows)}/></section>) : <p className="rounded-xl bg-[var(--color-surface-raised)] p-4 text-sm text-[var(--color-ink-muted)]">Aucun bloc piscine n’est assigné à cet athlète. Retourne à l’étape Contenu pour ajuster ses blocs.</p>}
+          <div className="grid gap-2 sm:grid-cols-3"><SummaryMetric icon={Users} label="Listes prêtes" value={`${readyAthleteCount}/${athletes.length} athlètes`}/><SummaryMetric icon={Waves} label="Piscine" value={`${totalDuration} min`}/><SummaryMetric icon={CalendarDays} label="Volume total" value={`${totalVolume} plongeons`}/></div>
+          <div className={cn("rounded-xl px-4 py-3 text-sm font-semibold", readyForSelected ? "bg-[var(--color-success-soft)] text-[var(--color-success)]" : "bg-[var(--color-action)]/10 text-[var(--color-action-strong)]")}>{readyForSelected ? "Liste prête pour cet athlète." : "Complète les lignes et vérifie les répétitions pour préparer cette liste."}</div>
+        </CardContent></Card> : <Card><CardContent className="p-6"><WarningText>Aucun athlète dans ce groupe.</WarningText></CardContent></Card>}
       </div>
-      {athleteBlocks.length ? athleteBlocks.map((block) => <section key={block.id}><h4 className="mb-2 font-black">{block.title}</h4><PoolListTable rows={rowsByAthleteBlock[poolAthleteBlockKey(selectedAthlete.id, block.id)] ?? poolSectionsToRows(block.sections)} onChange={(rows) => onRowsChange(selectedAthlete.id, block.id, rows)}/></section>) : <p className="rounded-xl bg-[var(--color-surface-raised)] p-4 text-sm text-[var(--color-ink-muted)]">Aucun bloc piscine n’est assigné à cet athlète. Retourne à l’étape Dryland pour ajuster ses blocs.</p>}
-    </CardContent></Card>}
-    <div className="grid gap-2 sm:grid-cols-2"><SummaryMetric icon={Users} label="Listes prêtes" value={`${readyAthleteCount}/${athletes.length}`}/><SummaryMetric icon={CalendarDays} label="Volume total" value={`${totalVolume} plongeons`}/></div>
-    <div className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-white p-2"><Button type="button" size="sm" variant="outline" disabled={selectedIndex <= 0} onClick={() => setSelectedAthleteId(athletes[selectedIndex - 1]?.id ?? "")}><ArrowLeft className="h-4 w-4"/>Athlète précédent</Button><span className="text-sm font-black">{selectedVolume} plongeons</span><Button type="button" size="sm" variant="outline" disabled={selectedIndex < 0 || selectedIndex >= athletes.length - 1} onClick={() => setSelectedAthleteId(athletes[selectedIndex + 1]?.id ?? "")}>Athlète suivant<ArrowRight className="h-4 w-4"/></Button></div>
+    </div>
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-white p-3"><Button type="button" variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4"/>Retour</Button><div className="hidden text-sm font-semibold text-[var(--color-ink-muted)] sm:block">Étape 4 sur 5 · Listes piscine</div><Button type="button" variant="action" onClick={onContinue}>Vérifier<ArrowRight className="h-4 w-4"/></Button></div>
   </div>;
 }
 
@@ -1135,7 +1159,7 @@ function PublishStep(props: { title: string; groupName: string; date: string; ti
   </div>;
 }
 
-function SummaryPanel(props: { title: string; date: string; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number; poolVolume: number; drylandExercises: number; poolReady: boolean; assignmentsReady: boolean; publicationIssues: string[]; duration: number; step: number; isPending: boolean; canPublish: boolean; onBack: () => void; onContinue: () => void; onSaveDraft: () => void; onPublish: () => void }) {
+function SummaryPanel(props: { title: string; date: string; time: string; blockCount: number; athleteCount: number; unassignedCount: number; totalVolume: number; poolVolume: number; drylandExercises: number; poolReady: boolean; assignmentsReady: boolean; publicationIssues: string[]; duration: number; step: number; isPending: boolean; canPublish: boolean; onBack: () => void; onContinue: () => void; onSaveDraft: () => void; onPublish: () => void }) {
   if (props.step === 4) {
     const checks = [
       { label: "Tous les blocs ont des athlètes", ready: props.assignmentsReady },
@@ -1164,6 +1188,7 @@ function SummaryPanel(props: { title: string; date: string; blockCount: number; 
         </CardHeader>
         <CardContent className="space-y-4">
           <SummaryMetric icon={CalendarPlus} label="Date" value={formatSessionDate(props.date)} />
+          <SummaryMetric icon={Clock3} label="Heure" value={props.time || "À choisir"} />
           <SummaryMetric icon={FileText} label="Blocs" value={props.blockCount} />
           <SummaryMetric icon={Users} label="Athlètes concernés" value={props.athleteCount} />
           <SummaryMetric icon={AlertTriangle} label="Blocs sans athlètes" value={props.unassignedCount} tone={props.unassignedCount > 0 ? "warning" : "default"} />
