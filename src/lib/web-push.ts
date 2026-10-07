@@ -74,7 +74,7 @@ export async function dispatchSessionPublication(sessionId: string) {
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
-          if (await send(subscription, { title: "Nouvelle séance disponible", body: "Ton entraînement est prêt. Consulte ta séance dans DivePlan.", url: `/athlete/session/${encodeURIComponent(sessionId)}` }) === "sent") accepted++;
+          if (await send(subscription, { title: "Nouvelle séance disponible", body: "Ta séance est prête.", url: `/athlete/session/${encodeURIComponent(sessionId)}` }) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back publishing. */ }
       }
       await query(`UPDATE "PushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);
