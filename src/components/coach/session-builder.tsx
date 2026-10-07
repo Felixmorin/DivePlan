@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronUp, Clock3, Copy, Dumbbell, FileText, Leaf, MoreHorizontal, Plus, Search, Send, Trash2, UserRound, Users, Waves } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock3, Copy, Dumbbell, FileText, GripVertical, Leaf, MoreHorizontal, Plus, Search, Send, Trash2, UserRound, Users, Waves } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -149,6 +149,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     : initialExerciseId ? [{ id: "dryland-1", title: "Dryland 1", duration: 20, exerciseIds: [initialExerciseId], athleteIds: initialAthleteIds, exerciseOverrides: {} }] : []);
   const [drylandProgramMode, setDrylandProgramMode] = useState<"team" | "individual">("team");
   const [drylandTargetAthleteIds, setDrylandTargetAthleteIds] = useState(initialAthleteIds);
+  const [selectedDrylandBlockId, setSelectedDrylandBlockId] = useState(drylandBlocks[0]?.id ?? "");
   const [poolAssignments, setPoolAssignments] = useState(() =>
     Object.fromEntries(activePoolBlocks.map((block) => [block.id, (block.athleteIds.length > 0 ? block.athleteIds : initialAthleteIds).filter((id) => initialAthleteIds.includes(id))]))
   );
@@ -195,6 +196,10 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   });
   const watched = useWatch({ control: form.control });
   const athleteIds = useMemo(() => athletes.filter((athlete) => athlete.groupId === (watched.groupId ?? initialGroupId)).map((athlete) => athlete.id), [athletes, initialGroupId, watched.groupId]);
+  useEffect(() => {
+    if (drylandBlocks.some((block) => block.id === selectedDrylandBlockId)) return;
+    setSelectedDrylandBlockId(drylandBlocks[0]?.id ?? "");
+  }, [drylandBlocks, selectedDrylandBlockId]);
   const drylandGroupId = watched.groupId ?? initialGroupId;
   const previousDrylandGroupId = useRef(drylandGroupId);
   useEffect(() => {
@@ -235,12 +240,13 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     try {
       const raw = window.localStorage.getItem(draftKey);
       if (raw) {
-        const draft = JSON.parse(raw) as { values?: Partial<FormValues>; drylandBlocks?: BuilderDrylandBlock[]; drylandProgramMode?: "team" | "individual"; drylandTargetAthleteIds?: string[]; poolBlocks?: BuilderPoolBlock[]; poolAssignments?: Record<string, string[]>; poolRowsByAthleteBlock?: Record<string, PoolListRow[]>; warmup?: OptionalBlock; cooldown?: OptionalBlock; contentOrder?: string[]; evaluationPlacement?: string };
+        const draft = JSON.parse(raw) as { values?: Partial<FormValues>; drylandBlocks?: BuilderDrylandBlock[]; drylandProgramMode?: "team" | "individual"; drylandTargetAthleteIds?: string[]; selectedDrylandBlockId?: string; poolBlocks?: BuilderPoolBlock[]; poolAssignments?: Record<string, string[]>; poolRowsByAthleteBlock?: Record<string, PoolListRow[]>; warmup?: OptionalBlock; cooldown?: OptionalBlock; contentOrder?: string[]; evaluationPlacement?: string };
         queueMicrotask(() => {
           if (draft.values) form.reset({ ...form.getValues(), ...draft.values });
           if (draft.drylandBlocks) setDrylandBlocks(draft.drylandBlocks);
           if (draft.drylandProgramMode) setDrylandProgramMode(draft.drylandProgramMode);
           if (draft.drylandTargetAthleteIds) setDrylandTargetAthleteIds(draft.drylandTargetAthleteIds);
+          if (draft.selectedDrylandBlockId) setSelectedDrylandBlockId(draft.selectedDrylandBlockId);
           if (draft.poolBlocks) setActivePoolBlocks(draft.poolBlocks);
           if (draft.poolAssignments) setPoolAssignments(draft.poolAssignments);
           if (draft.poolRowsByAthleteBlock) setPoolRowsByAthleteBlock(draft.poolRowsByAthleteBlock);
@@ -257,8 +263,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   }, [draftKey, form]);
   useEffect(() => {
     if (!restoredDraft.current) return;
-    window.localStorage.setItem(draftKey, JSON.stringify({ values: watched, drylandBlocks, drylandProgramMode, drylandTargetAthleteIds, poolBlocks: activePoolBlocks, poolAssignments, poolRowsByAthleteBlock, warmup, cooldown, contentOrder, evaluationPlacement }));
-  }, [activePoolBlocks, contentOrder, cooldown, draftKey, drylandBlocks, drylandProgramMode, drylandTargetAthleteIds, evaluationPlacement, form, poolAssignments, poolRowsByAthleteBlock, warmup, watched]);
+    window.localStorage.setItem(draftKey, JSON.stringify({ values: watched, drylandBlocks, drylandProgramMode, drylandTargetAthleteIds, selectedDrylandBlockId, poolBlocks: activePoolBlocks, poolAssignments, poolRowsByAthleteBlock, warmup, cooldown, contentOrder, evaluationPlacement }));
+  }, [activePoolBlocks, contentOrder, cooldown, draftKey, drylandBlocks, drylandProgramMode, drylandTargetAthleteIds, evaluationPlacement, form, poolAssignments, poolRowsByAthleteBlock, selectedDrylandBlockId, warmup, watched]);
   useEffect(() => {
     if (watched.planningEventId && !planningEvents.some((event) => event.id === watched.planningEventId && (!event.groupId || event.groupId === watched.groupId) && toMontrealDateInputValue(event.startsAt) === watched.date)) {
       form.setValue("planningEventId", "");
@@ -462,6 +468,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   function addDrylandBlock() {
     const id = `dryland-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setDrylandBlocks((current) => [...current, { id, title: `Dryland ${current.length + 1}`, duration: 20, exerciseIds: [], athleteIds: drylandTargetAthleteIds, exerciseOverrides: {} }]);
+    setSelectedDrylandBlockId(id);
     setContentOrder((current) => [...current, id]);
     pulse(id);
   }
@@ -577,7 +584,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       )}
       {publishError && <div role="alert" className="mb-5 rounded-2xl border border-[var(--color-danger)]/25 bg-red-50 p-4 text-sm font-semibold text-[var(--color-danger)]">{publishError}</div>}
 
-      <div className={cn("grid gap-6", step === 4 ? "lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]" : "lg:grid-cols-[minmax(0,1fr)_340px]")}>
+      <div className={cn("grid gap-6", step === 2 ? "grid-cols-1" : step === 4 ? "lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]" : "lg:grid-cols-[minmax(0,1fr)_340px]")}>
         <div className="space-y-5">
           {step === 0 && <>
             <section className="space-y-4">
@@ -631,18 +638,10 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
               </details>
             </div>
           )}
-          {step === 2 && <div className="space-y-5">
-            <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 3 sur 5</p><h2 className="mt-1 text-2xl font-black">Organiser le dryland</h2></div>
-            <section className="rounded-2xl border border-[var(--color-border)] bg-white p-4"><h3 className="mb-3 font-black">Type de programme dryland</h3><div className="grid gap-3 sm:grid-cols-2">
-              <button type="button" aria-pressed={drylandProgramMode === "team"} onClick={() => { setDrylandProgramMode("team"); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: drylandTargetAthleteIds }))); }} className={cn("flex min-h-20 items-center gap-3 rounded-xl border p-4 text-left", drylandProgramMode === "team" ? "border-[var(--block-dryland-fg)] bg-[var(--block-dryland-bg)]/50" : "border-[var(--color-border)] hover:border-[var(--color-brand)]")}><Users className="h-7 w-7 shrink-0"/><span><strong className="block">Pour toute l’équipe</strong><span className="text-sm text-[var(--color-ink-muted)]">Même circuit pour tout le groupe</span></span></button>
-              <button type="button" aria-pressed={drylandProgramMode === "individual"} onClick={() => setDrylandProgramMode("individual")} className={cn("flex min-h-20 items-center gap-3 rounded-xl border p-4 text-left", drylandProgramMode === "individual" ? "border-[var(--block-dryland-fg)] bg-[var(--block-dryland-bg)]/50" : "border-[var(--color-border)] hover:border-[var(--color-brand)]")}><UserRound className="h-7 w-7 shrink-0"/><span><strong className="block">Programme individuel</strong><span className="text-sm text-[var(--color-ink-muted)]">Un plan différent par athlète</span></span></button>
-            </div></section>
-            <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(270px,0.8fr)]">
-              <DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} programMode={drylandProgramMode} flashBlock={flashBlock} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onMoveBlock={moveDrylandBlock} onSaveBlockTemplate={saveDrylandTemplate} onCreateExercise={addExercise}/>
-              <Card><CardHeader><CardTitle>Groupe ciblé</CardTitle><p className="text-sm text-[var(--color-ink-muted)]">{groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} · {drylandTargetAthleteIds.length} athlètes</p></CardHeader><CardContent className="space-y-4"><AthleteAvatarGroup ids={drylandTargetAthleteIds} athletes={visibleAthletes} limit={8}/><details className="group"><summary className="cursor-pointer list-none font-bold text-[var(--color-brand-strong)]">Exclure un athlète <ChevronDown className="ml-1 inline h-4 w-4 transition group-open:rotate-180"/></summary><div className="mt-3 space-y-2">{visibleAthletes.map((athlete) => { const included = drylandTargetAthleteIds.includes(athlete.id); return <button key={athlete.id} type="button" aria-pressed={included} onClick={() => { const next = included ? drylandTargetAthleteIds.filter((id) => id !== athlete.id) : [...drylandTargetAthleteIds, athlete.id]; setDrylandTargetAthleteIds(next); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: next }))); }} className={cn("flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm font-semibold", included ? "border-[var(--color-brand)] bg-[var(--block-pool-bg)]" : "border-[var(--color-border)] text-[var(--color-ink-muted)]")}>{athlete.firstName} {athlete.lastName}<span>{included ? "Inclus" : "Exclu"}</span></button>; })}</div></details></CardContent></Card>
-            </div>
-            {warmup.enabled && <OptionalBlockEditor label="Échauffement" block={warmup} onChange={(update) => setWarmup((current) => ({ ...current, ...update }))}/>}
-            <OptionalBlockEditor label="Retour au calme" block={cooldown} onChange={(update) => setCooldown((current) => ({ ...current, ...update }))}/>
+          {step === 2 && <div className="space-y-4">
+            <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 3 sur 5</p><h2 className="mt-1 text-2xl font-black">Dryland</h2></div>
+            <DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} targetAthleteIds={drylandTargetAthleteIds} selectedBlockId={selectedDrylandBlockId} programMode={drylandProgramMode} flashBlock={flashBlock} onSelectBlock={setSelectedDrylandBlockId} onProgramModeChange={(mode) => { setDrylandProgramMode(mode); if (mode === "team") setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: drylandTargetAthleteIds }))); }} onTargetAthletesChange={(ids) => { setDrylandTargetAthleteIds(ids); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: ids }))); }} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onSaveAndContinue={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index >= 0 && index < effectiveDrylandBlocks.length - 1) setSelectedDrylandBlockId(effectiveDrylandBlocks[index + 1].id); else void advanceTo(3); }} onBack={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index > 0) setSelectedDrylandBlockId(effectiveDrylandBlocks[index - 1].id); }} onCreateExercise={addExercise}/>
+            <details className="rounded-2xl border border-[var(--color-border)] bg-white p-4"><summary className="cursor-pointer font-bold">Échauffement et retour au calme</summary><div className="mt-4 space-y-3">{warmup.enabled && <OptionalBlockEditor label="Échauffement" block={warmup} onChange={(update) => setWarmup((current) => ({ ...current, ...update }))}/>}<OptionalBlockEditor label="Retour au calme" block={cooldown} onChange={(update) => setCooldown((current) => ({ ...current, ...update }))}/></div></details>
           </div>}
           {step === 3 && <div className="space-y-5">
             <PoolStep poolBlocks={activePoolBlocks} recentBlocks={poolBlocks} flashBlock={flashBlock} onAddPoolBlock={addPoolBlock} onReusePoolBlock={reusePoolBlock} onRemovePoolBlock={removePoolBlock} onMoveBlock={movePoolBlock} onUpdatePoolBlock={updatePoolBlock} onUpdatePoolRows={updatePoolRows}/>
@@ -651,7 +650,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
           {step === 4 && <PublishStep title={watched.title?.trim() || `${groups.find((group) => group.id === watched.groupId)?.name ?? "Séance"} · ${formatSessionDate(watched.date ?? "")}`} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe à choisir"} date={watched.date ?? ""} time={watched.time ?? ""} duration={totalDuration} athleteCount={visibleAthletes.length} athletes={visibleAthletes} blocks={reviewBlocks} issues={publicationIssues} poolReady={activePoolBlocks.length === 0 || individualPoolBlocks.every(poolBlockIsValid)} assignmentsReady={unassignedBlocks.length === 0} canPublish={canPublish} onEditBlock={(block) => setStep(block.type === "pool" ? 3 : block.type === "dryland" ? 1 : 1)} />}
         </div>
 
-        <SummaryPanel
+        {step !== 2 && <SummaryPanel
               title={watched.title ?? "Nouvelle séance"}
           date={watched.date ?? ""}
           blockCount={activePoolBlocks.length + drylandBlocks.length + Number(warmup.enabled) + Number(cooldown.enabled)}
@@ -671,10 +670,10 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
           onContinue={() => void advanceTo(Math.min(4, step + 1))}
           onSaveDraft={() => publishSession("DRAFT")}
           onPublish={() => publishSession("READY")}
-        />
+        />}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border)] bg-white/95 p-3 shadow-[0_-16px_34px_rgba(7,20,35,0.12)] backdrop-blur lg:hidden">
+      {step !== 2 && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border)] bg-white/95 p-3 shadow-[0_-16px_34px_rgba(7,20,35,0.12)] backdrop-blur lg:hidden">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <Button type="button" variant="outline" disabled={step === 0 || isPending} onClick={() => setStep(step - 1)}>Retour</Button>
           {step === 4 && <Button type="button" variant="outline" size="sm" disabled={isPending || !canPublish} onClick={() => publishSession("DRAFT")} aria-label="Enregistrer comme brouillon privé"><FileText className="h-4 w-4" /> Brouillon</Button>}
@@ -682,7 +681,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
             {step === 4 ? (isPending ? "Publication…" : "Publier") : "Continuer"}
           </Button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -757,78 +756,121 @@ function DrylandStep(props: {
   exercises: BuilderExercise[];
   blocks: BuilderDrylandBlock[];
   athletes: BuilderAthlete[];
+  groupName: string;
+  targetAthleteIds: string[];
+  selectedBlockId: string;
   programMode: "team" | "individual";
   flashBlock: string | null;
+  onSelectBlock: (blockId: string) => void;
+  onProgramModeChange: (mode: "team" | "individual") => void;
+  onTargetAthletesChange: (ids: string[]) => void;
   onToggleExercise: (blockId: string, exerciseId: string, selected: boolean, occurrenceIndex?: number) => void;
   onMoveExercise: (blockId: string, occurrenceIndex: number, direction: -1 | 1) => void;
   onUpdateBlock: (blockId: string, update: Partial<Omit<BuilderDrylandBlock, "id">>) => void;
   onAddBlock: () => void;
   onRemoveBlock: (blockId: string) => void;
-  onMoveBlock: (blockId: string, direction: -1 | 1) => void;
-  onSaveBlockTemplate: (blockId: string) => void;
+  onSaveAndContinue: () => void;
+  onBack: () => void;
   onCreateExercise: (input: QuickExerciseInput) => Promise<void>;
 }) {
   const [search, setSearch] = useState("");
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-[var(--block-dryland-fg)]/20 bg-[var(--block-dryland-bg)]/45 p-4">
-        <div><h2 className="text-xl font-black">{props.programMode === "team" ? "Circuit commun" : "Programmes individuels"}</h2><p className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{props.programMode === "team" ? "Même circuit pour les athlètes du groupe ciblé." : "Compose les circuits et choisis les athlètes auxquels ils s’adressent."}</p></div>
-        <Button type="button" onClick={props.onAddBlock}><Plus className="h-4 w-4" /> {props.programMode === "team" ? "Ajouter un circuit" : "Ajouter un programme"}</Button>
+  const [showLibrary, setShowLibrary] = useState(false);
+  const selectedBlock = props.blocks.find((block) => block.id === props.selectedBlockId);
+  const selectedIndex = props.blocks.findIndex((block) => block.id === props.selectedBlockId);
+  const selectedExercises = selectedBlock ? orderExercises(props.exercises, selectedBlock.exerciseIds) : [];
+  const completedCount = props.blocks.filter((block) => block.exerciseIds.length > 0 && block.athleteIds.length > 0).length;
+  const progress = props.blocks.length > 0 ? Math.round(completedCount / props.blocks.length * 100) : 0;
+  const nextBlock = selectedIndex >= 0 ? props.blocks[selectedIndex + 1] : undefined;
+  const availableExercises = props.exercises.filter((exercise) => `${exercise.name} ${exercise.category} ${exercise.equipment ?? ""}`.toLocaleLowerCase("fr").includes(search.trim().toLocaleLowerCase("fr")));
+
+  function updateExercise(exercise: BuilderExercise, field: "sets" | "reps" | "duration", value: number | null) {
+    if (!selectedBlock) return;
+    const previous = selectedBlock.exerciseOverrides[exercise.id];
+    props.onUpdateBlock(selectedBlock.id, {
+      exerciseOverrides: {
+        ...selectedBlock.exerciseOverrides,
+        [exercise.id]: {
+          sets: previous?.sets ?? exercise.sets,
+          reps: previous?.reps ?? exercise.reps,
+          duration: previous?.duration ?? exercise.duration,
+          notes: previous?.notes ?? null,
+          [field]: value
+        }
+      }
+    });
+  }
+
+  return <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white shadow-[var(--shadow-card)]">
+    <div className="grid min-h-[520px] lg:grid-cols-[245px_minmax(0,1fr)]">
+      <aside className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 lg:border-b-0 lg:border-r">
+        <div className="flex items-center justify-between"><h3 className="font-black">Blocs dryland ({props.blocks.length})</h3><Button type="button" size="sm" variant="outline" aria-label="Ajouter un bloc dryland" onClick={props.onAddBlock}><Plus className="h-4 w-4"/></Button></div>
+        <p className="mt-1 text-xs font-semibold text-[var(--color-ink-muted)]">{completedCount} / {props.blocks.length} complétés</p>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--color-border)]"><div className="h-full rounded-full bg-[var(--color-brand)] transition-all" style={{ width: `${progress}%` }}/></div>
+        <div className="mt-4 space-y-2">{props.blocks.map((block, index) => {
+          const isSelected = block.id === props.selectedBlockId;
+          const isComplete = block.exerciseIds.length > 0 && block.athleteIds.length > 0;
+          return <button key={block.id} type="button" aria-current={isSelected ? "step" : undefined} onClick={() => props.onSelectBlock(block.id)} className={cn("flex w-full items-center gap-3 rounded-xl border p-3 text-left transition", isSelected ? "border-amber-400 bg-amber-50" : "border-[var(--color-border)] bg-white hover:border-[var(--color-brand)]")}>
+            <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black", isComplete ? "bg-[var(--color-success)] text-white" : isSelected ? "bg-amber-500 text-white" : "bg-[var(--color-surface-raised)] text-[var(--color-ink-muted)]")}>{isComplete ? <CheckCircle2 className="h-4 w-4"/> : index + 1}</span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{block.title || `Dryland ${index + 1}`}</span><span className="block text-xs text-[var(--color-ink-muted)]">{block.duration} min</span></span><ChevronRight className="h-4 w-4 text-[var(--color-ink-muted)]"/>
+          </button>;
+        })}</div>
+        {props.blocks.length === 0 && <p className="mt-4 text-sm text-[var(--color-ink-muted)]">Ajoute un bloc depuis l’étape Blocs.</p>}
+      </aside>
+
+      <div className="min-w-0 p-4 sm:p-5">
+        {selectedBlock ? <>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-52 flex-1">
+              <Input aria-label="Nom du bloc dryland" value={selectedBlock.title} onChange={(event) => props.onUpdateBlock(selectedBlock.id, { title: event.target.value })} className="h-auto border-0 bg-transparent px-0 text-2xl font-black shadow-none focus-visible:shadow-none"/>
+              <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{selectedBlock.duration} min · {props.groupName} · {props.programMode === "team" ? props.targetAthleteIds.length : selectedBlock.athleteIds.length} athlètes</p>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+              <div className="flex items-center gap-2 text-xs font-black"><Users className="h-4 w-4"/>{props.programMode === "team" ? "Même circuit pour tout le groupe" : "Athlètes du programme"}</div>
+              <div className="mt-2"><AthleteAvatarGroup ids={props.programMode === "team" ? props.targetAthleteIds : selectedBlock.athleteIds} athletes={props.athletes} limit={6}/></div>
+              {props.programMode === "team" && <details className="group mt-2"><summary className="cursor-pointer list-none text-xs font-bold underline">Exclure un athlète <ChevronDown className="ml-1 inline h-3 w-3 transition group-open:rotate-180"/></summary><div className="mt-2 space-y-1">{props.athletes.map((athlete) => { const included = props.targetAthleteIds.includes(athlete.id); return <button key={athlete.id} type="button" aria-pressed={included} onClick={() => props.onTargetAthletesChange(included ? props.targetAthleteIds.filter((id) => id !== athlete.id) : [...props.targetAthleteIds, athlete.id])} className="flex w-full justify-between rounded-md px-2 py-1 text-left text-xs hover:bg-amber-100">{athlete.firstName} {athlete.lastName}<span>{included ? "Inclus" : "Exclu"}</span></button>; })}</div></details>}
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 rounded-xl bg-[var(--color-surface-raised)] p-1">
+            <button type="button" aria-pressed={props.programMode === "team"} onClick={() => props.onProgramModeChange("team")} className={cn("rounded-lg px-3 py-2 text-sm font-black", props.programMode === "team" ? "bg-[var(--color-brand)] text-white" : "text-[var(--color-ink-muted)]")}><Users className="mr-2 inline h-4 w-4"/>Équipe</button>
+            <button type="button" aria-pressed={props.programMode === "individual"} onClick={() => props.onProgramModeChange("individual")} className={cn("rounded-lg px-3 py-2 text-sm font-black", props.programMode === "individual" ? "bg-[var(--color-brand)] text-white" : "text-[var(--color-ink-muted)]")}><UserRound className="mr-2 inline h-4 w-4"/>Par athlète</button>
+          </div>
+          {props.programMode === "individual" && <div className="mt-3"><AssignmentSelector selected={selectedBlock.athleteIds} onChange={(ids) => props.onUpdateBlock(selectedBlock.id, { athleteIds: ids })} athletes={props.athletes}/></div>}
+
+          <section className="mt-4 rounded-xl border border-[var(--color-border)] p-3 sm:p-4">
+            <h3 className="mb-3 flex items-center gap-2 font-black"><Dumbbell className="h-4 w-4 text-[var(--block-dryland-fg)]"/>{props.programMode === "team" ? "Circuit de l’équipe" : "Circuit individuel"}</h3>
+            <div className="space-y-2">{selectedExercises.map((exercise, index) => {
+              const override = selectedBlock.exerciseOverrides[exercise.id];
+              const sets = override?.sets ?? exercise.sets ?? 1;
+              const reps = override?.reps ?? exercise.reps;
+              const seconds = override?.duration ?? exercise.duration;
+              const quantity = exercise.roundTrip ? "Aller-retour" : seconds ? `${sets} × ${seconds} s` : `${sets} × ${reps ?? "—"}`;
+              return <div key={`${exercise.id}-${index}`} className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-white px-3 py-2">
+                <GripVertical className="h-4 w-4 shrink-0 text-[var(--color-ink-soft)]"/>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{exercise.name}</p><p className="text-xs text-[var(--color-ink-muted)]">{exercise.category}</p></div>
+                <span className="whitespace-nowrap text-sm font-semibold text-[var(--color-ink-muted)]">{quantity}</span>
+                <details className="relative"><summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-raised)]"><MoreHorizontal className="h-4 w-4"/></summary><div className="absolute right-0 z-20 mt-1 w-52 rounded-xl border border-[var(--color-border)] bg-white p-3 shadow-[var(--shadow-soft)]"><div className="mb-2 text-xs font-black">Modifier l’exercice</div><div className="grid grid-cols-2 gap-2"><Input aria-label={`Séries ${exercise.name}`} type="number" min="1" value={sets} onChange={(event) => updateExercise(exercise, "sets", Number(event.target.value) || 1)} placeholder="Séries"/>{!exercise.roundTrip && <Input aria-label={`Répétitions ${exercise.name}`} type="number" min="1" value={reps ?? ""} onChange={(event) => updateExercise(exercise, "reps", Number(event.target.value) || null)} placeholder="Répétitions"/>}{!exercise.roundTrip && <Input aria-label={`Durée en secondes ${exercise.name}`} type="number" min="1" value={seconds ?? ""} onChange={(event) => updateExercise(exercise, "duration", Number(event.target.value) || null)} placeholder="Secondes"/>}</div><div className="mt-2 flex justify-between gap-2"><button type="button" onClick={() => props.onMoveExercise(selectedBlock.id, index, -1)} disabled={index === 0} className="text-xs font-bold text-[var(--color-brand-strong)] disabled:opacity-40">Monter</button><button type="button" onClick={() => props.onMoveExercise(selectedBlock.id, index, 1)} disabled={index === selectedExercises.length - 1} className="text-xs font-bold text-[var(--color-brand-strong)] disabled:opacity-40">Descendre</button><button type="button" onClick={() => props.onToggleExercise(selectedBlock.id, exercise.id, true, index)} className="text-xs font-bold text-[var(--color-danger)]">Retirer</button></div></div></details>
+              </div>;
+            })}</div>
+            {selectedExercises.length === 0 && <p className="rounded-lg bg-[var(--color-surface-raised)] p-3 text-sm text-[var(--color-ink-muted)]">Ajoute des exercices pour composer ce circuit.</p>}
+            <Button type="button" variant="outline" className="mt-3 w-full border-dashed text-[var(--color-brand-strong)]" onClick={() => setShowLibrary((value) => !value)}><Plus className="h-4 w-4"/>Ajouter un exercice</Button>
+            {showLibrary && <div className="mt-3 space-y-3">
+              <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-soft)]"/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice" className="pl-9"/></label>
+              <div className="max-h-64 space-y-2 overflow-y-auto">{availableExercises.map((exercise) => <button key={exercise.id} type="button" onClick={() => { props.onToggleExercise(selectedBlock.id, exercise.id, false); setShowLibrary(false); setSearch(""); }} className="flex w-full items-center justify-between rounded-lg border border-[var(--color-border)] p-3 text-left text-sm hover:border-[var(--color-brand)]"><span><strong>{exercise.name}</strong><span className="ml-2 text-xs text-[var(--color-ink-muted)]">{exercise.category}</span></span><Plus className="h-4 w-4 text-[var(--color-brand-strong)]"/></button>)}{availableExercises.length === 0 && <p className="p-3 text-sm text-[var(--color-ink-muted)]">Aucun exercice trouvé.</p>}</div>
+              <details><summary className="cursor-pointer text-sm font-bold text-[var(--color-brand-strong)]">Créer un exercice rapide</summary><div className="mt-3"><QuickExerciseForm onCreateExercise={props.onCreateExercise}/></div></details>
+            </div>}
+          </section>
+          <div className="mt-3 flex justify-end"><Button type="button" variant="outline" size="sm" onClick={() => props.onRemoveBlock(selectedBlock.id)}><Trash2 className="h-4 w-4"/>Supprimer ce bloc</Button></div>
+        </> : <div className="flex min-h-80 flex-col items-center justify-center gap-3 text-center"><Dumbbell className="h-10 w-10 text-[var(--block-dryland-fg)]"/><p className="font-bold">Aucun bloc dryland</p><Button type="button" onClick={props.onAddBlock}><Plus className="h-4 w-4"/>Ajouter un bloc</Button></div>}
       </div>
-      <QuickExerciseForm onCreateExercise={props.onCreateExercise} />
-      {props.blocks.map((block, blockIndex) => {
-        const selectedExercises = orderExercises(props.exercises, block.exerciseIds);
-        const availableExercises = props.exercises.filter((exercise) => `${exercise.name} ${exercise.category} ${exercise.equipment ?? ""}`.toLocaleLowerCase("fr").includes(search.trim().toLocaleLowerCase("fr")));
-        const renderExercise = (exercise: BuilderExercise, selected: boolean, occurrenceIndex?: number) => (
-          <div key={selected ? `${exercise.id}-${occurrenceIndex}` : exercise.id} className={cn("grid gap-3 rounded-2xl border p-3 sm:grid-cols-[auto_1fr_auto] sm:items-center", selected ? "border-[var(--block-dryland-fg)]/30 bg-[var(--block-dryland-bg)]/45" : "border-[var(--color-border)] bg-white")}>
-            <button type="button" onClick={() => props.onToggleExercise(block.id, exercise.id, selected, occurrenceIndex)} className={cn("flex h-11 w-11 items-center justify-center rounded-xl border focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", selected ? "border-[var(--color-success)] bg-[var(--color-success)] text-white" : "border-[var(--color-border)] text-[var(--color-ink-soft)]")} aria-label={`${selected ? "Retirer" : "Ajouter encore"} ${exercise.name} ${selected ? "du" : "au"} bloc ${block.title}`}>
-              {selected ? <CheckCircle2 className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
-            </button>
-            <div>
-              <div className="font-black">{exercise.name}</div>
-              <div className="text-sm text-[var(--color-ink-muted)]">{exercise.sets ?? 1} x {exercise.roundTrip ? "Aller-retour" : exercise.reps ?? "Répétitions à définir"} - {exercise.equipment ?? "Aucun"}</div>
-              {selected && <div className="mt-2 grid gap-2 sm:grid-cols-4">
-                {(["sets", ...(exercise.roundTrip ? [] : ["reps"])] as ("sets" | "reps")[]).map((field) => {
-                  const value = block.exerciseOverrides[exercise.id]?.[field] ?? exercise[field];
-                  return <Input key={field} aria-label={`${field === "sets" ? "Séries" : "Répétitions"} ${exercise.name}`} type="number" min="1" value={value ?? ""} placeholder={field === "sets" ? "Séries" : "Répétitions"} onChange={(event) => props.onUpdateBlock(block.id, { exerciseOverrides: { ...block.exerciseOverrides, [exercise.id]: { sets: block.exerciseOverrides[exercise.id]?.sets ?? exercise.sets, reps: block.exerciseOverrides[exercise.id]?.reps ?? exercise.reps, duration: block.exerciseOverrides[exercise.id]?.duration ?? exercise.duration, notes: block.exerciseOverrides[exercise.id]?.notes ?? null, [field]: event.target.value ? Number(event.target.value) : null } } })} />;
-                })}
-                <Input aria-label={`Note ${exercise.name}`} value={block.exerciseOverrides[exercise.id]?.notes ?? ""} placeholder="Note" onChange={(event) => props.onUpdateBlock(block.id, { exerciseOverrides: { ...block.exerciseOverrides, [exercise.id]: { sets: block.exerciseOverrides[exercise.id]?.sets ?? exercise.sets, reps: block.exerciseOverrides[exercise.id]?.reps ?? exercise.reps, duration: block.exerciseOverrides[exercise.id]?.duration ?? exercise.duration, notes: event.target.value || null } } })} />
-              </div>}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-[var(--color-ink-muted)]">{exercise.category}</span>
-              {selected && <div className="flex gap-1"><button type="button" aria-label={`Monter ${exercise.name}`} onClick={() => props.onMoveExercise(block.id, occurrenceIndex!, -1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white"><ArrowUp className="h-4 w-4" /></button><button type="button" aria-label={`Descendre ${exercise.name}`} onClick={() => props.onMoveExercise(block.id, occurrenceIndex!, 1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white"><ArrowDown className="h-4 w-4" /></button></div>}
-            </div>
-          </div>
-        );
-        return (
-          <div key={block.id}>
-            <BlockCard type="dryland" title={block.title || `Dryland ${blockIndex + 1}`} assigned={block.athleteIds} athletes={props.athletes} state={selectedExercises.length > 0 ? "Prêt" : "À compléter"} flash={props.flashBlock === block.id} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < props.blocks.length - 1} onMoveUp={() => props.onMoveBlock(block.id, -1)} onMoveDown={() => props.onMoveBlock(block.id, 1)} onSaveTemplate={() => props.onSaveBlockTemplate(block.id)}>
-              <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-                <Input aria-label={`Nom du bloc dryland ${blockIndex + 1}`} value={block.title} placeholder={`Dryland ${blockIndex + 1}`} onChange={(event) => props.onUpdateBlock(block.id, { title: event.target.value })} />
-                <Button type="button" variant="outline" aria-label={`Supprimer ${block.title}`} onClick={() => props.onRemoveBlock(block.id)}><Trash2 className="h-4 w-4" /> Supprimer</Button>
-              </div>
-              <div className="mb-4 rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">Choisis et ordonne uniquement les exercices de ce bloc.</div>
-              <div className="max-h-[520px] space-y-4 overflow-y-auto pr-1">
-                {selectedExercises.length > 0 && <div className="space-y-2">
-                  <div className="text-sm font-black uppercase tracking-wide text-[var(--block-dryland-fg)]">Exercices sélectionnés</div>
-                  {selectedExercises.map((exercise, occurrenceIndex) => renderExercise(exercise, true, occurrenceIndex))}
-                </div>}
-                <div className="space-y-2">
-                  <div className="text-sm font-black uppercase tracking-wide text-[var(--color-ink-muted)]">Exercices disponibles</div>
-                  <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-soft)]" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice dryland" className="pl-9" /></label>
-                  {availableExercises.length > 0 ? availableExercises.map((exercise) => renderExercise(exercise, false)) : <div className="rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">Aucun exercice trouvé.</div>}
-                </div>
-              </div>
-              {props.programMode === "individual" && <div className="mt-4 border-t border-[var(--color-border)] pt-4"><div className="mb-2 text-sm font-black">Athlètes ciblés pour ce circuit</div><AssignmentSelector selected={block.athleteIds} onChange={(ids) => props.onUpdateBlock(block.id, { athleteIds: ids })} athletes={props.athletes}/></div>}
-              {selectedExercises.length === 0 && <WarningText>Ajoute au moins un exercice à ce bloc.</WarningText>}
-            </BlockCard>
-          </div>
-        );
-      })}
-      {props.blocks.length === 0 && <div className="rounded-[var(--radius-panel)] border border-dashed border-[var(--color-border)] bg-white p-8 text-center text-sm font-semibold text-[var(--color-ink-muted)]">Aucun bloc dryland. Ajoute-en un si cette séance en a besoin.</div>}
     </div>
-  );
+
+    <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] bg-white/95 p-3 backdrop-blur">
+      <Button type="button" variant="outline" disabled={selectedIndex <= 0} onClick={props.onBack}><ArrowLeft className="h-4 w-4"/>Bloc précédent{selectedIndex > 0 && props.blocks[selectedIndex - 1] ? <span className="hidden sm:inline"> · {props.blocks[selectedIndex - 1].title}</span> : null}</Button>
+      <div className="text-center text-xs font-semibold text-[var(--color-ink-muted)]">Étape 3 sur 5 · Dryland</div>
+      <Button type="button" variant="action" onClick={props.onSaveAndContinue}>Enregistrer ce bloc et continuer<ArrowRight className="h-4 w-4"/><span className="hidden text-[10px] font-medium sm:inline">{nextBlock ? `Bloc suivant : ${nextBlock.title}` : "Continuer vers Piscine"}</span></Button>
+    </div>
+  </div>;
 }
 
 function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: QuickExerciseInput) => Promise<void> }) {
