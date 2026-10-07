@@ -65,8 +65,8 @@ export async function saveSessionPublicationTargets(tx: PoolClient, sessionId: s
 
 export async function dispatchSessionPublication(sessionId: string) {
   if (!isAutomaticSessionPushEnabled()) return;
-  const deliveries = (await query<{ id: string; userId: string }>(
-    `SELECT id,"userId" FROM "PushDelivery" WHERE "sessionId"=$1 AND status='PENDING' ORDER BY id`, [sessionId]
+  const deliveries = (await query<{ id: string; userId: string; title: string }>(
+    `SELECT d.id,d."userId",s.title FROM "PushDelivery" d JOIN "TrainingSession" s ON s.id=d."sessionId" WHERE d."sessionId"=$1 AND d.status='PENDING' ORDER BY d.id`, [sessionId]
   )).rows;
   for (const delivery of deliveries) {
     try {
@@ -74,7 +74,7 @@ export async function dispatchSessionPublication(sessionId: string) {
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
-          if (await send(subscription, { title: "Nouvelle séance disponible", body: "Ta séance est prête.", url: `/athlete/session/${encodeURIComponent(sessionId)}` }) === "sent") accepted++;
+          if (await send(subscription, { title: "Nouvelle séance disponible", body: `L’aperçu de la séance « ${delivery.title} » est prêt.`, url: `/athlete/session/${encodeURIComponent(sessionId)}` }) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back publishing. */ }
       }
       await query(`UPDATE "PushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);

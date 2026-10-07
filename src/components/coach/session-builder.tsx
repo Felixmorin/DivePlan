@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronUp, Clock3, Copy, Dumbbell, FileText, Leaf, MoreHorizontal, Plus, Search, Send, Trash2, Users, Waves } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronUp, Clock3, Copy, Dumbbell, FileText, Leaf, MoreHorizontal, Plus, Search, Send, Trash2, UserRound, Users, Waves } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -147,6 +147,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
         exerciseOverrides: Object.fromEntries(block.drylandExercises.map((item) => [item.exerciseId, { sets: item.sets, reps: item.reps, duration: item.duration, notes: item.notes }]))
       }))
     : initialExerciseId ? [{ id: "dryland-1", title: "Dryland 1", duration: 20, exerciseIds: [initialExerciseId], athleteIds: initialAthleteIds, exerciseOverrides: {} }] : []);
+  const [drylandProgramMode, setDrylandProgramMode] = useState<"team" | "individual">("team");
+  const [drylandTargetAthleteIds, setDrylandTargetAthleteIds] = useState(initialAthleteIds);
   const [poolAssignments, setPoolAssignments] = useState(() =>
     Object.fromEntries(activePoolBlocks.map((block) => [block.id, (block.athleteIds.length > 0 ? block.athleteIds : initialAthleteIds).filter((id) => initialAthleteIds.includes(id))]))
   );
@@ -193,6 +195,14 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   });
   const watched = useWatch({ control: form.control });
   const athleteIds = useMemo(() => athletes.filter((athlete) => athlete.groupId === (watched.groupId ?? initialGroupId)).map((athlete) => athlete.id), [athletes, initialGroupId, watched.groupId]);
+  const drylandGroupId = watched.groupId ?? initialGroupId;
+  const previousDrylandGroupId = useRef(drylandGroupId);
+  useEffect(() => {
+    if (previousDrylandGroupId.current === drylandGroupId) return;
+    previousDrylandGroupId.current = drylandGroupId;
+    setDrylandTargetAthleteIds(athleteIds);
+    setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds })));
+  }, [athleteIds, drylandGroupId]);
   const visibleAthletes = athletes.filter((athlete) => athleteIds.includes(athlete.id));
   const effectiveDrylandBlocks = useMemo(() => {
     const validIds = new Set(athleteIds);
@@ -225,10 +235,12 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     try {
       const raw = window.localStorage.getItem(draftKey);
       if (raw) {
-        const draft = JSON.parse(raw) as { values?: Partial<FormValues>; drylandBlocks?: BuilderDrylandBlock[]; poolBlocks?: BuilderPoolBlock[]; poolAssignments?: Record<string, string[]>; poolRowsByAthleteBlock?: Record<string, PoolListRow[]>; warmup?: OptionalBlock; cooldown?: OptionalBlock; contentOrder?: string[]; evaluationPlacement?: string };
+        const draft = JSON.parse(raw) as { values?: Partial<FormValues>; drylandBlocks?: BuilderDrylandBlock[]; drylandProgramMode?: "team" | "individual"; drylandTargetAthleteIds?: string[]; poolBlocks?: BuilderPoolBlock[]; poolAssignments?: Record<string, string[]>; poolRowsByAthleteBlock?: Record<string, PoolListRow[]>; warmup?: OptionalBlock; cooldown?: OptionalBlock; contentOrder?: string[]; evaluationPlacement?: string };
         queueMicrotask(() => {
           if (draft.values) form.reset({ ...form.getValues(), ...draft.values });
           if (draft.drylandBlocks) setDrylandBlocks(draft.drylandBlocks);
+          if (draft.drylandProgramMode) setDrylandProgramMode(draft.drylandProgramMode);
+          if (draft.drylandTargetAthleteIds) setDrylandTargetAthleteIds(draft.drylandTargetAthleteIds);
           if (draft.poolBlocks) setActivePoolBlocks(draft.poolBlocks);
           if (draft.poolAssignments) setPoolAssignments(draft.poolAssignments);
           if (draft.poolRowsByAthleteBlock) setPoolRowsByAthleteBlock(draft.poolRowsByAthleteBlock);
@@ -245,8 +257,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   }, [draftKey, form]);
   useEffect(() => {
     if (!restoredDraft.current) return;
-    window.localStorage.setItem(draftKey, JSON.stringify({ values: watched, drylandBlocks, poolBlocks: activePoolBlocks, poolAssignments, poolRowsByAthleteBlock, warmup, cooldown, contentOrder, evaluationPlacement }));
-  }, [activePoolBlocks, contentOrder, cooldown, draftKey, drylandBlocks, evaluationPlacement, form, poolAssignments, poolRowsByAthleteBlock, warmup, watched]);
+    window.localStorage.setItem(draftKey, JSON.stringify({ values: watched, drylandBlocks, drylandProgramMode, drylandTargetAthleteIds, poolBlocks: activePoolBlocks, poolAssignments, poolRowsByAthleteBlock, warmup, cooldown, contentOrder, evaluationPlacement }));
+  }, [activePoolBlocks, contentOrder, cooldown, draftKey, drylandBlocks, drylandProgramMode, drylandTargetAthleteIds, evaluationPlacement, form, poolAssignments, poolRowsByAthleteBlock, warmup, watched]);
   useEffect(() => {
     if (watched.planningEventId && !planningEvents.some((event) => event.id === watched.planningEventId && (!event.groupId || event.groupId === watched.groupId) && toMontrealDateInputValue(event.startsAt) === watched.date)) {
       form.setValue("planningEventId", "");
@@ -449,7 +461,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
 
   function addDrylandBlock() {
     const id = `dryland-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setDrylandBlocks((current) => [...current, { id, title: `Dryland ${current.length + 1}`, duration: 20, exerciseIds: [], athleteIds: athleteIds, exerciseOverrides: {} }]);
+    setDrylandBlocks((current) => [...current, { id, title: `Dryland ${current.length + 1}`, duration: 20, exerciseIds: [], athleteIds: drylandTargetAthleteIds, exerciseOverrides: {} }]);
     setContentOrder((current) => [...current, id]);
     pulse(id);
   }
@@ -617,23 +629,25 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
                   <button type="button" onClick={() => { setCooldown((value) => ({ ...value, enabled: true })); setContentOrder((current) => [...current.filter((id) => id !== "cooldown"), "cooldown"]); }} className="flex items-center gap-2 rounded-xl p-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]"><Leaf className="h-4 w-4 text-[var(--block-cooldown-fg)]"/>Retour au calme</button>
                 </div>
               </details>
-              <details className="rounded-2xl border border-[var(--color-border)] bg-white p-4"><summary className="cursor-pointer font-bold">Configurer les blocs et exercices dryland</summary><div className="mt-4"><OptionalBlockEditor label="Échauffement" block={warmup} onChange={(update) => setWarmup((current) => ({ ...current, ...update }))}/><div className="mt-4"><DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} flashBlock={flashBlock} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onMoveBlock={moveDrylandBlock} onSaveBlockTemplate={saveDrylandTemplate} onCreateExercise={addExercise}/></div></div></details>
-              <details className="rounded-2xl border border-[var(--color-border)] bg-white p-4"><summary className="cursor-pointer font-bold">Configurer les listes de plongeons</summary><div className="mt-4"><PoolStep poolBlocks={activePoolBlocks} recentBlocks={poolBlocks} flashBlock={flashBlock} onAddPoolBlock={addPoolBlock} onReusePoolBlock={reusePoolBlock} onRemovePoolBlock={removePoolBlock} onMoveBlock={movePoolBlock} onUpdatePoolBlock={updatePoolBlock} onUpdatePoolRows={updatePoolRows}/></div></details>
-              <details className="rounded-2xl border border-[var(--color-border)] bg-white p-4"><summary className="cursor-pointer font-bold">Configurer le retour au calme</summary><div className="mt-4"><OptionalBlockEditor label="Retour au calme" block={cooldown} onChange={(update) => setCooldown((current) => ({ ...current, ...update }))}/></div></details>
             </div>
           )}
-          {step === 2 && (
-            <AssignmentsStep
-              athletes={visibleAthletes}
-              drylandBlocks={effectiveDrylandBlocks}
-              poolBlocks={activePoolBlocks}
-              poolAssignments={poolAssignments}
-              flashBlock={flashBlock}
-              onAssignDry={(blockId, ids) => updateDrylandBlock(blockId, { athleteIds: ids })}
-              onAssignPoolBlock={assignPoolBlock}
-            />
-          )}
-          {step === 3 && <PoolAthletesStep athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} averagePoolVolumeByAthlete={athletePoolAverageById} blocks={activePoolBlocks} assignments={effectivePoolAssignments} rowsByAthleteBlock={poolRowsByAthleteBlock} recentBlocks={poolBlocks} onRowsChange={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} onCopyRows={(sourceId, targetId) => setPoolRowsByAthleteBlock((current) => ({ ...current, ...Object.fromEntries(activePoolBlocks.map((block) => [poolAthleteBlockKey(targetId, block.id), current[poolAthleteBlockKey(sourceId, block.id)] ?? poolSectionsToRows(block.sections)])) }))} onLoadRows={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} />}
+          {step === 2 && <div className="space-y-5">
+            <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 3 sur 5</p><h2 className="mt-1 text-2xl font-black">Organiser le dryland</h2></div>
+            <section className="rounded-2xl border border-[var(--color-border)] bg-white p-4"><h3 className="mb-3 font-black">Type de programme dryland</h3><div className="grid gap-3 sm:grid-cols-2">
+              <button type="button" aria-pressed={drylandProgramMode === "team"} onClick={() => { setDrylandProgramMode("team"); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: drylandTargetAthleteIds }))); }} className={cn("flex min-h-20 items-center gap-3 rounded-xl border p-4 text-left", drylandProgramMode === "team" ? "border-[var(--block-dryland-fg)] bg-[var(--block-dryland-bg)]/50" : "border-[var(--color-border)] hover:border-[var(--color-brand)]")}><Users className="h-7 w-7 shrink-0"/><span><strong className="block">Pour toute l’équipe</strong><span className="text-sm text-[var(--color-ink-muted)]">Même circuit pour tout le groupe</span></span></button>
+              <button type="button" aria-pressed={drylandProgramMode === "individual"} onClick={() => setDrylandProgramMode("individual")} className={cn("flex min-h-20 items-center gap-3 rounded-xl border p-4 text-left", drylandProgramMode === "individual" ? "border-[var(--block-dryland-fg)] bg-[var(--block-dryland-bg)]/50" : "border-[var(--color-border)] hover:border-[var(--color-brand)]")}><UserRound className="h-7 w-7 shrink-0"/><span><strong className="block">Programme individuel</strong><span className="text-sm text-[var(--color-ink-muted)]">Un plan différent par athlète</span></span></button>
+            </div></section>
+            <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(270px,0.8fr)]">
+              <DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} programMode={drylandProgramMode} flashBlock={flashBlock} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onMoveBlock={moveDrylandBlock} onSaveBlockTemplate={saveDrylandTemplate} onCreateExercise={addExercise}/>
+              <Card><CardHeader><CardTitle>Groupe ciblé</CardTitle><p className="text-sm text-[var(--color-ink-muted)]">{groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} · {drylandTargetAthleteIds.length} athlètes</p></CardHeader><CardContent className="space-y-4"><AthleteAvatarGroup ids={drylandTargetAthleteIds} athletes={visibleAthletes} limit={8}/><details className="group"><summary className="cursor-pointer list-none font-bold text-[var(--color-brand-strong)]">Exclure un athlète <ChevronDown className="ml-1 inline h-4 w-4 transition group-open:rotate-180"/></summary><div className="mt-3 space-y-2">{visibleAthletes.map((athlete) => { const included = drylandTargetAthleteIds.includes(athlete.id); return <button key={athlete.id} type="button" aria-pressed={included} onClick={() => { const next = included ? drylandTargetAthleteIds.filter((id) => id !== athlete.id) : [...drylandTargetAthleteIds, athlete.id]; setDrylandTargetAthleteIds(next); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: next }))); }} className={cn("flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm font-semibold", included ? "border-[var(--color-brand)] bg-[var(--block-pool-bg)]" : "border-[var(--color-border)] text-[var(--color-ink-muted)]")}>{athlete.firstName} {athlete.lastName}<span>{included ? "Inclus" : "Exclu"}</span></button>; })}</div></details></CardContent></Card>
+            </div>
+            {warmup.enabled && <OptionalBlockEditor label="Échauffement" block={warmup} onChange={(update) => setWarmup((current) => ({ ...current, ...update }))}/>}
+            <OptionalBlockEditor label="Retour au calme" block={cooldown} onChange={(update) => setCooldown((current) => ({ ...current, ...update }))}/>
+          </div>}
+          {step === 3 && <div className="space-y-5">
+            <PoolStep poolBlocks={activePoolBlocks} recentBlocks={poolBlocks} flashBlock={flashBlock} onAddPoolBlock={addPoolBlock} onReusePoolBlock={reusePoolBlock} onRemovePoolBlock={removePoolBlock} onMoveBlock={movePoolBlock} onUpdatePoolBlock={updatePoolBlock} onUpdatePoolRows={updatePoolRows}/>
+            <PoolAthletesStep athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} averagePoolVolumeByAthlete={athletePoolAverageById} blocks={activePoolBlocks} assignments={effectivePoolAssignments} rowsByAthleteBlock={poolRowsByAthleteBlock} recentBlocks={poolBlocks} onRowsChange={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} onCopyRows={(sourceId, targetId) => setPoolRowsByAthleteBlock((current) => ({ ...current, ...Object.fromEntries(activePoolBlocks.map((block) => [poolAthleteBlockKey(targetId, block.id), current[poolAthleteBlockKey(sourceId, block.id)] ?? poolSectionsToRows(block.sections)])) }))} onLoadRows={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} />
+          </div>}
           {step === 4 && <PublishStep title={watched.title?.trim() || `${groups.find((group) => group.id === watched.groupId)?.name ?? "Séance"} · ${formatSessionDate(watched.date ?? "")}`} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe à choisir"} date={watched.date ?? ""} time={watched.time ?? ""} duration={totalDuration} athleteCount={visibleAthletes.length} athletes={visibleAthletes} blocks={reviewBlocks} issues={publicationIssues} poolReady={activePoolBlocks.length === 0 || individualPoolBlocks.every(poolBlockIsValid)} assignmentsReady={unassignedBlocks.length === 0} canPublish={canPublish} onEditBlock={(block) => setStep(block.type === "pool" ? 3 : block.type === "dryland" ? 1 : 1)} />}
         </div>
 
@@ -743,6 +757,7 @@ function DrylandStep(props: {
   exercises: BuilderExercise[];
   blocks: BuilderDrylandBlock[];
   athletes: BuilderAthlete[];
+  programMode: "team" | "individual";
   flashBlock: string | null;
   onToggleExercise: (blockId: string, exerciseId: string, selected: boolean, occurrenceIndex?: number) => void;
   onMoveExercise: (blockId: string, occurrenceIndex: number, direction: -1 | 1) => void;
@@ -757,8 +772,8 @@ function DrylandStep(props: {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-[var(--block-dryland-fg)]/20 bg-[var(--block-dryland-bg)]/45 p-4">
-        <div><h2 className="text-xl font-black">Blocs dryland</h2><p className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">Crée plusieurs blocs avec des exercices et des athlètes différents.</p></div>
-        <Button type="button" onClick={props.onAddBlock}><Plus className="h-4 w-4" /> Ajouter un bloc dryland</Button>
+        <div><h2 className="text-xl font-black">{props.programMode === "team" ? "Circuit commun" : "Programmes individuels"}</h2><p className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{props.programMode === "team" ? "Même circuit pour les athlètes du groupe ciblé." : "Compose les circuits et choisis les athlètes auxquels ils s’adressent."}</p></div>
+        <Button type="button" onClick={props.onAddBlock}><Plus className="h-4 w-4" /> {props.programMode === "team" ? "Ajouter un circuit" : "Ajouter un programme"}</Button>
       </div>
       <QuickExerciseForm onCreateExercise={props.onCreateExercise} />
       {props.blocks.map((block, blockIndex) => {
@@ -805,6 +820,7 @@ function DrylandStep(props: {
                   {availableExercises.length > 0 ? availableExercises.map((exercise) => renderExercise(exercise, false)) : <div className="rounded-2xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold text-[var(--color-ink-muted)]">Aucun exercice trouvé.</div>}
                 </div>
               </div>
+              {props.programMode === "individual" && <div className="mt-4 border-t border-[var(--color-border)] pt-4"><div className="mb-2 text-sm font-black">Athlètes ciblés pour ce circuit</div><AssignmentSelector selected={block.athleteIds} onChange={(ids) => props.onUpdateBlock(block.id, { athleteIds: ids })} athletes={props.athletes}/></div>}
               {selectedExercises.length === 0 && <WarningText>Ajoute au moins un exercice à ce bloc.</WarningText>}
             </BlockCard>
           </div>
