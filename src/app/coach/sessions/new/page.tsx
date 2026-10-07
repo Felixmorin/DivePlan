@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
-import { parseSessionTemplatePayload } from "@/lib/session-template";
+import { buildSessionTemplatePayload, getSessionSnapshot, parseSessionTemplatePayload } from "@/lib/session-template";
 import type { SessionPoolHeight } from "@/lib/session-template";
 import Link from "next/link";
 
@@ -35,13 +35,15 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     );
   }
 
-  const [groupsR, athletesR, drylandR, templateR, eventsR, recentR] = await Promise.all([
+  const [groupsR, athletesR, drylandR, templateR, eventsR, recentR, templatesR, recentSessionIdsR] = await Promise.all([
     query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`,[clubId]),
     query<{id:string;groupId:string;level:string;firstName:string;lastName:string;avatar:string|null}>(`SELECT a.id,a."groupId",a.level,u."firstName",u."lastName",u.avatar FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
     query<{id:string;name:string;category:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean;equipment:string|null;tags:string[]}>(`SELECT id,name,category,"defaultSets","defaultReps","defaultDuration","roundTrip",equipment,tags FROM "DrylandExercise" WHERE "archivedAt" IS NULL ORDER BY name`),
     templateId ? query<{id:string;name:string;category:string;payload:unknown}>(`SELECT id,name,category,payload FROM "SessionTemplate" WHERE id=$1 AND "clubId"=$2`,[templateId,clubId]) : Promise.resolve(null),
     query<{id:string;title:string;startsAt:Date;groupId:string;location:string|null}>(`SELECT id,title,"startsAt","groupId",location FROM "PlanningEvent" WHERE "clubId"=$1 AND type='TRAINING_SCHEDULE' ORDER BY "startsAt"`,[clubId]),
-    query<{sessionId:string;sessionTitle:string;blockId:string;title:string;duration:number;position:number}>(`WITH recent AS (SELECT s.id,s.title,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "PoolTraining" p ON p."blockId"=b.id WHERE b."sessionId"=s.id) ORDER BY s.date DESC LIMIT 8) SELECT r.id AS "sessionId",r.title AS "sessionTitle",b.id AS "blockId",b.title,b.duration,b.position FROM recent r JOIN "SessionBlock" b ON b."sessionId"=r.id JOIN "PoolTraining" p ON p."blockId"=b.id ORDER BY r.date DESC,b.position ASC`,[clubId])
+    query<{sessionId:string;sessionTitle:string;blockId:string;title:string;duration:number;position:number}>(`WITH recent AS (SELECT s.id,s.title,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "PoolTraining" p ON p."blockId"=b.id WHERE b."sessionId"=s.id) ORDER BY s.date DESC LIMIT 8) SELECT r.id AS "sessionId",r.title AS "sessionTitle",b.id AS "blockId",b.title,b.duration,b.position FROM recent r JOIN "SessionBlock" b ON b."sessionId"=r.id JOIN "PoolTraining" p ON p."blockId"=b.id ORDER BY r.date DESC,b.position ASC`,[clubId]),
+    query<{id:string;name:string;category:string;payload:unknown}>(`SELECT id,name,category,payload FROM "SessionTemplate" WHERE "clubId"=$1 ORDER BY favorite DESC,name ASC LIMIT 100`,[clubId]),
+    query<{id:string;title:string;date:Date;groupId:string}>(`SELECT s.id,s.title,s.date,w."groupId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 ORDER BY s.date DESC LIMIT 8`,[clubId])
   ]);
   const groups=groupsR.rows;
   const athleteAvatarUrls = await resolveAvatarUrls(athletesR.rows.map((athlete) => athlete.avatar));
@@ -113,6 +115,14 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
         payload: parseSessionTemplatePayload(template.payload)
       }
     : null;
+  const templates = templatesR.rows.flatMap((item) => {
+    const parsed = (() => { try { return parseSessionTemplatePayload(item.payload); } catch { return null; } })();
+    return parsed ? [{ id: item.id, name: item.name, category: item.category, payload: parsed }] : [];
+  });
+  const recentSessions = (await Promise.all(recentSessionIdsR.rows.map(async (item) => {
+    const snapshot = await getSessionSnapshot(item.id, clubId);
+    return snapshot ? { id: item.id, title: item.title, date: item.date, groupId: item.groupId, payload: buildSessionTemplatePayload(snapshot) } : null;
+  }))).filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return (
     <CoachShell active="Seances">
@@ -164,6 +174,8 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
             })) ?? []
           }))}
           initialTemplate={initialTemplate}
+          templates={templates}
+          recentSessions={recentSessions}
           initialPlanningEventId={planningEventId}
           initialExerciseId={exerciseId}
           onCreate={createTrainingSession}
