@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, ChevronRight, Edit3, LogOut, Medal, Star, UserRound, Waves } from "lucide-react";
+import { Building2, ChevronRight, LogOut, Medal, Star, UserRound, Waves } from "lucide-react";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { CompetitionList } from "@/components/athlete/competition-list";
@@ -85,6 +85,7 @@ export default async function ProfilePage() {
         <h2 className="mb-3 text-xl font-black">Préférences</h2>
         <div className="space-y-3">
           <NotificationSettings />
+          <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} username={athlete.user.username} />
         </div>
       </section>
 
@@ -113,14 +114,6 @@ export default async function ProfilePage() {
       <section className="mt-7">
         <h2 className="mb-3 text-xl font-black">Compte</h2>
         <div className="overflow-hidden rounded-[1.4rem] border border-white/10 bg-[#0b1e30]">
-          <details className="group border-b border-white/8">
-            <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 text-base font-semibold marker:hidden focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
-              <Edit3 className="h-5 w-5 text-cyan-200/75" />
-              <span className="flex-1">Modifier mon profil</span>
-              <ChevronRight className="h-5 w-5 text-white/45 transition group-open:rotate-90" />
-            </summary>
-            <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} />
-          </details>
           <SignOutWithPushCleanup action={signOutAthlete}>
             <button type="submit" className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-base font-semibold text-rose-300 transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
               <LogOut className="h-5 w-5" />

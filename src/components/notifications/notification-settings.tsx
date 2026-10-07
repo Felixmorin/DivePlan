@@ -146,18 +146,24 @@ export function NotificationSettings() {
     error: "État des notifications indisponible"
   }[state];
 
-  return <section className="rounded-2xl border border-[var(--color-border)] bg-white p-5" aria-labelledby="notification-settings-title">
-    <h2 id="notification-settings-title" className="text-lg font-black text-[var(--color-ink)]">Notifications</h2>
-    <p className="mt-1 text-sm text-[var(--color-ink-muted)]">État : <span role="status" className="font-bold">{status}</span></p>
-    {state === "denied" && <p className="mt-3 text-sm text-[var(--color-ink-muted)]">Pour les réactiver, autorise les notifications de DivePlan dans les réglages du navigateur ou de l’appareil, puis reviens ici. DivePlan ne redemandera pas la permission automatiquement.</p>}
-    {state === "configuration" && <p className="mt-3 text-sm text-[var(--color-ink-muted)]">L’administrateur doit configurer les clés VAPID de DivePlan avant l’activation. Recharge la page après la configuration.</p>}
-    {state === "storage" && <p className="mt-3 text-sm text-[var(--color-ink-muted)]">La migration SQL Web Push doit être appliquée à la base de données avant l’enregistrement de cet appareil.</p>}
+  return <section className="rounded-2xl border border-white/10 bg-[#0b1e30] p-4" aria-labelledby="notification-settings-title">
+    <h3 id="notification-settings-title" className="text-lg font-black text-white">Notifications</h3>
+    <p className="mt-1 text-sm text-white/55">État : <span role="status" className="font-bold text-white/80">{status}</span></p>
+    {state === "denied" && <p className="mt-3 text-sm text-white/65">Pour les réactiver, autorise les notifications de DivePlan dans les réglages du navigateur ou de l’appareil, puis reviens ici. DivePlan ne redemandera pas la permission automatiquement.</p>}
+    {state === "configuration" && <p className="mt-3 text-sm text-white/65">L’administrateur doit configurer les clés VAPID de DivePlan avant l’activation. Recharge la page après la configuration.</p>}
+    {state === "storage" && <p className="mt-3 text-sm text-white/65">La migration SQL Web Push doit être appliquée à la base de données avant l’enregistrement de cet appareil.</p>}
     {appleMobile && !standalone && <p className="mt-3 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700">Sur iPhone ou iPad, ajoute d’abord DivePlan à l’écran d’accueil : ouvre le menu Partager, choisis « Sur l’écran d’accueil », puis ouvre DivePlan depuis son icône.</p>}
-    {state === "unsupported" && appleMobile && !standalone && <p className="mt-2 text-sm text-[var(--color-ink-muted)]">Les notifications seront disponibles après l’ouverture de l’app installée, si ta version d’iOS/iPadOS les prend en charge.</p>}
-    <div className="mt-4 flex flex-wrap gap-2">
-      {state === "disabled" && <button type="button" onClick={() => void enable()} className="min-h-10 rounded-xl bg-[var(--color-brand-strong)] px-4 text-sm font-bold text-white">Activer les notifications</button>}
-      {state === "enabled" && <><button type="button" onClick={() => void test()} className="min-h-10 rounded-xl bg-[var(--color-brand-strong)] px-4 text-sm font-bold text-white">Envoyer une notification de test</button><button type="button" onClick={() => void disable()} className="min-h-10 rounded-xl border border-[var(--color-border)] bg-white px-4 text-sm font-bold !text-[var(--color-ink)] hover:bg-[var(--color-coach-bg)]">Désactiver sur cet appareil</button></>}
-    </div>
-    {message && <p className="mt-3 text-sm text-[var(--color-ink-muted)]" role="status">{message}</p>}
+    {state === "unsupported" && appleMobile && !standalone && <p className="mt-2 text-sm text-white/65">Les notifications seront disponibles après l’ouverture de l’app installée, si ta version d’iOS/iPadOS les prend en charge.</p>}
+    <fieldset className="mt-4 grid grid-cols-2 gap-2" disabled={state === "checking" || state === "unsupported"}>
+      <legend className="sr-only">Activer ou désactiver les notifications sur cet appareil</legend>
+      {(["enabled", "disabled"] as const).map((value) => (
+        <label key={value} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 text-sm font-bold transition ${state === value ? "border-[var(--color-club-red)] bg-[var(--color-club-red)]/10 text-white" : "border-white/10 text-white/65 hover:bg-white/[0.04]"}`}>
+          <input type="radio" name="athlete-notifications" value={value} checked={value === "enabled" ? state === "enabled" : state !== "enabled" && state !== "checking" && state !== "unsupported"} onChange={() => { if (value === "enabled") void enable(); else void disable(); }} className="accent-[var(--color-club-red)]" />
+          {value === "enabled" ? "Activées" : "Désactivées"}
+        </label>
+      ))}
+    </fieldset>
+    {state === "enabled" && <button type="button" onClick={() => void test()} className="mt-3 min-h-10 rounded-xl border border-white/10 px-4 text-sm font-bold text-white/75 hover:bg-white/[0.04]">Envoyer une notification de test</button>}
+    {message && <p className="mt-3 text-sm text-white/65" role="status">{message}</p>}
   </section>;
 }

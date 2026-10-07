@@ -118,7 +118,7 @@ export type AthleteCurrentWeekSummary = {
   volume: number;
 };
 
-type CurrentUser = {id:string;firstName:string;lastName:string;email:string;avatar:string|null;role:"ADMIN"|"COACH"|"ATHLETE";clubId:string|null;passwordHash:string|null;passwordSetAt:Date|null;createdAt:Date};
+type CurrentUser = {id:string;firstName:string;lastName:string;email:string;username:string|null;avatar:string|null;role:"ADMIN"|"COACH"|"ATHLETE";clubId:string|null;passwordHash:string|null;passwordSetAt:Date|null;createdAt:Date};
 type CurrentAthlete = {id:string;userId:string;clubId:string;groupId:string|null;birthDate:Date;level:string;active:boolean;user:CurrentUser;club:{id:string;name:string;logo:string|null;createdAt:Date};group:({id:string;name:string;clubId:string;coachId:string;coach:{id:string;userId:string;clubId:string;planningDefaultView:string;weekStartsOn:number;printShowCoachNotes:boolean;printShowAthleteNames:boolean;printRepetitionChecks:boolean;user:CurrentUser}})|null;competitionDives:Array<{id:string;athleteId:string;height:PoolHeight;diveCode:string;diveName:string;difficulty:number|null;position:number;createdAt:Date}>};
 
 export async function getCurrentAthlete() {

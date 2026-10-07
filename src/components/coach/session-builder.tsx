@@ -25,6 +25,7 @@ const schema = z.object({
   title: z.string().trim().optional(),
   date: z.string().min(10, "Date requise"),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Heure requise"),
+  duration: z.number().int().min(15, "La durée minimale est de 15 minutes.").max(600, "La durée maximale est de 10 heures."),
   groupId: z.string().min(1, "Groupe requis"),
   notes: z.string().optional()
   ,planningEventId: z.string().optional()
@@ -58,7 +59,7 @@ type BuilderGroup = {
   name: string;
 };
 
-type BuilderPlanningEvent = { id: string; title: string; startsAt: Date; groupId: string | null; location: string | null };
+type BuilderPlanningEvent = { id: string; title: string; startsAt: Date; duration: number | null; groupId: string | null; location: string | null };
 
 type BuilderPoolDive = {
   diveCode: string;
@@ -182,6 +183,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
       title: initialTemplate?.payload.title ?? "",
       date: selectedInitialEvent ? toMontrealDateInputValue(selectedInitialEvent.startsAt) : toMontrealDateInputValue(),
       time: selectedInitialEvent ? toMontrealDateTimeInputValue(selectedInitialEvent.startsAt).slice(11, 16) : "",
+      duration: Math.min(600, Math.max(15, selectedInitialEvent?.duration ?? initialTemplate?.payload.duration ?? 90)),
       groupId: initialGroupId,
       notes: initialTemplate?.payload.notes ?? ""
       ,planningEventId: initialPlanningEventId ?? ""
@@ -252,6 +254,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     if (selectedEvent) {
       const time = toMontrealDateTimeInputValue(selectedEvent.startsAt).slice(11, 16);
       form.setValue("time", time, { shouldValidate: true });
+      form.setValue("duration", Math.min(600, Math.max(15, selectedEvent.duration ?? 90)), { shouldValidate: true });
     }
   }, [form, planningEvents, watched.planningEventId]);
   const selectedDrylandExercises = useMemo(() => effectiveDrylandBlocks.reduce((sum, block) => sum + block.exerciseIds.length, 0), [effectiveDrylandBlocks]);
@@ -261,9 +264,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     ...effectiveDrylandBlocks.map((block) => block.athleteIds.length === 0 ? block.title : null),
     ...activePoolBlocks.map((block) => ((effectivePoolAssignments[block.id] ?? []).length === 0 ? block.title : null))
   ].filter(Boolean);
-  const totalDuration = Math.min(600, Math.max(15,
-    (warmup.enabled ? warmup.duration : 0) + (cooldown.enabled ? cooldown.duration : 0) + effectiveDrylandBlocks.reduce((sum, block) => sum + block.duration, 0) + activePoolBlocks.reduce((sum, block) => sum + block.duration, 0)
-  ));
+  const totalDuration = watched.duration ?? 90;
   const poolVolume = individualPoolBlocks.reduce((sum, block) => sum + block.sections.reduce((sectionSum, section) => sectionSum + sectionVolume(section), 0), 0);
   const dryVolume = effectiveDrylandBlocks.reduce((sum, block) => sum + block.exerciseIds.reduce((blockSum, exerciseId) => {
     const exercise = library.find((item) => item.id === exerciseId);
@@ -296,10 +297,10 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   ], [activePoolBlocks, drylandBlocks]);
   const effectiveEvaluationPlacement = evaluationChoices.some((choice) => choice.value === evaluationPlacement) ? evaluationPlacement : "none";
   const contentRows = [
-    ...(warmup.enabled ? [{ id: "warmup", title: warmup.title, type: "warmup" as const, duration: warmup.duration, subtitle: "Préparation du groupe" }] : []),
-    ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title || "Dryland", type: "dryland" as const, duration: block.duration, subtitle: `${block.exerciseIds.length} exercice${block.exerciseIds.length === 1 ? "" : "s"} · Équipe ou par athlète` })),
-    ...activePoolBlocks.map((block) => ({ id: block.id, title: block.title || "Piscine", type: "pool" as const, duration: block.duration, subtitle: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes · Liste par athlète` })),
-    ...(cooldown.enabled ? [{ id: "cooldown", title: cooldown.title, type: "cooldown" as const, duration: cooldown.duration, subtitle: "Récupération du groupe" }] : [])
+    ...(warmup.enabled ? [{ id: "warmup", title: warmup.title, type: "warmup" as const, subtitle: "Préparation du groupe" }] : []),
+    ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title || "Dryland", type: "dryland" as const, subtitle: `${block.exerciseIds.length} exercice${block.exerciseIds.length === 1 ? "" : "s"} · Équipe ou par athlète` })),
+    ...activePoolBlocks.map((block) => ({ id: block.id, title: block.title || "Piscine", type: "pool" as const, subtitle: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes · Liste par athlète` })),
+    ...(cooldown.enabled ? [{ id: "cooldown", title: cooldown.title, type: "cooldown" as const, subtitle: "Récupération du groupe" }] : [])
   ];
   const orderedContentRows = [...contentOrder.map((id) => contentRows.find((row) => row.id === id)).filter((row): row is typeof contentRows[number] => Boolean(row)), ...contentRows.filter((row) => !contentOrder.includes(row.id))];
 
@@ -340,6 +341,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     setCooldown({ enabled: Boolean(cool), title: cool?.title ?? "Retour au calme", duration: cool?.duration ?? 8, description: cool?.description ?? "" });
     form.setValue("title", title, { shouldValidate: true });
     form.setValue("notes", payload.notes ?? "");
+    form.setValue("duration", Math.min(600, Math.max(15, payload.duration)), { shouldValidate: true });
   }
 
   function chooseTemplate(templateId: string) {
@@ -453,18 +455,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     if (index < 0 || target < 0 || target >= order.length) return;
     [order[index], order[target]] = [order[target], order[index]];
     setContentOrder(order);
-  }
-
-  function updateContentDuration(blockId: string, delta: number) {
-    if (blockId === "warmup") setWarmup((value) => ({ ...value, duration: Math.max(1, Math.min(600, value.duration + delta)) }));
-    else if (blockId === "cooldown") setCooldown((value) => ({ ...value, duration: Math.max(1, Math.min(600, value.duration + delta)) }));
-    else if (drylandBlocks.some((block) => block.id === blockId)) {
-      const duration = drylandBlocks.find((block) => block.id === blockId)?.duration ?? 1;
-      updateDrylandBlock(blockId, { duration: Math.max(1, Math.min(600, duration + delta)) });
-    } else {
-      const duration = activePoolBlocks.find((block) => block.id === blockId)?.duration ?? 1;
-      updatePoolBlock(blockId, { duration: Math.max(1, Math.min(600, duration + delta)) });
-    }
   }
 
   async function addExercise(input: QuickExerciseInput) {
@@ -596,11 +586,10 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
               <div className="space-y-2">
                 {orderedContentRows.map((row, index) => {
                   const Icon = row.type === "warmup" ? Activity : row.type === "dryland" ? Dumbbell : row.type === "pool" ? Waves : Leaf;
-                  return <div key={row.id} className={cn("grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border bg-white p-2 sm:gap-3 sm:p-3", flashBlock === row.id && "builder-pulse", row.type === "warmup" ? "border-[var(--block-warmup-fg)]/35" : row.type === "dryland" ? "border-[var(--block-dryland-fg)]/25" : row.type === "pool" ? "border-[var(--block-pool-fg)]/25" : "border-[var(--block-cooldown-fg)]/25")}>
+                  return <div key={row.id} className={cn("grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-2 rounded-2xl border bg-white p-2 sm:gap-3 sm:p-3", flashBlock === row.id && "builder-pulse", row.type === "warmup" ? "border-[var(--block-warmup-fg)]/35" : row.type === "dryland" ? "border-[var(--block-dryland-fg)]/25" : row.type === "pool" ? "border-[var(--block-pool-fg)]/25" : "border-[var(--block-cooldown-fg)]/25")}>
                     <div className="flex gap-1"><button type="button" aria-label={`Monter ${row.title}`} disabled={index === 0} onClick={() => moveContentBlock(row.id, -1)} className="rounded-lg p-2 text-[var(--color-ink-muted)] disabled:opacity-30"><ArrowUp className="h-4 w-4"/></button><button type="button" aria-label={`Descendre ${row.title}`} disabled={index === orderedContentRows.length - 1} onClick={() => moveContentBlock(row.id, 1)} className="rounded-lg p-2 text-[var(--color-ink-muted)] disabled:opacity-30"><ArrowDown className="h-4 w-4"/></button></div>
                     <span className={cn("flex h-11 w-11 items-center justify-center rounded-full", row.type === "warmup" ? "bg-[var(--block-warmup-bg)] text-[var(--block-warmup-fg)]" : row.type === "dryland" ? "bg-[var(--block-dryland-bg)] text-[var(--block-dryland-fg)]" : row.type === "pool" ? "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]" : "bg-[var(--block-cooldown-bg)] text-[var(--block-cooldown-fg)]")}><Icon className="h-5 w-5"/></span>
                     <div className="min-w-0"><div className="truncate font-black">{row.title}</div><div className="text-sm text-[var(--color-ink-muted)]">{row.subtitle}</div></div>
-                    <div className="flex items-center justify-end gap-2"><button type="button" aria-label={`Réduire la durée de ${row.title}`} onClick={() => updateContentDuration(row.id, -5)} className="h-10 w-10 rounded-xl border border-[var(--color-border)] font-bold">−</button><span className="min-w-14 text-center text-sm font-black">{row.duration} min</span><button type="button" aria-label={`Augmenter la durée de ${row.title}`} onClick={() => updateContentDuration(row.id, 5)} className="h-10 w-10 rounded-xl border border-[var(--color-border)] font-bold">＋</button></div>
                   </div>;
                 })}
                 {orderedContentRows.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-white p-5 text-center text-sm text-[var(--color-ink-muted)]">Aucun bloc pour le moment. Ajoute un bloc pour commencer.</div>}
@@ -714,10 +703,15 @@ function DetailsStep({ form, selectedGroupId, selectedDate, selectedPlanningEven
             {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
           </select>
         </Field>
+        <Field label="Durée totale de l’entraînement (minutes)">
+          <Input type="number" min={15} max={600} step={5} {...form.register("duration", { valueAsNumber: true })} />
+          <span className="mt-1 block text-xs font-semibold normal-case text-[var(--color-ink-muted)]">{selectedPlanningEventId ? "Préremplie selon la durée de l’événement du planning; ajuste-la au besoin." : "Confirme la durée totale prévue pour cet entraînement."}</span>
+          {form.formState.errors.duration && <span role="alert" className="text-xs font-bold text-[var(--color-danger)]">{form.formState.errors.duration.message}</span>}
+        </Field>
         <Field label="Horaire du groupe" className="md:col-span-2">
           <select className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]" {...form.register("planningEventId")}>
             <option value="">Aucun horaire lié</option>
-            {planningEvents.filter((event) => (!event.groupId || event.groupId === selectedGroupId) && toMontrealDateInputValue(event.startsAt) === selectedDate).map((event) => <option key={event.id} value={event.id}>{event.title} · {new Intl.DateTimeFormat("fr-CA", { dateStyle: "short", timeStyle: "short", timeZone: "America/Toronto" }).format(event.startsAt)}{event.location ? ` · ${event.location}` : ""}</option>)}
+            {planningEvents.filter((event) => (!event.groupId || event.groupId === selectedGroupId) && toMontrealDateInputValue(event.startsAt) === selectedDate).map((event) => <option key={event.id} value={event.id}>{event.title} · {new Intl.DateTimeFormat("fr-CA", { dateStyle: "short", timeStyle: "short", timeZone: "America/Toronto" }).format(event.startsAt)}{event.duration ? ` · ${event.duration} min` : ""}{event.location ? ` · ${event.location}` : ""}</option>)}
           </select>
           <span className="mt-1 block text-xs font-semibold normal-case text-[var(--color-ink-muted)]">L’horaire reste affiché dans le planning; la séance sera ouverte depuis ce même élément.</span>
         </Field>
