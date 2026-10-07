@@ -46,6 +46,19 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     query<{id:string;title:string;date:Date;groupId:string}>(`SELECT s.id,s.title,s.date,w."groupId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 ORDER BY s.date DESC LIMIT 8`,[clubId])
   ]);
   const groups=groupsR.rows;
+  const athletePoolAveragesR = athletesR.rows.length > 0
+    ? await query<{ athleteId: string; average: number | string }>(
+      `SELECT c."athleteId", ROUND(COALESCE(SUM(l."repetitionsCompleted"), 0)::numeric / COUNT(DISTINCT c."sessionId")) AS average
+       FROM "AthleteSessionCompletion" c
+       JOIN "TrainingSession" s ON s.id = c."sessionId"
+       JOIN "TrainingWeek" w ON w.id = s."weekId"
+       LEFT JOIN "AthleteDiveLog" l ON l."athleteId" = c."athleteId" AND l."sessionId" = c."sessionId"
+       WHERE c."athleteId" = ANY($1::text[]) AND w."clubId" = $2 AND c.status = 'COMPLETED'
+       GROUP BY c."athleteId"`,
+      [athletesR.rows.map((athlete) => athlete.id), clubId]
+    )
+    : { rows: [] as { athleteId: string; average: number | string }[] };
+  const athletePoolAverageById = Object.fromEntries(athletePoolAveragesR.rows.map((row) => [row.athleteId, Number(row.average)]));
   const athleteAvatarUrls = await resolveAvatarUrls(athletesR.rows.map((athlete) => athlete.avatar));
   const athletes=athletesR.rows.map((a,index)=>({id:a.id,groupId:a.groupId,level:a.level,user:{firstName:a.firstName,lastName:a.lastName,avatar:athleteAvatarUrls[index]}}));
   const drylandLibrary=drylandR.rows;
@@ -154,6 +167,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
             tags: exercise.tags
           }))}
           groups={groups}
+          athletePoolAverageById={athletePoolAverageById}
           planningEvents={planningEvents.map((event) => ({ id: event.id, title: event.title, startsAt: event.startsAt, duration: event.duration, groupId: event.groupId, location: event.location }))}
           poolBlocks={poolBlocks.map((block) => ({
             id: block.id,
