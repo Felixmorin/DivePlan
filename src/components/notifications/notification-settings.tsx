@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-type State = "checking" | "unsupported" | "disabled" | "enabled" | "denied" | "error";
+type State = "checking" | "unsupported" | "disabled" | "enabled" | "denied" | "configuration" | "storage" | "error";
 type PushSubscriptionJSON = { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
 
 function isAppleMobile() {
@@ -20,7 +20,10 @@ async function syncSubscription(subscription: PushSubscription) {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ endpoint: data.endpoint, keys: data.keys })
   });
-  if (!response.ok) throw new Error("subscription_sync_failed");
+  if (!response.ok) {
+    const result = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(result?.error ?? "subscription_sync_failed");
+  }
 }
 
 export async function clearDevicePushSubscription() {
@@ -52,27 +55,46 @@ export function NotificationSettings() {
     if (subscription) {
       await syncSubscription(subscription);
       setState("enabled");
-    } else setState("disabled");
+    } else setState(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ? "disabled" : "configuration");
   }, []);
 
-  useEffect(() => { void Promise.resolve().then(refresh).catch(() => setState("error")); }, [refresh]);
+  useEffect(() => {
+    void Promise.resolve().then(refresh).catch((error: unknown) => {
+      if (error instanceof Error && error.message === "storage_unavailable") {
+        setState("storage");
+        setMessage("La base des abonnements Web Push n’est pas disponible. Vérifie que la migration SQL Web Push a été appliquée.");
+      } else {
+        setState("error");
+        setMessage("Impossible de vérifier cet appareil. Vérifie ta connexion puis recharge la page.");
+      }
+    });
+  }, [refresh]);
 
   async function enable() {
     setMessage("");
+    const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!key) {
+      setState("configuration");
+      setMessage("La clé publique VAPID manque à la configuration de DivePlan. Les notifications ne peuvent pas être activées pour le moment.");
+      return;
+    }
     try {
       const permission = await Notification.requestPermission();
       if (permission === "denied") { setState("denied"); return; }
       if (permission !== "granted") { setState("disabled"); setMessage("Aucune permission n’a été accordée."); return; }
       const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-      const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!key) throw new Error("vapid_key_missing");
       const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(key) as BufferSource });
       await syncSubscription(subscription);
       setState("enabled");
       setMessage("Notifications activées sur cet appareil.");
-    } catch {
-      setState("error");
-      setMessage("Impossible d’activer les notifications. Vérifie la connexion et réessaie.");
+    } catch (error) {
+      if (error instanceof Error && error.message === "storage_unavailable") {
+        setState("storage");
+        setMessage("La base des abonnements Web Push n’est pas disponible. Vérifie que la migration SQL Web Push a été appliquée.");
+      } else {
+        setState("error");
+        setMessage("Impossible d’activer les notifications. Vérifie les réglages du navigateur et la configuration VAPID de DivePlan.");
+      }
     }
   }
 
@@ -105,6 +127,7 @@ export function NotificationSettings() {
   const status = {
     checking: "Vérification de cet appareil…", unsupported: "Les notifications Web Push ne sont pas prises en charge par ce navigateur ou ce contexte.",
     disabled: "Désactivées sur cet appareil", enabled: "Activées sur cet appareil", denied: "Permission refusée dans le navigateur",
+    configuration: "Configuration Web Push incomplète", storage: "Base des abonnements indisponible",
     error: "État des notifications indisponible"
   }[state];
 
@@ -112,6 +135,8 @@ export function NotificationSettings() {
     <h2 id="notification-settings-title" className="text-lg font-black text-[var(--color-ink)]">Notifications</h2>
     <p className="mt-1 text-sm text-[var(--color-ink-muted)]">État : <span role="status" className="font-bold">{status}</span></p>
     {state === "denied" && <p className="mt-3 text-sm text-[var(--color-ink-muted)]">Pour les réactiver, autorise les notifications de DivePlan dans les réglages du navigateur ou de l’appareil, puis reviens ici. DivePlan ne redemandera pas la permission automatiquement.</p>}
+    {state === "configuration" && <p className="mt-3 text-sm text-[var(--color-ink-muted)]">L’administrateur doit configurer les clés VAPID de DivePlan avant l’activation. Recharge la page après la configuration.</p>}
+    {state === "storage" && <p className="mt-3 text-sm text-[var(--color-ink-muted)]">La migration SQL Web Push doit être appliquée à la base de données avant l’enregistrement de cet appareil.</p>}
     {appleMobile && !standalone && <p className="mt-3 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700">Sur iPhone ou iPad, ajoute d’abord DivePlan à l’écran d’accueil : ouvre le menu Partager, choisis « Sur l’écran d’accueil », puis ouvre DivePlan depuis son icône.</p>}
     {state === "unsupported" && appleMobile && !standalone && <p className="mt-2 text-sm text-[var(--color-ink-muted)]">Les notifications seront disponibles après l’ouverture de l’app installée, si ta version d’iOS/iPadOS les prend en charge.</p>}
     <div className="mt-4 flex flex-wrap gap-2">

@@ -21,11 +21,15 @@ export async function POST(request: Request) {
   const parsed = subscriptionSchema.safeParse(body);
   if (!parsed.success || !validatePushEndpoint(parsed.data.endpoint)) return Response.json({ error: "invalid_subscription" }, { status: 400 });
   const { endpoint, keys } = parsed.data;
-  await query(
-    `INSERT INTO "PushSubscription" (id,"userId",endpoint,p256dh,auth) VALUES ($1,$2,$3,$4,$5)
-     ON CONFLICT (endpoint) DO UPDATE SET "userId"=EXCLUDED."userId",p256dh=EXCLUDED.p256dh,auth=EXCLUDED.auth,"updatedAt"=NOW(),"lastTestAt"=NULL`,
-    [randomUUID(), user.id, endpoint, keys.p256dh, keys.auth]
-  );
+  try {
+    await query(
+      `INSERT INTO "PushSubscription" (id,"userId",endpoint,p256dh,auth) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (endpoint) DO UPDATE SET "userId"=EXCLUDED."userId",p256dh=EXCLUDED.p256dh,auth=EXCLUDED.auth,"updatedAt"=NOW(),"lastTestAt"=NULL`,
+      [randomUUID(), user.id, endpoint, keys.p256dh, keys.auth]
+    );
+  } catch {
+    return Response.json({ error: "storage_unavailable" }, { status: 503 });
+  }
   return Response.json({ ok: true });
 }
 
