@@ -36,7 +36,7 @@ async function send(row: SubscriptionRow, payload: object) {
       await query(`DELETE FROM "PushSubscription" WHERE id=$1`, [row.id]);
       return "expired" as const;
     }
-    throw new Error(`Push provider rejected a notification (status ${status || "unknown"})`);
+    throw new Error(`push_provider_${status || "unknown"}`);
   }
 }
 
@@ -99,9 +99,10 @@ export async function sendDeviceTest(userId: string, endpoint: string) {
     await result.query("COMMIT");
     try {
       const result = await send(selected.rows[0], { title: "DivePlan", body: "Les notifications sont activées sur cet appareil.", url: "/" });
-      return result === "sent" ? "accepted" as const : "failed" as const;
-    } catch {
-      return "failed" as const;
+      return result === "sent" ? "accepted" as const : result === "expired" ? "expired" as const : "failed" as const;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "push_provider_unknown";
+      return reason.startsWith("push_provider_") ? reason as `push_provider_${string}` : "failed" as const;
     }
   } catch (error) {
     await result.query("ROLLBACK").catch(() => undefined);

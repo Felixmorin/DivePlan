@@ -156,7 +156,7 @@ export function NotificationSettings() {
     {state === "unsupported" && appleMobile && !standalone && <p className="mt-2 text-sm text-[var(--color-ink-muted)]">Les notifications seront disponibles après l’ouverture de l’app installée, si ta version d’iOS/iPadOS les prend en charge.</p>}
     <div className="mt-4 flex flex-wrap gap-2">
       {state === "disabled" && <button type="button" onClick={() => void enable()} className="min-h-10 rounded-xl bg-[var(--color-brand-strong)] px-4 text-sm font-bold text-white">Activer les notifications</button>}
-      {state === "enabled" && <><button type="button" onClick={() => void test()} className="min-h-10 rounded-xl bg-[var(--color-brand-strong)] px-4 text-sm font-bold text-white">Envoyer une notification de test</button><button type="button" onClick={() => void disable()} className="min-h-10 rounded-xl border border-[var(--color-border)] px-4 text-sm font-bold">Désactiver sur cet appareil</button></>}
+      {state === "enabled" && <><button type="button" onClick={() => void test()} className="min-h-10 rounded-xl bg-[var(--color-brand-strong)] px-4 text-sm font-bold text-white">Envoyer une notification de test</button><button type="button" onClick={() => void disable()} className="min-h-10 rounded-xl border border-[var(--color-border)] bg-white px-4 text-sm font-bold !text-[var(--color-ink)] hover:bg-[var(--color-coach-bg)]">Désactiver sur cet appareil</button></>}
     </div>
     {message && <p className="mt-3 text-sm text-[var(--color-ink-muted)]" role="status">{message}</p>}
   </section>;

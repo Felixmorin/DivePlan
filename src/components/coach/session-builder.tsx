@@ -114,7 +114,7 @@ type SessionBuilderProps = {
   onCreateExercise: (input: QuickExerciseInput) => Promise<BuilderExercise>;
 };
 
-const steps = ["Démarrer", "Contenu", "Organisation", "Aperçu", "Publier"];
+const steps = ["Démarrer", "Contenu", "Dryland", "Piscine", "Publier"];
 
 export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvents, poolBlocks, initialTemplate, templates, recentSessions, initialPlanningEventId, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
   const [step, setStep] = useState(0);
@@ -949,8 +949,8 @@ function AssignmentsStep(props: { athletes: BuilderAthlete[]; drylandBlocks: Bui
   return (
     <div className="space-y-5">
       <div className="rounded-[var(--radius-panel)] bg-[var(--color-navy)] p-5 text-white">
-        <p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand)]">Étape 3 · Athlètes</p>
-        <h2 className="mt-2 text-2xl font-black">Qui fait chaque bloc ?</h2>
+        <p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand)]">Étape 3 · Dryland</p>
+        <h2 className="mt-2 text-2xl font-black">Organiser le dryland</h2>
         <p className="mt-2 text-sm leading-6 text-white/70">Le groupe entier est sélectionné par défaut. Garde ce choix ou adapte les athlètes bloc par bloc.</p>
       </div>
       {assignmentBlocks.length === 0 && <Card><CardContent className="p-5"><WarningText>Ajoute d’abord un bloc dryland ou piscine à l’étape Composer.</WarningText></CardContent></Card>}
@@ -972,7 +972,7 @@ function AssignmentsStep(props: { athletes: BuilderAthlete[]; drylandBlocks: Bui
 function PublicationStep({ title, groupName, scheduleName, date, time, totalVolume, unassignedBlocks, selectedExercises, athleteCount, validationIssues, blocks, athletes }: { title: string; groupName: string; scheduleName: string; date: string; time: string; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number; validationIssues: string[]; blocks: Array<{ id: string; title: string; type: "warmup" | "dryland" | "pool" | "cooldown"; assigned: string[]; content: string }>; athletes: BuilderAthlete[] }) {
   return (
     <Card>
-      <CardHeader><CardTitle>Vérifier avant de publier</CardTitle><p className="text-sm text-[var(--color-ink-muted)]">Les athlètes recevront le plan dès sa publication.</p></CardHeader>
+      <CardHeader><p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand-strong)]">Étape 4 · Piscine</p><CardTitle>Organiser la piscine</CardTitle><p className="text-sm text-[var(--color-ink-muted)]">Vérifie les listes et le volume avant de publier.</p></CardHeader>
       <CardContent className="space-y-5">
         <div className="rounded-[var(--radius-panel)] border border-[var(--color-navy)] bg-[var(--color-navy)] p-5 text-white">
           <StatusPill status="READY" />

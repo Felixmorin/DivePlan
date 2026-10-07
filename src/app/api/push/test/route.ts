@@ -19,8 +19,18 @@ export async function POST(request: Request) {
     accepted: { status: 202, message: "Le service push a accepté l’envoi. La réception sur cet appareil n’est pas confirmée." },
     failed: { status: 502, message: "Le service push n’a pas accepté l’envoi." },
     not_found: { status: 404, message: "Cet appareil n’est plus associé à ce compte. Active de nouveau les notifications." },
+    expired: { status: 410, message: "Le service push a rejeté cet abonnement expiré. Désactive puis réactive les notifications sur cet appareil." },
     rate_limited: { status: 429, message: "Attends quelques secondes avant un autre test." }
   } as const;
-  const response = messages[result];
+  const providerStatus = result.startsWith("push_provider_") ? Number(result.slice("push_provider_".length)) : null;
+  const response = providerStatus === 400 || providerStatus === 401 || providerStatus === 403
+    ? { status: 502, message: `Le service push a refusé l’authentification VAPID (HTTP ${providerStatus}). Vérifie que les clés VAPID publique et privée configurées sur l’hébergement proviennent de la même paire, puis redéploie.` }
+    : providerStatus === 413
+      ? { status: 502, message: "Le service push a refusé le contenu de la notification (HTTP 413)." }
+      : providerStatus === 429
+        ? { status: 502, message: "Le service push limite temporairement les envois. Réessaie plus tard." }
+        : providerStatus !== null && Number.isInteger(providerStatus)
+          ? { status: 502, message: `Le fournisseur push a refusé l’envoi (HTTP ${providerStatus}). Réessaie; si le problème continue, vérifie les clés VAPID de l’hébergement.` }
+          : messages[result as keyof typeof messages] ?? messages.failed;
   return Response.json({ status: result, message: response.message }, { status: response.status });
 }
