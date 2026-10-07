@@ -108,6 +108,8 @@ model User {
   athlete       Athlete?
   coach         Coach?
   events        AppEvent[]
+  pushSubscriptions PushSubscription[]
+  pushDeliveries PushDelivery[]
 }
 
 model AppEvent {
@@ -191,6 +193,36 @@ model Coach {
   competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
 }
 
+model PushSubscription {
+  id        String   @id
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  lastTestAt DateTime?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId])
+}
+
+model PushDelivery {
+  id        String   @id
+  sessionId String
+  userId    String
+  status    String   @default("PENDING")
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  sentAt    DateTime?
+  lastError String?
+  session   TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([status, createdAt])
+}
+
 model TrainingGroup {
   id             String          @id @default(cuid())
   name           String
@@ -260,6 +292,7 @@ model TrainingSession {
   templates       SessionTemplate[]
   planningEvent   PlanningEvent?             @relation(fields: [planningEventId], references: [id], onDelete: SetNull)
   competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
+  pushDeliveries PushDelivery[]
 }
 
 model SessionBlock {

@@ -3,7 +3,9 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "DivePlan",
-  description: "SaaS de planification sportive pour clubs de plongeon"
+  description: "SaaS de planification sportive pour clubs de plongeon",
+  icons: { apple: "/icons/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "DivePlan", statusBarStyle: "black-translucent" }
 };
 
 export const viewport: Viewport = {

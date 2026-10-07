@@ -16,6 +16,7 @@ import {
   ,BlockType, PoolHeight, SessionStatus, WeekStatus, type SessionBlockType, type SessionPoolHeight
 } from "@/lib/session-template";
 import { formatMontrealDate, parseMontrealDateTimeInput, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
+import { dispatchSessionPublication, isAutomaticSessionPushEnabled, saveSessionPublicationTargets } from "@/lib/web-push";
 
 const sessionInputSchema = z.object({
   title: z.string().min(3),
@@ -162,8 +163,11 @@ export async function createTrainingSession(input: CreateSessionInput) {
         status: data.status
       });
       if (planningEvent?.id) await tx.query(`UPDATE "TrainingSession" SET "planningEventId"=$1 WHERE id=$2`,[planningEvent.id,created.id]);
+      if (data.status === SessionStatus.READY && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, created.id);
       return created;
     });
+
+    if (data.status === SessionStatus.READY) await dispatchSessionPublication(session.id).catch(() => undefined);
 
     revalidatePath("/coach");
     revalidatePath("/coach/planning");
@@ -262,6 +266,8 @@ export async function createTrainingSession(input: CreateSessionInput) {
       await createPoolBlock(tx, createdSession.id, poolBlock, index + drylandBlocks.length + 2);
     }
 
+    if (data.status === SessionStatus.READY && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, createdSession.id);
+
     if (data.cooldown.enabled) {
       await createBlock(tx, {
         sessionId: createdSession.id,
@@ -278,6 +284,8 @@ export async function createTrainingSession(input: CreateSessionInput) {
 
     return createdSession;
   });
+
+  if (data.status === SessionStatus.READY) await dispatchSessionPublication(session.id).catch(() => undefined);
 
   revalidatePath("/coach");
   revalidatePath("/coach/planning");
@@ -457,7 +465,12 @@ export async function publishTrainingSession(formData: FormData) {
   const session=(await query<{id:string;title:string}>(`SELECT s.id,s.title FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE s.id=$1 AND w."clubId"=$2 AND s.status=$3`,[sessionId,clubId,SessionStatus.DRAFT])).rows[0];
   if (!session) throw new Error("Brouillon introuvable pour ce club.");
 
-  await query(`UPDATE "TrainingSession" SET status=$1 WHERE id=$2`,[SessionStatus.READY,session.id]);
+  await withTransaction(async (tx) => {
+    const published = await tx.query(`UPDATE "TrainingSession" s SET status=$1 FROM "TrainingWeek" w WHERE s.id=$2 AND w.id=s."weekId" AND w."clubId"=$3 AND s.status=$4 RETURNING s.id`,[SessionStatus.READY,session.id,clubId,SessionStatus.DRAFT]);
+    if (!published.rowCount) throw new Error("Ce brouillon a déjà été publié ou est introuvable.");
+    if (isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, session.id);
+  });
+  await dispatchSessionPublication(session.id).catch(() => undefined);
   await trackEvent({ type: "session.published", message: `Seance publiee: ${session.title}`, clubId, userId: user.id, metadata: { sessionId: session.id } });
   revalidatePath("/coach");
   revalidatePath("/coach/planning");
@@ -761,8 +774,9 @@ export async function updateTrainingSession(formData: FormData) {
   const validDrylandExercises = await query<{id:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null}>(`SELECT id,"defaultSets","defaultReps","defaultDuration" FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`,[selectedDrylandIds]);
   const validDrylandById = new Map(validDrylandExercises.rows.map((exercise) => [exercise.id, exercise]));
 
+  const wasPublished = existing.status === SessionStatus.DRAFT && status === SessionStatus.READY;
   await withTransaction(async (tx) => {
-    const updated=await tx.query(`UPDATE "TrainingSession" s SET title=$1,focus=$2,duration=$3,date=$4,notes=$5,status=$6 FROM "TrainingWeek" w WHERE s.id=$7 AND s."weekId"=w.id AND w."clubId"=$8 AND NOT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND (c."startedAt" IS NOT NULL OR c.status<>'NOT_STARTED')) AND NOT EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id) AND NOT EXISTS (SELECT 1 FROM "AthleteExerciseLog" l WHERE l."sessionId"=s.id)`,[title,focus,Number.isFinite(duration)?duration:existing.duration,parseMontrealDateTimeInput(date),String(formData.get("notes")??"").trim()||null,status,sessionId,clubId]);
+    const updated=await tx.query(`UPDATE "TrainingSession" s SET title=$1,focus=$2,duration=$3,date=$4,notes=$5,status=$6 FROM "TrainingWeek" w WHERE s.id=$7 AND s."weekId"=w.id AND w."clubId"=$8 AND (NOT $9 OR s.status='DRAFT') AND NOT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND (c."startedAt" IS NOT NULL OR c.status<>'NOT_STARTED')) AND NOT EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id) AND NOT EXISTS (SELECT 1 FROM "AthleteExerciseLog" l WHERE l."sessionId"=s.id)`,[title,focus,Number.isFinite(duration)?duration:existing.duration,parseMontrealDateTimeInput(date),String(formData.get("notes")??"").trim()||null,status,sessionId,clubId,wasPublished]);
     if(!updated.rowCount) throw new Error("Cette seance a deja ete commencee ou est introuvable.");
     await tx.query(`DELETE FROM "SessionBlock" WHERE "sessionId"=$1 AND NOT (id=ANY($2::text[]))`,[sessionId,Array.from(includedBlockIds)]);
 
@@ -809,7 +823,10 @@ export async function updateTrainingSession(formData: FormData) {
         await tx.query(`UPDATE "SessionBlock" SET "estimatedVolume"=$1 WHERE id=$2 AND "sessionId"=$3`,[poolRowsVolume(rows),block.id,sessionId]);
       }
     }
+    if (wasPublished && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, sessionId);
   });
+
+  if (wasPublished) await dispatchSessionPublication(sessionId).catch(() => undefined);
 
   await trackEvent({
     type: "session.updated",

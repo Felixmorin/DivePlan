@@ -11,6 +11,8 @@ import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthle
 import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { getClubMilestones } from "@/lib/milestone-data";
+import { NotificationSettings } from "@/components/notifications/notification-settings";
+import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +82,10 @@ export default async function ProfilePage() {
       </section>
 
       <section className="mt-7">
+        <NotificationSettings />
+      </section>
+
+      <section className="mt-7">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
             <h2 className="mt-1 text-xl font-black">Ma liste de compétition</h2>
@@ -112,13 +118,13 @@ export default async function ProfilePage() {
             </summary>
             <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} />
           </details>
-          <form action={signOutAthlete}>
+          <SignOutWithPushCleanup action={signOutAthlete}>
             <button type="submit" className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-base font-semibold text-rose-300 transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
               <LogOut className="h-5 w-5" />
               <span className="flex-1">Déconnexion</span>
               <ChevronRight className="h-5 w-5 text-white/45" />
             </button>
-          </form>
+          </SignOutWithPushCleanup>
         </div>
       </section>
     </AthleteShell>

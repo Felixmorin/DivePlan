@@ -4,6 +4,7 @@ import { Activity, Award, CalendarDays, Computer, Dumbbell, FileText, LayoutDash
 import { signOutCoach } from "@/app/coach/settings/actions";
 import { requireCoach } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
+import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
 
 const nav = [
   { href: "/coach", label: "Dashboard", icon: LayoutDashboard },
@@ -106,12 +107,12 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
               </Link>
             );
           })}
-          <form action={signOutCoach} className="ml-auto shrink-0">
+          <SignOutWithPushCleanup action={signOutCoach} className="ml-auto shrink-0">
             <button type="submit" className="flex min-h-10 items-center gap-2 rounded-xl px-3 text-xs font-black text-[var(--color-ink-muted)] transition duration-[var(--duration-fast)] hover:bg-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
               <LogOut className="h-4 w-4" />
               <span>Déconnexion</span>
             </button>
-          </form>
+          </SignOutWithPushCleanup>
         </div>
       </header>
       <main className="min-w-0 lg:pl-68">

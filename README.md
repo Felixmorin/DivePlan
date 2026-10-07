@@ -26,6 +26,7 @@ Le produit est actuellement conçu pour des **pilotes accompagnés avec des club
 - Notes par plongeon, feedback par bloc et commentaire de fin de séance.
 - Historique de progression, compétences, profil et changement du mot de passe temporaire.
 - Déclaration d’absence à une séance.
+- Notifications Web Push facultatives pour les séances publiées; configuration et essais sur appareil dans [docs/web-push.md](docs/web-push.md).
 
 ## Limites connues
 

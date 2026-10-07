@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { requireCoach } from "@/lib/current-user";
+import { NotificationSettings } from "@/components/notifications/notification-settings";
+import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +72,7 @@ export default async function CoachSettingsPage() {
         </Card>
 
         <div className="space-y-6">
+          <NotificationSettings />
           <Card>
             <CardHeader className="border-b border-[var(--color-border)] bg-white">
               <CardTitle>Compte coach</CardTitle>
@@ -98,12 +101,12 @@ export default async function CoachSettingsPage() {
                 <span className="flex items-center gap-2 text-sm font-black text-[var(--color-ink)]"><Shield className="h-4 w-4" /> Session active</span>
                 <Badge variant="success">Coach</Badge>
               </div>
-              <form action={signOutCoach}>
+              <SignOutWithPushCleanup action={signOutCoach}>
                 <Button type="submit" variant="outline" className="w-full">
                   <LogOut className="h-4 w-4" />
                   Me déconnecter
                 </Button>
-              </form>
+              </SignOutWithPushCleanup>
             </CardContent>
           </Card>
 
