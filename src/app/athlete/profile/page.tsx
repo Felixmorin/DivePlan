@@ -1,17 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, ChevronRight, LogOut, Medal, Star, UserRound, Waves } from "lucide-react";
+import { Building2, ChevronRight, LogOut, Medal, Settings, Star, UserRound, Waves } from "lucide-react";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { CompetitionList } from "@/components/athlete/competition-list";
 import { MilestonesDialog } from "@/components/athlete/milestones-dialog";
-import { ProfileForm } from "@/components/athlete/profile-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { getClubMilestones } from "@/lib/milestone-data";
-import { NotificationSettings } from "@/components/notifications/notification-settings";
 import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
 
 export const dynamic = "force-dynamic";
@@ -82,14 +80,6 @@ export default async function ProfilePage() {
       </section>
 
       <section className="mt-7">
-        <h2 className="mb-3 text-xl font-black">Préférences</h2>
-        <div className="space-y-3">
-          <NotificationSettings />
-          <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} username={athlete.user.username} />
-        </div>
-      </section>
-
-      <section className="mt-7">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
             <h2 className="mt-1 text-xl font-black">Ma liste de compétition</h2>
@@ -114,6 +104,11 @@ export default async function ProfilePage() {
       <section className="mt-7">
         <h2 className="mb-3 text-xl font-black">Compte</h2>
         <div className="overflow-hidden rounded-[1.4rem] border border-white/10 bg-[#0b1e30]">
+          <Link href="/athlete/preferences" className="flex min-h-14 items-center gap-3 border-b border-white/8 px-4 text-base font-semibold transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+            <Settings className="h-5 w-5 text-white/65" />
+            <span className="flex-1">Préférences</span>
+            <ChevronRight className="h-5 w-5 text-white/45" />
+          </Link>
           <SignOutWithPushCleanup action={signOutAthlete}>
             <button type="submit" className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-base font-semibold text-rose-300 transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
               <LogOut className="h-5 w-5" />
