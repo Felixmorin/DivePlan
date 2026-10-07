@@ -265,6 +265,18 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
         if (first.rowCount) earned.push(MILESTONES.first500.key);
       }
     }
+    const sessionTotal = await tx.query<{ total: string }>(
+      `SELECT COALESCE(sum("repetitionsCompleted"), 0)::text AS total
+       FROM "AthleteDiveLog" WHERE "athleteId" = $1 AND "sessionId" = $2`,
+      [athlete.id, payload.sessionId]
+    );
+    if (Number(sessionTotal.rows[0]?.total ?? 0) > 60) {
+      const result = await tx.query(
+        `INSERT INTO "AthleteMilestone" (id, "athleteId", key) VALUES ($1,$2,$3) ON CONFLICT ("athleteId", key) DO NOTHING RETURNING key`,
+        [randomUUID(), athlete.id, MILESTONES.sessionVolume60.key]
+      );
+      if (result.rowCount) earned.push(MILESTONES.sessionVolume60.key);
+    }
     const allCompetitionDivesDone = await tx.query(
       `SELECT 1 WHERE EXISTS (SELECT 1 FROM "CompetitionDive" WHERE "athleteId" = $1)
        AND NOT EXISTS (SELECT 1 FROM "CompetitionDive" c WHERE c."athleteId" = $1 AND (
