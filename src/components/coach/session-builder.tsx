@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, ArrowDown, ArrowUp, BookmarkPlus, CalendarPlus, CheckCircle2, ChevronDown, ChevronUp, FileText, MoreHorizontal, Plus, Search, Send, Trash2, Users, Waves } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDown, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronUp, Clock3, Dumbbell, FileText, Leaf, MoreHorizontal, Plus, Search, Send, Trash2, Users, Waves } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -161,6 +161,16 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     duration: templateCooldown?.duration ?? 8,
     description: templateCooldown?.description ?? ""
   });
+  const [contentOrder, setContentOrder] = useState<string[]>(() => {
+    let dryIndex = 0;
+    let poolIndex = 0;
+    return templateBlocks.map((block) => {
+      if (block.type === "WARMUP") return "warmup";
+      if (block.type === "COOLDOWN") return "cooldown";
+      if (block.type === "DRYLAND") return `template-dryland-${dryIndex++}`;
+      return `template-pool-${poolIndex++}`;
+    });
+  });
   const [evaluationPlacement, setEvaluationPlacement] = useState("none");
   const [flashBlock, setFlashBlock] = useState<string | null>(null);
   const form = useForm<FormValues>({
@@ -189,7 +199,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     try {
       const raw = window.localStorage.getItem(draftKey);
       if (raw) {
-        const draft = JSON.parse(raw) as { values?: Partial<FormValues>; drylandBlocks?: BuilderDrylandBlock[]; poolBlocks?: BuilderPoolBlock[]; poolAssignments?: Record<string, string[]>; warmup?: OptionalBlock; cooldown?: OptionalBlock; evaluationPlacement?: string };
+        const draft = JSON.parse(raw) as { values?: Partial<FormValues>; drylandBlocks?: BuilderDrylandBlock[]; poolBlocks?: BuilderPoolBlock[]; poolAssignments?: Record<string, string[]>; warmup?: OptionalBlock; cooldown?: OptionalBlock; contentOrder?: string[]; evaluationPlacement?: string };
         queueMicrotask(() => {
           if (draft.values) form.reset({ ...form.getValues(), ...draft.values });
           if (draft.drylandBlocks) setDrylandBlocks(draft.drylandBlocks);
@@ -197,6 +207,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
           if (draft.poolAssignments) setPoolAssignments(draft.poolAssignments);
           if (draft.warmup) setWarmup(draft.warmup);
           if (draft.cooldown) setCooldown(draft.cooldown);
+          if (draft.contentOrder) setContentOrder(draft.contentOrder);
           if (draft.evaluationPlacement) setEvaluationPlacement(draft.evaluationPlacement);
           restoredDraft.current = true;
         });
@@ -207,8 +218,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   }, [draftKey, form]);
   useEffect(() => {
     if (!restoredDraft.current) return;
-    window.localStorage.setItem(draftKey, JSON.stringify({ values: watched, drylandBlocks, poolBlocks: activePoolBlocks, poolAssignments, warmup, cooldown, evaluationPlacement }));
-  }, [activePoolBlocks, cooldown, draftKey, drylandBlocks, evaluationPlacement, form, poolAssignments, warmup, watched]);
+    window.localStorage.setItem(draftKey, JSON.stringify({ values: watched, drylandBlocks, poolBlocks: activePoolBlocks, poolAssignments, warmup, cooldown, contentOrder, evaluationPlacement }));
+  }, [activePoolBlocks, contentOrder, cooldown, draftKey, drylandBlocks, evaluationPlacement, form, poolAssignments, warmup, watched]);
   useEffect(() => {
     if (watched.planningEventId && !planningEvents.some((event) => event.id === watched.planningEventId && (!event.groupId || event.groupId === watched.groupId) && toMontrealDateInputValue(event.startsAt) === watched.date)) {
       form.setValue("planningEventId", "");
@@ -255,6 +266,13 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     ...activePoolBlocks.map((block) => ({ value: `block:${block.id}`, label: `Dans le bloc « ${block.title} »` }))
   ], [activePoolBlocks, drylandBlocks]);
   const effectiveEvaluationPlacement = evaluationChoices.some((choice) => choice.value === evaluationPlacement) ? evaluationPlacement : "none";
+  const contentRows = [
+    ...(warmup.enabled ? [{ id: "warmup", title: warmup.title, type: "warmup" as const, duration: warmup.duration, subtitle: "Préparation du groupe" }] : []),
+    ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title || "Dryland", type: "dryland" as const, duration: block.duration, subtitle: `${block.exerciseIds.length} exercice${block.exerciseIds.length === 1 ? "" : "s"} · Équipe ou par athlète` })),
+    ...activePoolBlocks.map((block) => ({ id: block.id, title: block.title || "Piscine", type: "pool" as const, duration: block.duration, subtitle: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes · Liste par athlète` })),
+    ...(cooldown.enabled ? [{ id: "cooldown", title: cooldown.title, type: "cooldown" as const, duration: cooldown.duration, subtitle: "Récupération du groupe" }] : [])
+  ];
+  const orderedContentRows = [...contentOrder.map((id) => contentRows.find((row) => row.id === id)).filter((row): row is typeof contentRows[number] => Boolean(row)), ...contentRows.filter((row) => !contentOrder.includes(row.id))];
 
   function loadPayload(payload: SessionTemplatePayload, title: string) {
     const validExerciseIds = new Set(library.map((exercise) => exercise.id));
@@ -278,6 +296,14 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
     setDrylandBlocks(nextDryland);
     setActivePoolBlocks(nextPool);
     setPoolAssignments(Object.fromEntries(nextPool.map((block) => [block.id, athleteIds])));
+    let dryIndex = 0;
+    let poolIndex = 0;
+    setContentOrder(blocks.map((block, index) => {
+      if (block.type === "WARMUP") return "warmup";
+      if (block.type === "COOLDOWN") return "cooldown";
+      if (block.type === "DRYLAND") return nextDryland[dryIndex++]?.id ?? `loaded-dryland-${Date.now()}-${index}`;
+      return nextPool[poolIndex++]?.id ?? `loaded-pool-${Date.now()}-${index}`;
+    }));
     const warm = blocks.find((block) => block.type === "WARMUP");
     const cool = blocks.find((block) => block.type === "COOLDOWN");
     setWarmup({ enabled: Boolean(warm), title: warm?.title ?? "Échauffement dynamique", duration: warm?.duration ?? 12, description: warm?.description ?? "" });
@@ -321,6 +347,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   function addPoolBlock(block: BuilderPoolBlock) {
     setActivePoolBlocks((current) => [...current, block]);
     setPoolAssignments((current) => ({ ...current, [block.id]: athleteIds }));
+    setContentOrder((current) => [...current, block.id]);
     pulse(block.id);
   }
 
@@ -330,6 +357,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
 
   function removePoolBlock(blockId: string) {
     setActivePoolBlocks((current) => current.filter((block) => block.id !== blockId));
+    setContentOrder((current) => current.filter((id) => id !== blockId));
     setPoolAssignments((current) => {
       const next = { ...current };
       delete next[blockId];
@@ -380,7 +408,29 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
   function addDrylandBlock() {
     const id = `dryland-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setDrylandBlocks((current) => [...current, { id, title: `Dryland ${current.length + 1}`, duration: 20, exerciseIds: [], athleteIds: athleteIds, exerciseOverrides: {} }]);
+    setContentOrder((current) => [...current, id]);
     pulse(id);
+  }
+
+  function moveContentBlock(blockId: string, direction: -1 | 1) {
+    const order = orderedContentRows.map((row) => row.id);
+    const index = order.indexOf(blockId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= order.length) return;
+    [order[index], order[target]] = [order[target], order[index]];
+    setContentOrder(order);
+  }
+
+  function updateContentDuration(blockId: string, delta: number) {
+    if (blockId === "warmup") setWarmup((value) => ({ ...value, duration: Math.max(1, Math.min(600, value.duration + delta)) }));
+    else if (blockId === "cooldown") setCooldown((value) => ({ ...value, duration: Math.max(1, Math.min(600, value.duration + delta)) }));
+    else if (drylandBlocks.some((block) => block.id === blockId)) {
+      const duration = drylandBlocks.find((block) => block.id === blockId)?.duration ?? 1;
+      updateDrylandBlock(blockId, { duration: Math.max(1, Math.min(600, duration + delta)) });
+    } else {
+      const duration = activePoolBlocks.find((block) => block.id === blockId)?.duration ?? 1;
+      updatePoolBlock(blockId, { duration: Math.max(1, Math.min(600, duration + delta)) });
+    }
   }
 
   async function addExercise(input: QuickExerciseInput) {
@@ -502,39 +552,37 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
             <div className="rounded-2xl bg-[var(--color-brand)]/10 p-3 text-sm text-[var(--color-ink-muted)]"><Users className="mr-2 inline h-4 w-4" />Les listes et les blocs resteront modifiables avant la publication.</div>
           </>}
           {step === 1 && (
-            <div className="space-y-8">
-              <div className="rounded-[var(--radius-panel)] bg-[var(--color-navy)] p-5 text-white">
-                <p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand)]">Étape 2 · Contenu</p>
-                <h2 className="mt-2 text-2xl font-black">Compose l’entraînement</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">Ajoute les blocs dryland et piscine dont le groupe a besoin. Tu pourras ensuite attribuer chaque bloc aux bons athlètes.</p>
+            <div className="space-y-4">
+              <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 2 sur 5</p><h2 className="mt-1 text-2xl font-black">Organiser les blocs</h2></div>
+              <div className="grid gap-3 rounded-2xl border border-[var(--color-border)] bg-white p-4 sm:grid-cols-3">
+                <div className="flex items-center gap-3 sm:border-r sm:border-[var(--color-border)]"><Users className="h-5 w-5 text-[var(--color-brand-strong)]"/><div><div className="text-xs text-[var(--color-ink-muted)]">Groupe</div><div className="font-bold">{groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} · {visibleAthletes.length} athlètes</div></div></div>
+                <div className="flex items-center gap-3 sm:border-r sm:border-[var(--color-border)] sm:pl-4"><Clock3 className="h-5 w-5 text-[var(--color-brand-strong)]"/><div><div className="text-xs text-[var(--color-ink-muted)]">Durée totale</div><div className="text-xl font-black">{Math.floor(totalDuration / 60)} h {String(totalDuration % 60).padStart(2, "0")}</div></div></div>
+                <div className="flex items-center gap-3 sm:pl-4"><CalendarDays className="h-5 w-5 text-[var(--color-brand-strong)]"/><div><div className="text-xs text-[var(--color-ink-muted)]">Contenu</div><div className="font-bold">{contentRows.length} blocs</div></div></div>
               </div>
-              <OptionalBlockEditor label="Échauffement" block={warmup} onChange={(update) => setWarmup((current) => ({ ...current, ...update }))} />
-              <DrylandStep
-                exercises={library}
-                blocks={effectiveDrylandBlocks}
-                athletes={visibleAthletes}
-                flashBlock={flashBlock}
-                onToggleExercise={toggleExercise}
-                onMoveExercise={moveExercise}
-                onUpdateBlock={updateDrylandBlock}
-                onAddBlock={addDrylandBlock}
-                onRemoveBlock={(blockId) => setDrylandBlocks((current) => current.filter((block) => block.id !== blockId))}
-                onMoveBlock={moveDrylandBlock}
-                onSaveBlockTemplate={saveDrylandTemplate}
-                onCreateExercise={addExercise}
-              />
-              <PoolStep
-                poolBlocks={activePoolBlocks}
-                recentBlocks={poolBlocks}
-                flashBlock={flashBlock}
-                onAddPoolBlock={addPoolBlock}
-                onReusePoolBlock={reusePoolBlock}
-                onRemovePoolBlock={removePoolBlock}
-                onMoveBlock={movePoolBlock}
-                onUpdatePoolBlock={updatePoolBlock}
-                onUpdatePoolRows={updatePoolRows}
-              />
-              <OptionalBlockEditor label="Retour au calme" block={cooldown} onChange={(update) => setCooldown((current) => ({ ...current, ...update }))} />
+              <div className="space-y-2">
+                {orderedContentRows.map((row, index) => {
+                  const Icon = row.type === "warmup" ? Activity : row.type === "dryland" ? Dumbbell : row.type === "pool" ? Waves : Leaf;
+                  return <div key={row.id} className={cn("grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border bg-white p-2 sm:gap-3 sm:p-3", flashBlock === row.id && "builder-pulse", row.type === "warmup" ? "border-[var(--block-warmup-fg)]/35" : row.type === "dryland" ? "border-[var(--block-dryland-fg)]/25" : row.type === "pool" ? "border-[var(--block-pool-fg)]/25" : "border-[var(--block-cooldown-fg)]/25")}>
+                    <div className="flex gap-1"><button type="button" aria-label={`Monter ${row.title}`} disabled={index === 0} onClick={() => moveContentBlock(row.id, -1)} className="rounded-lg p-2 text-[var(--color-ink-muted)] disabled:opacity-30"><ArrowUp className="h-4 w-4"/></button><button type="button" aria-label={`Descendre ${row.title}`} disabled={index === orderedContentRows.length - 1} onClick={() => moveContentBlock(row.id, 1)} className="rounded-lg p-2 text-[var(--color-ink-muted)] disabled:opacity-30"><ArrowDown className="h-4 w-4"/></button></div>
+                    <span className={cn("flex h-11 w-11 items-center justify-center rounded-full", row.type === "warmup" ? "bg-[var(--block-warmup-bg)] text-[var(--block-warmup-fg)]" : row.type === "dryland" ? "bg-[var(--block-dryland-bg)] text-[var(--block-dryland-fg)]" : row.type === "pool" ? "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]" : "bg-[var(--block-cooldown-bg)] text-[var(--block-cooldown-fg)]")}><Icon className="h-5 w-5"/></span>
+                    <div className="min-w-0"><div className="truncate font-black">{row.title}</div><div className="text-sm text-[var(--color-ink-muted)]">{row.subtitle}</div></div>
+                    <div className="flex items-center justify-end gap-2"><button type="button" aria-label={`Réduire la durée de ${row.title}`} onClick={() => updateContentDuration(row.id, -5)} className="h-10 w-10 rounded-xl border border-[var(--color-border)] font-bold">−</button><span className="min-w-14 text-center text-sm font-black">{row.duration} min</span><button type="button" aria-label={`Augmenter la durée de ${row.title}`} onClick={() => updateContentDuration(row.id, 5)} className="h-10 w-10 rounded-xl border border-[var(--color-border)] font-bold">＋</button></div>
+                  </div>;
+                })}
+                {orderedContentRows.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-white p-5 text-center text-sm text-[var(--color-ink-muted)]">Aucun bloc pour le moment. Ajoute un bloc pour commencer.</div>}
+              </div>
+              <details className="group relative rounded-2xl border border-dashed border-[var(--color-brand)]/50 bg-[var(--color-brand)]/5">
+                <summary className="flex cursor-pointer list-none items-center justify-center gap-2 p-3 font-black text-[var(--color-brand-strong)]"><Plus className="h-5 w-5"/>Ajouter un bloc<ChevronDown className="h-4 w-4 transition group-open:rotate-180"/></summary>
+                <div className="absolute bottom-full left-1/2 z-20 mb-2 grid w-64 -translate-x-1/2 gap-1 rounded-2xl border border-[var(--color-border)] bg-white p-2 shadow-[var(--shadow-soft)]">
+                  <button type="button" onClick={() => { setWarmup((value) => ({ ...value, enabled: true })); setContentOrder((current) => ["warmup", ...current.filter((id) => id !== "warmup")]); }} className="flex items-center gap-2 rounded-xl p-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]"><Activity className="h-4 w-4 text-[var(--block-warmup-fg)]"/>Échauffement</button>
+                  <button type="button" onClick={addDrylandBlock} className="flex items-center gap-2 rounded-xl p-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]"><Dumbbell className="h-4 w-4 text-[var(--block-dryland-fg)]"/>Dryland</button>
+                  <button type="button" onClick={() => addPoolBlock({ id: `pool-${Date.now()}`, title: "Piscine", duration: 45, athleteIds, sections: [] })} className="flex items-center gap-2 rounded-xl p-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]"><Waves className="h-4 w-4 text-[var(--block-pool-fg)]"/>Piscine</button>
+                  <button type="button" onClick={() => { setCooldown((value) => ({ ...value, enabled: true })); setContentOrder((current) => [...current.filter((id) => id !== "cooldown"), "cooldown"]); }} className="flex items-center gap-2 rounded-xl p-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]"><Leaf className="h-4 w-4 text-[var(--block-cooldown-fg)]"/>Retour au calme</button>
+                </div>
+              </details>
+              <details className="rounded-2xl border border-[var(--color-border)] bg-white p-4"><summary className="cursor-pointer font-bold">Configurer les blocs et exercices dryland</summary><div className="mt-4"><OptionalBlockEditor label="Échauffement" block={warmup} onChange={(update) => setWarmup((current) => ({ ...current, ...update }))}/><div className="mt-4"><DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} flashBlock={flashBlock} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onMoveBlock={moveDrylandBlock} onSaveBlockTemplate={saveDrylandTemplate} onCreateExercise={addExercise}/></div></div></details>
+              <details className="rounded-2xl border border-[var(--color-border)] bg-white p-4"><summary className="cursor-pointer font-bold">Configurer les listes de plongeons</summary><div className="mt-4"><PoolStep poolBlocks={activePoolBlocks} recentBlocks={poolBlocks} flashBlock={flashBlock} onAddPoolBlock={addPoolBlock} onReusePoolBlock={reusePoolBlock} onRemovePoolBlock={removePoolBlock} onMoveBlock={movePoolBlock} onUpdatePoolBlock={updatePoolBlock} onUpdatePoolRows={updatePoolRows}/></div></details>
+              <details className="rounded-2xl border border-[var(--color-border)] bg-white p-4"><summary className="cursor-pointer font-bold">Configurer le retour au calme</summary><div className="mt-4"><OptionalBlockEditor label="Retour au calme" block={cooldown} onChange={(update) => setCooldown((current) => ({ ...current, ...update }))}/></div></details>
             </div>
           )}
           {step === 2 && (
@@ -570,7 +618,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, planningEvent
         <SummaryPanel
               title={watched.title ?? "Nouvelle séance"}
           date={watched.date ?? ""}
-          blockCount={activePoolBlocks.length + drylandBlocks.length}
+          blockCount={activePoolBlocks.length + drylandBlocks.length + Number(warmup.enabled) + Number(cooldown.enabled)}
           athleteCount={allAssignedIds.length}
           unassignedCount={unassignedBlocks.length}
           totalVolume={totalVolume}

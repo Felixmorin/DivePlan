@@ -22,7 +22,8 @@ async function syncSubscription(subscription: PushSubscription) {
   });
   if (!response.ok) {
     const result = await response.json().catch(() => null) as { error?: string } | null;
-    throw new Error(result?.error ?? "subscription_sync_failed");
+    if (result?.error === "storage_unavailable") throw new Error("storage_unavailable");
+    throw new Error(`server_${response.status}_${result?.error ?? "request_failed"}`);
   }
 }
 
@@ -63,6 +64,9 @@ export function NotificationSettings() {
       if (error instanceof Error && error.message === "storage_unavailable") {
         setState("storage");
         setMessage("La base des abonnements Web Push n’est pas disponible. Vérifie que la migration SQL Web Push a été appliquée.");
+      } else if (error instanceof Error && error.message.startsWith("server_")) {
+        setState("error");
+        setMessage("Le serveur n’a pas pu enregistrer l’abonnement de cet appareil. Vérifie la session et la connexion à la base.");
       } else {
         setState("error");
         setMessage("Impossible de vérifier cet appareil. Vérifie ta connexion puis recharge la page.");
@@ -78,12 +82,16 @@ export function NotificationSettings() {
       setMessage("La clé publique VAPID manque à la configuration de DivePlan. Les notifications ne peuvent pas être activées pour le moment.");
       return;
     }
+    let step: "permission" | "service_worker" | "push_subscription" | "server_registration" = "permission";
     try {
       const permission = await Notification.requestPermission();
       if (permission === "denied") { setState("denied"); return; }
       if (permission !== "granted") { setState("disabled"); setMessage("Aucune permission n’a été accordée."); return; }
+      step = "service_worker";
       const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      step = "push_subscription";
       const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlToBytes(key) as BufferSource });
+      step = "server_registration";
       await syncSubscription(subscription);
       setState("enabled");
       setMessage("Notifications activées sur cet appareil.");
@@ -93,7 +101,14 @@ export function NotificationSettings() {
         setMessage("La base des abonnements Web Push n’est pas disponible. Vérifie que la migration SQL Web Push a été appliquée.");
       } else {
         setState("error");
-        setMessage("Impossible d’activer les notifications. Vérifie les réglages du navigateur et la configuration VAPID de DivePlan.");
+        const reason = error instanceof Error ? error.message : "unknown";
+        const messages = {
+          permission: "Le navigateur n’a pas pu accorder la permission. Vérifie ses réglages de notifications.",
+          service_worker: "Le service worker n’a pas pu être installé. Vérifie que DivePlan est ouvert en HTTPS (ou sur localhost) et recharge la page.",
+          push_subscription: "Le navigateur n’a pas pu créer l’abonnement Web Push. Vérifie que les clés VAPID de la version ouverte sont valides et que les notifications sont prises en charge.",
+          server_registration: reason === "server_401_unauthorized" ? "Ta session a expiré. Reconnecte-toi puis réessaie." : reason === "server_403_forbidden" ? "Ce compte n’est pas autorisé à activer les notifications." : reason.startsWith("server_") ? "Le serveur a refusé l’enregistrement. Vérifie la migration Web Push et la connexion à la base de données." : "Le serveur n’a pas répondu correctement à l’enregistrement. Vérifie la connexion et recharge la page."
+        };
+        setMessage(messages[step]);
       }
     }
   }
