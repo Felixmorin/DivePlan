@@ -33,47 +33,47 @@ const sessionInputSchema = z.object({
   warmup: z.object({
     enabled: z.boolean(),
     competitionEvaluation: z.boolean().default(false),
-    title: z.string().trim().min(1),
-    duration: z.number().int().min(1),
+    title: z.string().trim(),
+    duration: z.number().int(),
     description: z.string().optional()
   }),
   cooldown: z.object({
     enabled: z.boolean(),
     competitionEvaluation: z.boolean().default(false),
-    title: z.string().trim().min(1),
-    duration: z.number().int().min(1),
+    title: z.string().trim(),
+    duration: z.number().int(),
     description: z.string().optional()
   }),
   drylandBlocks: z.array(z.object({
     competitionEvaluation: z.boolean().default(false),
-    title: z.string().trim().min(1),
-    duration: z.number().int().min(1),
-    exerciseIds: z.array(z.string()).min(1),
-    athleteIds: z.array(z.string()).min(1),
+    title: z.string().trim(),
+    duration: z.number().int(),
+    exerciseIds: z.array(z.string()),
+    athleteIds: z.array(z.string()),
     exerciseOverrides: z.record(z.string(), z.object({
-      sets: z.number().int().min(1).max(20).nullable(),
-      reps: z.number().int().min(1).max(200).nullable(),
-      duration: z.number().int().min(1).max(3600).nullable(),
+      sets: z.number().int().nullable(),
+      reps: z.number().int().nullable(),
+      duration: z.number().int().nullable(),
       notes: z.string().nullable()
     })).default({})
   })).default([]),
   poolBlocks: z.array(z.object({
     competitionEvaluation: z.boolean().default(false),
-    title: z.string().min(1),
-    duration: z.number().int().min(1).max(600),
+    title: z.string(),
+    duration: z.number().int(),
     athleteIds: z.array(z.string()).default([]),
     sections: z.array(z.object({
       height: z.nativeEnum(PoolHeight),
       label: z.string().nullable(),
       dives: z.array(z.object({
-        diveCode: z.string().min(1),
-        diveName: z.string().min(1),
-        position: z.string().min(1),
-        repetitions: z.number().min(1),
+        diveCode: z.string(),
+        diveName: z.string(),
+        position: z.string(),
+        repetitions: z.number().int(),
         notes: z.string().nullable(),
         order: z.number()
-      })).min(1)
-    })).min(1)
+    }))
+    }))
   })).default([])
 });
 
@@ -126,6 +126,15 @@ export async function createDrylandExercise(input: QuickExerciseInput) {
 export async function createTrainingSession(input: CreateSessionInput) {
   const { user, coach, clubId } = await requireCoach();
   const data = sessionInputSchema.parse(input);
+  if (data.status === SessionStatus.READY) {
+    const invalidBlocks =
+      data.title.trim().length < 3 ||
+      (data.warmup.enabled && (!data.warmup.title.trim() || data.warmup.duration < 1)) ||
+      (data.cooldown.enabled && (!data.cooldown.title.trim() || data.cooldown.duration < 1)) ||
+      data.drylandBlocks.some((block) => !block.title.trim() || block.duration < 1 || block.exerciseIds.length === 0 || block.athleteIds.length === 0 || Object.values(block.exerciseOverrides).some((value) => (value.sets !== null && (value.sets < 1 || value.sets > 20)) || (value.reps !== null && (value.reps < 1 || value.reps > 200)) || (value.duration !== null && (value.duration < 1 || value.duration > 3600)))) ||
+      data.poolBlocks.some((block) => !block.title.trim() || block.duration < 1 || block.duration > 600 || block.athleteIds.length === 0 || block.sections.length === 0 || block.sections.some((section) => section.dives.length === 0 || section.dives.some((dive) => !dive.diveCode.trim() || !dive.diveName.trim() || !dive.position.trim() || dive.repetitions < 1)));
+    if (invalidBlocks) throw new Error("La séance contient des éléments à corriger avant publication.");
+  }
   const group = (await query<{id:string}>(`SELECT id FROM "TrainingGroup" WHERE id=$1 AND "clubId"=$2`,[data.groupId,clubId])).rows[0];
 
   if (!group) {
@@ -191,12 +200,12 @@ export async function createTrainingSession(input: CreateSessionInput) {
     : data.evaluationPlacement === "start"
       ? blockEvaluationCount !== 0
       : !isBlockPlacement || data.warmup.competitionEvaluation || data.cooldown.competitionEvaluation || blockEvaluationCount !== 1;
-  if (invalidEvaluationPlacement) {
+  if (data.status === SessionStatus.READY && invalidEvaluationPlacement) {
     throw new Error("Choisis un seul moment pour l’évaluation de confiance.");
   }
 
-  if ((!data.warmup.enabled && !data.cooldown.enabled && data.drylandBlocks.length === 0 && data.poolBlocks.length === 0) ||
-      data.poolBlocks.some((block) => block.athleteIds.length === 0)) {
+  if (data.status === SessionStatus.READY && ((!data.warmup.enabled && !data.cooldown.enabled && data.drylandBlocks.length === 0 && data.poolBlocks.length === 0) ||
+      data.poolBlocks.some((block) => block.athleteIds.length === 0))) {
     throw new Error("La seance doit contenir au moins un bloc et chaque bloc d'entrainement doit etre complet et assigne.");
   }
 
@@ -222,7 +231,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
   }));
   const poolBlocks = data.poolBlocks.map((block) => ({ ...block, athleteIds: requireValidAthletes(block.athleteIds) }));
 
-  if (allAthleteIds.length === 0 || drylandBlocks.some((block) => block.athleteIds.length === 0 || block.exercises.length !== block.exerciseIds.length) || poolBlocks.some((block) => block.athleteIds.length === 0)) {
+  if (data.status === SessionStatus.READY && (allAthleteIds.length === 0 || drylandBlocks.some((block) => block.athleteIds.length === 0 || block.exercises.length !== block.exerciseIds.length) || poolBlocks.some((block) => block.athleteIds.length === 0))) {
     throw new Error("La seance doit contenir au moins un athlete et un exercice valides.");
   }
 

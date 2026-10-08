@@ -493,7 +493,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   }
 
   function publishSession(status: "READY" | "DRAFT" = "READY") {
-    const invalidPoolBlock = individualPoolBlocks.find((block) => block.sections.length === 0 || poolSectionsToRows(block.sections).some((row) => validatePoolListRow(row).errors.length > 0));
+    const invalidPoolBlock = status === "READY" ? individualPoolBlocks.find((block) => block.sections.length === 0 || poolSectionsToRows(block.sections).some((row) => validatePoolListRow(row).errors.length > 0)) : undefined;
 
     if (invalidPoolBlock) {
       const invalidRow = poolSectionsToRows(invalidPoolBlock.sections).find((row) => validatePoolListRow(row).errors.length > 0);
@@ -666,7 +666,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       {step !== 2 && step !== 3 && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border)] bg-white/95 p-3 shadow-[0_-16px_34px_rgba(7,20,35,0.12)] backdrop-blur lg:hidden">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <Button type="button" variant="outline" disabled={step === 0 || isPending} onClick={() => setStep(step - 1)}>Retour</Button>
-          {step === 4 && <Button type="button" variant="outline" size="sm" disabled={isPending || !canPublish} onClick={() => publishSession("DRAFT")} aria-label="Enregistrer comme brouillon privé"><FileText className="h-4 w-4" /> Brouillon</Button>}
+          {step === 4 && <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => publishSession("DRAFT")} aria-label="Enregistrer comme brouillon privé"><FileText className="h-4 w-4" /> Brouillon</Button>}
           <Button type="button" variant={step === 4 ? "action" : "default"} disabled={isPending || (step === 4 && !canPublish)} onClick={() => (step === 4 ? publishSession("READY") : void advanceTo(Math.min(4, step + 1)))}>
             {step === 4 ? (isPending ? "Publication…" : "Publier") : "Continuer"}
           </Button>
@@ -1170,7 +1170,7 @@ function SummaryPanel(props: { title: string; date: string; time: string; blockC
     return <aside className="hidden space-y-4 lg:block">
       <Card><CardHeader><CardTitle>Vérifications</CardTitle></CardHeader><CardContent className="space-y-2">{checks.map((check) => <div key={check.label} className="flex items-center gap-3 rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm font-semibold"><CheckCircle2 className={cn("h-5 w-5 shrink-0", check.ready ? "text-[var(--color-success)]" : "text-[var(--color-action)]")}/>{check.label}</div>)}{props.publicationIssues.map((issue) => <p key={issue} className="text-sm font-semibold text-[var(--color-danger)]">{issue}</p>)}</CardContent></Card>
       <Card><CardHeader><CardTitle>Charge de travail (résumé)</CardTitle></CardHeader><CardContent className="space-y-3"><SummaryMetric icon={Waves} label="Piscine" value={`${props.poolVolume} répétitions`}/><SummaryMetric icon={Dumbbell} label="Dryland" value={`${props.drylandExercises} exercices`}/></CardContent></Card>
-      <div className="space-y-2"><Button type="button" variant="outline" className="w-full" disabled={props.isPending} onClick={props.onBack}>Retour</Button><Button type="button" variant="outline" className="w-full" disabled={props.isPending || !props.canPublish} onClick={props.onSaveDraft}><FileText className="h-4 w-4" /> Enregistrer comme brouillon</Button><Button type="button" variant="action" className="w-full" disabled={props.isPending || !props.canPublish} onClick={props.onPublish}>{props.isPending ? "Publication…" : "Publier la séance"}<Send className="h-4 w-4" /></Button></div>
+      <div className="space-y-2"><Button type="button" variant="outline" className="w-full" disabled={props.isPending} onClick={props.onBack}>Retour</Button><Button type="button" variant="outline" className="w-full" disabled={props.isPending} onClick={props.onSaveDraft}><FileText className="h-4 w-4" /> Enregistrer comme brouillon</Button><Button type="button" variant="action" className="w-full" disabled={props.isPending || !props.canPublish} onClick={props.onPublish}>{props.isPending ? "Publication…" : "Publier la séance"}<Send className="h-4 w-4" /></Button></div>
     </aside>;
   }
   return (

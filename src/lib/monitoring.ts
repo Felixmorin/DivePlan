@@ -31,7 +31,16 @@ export type AthleteSessionPreviewStats = {
 export async function getAthleteSessionPreviewStats(userId: string): Promise<AthleteSessionPreviewStats> {
   const weekStart = startOfMontrealWeek();
   const result = await query<{ createdAt: Date }>(
-    `SELECT "createdAt" FROM "AppEvent" WHERE "userId" = $1 AND type = $2 AND "createdAt" >= $3 ORDER BY "createdAt" ASC`,
+    `SELECT e."createdAt" FROM "AppEvent" e
+     WHERE e."userId" = $1 AND e.type = $2 AND e."createdAt" >= $3
+       AND NOT EXISTS (
+         SELECT 1 FROM "AthleteSessionCompletion" c
+         JOIN "Athlete" a ON a.id = c."athleteId"
+         WHERE a."userId" = e."userId"
+           AND c."sessionId" = e.metadata ->> 'sessionId'
+           AND c."startedAt" IS NOT NULL
+       )
+     ORDER BY e."createdAt" ASC`,
     [userId, ATHLETE_SESSION_PREVIEW_EVENT, weekStart]
   );
 

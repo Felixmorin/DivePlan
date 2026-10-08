@@ -42,7 +42,17 @@ export default async function MonitoringPage() {
        JOIN "TrainingSession" s ON s.id = c."sessionId" JOIN "TrainingWeek" w ON w.id = s."weekId"
        WHERE c.status = 'COMPLETED' AND c."completedAt" >= $1 AND w."clubId" = $2`, [since, clubId]
     ),
-    query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE "clubId" = $1 AND type = $2 AND "createdAt" >= $3`, [clubId, ATHLETE_SESSION_PREVIEW_EVENT, since])
+    query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM "AppEvent" e
+       WHERE e."clubId" = $1 AND e.type = $2 AND e."createdAt" >= $3
+         AND NOT EXISTS (
+           SELECT 1 FROM "AthleteSessionCompletion" c
+           JOIN "Athlete" a ON a.id = c."athleteId"
+           WHERE a."userId" = e."userId"
+             AND c."sessionId" = e.metadata ->> 'sessionId'
+             AND c."startedAt" IS NOT NULL
+         )`, [clubId, ATHLETE_SESSION_PREVIEW_EVENT, since]
+    )
   ]);
   const events = eventsResult.rows;
   const failedLogins = Number(failedResult.rows[0]?.count ?? 0);
