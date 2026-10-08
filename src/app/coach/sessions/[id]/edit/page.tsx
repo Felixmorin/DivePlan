@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, Copy, Clock3, Eye, FileText, Printer, Save, Send, Users, Waves } from "lucide-react";
-import { duplicateTrainingSession, updateDraftSessionFromBuilder, updateTrainingSession } from "@/app/coach/sessions/actions";
+import { createDrylandExercise, duplicateTrainingSession, updateDraftSessionFromBuilder, updateTrainingSession } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { SessionBuilder } from "@/components/coach/session-builder";
@@ -105,7 +105,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
           initialFocus={session.focus}
           editingSession
           onCreate={updateDraftSessionFromBuilder.bind(null, session.id)}
-          onCreateExercise={async () => { throw new Error("La création d'exercice rapide n'est pas disponible en édition de brouillon."); }}
+          onCreateExercise={createDrylandExercise}
         />
       </CoachShell>
     );
