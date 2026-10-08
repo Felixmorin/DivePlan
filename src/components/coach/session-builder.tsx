@@ -27,7 +27,8 @@ const schema = z.object({
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Heure requise"),
   duration: z.number().int().min(15, "La durée minimale est de 15 minutes.").max(600, "La durée maximale est de 10 heures."),
   groupId: z.string().min(1, "Groupe requis"),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  focus: z.string().optional()
   ,planningEventId: z.string().optional()
 });
 
@@ -111,6 +112,11 @@ type SessionBuilderProps = {
   templates: Array<{ id: string; name: string; category: string; payload: SessionTemplatePayload }>;
   recentSessions: Array<{ id: string; title: string; date: Date; groupId: string; payload: SessionTemplatePayload }>;
   initialPlanningEventId?: string;
+  initialGroupId?: string;
+  initialDate?: string;
+  initialTime?: string;
+  initialFocus?: string;
+  editingSession?: boolean;
   initialExerciseId?: string;
   onCreate: (input: CreateSessionInput) => Promise<void>;
   onCreateExercise: (input: QuickExerciseInput) => Promise<BuilderExercise>;
@@ -118,7 +124,7 @@ type SessionBuilderProps = {
 
 const steps = ["Démarrer", "Contenu", "Dryland", "Piscine", "Publier"];
 
-export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAverageById, planningEvents, poolBlocks, initialTemplate, templates, recentSessions, initialPlanningEventId, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
+export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAverageById, planningEvents, poolBlocks, initialTemplate, templates, recentSessions, initialPlanningEventId, initialGroupId: providedGroupId, initialDate, initialTime, initialFocus, editingSession = false, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
   const [step, setStep] = useState(0);
   const [assignmentOpenBlockId, setAssignmentOpenBlockId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -129,7 +135,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   const restoredDraft = useRef(false);
   const [library, setLibrary] = useState(drylandLibrary);
   const selectedInitialEvent = planningEvents.find((event) => event.id === initialPlanningEventId);
-  const initialGroupId = selectedInitialEvent?.groupId ?? groups[0]?.id ?? "";
+  const initialGroupId = providedGroupId ?? selectedInitialEvent?.groupId ?? groups[0]?.id ?? "";
   const initialAthleteIds = athletes.filter((athlete) => athlete.groupId === initialGroupId).map((athlete) => athlete.id);
   const templateBlocks = initialTemplate?.payload.blocks ?? [];
   const templateDrylandBlocks = templateBlocks.filter((block) => block.type === "DRYLAND");
@@ -180,17 +186,18 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       return `template-pool-${poolIndex++}`;
     });
   });
-  const [evaluationPlacement, setEvaluationPlacement] = useState("none");
+  const [evaluationPlacement, setEvaluationPlacement] = useState(() => getInitialEvaluationPlacement(initialTemplate?.payload));
   const [flashBlock, setFlashBlock] = useState<string | null>(null);
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       title: initialTemplate?.payload.title ?? "",
-      date: selectedInitialEvent ? toMontrealDateInputValue(selectedInitialEvent.startsAt) : toMontrealDateInputValue(),
-      time: selectedInitialEvent ? toMontrealDateTimeInputValue(selectedInitialEvent.startsAt).slice(11, 16) : "",
+      date: initialDate ?? (selectedInitialEvent ? toMontrealDateInputValue(selectedInitialEvent.startsAt) : toMontrealDateInputValue()),
+      time: initialTime ?? (selectedInitialEvent ? toMontrealDateTimeInputValue(selectedInitialEvent.startsAt).slice(11, 16) : ""),
       duration: Math.min(600, Math.max(15, selectedInitialEvent?.duration ?? initialTemplate?.payload.duration ?? 90)),
       groupId: initialGroupId,
-      notes: initialTemplate?.payload.notes ?? ""
+      notes: initialTemplate?.payload.notes ?? "",
+      focus: initialFocus ?? initialTemplate?.payload.focus ?? ""
       ,planningEventId: initialPlanningEventId ?? ""
     }
   });
@@ -511,7 +518,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
             ...values,
             title: values.title?.trim() || `${groups.find((group) => group.id === values.groupId)?.name ?? "Séance"} · ${formatSessionDate(values.date)}`,
             status,
-            focus: "",
+            focus: values.focus?.trim() ?? "",
             duration: totalDuration,
             warmup: { ...warmup, competitionEvaluation: false },
             cooldown: { ...cooldown, competitionEvaluation: false },
@@ -566,7 +573,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   return (
     <div className="pb-24 lg:pb-0">
       <Stepper current={step} onStepChange={(nextStep) => { void advanceTo(nextStep); }} />
-      {initialTemplate && (
+      {initialTemplate && !editingSession && (
         <div className="mb-5 rounded-[var(--radius-panel)] border border-[var(--color-brand)]/35 bg-[var(--color-brand)]/10 p-4">
           <div className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Modele charge</div>
           <div className="mt-1 text-xl font-black">{initialTemplate.name}</div>
@@ -580,7 +587,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       <div className={cn("grid gap-6", step === 2 ? "grid-cols-1" : step === 4 ? "lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]" : "lg:grid-cols-[minmax(0,1fr)_340px]")}>
         <div className="space-y-5">
           {step === 0 && <>
-            <section className="space-y-4">
+            {!editingSession && <section className="space-y-4">
               <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 1 sur 5</p><h2 className="mt-1 text-2xl font-black">Démarrer la séance</h2></div>
               <div className="grid gap-3 lg:grid-cols-3">
                 <button type="button" onClick={() => setStartChoice("template")} className={cn("rounded-2xl border bg-white p-4 text-left transition", startChoice === "template" ? "border-[var(--color-brand)] ring-1 ring-[var(--color-brand)]" : "border-[var(--color-border)] hover:border-[var(--color-brand)]")}><span className="text-lg font-black">À partir d’un modèle</span><span className="mt-1 block text-sm text-[var(--color-ink-muted)]">Choisis un modèle pour préremplir la séance.</span></button>
@@ -589,7 +596,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
               </div>
               {startChoice === "template" && <div className="grid gap-2 md:grid-cols-2">{templates.length ? templates.map((template) => <button key={template.id} type="button" onClick={() => chooseTemplate(template.id)} className={cn("rounded-xl border p-3 text-left", selectedTemplateId === template.id ? "border-[var(--color-brand)] bg-[var(--color-brand)]/5" : "border-[var(--color-border)] bg-white")}><span className="font-bold">{template.name}</span><span className="block text-xs text-[var(--color-ink-muted)]">{template.category} · {template.payload.blocks.length} blocs</span></button>) : <p className="rounded-xl bg-white p-4 text-sm text-[var(--color-ink-muted)]">Aucun modèle disponible. Tu peux en créer depuis la bibliothèque.</p>}</div>}
               {startChoice === "recent" && <div className="grid gap-2 md:grid-cols-2">{recentSessions.length ? recentSessions.map((session) => <button key={session.id} type="button" onClick={() => chooseRecent(session.id)} className="rounded-xl border border-[var(--color-border)] bg-white p-3 text-left hover:border-[var(--color-brand)]"><span className="font-bold">{session.title}</span><span className="block text-xs text-[var(--color-ink-muted)]">{formatSessionDate(toMontrealDateInputValue(session.date))} · {session.payload.blocks.length} blocs</span></button>) : <p className="rounded-xl bg-white p-4 text-sm text-[var(--color-ink-muted)]">Aucune séance récente à reprendre.</p>}</div>}
-            </section>
+            </section>}
             <DetailsStep form={form} selectedGroupId={watched.groupId ?? ""} selectedDate={watched.date ?? ""} selectedPlanningEventId={watched.planningEventId ?? ""} selectedTime={watched.time ?? ""} groups={groups} athletes={visibleAthletes} planningEvents={planningEvents} evaluationPlacement={effectiveEvaluationPlacement} evaluationChoices={evaluationChoices} onEvaluationPlacementChange={setEvaluationPlacement} />
           </>}
           {step === 1 && (
@@ -1319,6 +1326,23 @@ function poolBlocksFromTemplate(blocks: SessionTemplatePayload["blocks"]): Build
       dives: section.dives
     })) ?? []
   }));
+}
+
+function getInitialEvaluationPlacement(payload?: SessionTemplatePayload) {
+  if (!payload) return "none";
+  if (payload.competitionEvaluationAtStart) return "start";
+  let drylandIndex = 0;
+  let poolIndex = 0;
+  for (const block of payload.blocks) {
+    if (block.type === "DRYLAND") {
+      const id = `template-dryland-${drylandIndex++}`;
+      if (block.competitionEvaluation) return `block:${id}`;
+    } else if (block.type === "POOL") {
+      const id = `template-pool-${poolIndex++}`;
+      if (block.competitionEvaluation) return `block:${id}`;
+    }
+  }
+  return "none";
 }
 
 function moveItem<T>(items: T[], index: number, direction: -1 | 1) {

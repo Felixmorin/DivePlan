@@ -19,7 +19,7 @@ import { formatMontrealDate, parseMontrealDateTimeInput, startOfMontrealWeek, to
 import { dispatchSessionPublication, isAutomaticSessionPushEnabled, saveSessionPublicationTargets } from "@/lib/web-push";
 
 const sessionInputSchema = z.object({
-  title: z.string().min(3),
+  title: z.string(),
   date: z.string().min(10),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   groupId: z.string().min(1),
@@ -307,6 +307,63 @@ export async function createTrainingSession(input: CreateSessionInput) {
     metadata: { sessionId: session.id }
   });
   redirect(`/coach/sessions/${session.id}`);
+}
+
+export async function updateDraftSessionFromBuilder(sessionId: string, input: CreateSessionInput) {
+  const { user, coach, clubId } = await requireCoach();
+  const data = sessionInputSchema.parse(input);
+  const existing = await getSessionSnapshot(sessionId, clubId);
+  if (!existing || existing.status !== SessionStatus.DRAFT) throw new Error("Brouillon introuvable pour ce club.");
+  const activity = await query<{ started: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" WHERE "sessionId"=$1 AND ("startedAt" IS NOT NULL OR status<>'NOT_STARTED')) OR EXISTS (SELECT 1 FROM "AthleteDiveLog" WHERE "sessionId"=$1) OR EXISTS (SELECT 1 FROM "AthleteExerciseLog" WHERE "sessionId"=$1) AS started`,
+    [sessionId]
+  );
+  if (activity.rows[0]?.started) throw new Error("Cette séance a déjà commencé et ne peut plus être modifiée.");
+
+  const group = (await query<{ id: string }>(`SELECT id FROM "TrainingGroup" WHERE id=$1 AND "clubId"=$2`, [data.groupId, clubId])).rows[0];
+  if (!group) throw new Error("Groupe introuvable pour ce club.");
+  const planningEvent = data.planningEventId
+    ? (await query<{ id: string; startsAt: Date }>(`SELECT id,"startsAt" FROM "PlanningEvent" WHERE id=$1 AND "clubId"=$2 AND ("groupId"=$3 OR "groupId" IS NULL) AND type='TRAINING_SCHEDULE'`, [data.planningEventId, clubId, data.groupId])).rows[0] ?? null
+    : null;
+  if (data.planningEventId && !planningEvent) throw new Error("Horaire d'entraînement introuvable pour ce groupe.");
+  if (planningEvent && toMontrealDateInputValue(planningEvent.startsAt) !== data.date) throw new Error("L'horaire sélectionné ne correspond pas à la date de la séance.");
+  const sessionDate = planningEvent?.startsAt ?? parseMontrealDateTimeInput(`${data.date}T${data.time}`);
+  const athletes = await query<{ id: string }>(`SELECT id FROM "Athlete" WHERE "clubId"=$1 AND active=true AND "groupId"=$2`, [clubId, data.groupId]);
+  const validAthleteIds = new Set(athletes.rows.map((athlete) => athlete.id));
+  const allAthleteIds = Array.from(validAthleteIds);
+  const drylandIds = data.drylandBlocks.flatMap((block) => block.exerciseIds);
+  const exercises = await query<{ id: string; defaultSets: number | null; defaultReps: number | null; defaultDuration: number | null; roundTrip: boolean }>(
+    `SELECT id,"defaultSets","defaultReps","defaultDuration","roundTrip" FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`, [drylandIds]
+  );
+  const weekStart = startOfMontrealWeek(sessionDate);
+  const wasPublished = data.status === SessionStatus.READY;
+  const updated = await withTransaction(async (tx) => {
+    const found = (await tx.query<{ id: string }>(`SELECT id FROM "TrainingWeek" WHERE "clubId"=$1 AND "groupId"=$2 AND "startDate"=$3 LIMIT 1`, [clubId, data.groupId, weekStart])).rows[0];
+    const weekId = found?.id ?? randomUUID();
+    if (!found) await tx.query(`INSERT INTO "TrainingWeek" (id,"clubId","groupId","startDate",title,status) VALUES ($1,$2,$3,$4,$5,$6)`, [weekId, clubId, data.groupId, weekStart, `Semaine du ${formatMontrealDate(weekStart)}`, WeekStatus.PUBLISHED]);
+    await tx.query(`UPDATE "TrainingSession" SET date=$1,title=$2,duration=$3,focus=$4,notes=$5,"weekId"=$6,status=$7,"competitionEvaluationAtStart"=$8,"planningEventId"=$9 WHERE id=$10`, [sessionDate, data.title.trim(), data.duration, data.focus.trim(), data.notes?.trim() || null, weekId, data.status, data.evaluationPlacement === "start", planningEvent?.id ?? null, sessionId]);
+    await tx.query(`DELETE FROM "SessionBlock" WHERE "sessionId"=$1`, [sessionId]);
+    if (data.warmup.enabled) await createBlock(tx, { sessionId, type: BlockType.WARMUP, title: data.warmup.title, description: data.warmup.description, duration: data.warmup.duration, position: 1, estimatedVolume: 0, athleteIds: allAthleteIds });
+    for (const [index, block] of data.drylandBlocks.entries()) {
+      const blockExercises = block.exerciseIds.flatMap((id) => {
+        const exercise = exercises.rows.find((item) => item.id === id);
+        return exercise ? [{ ...exercise, override: block.exerciseOverrides[id] }] : [];
+      });
+      const created = await createBlock(tx, { sessionId, type: BlockType.DRYLAND, title: block.title, duration: block.duration, position: index + 2, estimatedVolume: blockExercises.reduce((sum, item) => sum + (item.override?.sets ?? item.defaultSets ?? 1) * (item.override?.reps ?? item.defaultReps ?? 1) * block.athleteIds.length, 0), athleteIds: block.athleteIds.filter((id) => validAthleteIds.has(id)), competitionEvaluation: block.competitionEvaluation });
+      for (const [order, item] of blockExercises.entries()) await tx.query(`INSERT INTO "DrylandBlockExercise" ("blockId","exerciseId",sets,reps,duration,notes,"order") VALUES ($1,$2,$3,$4,$5,$6,$7)`, [created.id, item.id, item.override?.sets ?? item.defaultSets, item.roundTrip ? null : item.override?.reps ?? item.defaultReps, item.roundTrip ? null : item.override?.duration ?? item.defaultDuration, item.override?.notes ?? null, order]);
+    }
+    for (const [index, block] of data.poolBlocks.entries()) await createPoolBlock(tx, sessionId, { ...block, athleteIds: block.athleteIds.filter((id) => validAthleteIds.has(id)) }, index + data.drylandBlocks.length + 2);
+    if (data.cooldown.enabled) await createBlock(tx, { sessionId, type: BlockType.COOLDOWN, title: data.cooldown.title, description: data.cooldown.description, duration: data.cooldown.duration, position: 99, estimatedVolume: 0, athleteIds: allAthleteIds });
+    if (wasPublished && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, sessionId);
+    return { id: sessionId, title: data.title.trim() };
+  });
+  if (wasPublished) await dispatchSessionPublication(sessionId).catch(() => undefined);
+  await trackEvent({ type: "session.updated", message: `Brouillon modifie: ${updated.title}`, clubId, userId: user.id, metadata: { sessionId } });
+  revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/coach/sessions");
+  revalidatePath(`/coach/sessions/${sessionId}`);
+  redirect(`/coach/sessions/${sessionId}`);
 }
 
 export async function duplicateTrainingSession(formData: FormData) {

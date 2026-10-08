@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { AlertTriangle, Copy, Clock3, Eye, FileText, Printer, Save, Send, Users, Waves } from "lucide-react";
-import { duplicateTrainingSession, updateTrainingSession } from "@/app/coach/sessions/actions";
+import { duplicateTrainingSession, updateDraftSessionFromBuilder, updateTrainingSession } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { CoachShell } from "@/components/coach/coach-shell";
+import { SessionBuilder } from "@/components/coach/session-builder";
 import { PoolListFormTable } from "@/components/coach/pool-list-table";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
@@ -14,7 +15,8 @@ import { getCoachSession } from "@/lib/coach-session";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
-import { toMontrealDateTimeInputValue } from "@/lib/timezone";
+import { buildSessionTemplatePayload } from "@/lib/session-template";
+import { toMontrealDateInputValue, toMontrealDateTimeInputValue } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +24,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
   const [{ id }, { clubId }] = await Promise.all([params, requireCoach()]);
   const [session, athletesR, drylandR] = await Promise.all([
     getCoachSession(id),
-    query<{id:string;firstName:string;lastName:string;avatar:string|null}>(`SELECT a.id,u."firstName",u."lastName",u.avatar FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
+    query<{id:string;groupId:string|null;level:string;firstName:string;lastName:string;avatar:string|null}>(`SELECT a.id,a."groupId",a.level,u."firstName",u."lastName",u.avatar FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
     query<{id:string;name:string;category:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean;equipment:string|null;tags:string[];archivedAt:Date|null}>(`SELECT * FROM "DrylandExercise" WHERE "archivedAt" IS NULL ORDER BY category,name`)
   ]);
   const athleteAvatarUrls = await resolveAvatarUrls(athletesR.rows.map((athlete) => athlete.avatar));
@@ -69,6 +71,42 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
             </CardContent>
           </Card>
         </div>
+      </CoachShell>
+    );
+  }
+
+  if (session.status === "DRAFT") {
+    const [groupsR, eventsR] = await Promise.all([
+      query<{ id: string; name: string }>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`, [clubId]),
+      query<{ id: string; title: string; startsAt: Date; duration: number | null; groupId: string | null; location: string | null }>(`SELECT id,title,"startsAt",duration,"groupId",location FROM "PlanningEvent" WHERE "clubId"=$1 AND type='TRAINING_SCHEDULE' ORDER BY "startsAt"`, [clubId])
+    ]);
+    const payload = buildSessionTemplatePayload(session);
+    return (
+      <CoachShell active="Seances">
+        <div className="mb-6">
+          <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Brouillon</p>
+          <h1 className="mt-2 text-3xl font-black">Modifier la séance</h1>
+          <p className="mt-1 text-[var(--color-ink-muted)]">Modifie les détails, blocs, exercices, plongeons et assignations dans le constructeur.</p>
+        </div>
+        <SessionBuilder
+          athletes={athletes.map((athlete, index) => ({ id: athlete.id, groupId: athletesR.rows[index].groupId, firstName: athlete.user.firstName, lastName: athlete.user.lastName, level: athletesR.rows[index].level, avatar: athlete.user.avatar }))}
+          drylandLibrary={drylandLibrary.map((exercise) => ({ id: exercise.id, name: exercise.name, category: exercise.category, sets: exercise.defaultSets, reps: exercise.defaultReps, duration: exercise.defaultDuration, roundTrip: exercise.roundTrip, equipment: exercise.equipment, tags: exercise.tags }))}
+          groups={groupsR.rows}
+          athletePoolAverageById={{}}
+          planningEvents={eventsR.rows}
+          poolBlocks={[]}
+          initialTemplate={{ id: session.id, name: session.title, category: "Brouillon", payload }}
+          templates={[]}
+          recentSessions={[]}
+          initialGroupId={session.week.groupId}
+          initialDate={toMontrealDateInputValue(session.date)}
+          initialTime={toMontrealDateTimeInputValue(session.date).slice(11, 16)}
+          initialPlanningEventId={session.planningEventId ?? undefined}
+          initialFocus={session.focus}
+          editingSession
+          onCreate={updateDraftSessionFromBuilder.bind(null, session.id)}
+          onCreateExercise={async () => { throw new Error("La création d'exercice rapide n'est pas disponible en édition de brouillon."); }}
+        />
       </CoachShell>
     );
   }
