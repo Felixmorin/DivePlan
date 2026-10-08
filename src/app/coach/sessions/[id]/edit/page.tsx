@@ -76,9 +76,21 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
   }
 
   if (session.status === "DRAFT") {
-    const [groupsR, eventsR] = await Promise.all([
+    const [groupsR, eventsR, averagesR] = await Promise.all([
       query<{ id: string; name: string }>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`, [clubId]),
-      query<{ id: string; title: string; startsAt: Date; duration: number | null; groupId: string | null; location: string | null }>(`SELECT id,title,"startsAt",duration,"groupId",location FROM "PlanningEvent" WHERE "clubId"=$1 AND type='TRAINING_SCHEDULE' ORDER BY "startsAt"`, [clubId])
+      query<{ id: string; title: string; startsAt: Date; duration: number | null; groupId: string | null; location: string | null }>(`SELECT id,title,"startsAt",duration,"groupId",location FROM "PlanningEvent" WHERE "clubId"=$1 AND type='TRAINING_SCHEDULE' ORDER BY "startsAt"`, [clubId]),
+      athletesR.rows.length > 0
+        ? query<{ athleteId: string; average: number | string }>(
+          `SELECT c."athleteId", ROUND(COALESCE(SUM(l."repetitionsCompleted"), 0)::numeric / COUNT(DISTINCT c."sessionId")) AS average
+           FROM "AthleteSessionCompletion" c
+           JOIN "TrainingSession" s ON s.id = c."sessionId"
+           JOIN "TrainingWeek" w ON w.id = s."weekId"
+           LEFT JOIN "AthleteDiveLog" l ON l."athleteId" = c."athleteId" AND l."sessionId" = c."sessionId"
+           WHERE c."athleteId" = ANY($1::text[]) AND w."clubId" = $2 AND c.status = 'COMPLETED'
+           GROUP BY c."athleteId"`,
+          [athletesR.rows.map((athlete) => athlete.id), clubId]
+        )
+        : Promise.resolve({ rows: [] as { athleteId: string; average: number | string }[] })
     ]);
     const payload = buildSessionTemplatePayload(session);
     return (
@@ -92,7 +104,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
           athletes={athletes.map((athlete, index) => ({ id: athlete.id, groupId: athletesR.rows[index].groupId, firstName: athlete.user.firstName, lastName: athlete.user.lastName, level: athletesR.rows[index].level, avatar: athlete.user.avatar }))}
           drylandLibrary={drylandLibrary.map((exercise) => ({ id: exercise.id, name: exercise.name, category: exercise.category, sets: exercise.defaultSets, reps: exercise.defaultReps, duration: exercise.defaultDuration, roundTrip: exercise.roundTrip, equipment: exercise.equipment, tags: exercise.tags }))}
           groups={groupsR.rows}
-          athletePoolAverageById={{}}
+          athletePoolAverageById={Object.fromEntries(averagesR.rows.map((row) => [row.athleteId, Number(row.average)]))}
           planningEvents={eventsR.rows}
           poolBlocks={[]}
           initialTemplate={{ id: session.id, name: session.title, category: "Brouillon", payload }}

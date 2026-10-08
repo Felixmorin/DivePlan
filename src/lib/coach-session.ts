@@ -57,7 +57,7 @@ export async function getCoachSession(sessionId: string): Promise<CoachSession> 
 async function getAverageByCompletedTraining(athleteIds: string[], excludedSessionId: string, valueColumn: "repetitionsCompleted" | "goldenRepetitions", decimals: number) {
   if (athleteIds.length === 0) return new Map<string,number>();
   const { rows }=await query<{athleteId:string;reps:number|string;trainings:number|string}>(
-    `SELECT c."athleteId",COALESCE(SUM(l."${valueColumn}"),0) AS reps,COUNT(DISTINCT c."sessionId") AS trainings FROM "AthleteSessionCompletion" c LEFT JOIN "AthleteDiveLog" l ON l."athleteId"=c."athleteId" AND l."sessionId"=c."sessionId" WHERE c."athleteId"=ANY($1::text[]) AND c."sessionId"<>$2 AND c.status='COMPLETED' GROUP BY c."athleteId"`,
+    `SELECT c."athleteId",SUM(l."${valueColumn}") AS reps,COUNT(DISTINCT l."sessionId") AS trainings FROM "AthleteSessionCompletion" c JOIN "AthleteDiveLog" l ON l."athleteId"=c."athleteId" AND l."sessionId"=c."sessionId" WHERE c."athleteId"=ANY($1::text[]) AND c."sessionId"<>$2 AND c.status='COMPLETED' GROUP BY c."athleteId"`,
     [athleteIds,excludedSessionId]
   );
   return new Map(rows.map(r=>{const average=Number(r.reps)/Number(r.trainings);return [r.athleteId,decimals===0?Math.round(average):Number(average.toFixed(decimals))] as const;}));

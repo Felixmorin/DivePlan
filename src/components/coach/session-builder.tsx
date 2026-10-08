@@ -584,7 +584,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       )}
       {publishError && <div role="alert" className="mb-5 rounded-2xl border border-[var(--color-danger)]/25 bg-red-50 p-4 text-sm font-semibold text-[var(--color-danger)]">{publishError}</div>}
 
-      <div className={cn("grid gap-6", step === 2 ? "grid-cols-1" : step === 4 ? "lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]" : "lg:grid-cols-[minmax(0,1fr)_340px]")}>
+      <div className={cn("grid gap-6", step === 2 || step === 3 ? "grid-cols-1" : step === 4 ? "lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]" : "lg:grid-cols-[minmax(0,1fr)_340px]")}>
         <div className="space-y-5">
           {step === 0 && <>
             {!editingSession && <section className="space-y-4">

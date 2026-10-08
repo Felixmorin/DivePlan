@@ -48,11 +48,11 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
   const groups=groupsR.rows;
   const athletePoolAveragesR = athletesR.rows.length > 0
     ? await query<{ athleteId: string; average: number | string }>(
-      `SELECT c."athleteId", ROUND(COALESCE(SUM(l."repetitionsCompleted"), 0)::numeric / COUNT(DISTINCT c."sessionId")) AS average
+      `SELECT c."athleteId", ROUND(SUM(l."repetitionsCompleted")::numeric / COUNT(DISTINCT l."sessionId")) AS average
        FROM "AthleteSessionCompletion" c
        JOIN "TrainingSession" s ON s.id = c."sessionId"
        JOIN "TrainingWeek" w ON w.id = s."weekId"
-       LEFT JOIN "AthleteDiveLog" l ON l."athleteId" = c."athleteId" AND l."sessionId" = c."sessionId"
+       JOIN "AthleteDiveLog" l ON l."athleteId" = c."athleteId" AND l."sessionId" = c."sessionId"
        WHERE c."athleteId" = ANY($1::text[]) AND w."clubId" = $2 AND c.status = 'COMPLETED'
        GROUP BY c."athleteId"`,
       [athletesR.rows.map((athlete) => athlete.id), clubId]
