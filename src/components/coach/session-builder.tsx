@@ -889,6 +889,7 @@ function DrylandStep(props: {
   onCreateExercise: (input: QuickExerciseInput) => Promise<void>;
 }) {
   const [search, setSearch] = useState("");
+  const [activeExerciseFilter, setActiveExerciseFilter] = useState("Tous");
   const [showLibrary, setShowLibrary] = useState(false);
   const selectedBlock = props.blocks.find((block) => block.id === props.selectedBlockId);
   const selectedIndex = props.blocks.findIndex((block) => block.id === props.selectedBlockId);
@@ -896,7 +897,15 @@ function DrylandStep(props: {
   const completedCount = props.blocks.filter((block) => block.exerciseIds.length > 0 && block.athleteIds.length > 0).length;
   const progress = props.blocks.length > 0 ? Math.round(completedCount / props.blocks.length * 100) : 0;
   const nextBlock = selectedIndex >= 0 ? props.blocks[selectedIndex + 1] : undefined;
-  const availableExercises = props.exercises.filter((exercise) => `${exercise.name} ${exercise.category} ${exercise.equipment ?? ""}`.toLocaleLowerCase("fr").includes(search.trim().toLocaleLowerCase("fr")));
+  const exerciseFilters = ["Tous", "Échauffement", "Airtrack", "Musculation", "Dryboard", "Flex"];
+  const availableExercises = props.exercises.filter((exercise) => {
+    const searchableText = `${exercise.name} ${exercise.category} ${exercise.equipment ?? ""} ${exercise.tags.join(" ")}`.toLocaleLowerCase("fr");
+    const matchesSearch = searchableText.includes(search.trim().toLocaleLowerCase("fr"));
+    const category = exercise.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr");
+    const metadata = `${exercise.equipment ?? ""} ${exercise.tags.join(" ")}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr");
+    const matchesFilter = activeExerciseFilter === "Tous" || (activeExerciseFilter === "Échauffement" && category === "echauffement") || (activeExerciseFilter === "Musculation" && (category === "force" || metadata.includes("musculation"))) || (activeExerciseFilter === "Flex" && (category === "mobilite" || metadata.includes("flex"))) || ((activeExerciseFilter === "Airtrack" || activeExerciseFilter === "Dryboard") && metadata.includes(activeExerciseFilter.toLocaleLowerCase("fr")));
+    return matchesSearch && matchesFilter;
+  });
 
   function updateExercise(exercise: BuilderExercise, field: "sets" | "reps" | "duration", value: number | null) {
     if (!selectedBlock) return;
@@ -977,6 +986,9 @@ function DrylandStep(props: {
             <Button type="button" variant="outline" className="mt-3 w-full border-dashed text-[var(--color-brand-strong)]" onClick={() => setShowLibrary((value) => !value)}><Plus className="h-4 w-4"/>Ajouter un exercice</Button>
             {showLibrary && <div className="mt-3 space-y-3">
               <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-soft)]"/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice" className="pl-9"/></label>
+              <div className="flex flex-wrap gap-2" aria-label="Filtrer les exercices">
+                {exerciseFilters.map((filter) => <button key={filter} type="button" aria-pressed={activeExerciseFilter === filter} onClick={() => setActiveExerciseFilter(filter)} className={cn("rounded-full border px-3 py-1.5 text-xs font-bold transition", activeExerciseFilter === filter ? "border-[var(--color-brand)] bg-[var(--color-brand)]/10 text-[var(--color-brand-strong)]" : "border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] hover:border-[var(--color-brand)]")}>{filter}</button>)}
+              </div>
               <div className="max-h-64 space-y-2 overflow-y-auto">{availableExercises.map((exercise) => <button key={exercise.id} type="button" onClick={() => { props.onToggleExercise(selectedBlock.id, exercise.id, false); setShowLibrary(false); setSearch(""); }} className="flex w-full items-center justify-between rounded-lg border border-[var(--color-border)] p-3 text-left text-sm hover:border-[var(--color-brand)]"><span><strong>{exercise.name}</strong><span className="ml-2 text-xs text-[var(--color-ink-muted)]">{exercise.category}</span></span><Plus className="h-4 w-4 text-[var(--color-brand-strong)]"/></button>)}{availableExercises.length === 0 && <p className="p-3 text-sm text-[var(--color-ink-muted)]">Aucun exercice trouvé.</p>}</div>
               <details><summary className="cursor-pointer text-sm font-bold text-[var(--color-brand-strong)]">Créer un exercice rapide</summary><div className="mt-3"><QuickExerciseForm onCreateExercise={props.onCreateExercise}/></div></details>
             </div>}
