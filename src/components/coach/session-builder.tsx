@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock3, Copy, Dumbbell, FileText, GripVertical, Leaf, MoreHorizontal, Plus, Search, Send, Trash2, UserRound, Users, Waves } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock3, Copy, Dumbbell, FileText, GripVertical, Leaf, MoreHorizontal, Plus, Search, Send, Trash2, UserRound, Users, Waves, X } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -125,6 +126,7 @@ type SessionBuilderProps = {
 const steps = ["Démarrer", "Contenu", "Dryland", "Piscine", "Publier"];
 
 export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAverageById, planningEvents, poolBlocks, initialTemplate, templates, recentSessions, initialPlanningEventId, initialGroupId: providedGroupId, initialDate, initialTime, initialFocus, editingSession = false, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [assignmentOpenBlockId, setAssignmentOpenBlockId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -360,14 +362,14 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       id: `loaded-pool-${Date.now()}-${index}`,
       title: block.title,
       duration: block.duration,
-      athleteIds,
+      athleteIds: block.athleteIds.length > 0 ? block.athleteIds.filter((id) => athleteIds.includes(id)) : athleteIds,
       competitionEvaluation: block.competitionEvaluation,
       sections: block.poolTraining?.sections.map((section) => ({ height: section.height, label: section.label, dives: section.dives })) ?? []
     }));
     setDrylandBlocks(nextDryland);
     setActivePoolBlocks(nextPool);
-    setPoolAssignments(Object.fromEntries(nextPool.map((block) => [block.id, athleteIds])));
-    setPoolRowsByAthleteBlock(Object.fromEntries(nextPool.flatMap((block) => athleteIds.map((athleteId) => [poolAthleteBlockKey(athleteId, block.id), poolSectionsToRows(block.sections)]))));
+    setPoolAssignments(Object.fromEntries(nextPool.map((block) => [block.id, block.athleteIds])));
+    setPoolRowsByAthleteBlock(Object.fromEntries(nextPool.flatMap((block) => block.athleteIds.map((athleteId) => [poolAthleteBlockKey(athleteId, block.id), poolSectionsToRows(block.sections)]))));
     let dryIndex = 0;
     let poolIndex = 0;
     setContentOrder(blocks.map((block, index) => {
@@ -575,7 +577,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     formData.set("block", JSON.stringify({ title: block.title, duration: block.duration, exercises }));
     startTransition(() => {
       void saveDrylandBlockAsTemplate(formData)
-        .then(() => window.alert("Template dryland enregistré."))
+        .then(() => { window.alert("Modèle dryland enregistré."); router.refresh(); })
         .catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Le template n'a pas pu être enregistré."));
     });
   }
@@ -585,17 +587,19 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     const source = template?.payload.blocks.find((block) => block.type === "DRYLAND");
     if (!template || !source) return;
     const exerciseIds = source.drylandExercises.map((item) => item.exerciseId).filter((id) => library.some((exercise) => exercise.id === id));
-    const id = `dryland-template-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setDrylandBlocks((current) => [...current, {
+    const selectedBlock = drylandBlocks.find((block) => block.id === selectedDrylandBlockId);
+    const id = selectedBlock?.id ?? `dryland-template-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const loadedBlock: BuilderDrylandBlock = {
       id,
       title: source.title,
       duration: source.duration,
       exerciseIds,
-      athleteIds: drylandProgramMode === "team" ? drylandTargetAthleteIds : [],
+      athleteIds: selectedBlock?.athleteIds ?? (drylandProgramMode === "team" ? drylandTargetAthleteIds : []),
       exerciseOverrides: Object.fromEntries(source.drylandExercises.map((item) => [item.exerciseId, { sets: item.sets, reps: item.reps, duration: item.duration, notes: item.notes }]))
-    }]);
+    };
+    setDrylandBlocks((current) => selectedBlock ? current.map((block) => block.id === id ? loadedBlock : block) : [...current, loadedBlock]);
     setSelectedDrylandBlockId(id);
-    setContentOrder((current) => [...current, id]);
+    if (!selectedBlock) setContentOrder((current) => [...current, id]);
     pulse(id);
   }
 
@@ -615,7 +619,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     formData.set("block", JSON.stringify({ title: block.title, duration: block.duration, sections: poolRowsToSections(rows, block.sections) }));
     startTransition(() => {
       void savePoolBlockAsTemplate(formData)
-        .then(() => window.alert("Modèle piscine enregistré."))
+        .then(() => { window.alert("Modèle piscine enregistré."); router.refresh(); })
         .catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Le modèle n’a pas pu être enregistré."));
     });
   }
@@ -640,24 +644,29 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     }
     const name = window.prompt("Nom du modèle de séance", watched.title?.trim() || "Nouvelle séance");
     if (!name?.trim()) return;
-    const blocks: SessionTemplatePayload["blocks"] = orderedContentRows.map((row, position) => {
+    let position = 0;
+    const blocks: SessionTemplatePayload["blocks"] = orderedContentRows.flatMap((row) => {
       const dryland = row.type === "dryland" ? effectiveDrylandBlocks.find((block) => block.id === row.id) : undefined;
       const pool = row.type === "pool" ? activePoolBlocks.find((block) => block.id === row.id) : undefined;
       const optional = row.type === "warmup" ? warmup : row.type === "cooldown" ? cooldown : undefined;
       const type = row.type === "warmup" ? "WARMUP" : row.type === "dryland" ? "DRYLAND" : row.type === "pool" ? "POOL" : "COOLDOWN";
-      const athleteIdsForBlock = dryland?.athleteIds ?? (pool ? effectivePoolAssignments[pool.id] ?? [] : athleteIds);
-      return {
+      const poolAthleteIds = pool ? effectivePoolAssignments[pool.id] ?? [] : [];
+      const individualPoolBlocks = pool && poolAthleteIds.length > 0
+        ? poolAthleteIds.map((athleteId) => ({ title: `Piscine - ${athleteDisplayName(athletes.find((athlete) => athlete.id === athleteId))}`, athleteIds: [athleteId] }))
+        : pool ? [{ title: pool.title, athleteIds: [] }] : null;
+      const poolVariants = individualPoolBlocks ?? [null];
+      return poolVariants.map((poolVariant) => ({
         type,
-        title: pool?.title ?? row.title,
+        title: poolVariant?.title ?? row.title,
         description: optional?.description || null,
         duration: dryland?.duration ?? pool?.duration ?? optional?.duration ?? 0,
-        position,
+        position: position++,
         estimatedVolume: 0,
         competitionEvaluation: evaluationPlacement === `block:${row.id}`,
-        athleteIds: athleteIdsForBlock,
+        athleteIds: poolVariant?.athleteIds ?? dryland?.athleteIds ?? athleteIds,
         drylandExercises: [],
         poolTraining: null
-      };
+      }));
     });
     const payload: SessionTemplatePayload = {
       version: 1,
@@ -724,12 +733,13 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
                     : row.type === "pool" ? effectivePoolAssignments[row.id] ?? [] : [];
                   const assignmentIsOpen = assignmentOpenBlockId === row.id;
                   return <div key={row.id} className="space-y-2">
-                    <div className={cn("grid items-center gap-2 rounded-2xl border bg-white p-2 sm:gap-3 sm:p-3", isAssignable ? "grid-cols-[auto_auto_minmax(0,1fr)_auto_auto]" : "grid-cols-[auto_auto_minmax(0,1fr)]", flashBlock === row.id && "builder-pulse", row.type === "warmup" ? "border-[var(--block-warmup-fg)]/35" : row.type === "dryland" ? "border-[var(--block-dryland-fg)]/25" : row.type === "pool" ? "border-[var(--block-pool-fg)]/25" : "border-[var(--block-cooldown-fg)]/25")}>
+                    <div className={cn("grid items-center gap-2 rounded-2xl border bg-white p-2 sm:gap-3 sm:p-3", isAssignable ? "grid-cols-[auto_auto_minmax(0,1fr)_auto_auto_auto]" : "grid-cols-[auto_auto_minmax(0,1fr)]", flashBlock === row.id && "builder-pulse", row.type === "warmup" ? "border-[var(--block-warmup-fg)]/35" : row.type === "dryland" ? "border-[var(--block-dryland-fg)]/25" : row.type === "pool" ? "border-[var(--block-pool-fg)]/25" : "border-[var(--block-cooldown-fg)]/25")}>
                     <div className="flex gap-1"><button type="button" aria-label={`Monter ${row.title}`} disabled={index === 0} onClick={() => moveContentBlock(row.id, -1)} className="rounded-lg p-2 text-[var(--color-ink-muted)] disabled:opacity-30"><ArrowUp className="h-4 w-4"/></button><button type="button" aria-label={`Descendre ${row.title}`} disabled={index === orderedContentRows.length - 1} onClick={() => moveContentBlock(row.id, 1)} className="rounded-lg p-2 text-[var(--color-ink-muted)] disabled:opacity-30"><ArrowDown className="h-4 w-4"/></button></div>
                     <span className={cn("flex h-11 w-11 items-center justify-center rounded-full", row.type === "warmup" ? "bg-[var(--block-warmup-bg)] text-[var(--block-warmup-fg)]" : row.type === "dryland" ? "bg-[var(--block-dryland-bg)] text-[var(--block-dryland-fg)]" : row.type === "pool" ? "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]" : "bg-[var(--block-cooldown-bg)] text-[var(--block-cooldown-fg)]")}><Icon className="h-5 w-5"/></span>
                     <div className="min-w-0"><div className="truncate font-black">{row.title}</div><div className="text-sm text-[var(--color-ink-muted)]">{row.subtitle}</div></div>
                     {isAssignable && <AthleteAvatarGroup ids={assignedAthleteIds} athletes={visibleAthletes} limit={4} />}
                     {isAssignable && <button type="button" aria-label={`${assignmentIsOpen ? "Fermer" : "Associer des athlètes à"} ${row.title}`} aria-expanded={assignmentIsOpen} onClick={() => setAssignmentOpenBlockId((current) => current === row.id ? null : row.id)} className={cn("flex h-9 w-9 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", assignmentIsOpen ? "border-[var(--color-brand)] bg-[var(--color-brand)]/10 text-[var(--color-brand-strong)]" : "border-[var(--color-border)] text-[var(--color-brand-strong)] hover:border-[var(--color-brand)] hover:bg-[var(--color-brand)]/5")}><Plus className="h-4 w-4" /></button>}
+                    {isAssignable && <button type="button" aria-label={`Supprimer ${row.title}`} title="Supprimer le bloc" onClick={() => { if (row.type === "dryland") { setDrylandBlocks((current) => current.filter((block) => block.id !== row.id)); setContentOrder((current) => current.filter((id) => id !== row.id)); } else removePoolBlock(row.id); setAssignmentOpenBlockId((current) => current === row.id ? null : current); }} className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-ink-muted)] transition hover:border-[var(--color-danger)] hover:bg-[var(--color-danger)]/5 hover:text-[var(--color-danger)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><X className="h-4 w-4" /></button>}
                     </div>
                     {isAssignable && assignmentIsOpen && <div className="pl-2 sm:pl-16"><AssignmentSelector selected={assignedAthleteIds} onChange={(ids) => row.type === "dryland" ? updateDrylandBlock(row.id, { athleteIds: ids }) : assignPoolBlock(row.id)(ids)} athletes={visibleAthletes} /></div>}
                   </div>;
@@ -913,7 +923,6 @@ function DrylandStep(props: {
         <div className="flex items-center justify-between"><h3 className="font-black">Blocs dryland ({props.blocks.length})</h3><Button type="button" size="sm" variant="outline" aria-label="Ajouter un bloc dryland" onClick={props.onAddBlock}><Plus className="h-4 w-4"/></Button></div>
         <p className="mt-1 text-xs font-semibold text-[var(--color-ink-muted)]">{completedCount} / {props.blocks.length} complétés</p>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--color-border)]"><div className="h-full rounded-full bg-[var(--color-brand)] transition-all" style={{ width: `${progress}%` }}/></div>
-        <details className="group relative mt-3"><summary className="cursor-pointer rounded-xl border border-[var(--color-border)] bg-white px-3 py-2 text-sm font-bold">Charger un modèle dryland<ChevronDown className="ml-2 inline h-4 w-4 transition group-open:rotate-180"/></summary><div className="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white p-2 shadow-[var(--shadow-soft)]">{props.templates.length ? props.templates.map((template) => <button key={template.id} type="button" onClick={(event) => { props.onLoadTemplate(template.id); event.currentTarget.closest("details")?.removeAttribute("open"); }} className="block w-full rounded-lg p-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]">{template.name}</button>) : <p className="p-2 text-xs text-[var(--color-ink-muted)]">Aucun modèle dryland enregistré.</p>}</div></details>
         <div className="mt-4 space-y-2">{props.blocks.map((block, index) => {
           const isSelected = block.id === props.selectedBlockId;
           const isComplete = block.exerciseIds.length > 0 && block.athleteIds.length > 0;
@@ -932,7 +941,10 @@ function DrylandStep(props: {
               <Input aria-label="Nom du bloc dryland" value={selectedBlock.title} onChange={(event) => props.onUpdateBlock(selectedBlock.id, { title: event.target.value })} className="h-auto border-0 bg-transparent px-0 text-2xl font-black shadow-none focus-visible:shadow-none"/>
               <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{selectedBlock.duration} min · {props.groupName} · {props.programMode === "team" ? props.targetAthleteIds.length : selectedBlock.athleteIds.length} athlètes</p>
             </div>
-            <Button type="button" size="sm" variant="outline" disabled={selectedExercises.length === 0} onClick={() => props.onSaveTemplate(selectedBlock.id)}><BookmarkPlus className="h-4 w-4"/>Enregistrer comme modèle</Button>
+            <div className="flex flex-wrap gap-2">
+              <details className="group relative"><summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-bold">Charger un modèle<ChevronDown className="h-4 w-4 transition group-open:rotate-180"/></summary><div className="absolute right-0 z-30 mt-1 max-h-56 w-64 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white p-2 shadow-[var(--shadow-soft)]">{props.templates.length ? props.templates.map((template) => <button key={template.id} type="button" onClick={(event) => { props.onLoadTemplate(template.id); event.currentTarget.closest("details")?.removeAttribute("open"); }} className="block w-full rounded-lg p-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]">{template.name}</button>) : <p className="p-2 text-xs text-[var(--color-ink-muted)]">Aucun modèle dryland enregistré.</p>}</div></details>
+              <Button type="button" size="sm" variant="outline" disabled={selectedExercises.length === 0} onClick={() => props.onSaveTemplate(selectedBlock.id)}><BookmarkPlus className="h-4 w-4"/>Enregistrer comme modèle</Button>
+            </div>
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
               <div className="flex items-center gap-2 text-xs font-black"><Users className="h-4 w-4"/>{props.programMode === "team" ? "Même circuit pour tout le groupe" : "Athlètes du programme"}</div>
               <div className="mt-2"><AthleteAvatarGroup ids={props.programMode === "team" ? props.targetAthleteIds : selectedBlock.athleteIds} athletes={props.athletes} limit={6}/></div>
@@ -995,6 +1007,8 @@ function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: Qui
     const name = String(formData.get("name") ?? "").trim();
     const category = String(formData.get("category") ?? "").trim() || "Custom";
     const equipment = String(formData.get("equipment") ?? "").trim();
+    const level = String(formData.get("level") ?? "").trim();
+    const description = String(formData.get("description") ?? "").trim();
     const tags = String(formData.get("tags") ?? "")
       .split(",")
       .map((tag) => tag.trim())
@@ -1011,6 +1025,8 @@ function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: Qui
         name,
         category,
         equipment,
+        level,
+        description,
         defaultSets: optionalNumber(formData.get("sets")),
         defaultReps: roundTrip ? null : optionalNumber(formData.get("reps")),
         defaultDuration: null,
@@ -1027,12 +1043,14 @@ function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: Qui
       <div className="mb-3 flex items-center gap-2 font-black text-[var(--block-dryland-fg)]"><Plus className="h-4 w-4" /> Créer un exercice rapide</div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <Input name="name" placeholder="Nom de l'exercice" required />
-        <Input name="category" placeholder="Catégorie" defaultValue="Custom" />
-        <Input name="equipment" placeholder="Équipement" />
-        <Input name="tags" placeholder="Tags: force, ouverture" />
+        <select name="category" defaultValue="Force" className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm"><option>Échauffement</option><option>Force</option><option>Puissance</option><option>Gainage</option><option>Mobilité</option><option>Technique</option><option>Cardio</option><option>Récupération</option></select>
+        <select name="equipment" defaultValue="" className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm"><option value="">Matériel : aucun</option><option>Haltère</option><option>Élastique</option><option>Tapis</option><option>Medball</option><option>Trampoline</option><option>Tremplin</option></select>
+        <select name="level" defaultValue="Tous niveaux" className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm"><option>Débutant</option><option>Intermédiaire</option><option>Avancé</option><option>Tous niveaux</option></select>
+        <textarea name="description" placeholder="Consignes" className="min-h-16 rounded-xl border border-[var(--color-border)] bg-white p-3 text-sm md:col-span-2" />
         <Input name="sets" type="number" min="1" placeholder="Séries" />
         <label className="flex items-center gap-2 text-sm font-bold"><input name="roundTrip" type="checkbox" checked={roundTrip} onChange={(event) => setRoundTrip(event.target.checked)} className="h-4 w-4 accent-[var(--color-brand)]" /> Aller-retour</label>
         {!roundTrip && <Input name="reps" type="number" min="1" placeholder="Répétitions" />}
+        <Input name="tags" placeholder="Tags (facultatif)" />
         <Button type="submit" variant="action" disabled={pending}><Plus className="h-4 w-4" /> {pending ? "Création..." : "Ajouter"}</Button>
       </div>
       {error && <div className="mt-3 rounded-xl bg-[var(--color-danger)]/10 p-3 text-sm font-semibold text-[var(--color-danger)]">{error}</div>}

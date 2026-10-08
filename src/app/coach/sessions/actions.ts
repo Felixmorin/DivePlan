@@ -83,6 +83,8 @@ const quickExerciseSchema = z.object({
   name: z.string().trim().min(2),
   category: z.string().trim().min(2).default("Custom"),
   equipment: z.string().trim().optional(),
+  level: z.string().trim().optional(),
+  description: z.string().trim().optional(),
   defaultSets: z.number().int().min(1).max(20).nullable().optional(),
   defaultReps: z.number().int().min(1).max(200).nullable().optional(),
   defaultDuration: z.number().int().min(1).max(3600).nullable().optional(),
@@ -103,8 +105,8 @@ export async function createDrylandExercise(input: QuickExerciseInput) {
   await requireCoach();
   const data = quickExerciseSchema.parse(input);
   const exercise = (await query<{id:string;name:string;category:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean;equipment:string|null;tags:string[]}>(
-    `INSERT INTO "DrylandExercise" (id,name,category,description,equipment,"defaultSets","defaultReps","defaultDuration","roundTrip",tags,"createdAt","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW()) RETURNING id,name,category,"defaultSets","defaultReps","defaultDuration","roundTrip",equipment,tags`,
-    [randomUUID(),data.name,data.category||"Custom",`Exercice ajoute rapidement: ${data.name}`,data.equipment?.trim()||null,data.defaultSets??null,data.roundTrip?null:data.defaultReps??null,data.roundTrip?null:data.defaultDuration??null,data.roundTrip,Array.from(new Set(data.tags.map(tag=>tag.toLowerCase())))]
+    `INSERT INTO "DrylandExercise" (id,name,category,description,equipment,level,"defaultSets","defaultReps","defaultDuration","roundTrip",tags,"createdAt","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW(),NOW()) RETURNING id,name,category,"defaultSets","defaultReps","defaultDuration","roundTrip",equipment,tags`,
+    [randomUUID(),data.name,data.category||"Custom",data.description?.trim()||`Exercice: ${data.name}`,data.equipment?.trim()||null,data.level?.trim()||null,data.defaultSets??null,data.roundTrip?null:data.defaultReps??null,data.roundTrip?null:data.defaultDuration??null,data.roundTrip,Array.from(new Set(data.tags.map(tag=>tag.toLowerCase())))]
   )).rows[0];
 
   revalidatePath("/coach/sessions/new");
@@ -421,7 +423,26 @@ export async function saveSessionAsTemplate(formData: FormData) {
   }
 
   const payload = buildSessionTemplatePayload(source);
-  payload.blocks = payload.blocks.map((block) => ({ ...block, estimatedVolume: 0, drylandExercises: [], poolTraining: null }));
+  const poolAthleteIds = Array.from(new Set(payload.blocks.filter((block) => block.type === "POOL").flatMap((block) => block.athleteIds)));
+  const poolAthletes = poolAthleteIds.length > 0
+    ? await query<{ id: string; firstName: string; lastName: string }>(`SELECT a.id,u."firstName",u."lastName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a.id=ANY($1::text[])`, [poolAthleteIds])
+    : { rows: [] as { id: string; firstName: string; lastName: string }[] };
+  const athleteNames = new Map(poolAthletes.rows.map((athlete) => [athlete.id, `${athlete.firstName} ${athlete.lastName}`.trim()]));
+  let position = 0;
+  payload.blocks = payload.blocks.flatMap((block) => {
+    const poolVariants = block.type === "POOL" && block.athleteIds.length > 0
+      ? block.athleteIds.map((athleteId) => ({ athleteId, title: `Piscine - ${athleteNames.get(athleteId) ?? "Athlète"}` }))
+      : [null];
+    return poolVariants.map((variant) => ({
+      ...block,
+      title: variant?.title ?? block.title,
+      position: position++,
+      athleteIds: variant ? [variant.athleteId] : block.athleteIds,
+      estimatedVolume: 0,
+      drylandExercises: [],
+      poolTraining: null
+    }));
+  });
   const template=(await query<{id:string;name:string}>(`INSERT INTO "SessionTemplate" (id,name,category,"sessionId","clubId",favorite,payload) VALUES ($1,$2,'Séance',$3,$4,false,$5::jsonb) RETURNING id,name`,[randomUUID(),name,source.id,clubId,JSON.stringify(payload)])).rows[0];
 
   await trackEvent({

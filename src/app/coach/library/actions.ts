@@ -10,6 +10,7 @@ const exerciseSchema = z.object({
   id: z.string().optional(),
   name: z.string().trim().min(2, "Le nom est requis."),
   category: z.string().trim().min(1, "La catégorie est requise."),
+  level: z.string().trim().optional(),
   description: z.string().trim().min(1, "La description est requise."),
   bodyArea: z.string().trim().optional(),
   equipment: z.string().trim().optional(),
@@ -34,6 +35,7 @@ export async function saveLibraryExercise(input: LibraryExerciseInput) {
   const payload = {
     name: data.name,
     category: data.category,
+    level: clean(data.level),
     description: data.description,
     bodyArea: clean(data.bodyArea),
     equipment: clean(data.equipment),
@@ -49,17 +51,17 @@ export async function saveLibraryExercise(input: LibraryExerciseInput) {
   const exerciseId = data.id ?? randomUUID();
   if (data.id) {
     await query(
-      `UPDATE "DrylandExercise" SET name=$1, category=$2, description=$3, "bodyArea"=$4, equipment=$5, setup=$6,
-       "defaultSets"=$7, "defaultReps"=$8, "defaultDuration"=$9, "roundTrip"=$10, "restSeconds"=$11,
-       "coachNotes"=$12, "archivedAt"=NULL, "updatedAt"=now() WHERE id=$13`,
-      [payload.name, payload.category, payload.description, payload.bodyArea, payload.equipment, payload.setup,
+      `UPDATE "DrylandExercise" SET name=$1, category=$2, level=$3, description=$4, "bodyArea"=$5, equipment=$6, setup=$7,
+       "defaultSets"=$8, "defaultReps"=$9, "defaultDuration"=$10, "roundTrip"=$11, "restSeconds"=$12,
+       "coachNotes"=$13, "archivedAt"=NULL, "updatedAt"=now() WHERE id=$14`,
+      [payload.name, payload.category, payload.level, payload.description, payload.bodyArea, payload.equipment, payload.setup,
        payload.defaultSets, payload.defaultReps, payload.defaultDuration, payload.roundTrip, payload.restSeconds, payload.coachNotes, exerciseId]
     );
   } else {
     await query(
-      `INSERT INTO "DrylandExercise" (id, name, category, description, "bodyArea", equipment, setup, "defaultSets", "defaultReps", "defaultDuration", "roundTrip", "restSeconds", "coachNotes", "archivedAt", tags, "createdAt", "updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NULL,'{}',now(),now())`,
-      [exerciseId, payload.name, payload.category, payload.description, payload.bodyArea, payload.equipment, payload.setup,
+      `INSERT INTO "DrylandExercise" (id, name, category, level, description, "bodyArea", equipment, setup, "defaultSets", "defaultReps", "defaultDuration", "roundTrip", "restSeconds", "coachNotes", "archivedAt", tags, "createdAt", "updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NULL,'{}',now(),now())`,
+      [exerciseId, payload.name, payload.category, payload.level, payload.description, payload.bodyArea, payload.equipment, payload.setup,
        payload.defaultSets, payload.defaultReps, payload.defaultDuration, payload.roundTrip, payload.restSeconds, payload.coachNotes]
     );
   }

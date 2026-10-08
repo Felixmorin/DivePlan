@@ -359,6 +359,7 @@ model DrylandExercise {
   id              String                 @id @default(cuid())
   name            String
   category        String
+  level           String?
   description     String
   videoUrl        String?
   defaultSets     Int?
