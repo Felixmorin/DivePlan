@@ -332,10 +332,14 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     ...(warmup.enabled ? [{ id: "warmup", title: warmup.title, type: "warmup" as const, subtitle: "Préparation du groupe" }] : []),
     ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title || "Dryland", type: "dryland" as const, subtitle: `${block.exerciseIds.length} exercice${block.exerciseIds.length === 1 ? "" : "s"} · ${block.athleteIds.length === athleteIds.length ? "Équipe entière" : `${block.athleteIds.length} athlète${block.athleteIds.length === 1 ? "" : "s"}`}` })),
     ...activePoolBlocks.map((block) => {
-      const assignedCount = effectivePoolAssignments[block.id]?.length ?? 0;
-      const assignedAthletes = (effectivePoolAssignments[block.id] ?? []).map((id) => athletes.find((athlete) => athlete.id === id)).filter(Boolean);
+      const assignedIds = effectivePoolAssignments[block.id] ?? [];
+      const assignedCount = assignedIds.length;
+      const assignedAthletes = assignedIds.map((id) => athletes.find((athlete) => athlete.id === id)).filter(Boolean);
+      const lineCount = assignedIds.length > 0
+        ? assignedIds.reduce((sum, athleteId) => sum + (poolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)] ?? poolSectionsToRows(block.sections)).reduce((rowSum, row) => rowSum + row.diveCodes.length, 0), 0)
+        : block.sections.reduce((sum, section) => sum + section.dives.length, 0);
       const title = assignedAthletes.length === 1 ? `Piscine - ${athleteDisplayName(assignedAthletes[0])}` : block.title || "Piscine";
-      return { id: block.id, title, type: "pool" as const, assigned: effectivePoolAssignments[block.id] ?? [], subtitle: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes · ${assignedCount} athlète${assignedCount === 1 ? "" : "s"}` };
+      return { id: block.id, title, type: "pool" as const, assigned: assignedIds, subtitle: `${lineCount} lignes · ${assignedCount} athlète${assignedCount === 1 ? "" : "s"}` };
     }),
     ...(cooldown.enabled ? [{ id: "cooldown", title: cooldown.title, type: "cooldown" as const, subtitle: "Récupération du groupe" }] : [])
   ];
