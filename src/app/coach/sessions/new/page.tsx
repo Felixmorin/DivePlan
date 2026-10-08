@@ -120,7 +120,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
   }
   const recentPoolSessions = [...sessionsById.values()];
   const poolBlocks = recentPoolSessions.flatMap((session) => session.blocks).filter((block) => block.poolTraining).slice(0, 3);
-  const initialTemplate = template
+  const initialTemplate = template && !["Dryland", "Piscine"].includes(template.category)
     ? {
         id: template.id,
         name: template.name,

@@ -30,6 +30,11 @@ export default async function TemplatesPage() {
     `SELECT id, name, category, favorite, payload FROM "SessionTemplate" WHERE "clubId" = $1 ORDER BY favorite DESC, name ASC LIMIT 200`, [clubId]
   );
   const templates = templatesResult.rows;
+  const templateGroups = [
+    { key: "session", title: "Modèles de séance", items: templates.filter((template) => !["Dryland", "Piscine"].includes(template.category)) },
+    { key: "dryland", title: "Modèles de dryland", items: templates.filter((template) => template.category === "Dryland") },
+    { key: "pool", title: "Modèles de piscine", items: templates.filter((template) => template.category === "Piscine") }
+  ];
 
   return (
     <CoachShell active="Template">
@@ -37,11 +42,11 @@ export default async function TemplatesPage() {
         <div><h1 className="text-3xl font-black">Templates</h1><p className="text-[var(--color-ink-muted)]">Modeles sauvegardes par les coachs du club.</p></div>
         <Button asChild><Link href="/coach/sessions/new">Nouvelle seance</Link></Button>
       </div>
-      {templates.length === 0 ? (
-        <EmptyState title="Aucun modele" description="Ouvre une seance existante et sauvegarde-la comme modele pour alimenter cette bibliotheque." />
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {templates.map((template) => {
+      <div className="space-y-8">
+          {templateGroups.map((group) => <section key={group.key}>
+            <h2 className="mb-3 text-xl font-black">{group.title} <span className="text-sm font-bold text-[var(--color-ink-muted)]">({group.items.length})</span></h2>
+            {group.items.length > 0 ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {group.items.map((template) => {
             const parsedPayload = sessionTemplatePayloadSchema.safeParse(template.payload);
             const payload = parsedPayload.success ? parsedPayload.data : null;
             const volume = payload?.blocks.reduce((sum, block) => sum + block.estimatedVolume, 0) ?? 0;
@@ -53,7 +58,7 @@ export default async function TemplatesPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <CardTitle>{template.name}</CardTitle>
-                      <p className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{template.category === "Dryland" ? "Bloc dryland" : template.category}</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{group.key === "session" ? "Structure de séance" : group.key === "dryland" ? "Bloc avec exercices" : "Bloc avec listes de plongeons"}</p>
                     </div>
                     <form action={toggleSessionTemplateFavorite}>
                       <input type="hidden" name="templateId" value={template.id} />
@@ -71,7 +76,7 @@ export default async function TemplatesPage() {
                   </div>
                   {!payload && <p role="alert" className="text-sm font-semibold text-[var(--color-danger)]">Ce template contient des données incomplètes et ne peut pas être chargé.</p>}
                   <div className="flex flex-wrap gap-2">
-                    {payload && <Button asChild size="sm" variant="action"><Link href={`/coach/sessions/new?templateId=${template.id}`}><FileText className="h-4 w-4" /> Charger</Link></Button>}
+                    {payload && group.key === "session" && <Button asChild size="sm" variant="action"><Link href={`/coach/sessions/new?templateId=${template.id}`}><FileText className="h-4 w-4" /> Charger</Link></Button>}
                     <form action={deleteSessionTemplate}>
                       <input type="hidden" name="templateId" value={template.id} />
                       <Button type="submit" size="sm" variant="outline"><Trash2 className="h-4 w-4" /> Supprimer</Button>
@@ -81,8 +86,9 @@ export default async function TemplatesPage() {
               </Card>
             );
           })}
-        </div>
-      )}
+            </div> : <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-white p-4 text-sm text-[var(--color-ink-muted)]">Aucun modèle enregistré dans cette catégorie.</p>}
+          </section>)}
+      </div>
     </CoachShell>
   );
 }

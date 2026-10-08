@@ -25,7 +25,7 @@ export default async function LibraryPage() {
   ]);
   const exercises = exerciseResult.rows.map((exercise) => ({ ...exercise, lastUsed: exercise.lastUsed?.toISOString() ?? null }));
   const dives = diveResult.rows.map((dive) => ({ code: dive.diveCode, name: dive.diveName, heights: [dive.height === "ONE_METER" ? "1 m" : dive.height === "THREE_METER" ? "3 m" : "Autre"], family: familyForDive(dive.diveCode, dive.position) }));
-  const templates = templateResult.rows.map((template) => ({ id: template.id, name: template.name, category: template.category, favorite: template.favorite, blocks: sessionTemplatePayloadSchema.safeParse(template.payload).success ? sessionTemplatePayloadSchema.parse(template.payload).blocks.length : 0 }));
+  const templates = templateResult.rows.filter((template) => !["Dryland", "Piscine"].includes(template.category)).map((template) => ({ id: template.id, name: template.name, category: template.category, favorite: template.favorite, blocks: sessionTemplatePayloadSchema.safeParse(template.payload).success ? sessionTemplatePayloadSchema.parse(template.payload).blocks.length : 0 }));
   return <CoachShell active="Bibliotheque"><LibraryClient exercises={exercises} dives={dives} templates={templates} /></CoachShell>;
 }
 

@@ -410,18 +410,19 @@ export async function saveSessionAsTemplate(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  const category = String(formData.get("category") ?? "General").trim() || "General";
   const source = await getSessionSnapshot(sessionId, clubId);
 
   if (!source) {
     throw new Error("Seance introuvable.");
   }
 
-  if (name.length < 3) {
+  if (!name) {
     throw new Error("Le nom du modele est requis.");
   }
 
-  const template=(await query<{id:string;name:string}>(`INSERT INTO "SessionTemplate" (id,name,category,"sessionId","clubId",favorite,payload) VALUES ($1,$2,$3,$4,$5,false,$6::jsonb) RETURNING id,name`,[randomUUID(),name,category,source.id,clubId,JSON.stringify(buildSessionTemplatePayload(source))])).rows[0];
+  const payload = buildSessionTemplatePayload(source);
+  payload.blocks = payload.blocks.map((block) => ({ ...block, estimatedVolume: 0, drylandExercises: [], poolTraining: null }));
+  const template=(await query<{id:string;name:string}>(`INSERT INTO "SessionTemplate" (id,name,category,"sessionId","clubId",favorite,payload) VALUES ($1,$2,'Séance',$3,$4,false,$5::jsonb) RETURNING id,name`,[randomUUID(),name,source.id,clubId,JSON.stringify(payload)])).rows[0];
 
   await trackEvent({
     type: "session_template.created",
@@ -436,6 +437,30 @@ export async function saveSessionAsTemplate(formData: FormData) {
   revalidatePath(`/coach/sessions/${source.id}`);
 }
 
+export async function saveSessionStructureTemplate(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const name = String(formData.get("name") ?? "").trim();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(String(formData.get("payload") ?? ""));
+  } catch {
+    throw new Error("Le modèle de séance est invalide.");
+  }
+  const parsed = parseSessionTemplatePayload(payload);
+  if (!name) throw new Error("Donne un nom au modèle.");
+  const structureOnly = {
+    ...parsed,
+    blocks: parsed.blocks.map((block) => ({ ...block, estimatedVolume: 0, drylandExercises: [], poolTraining: null }))
+  };
+  const template = (await query<{ id: string }>(
+    `INSERT INTO "SessionTemplate" (id,name,category,"clubId",favorite,payload) VALUES ($1,$2,'Séance',$3,false,$4::jsonb) RETURNING id`,
+    [randomUUID(), name, clubId, JSON.stringify(structureOnly)]
+  )).rows[0];
+  await trackEvent({ type: "session_template.created", message: `Modèle de séance créé: ${name}`, clubId, userId: user.id, metadata: { templateId: template.id } });
+  revalidatePath("/coach/templates");
+  revalidatePath("/coach/library");
+}
+
 export async function saveDrylandBlockAsTemplate(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const name = String(formData.get("name") ?? "").trim();
@@ -445,7 +470,7 @@ export async function saveDrylandBlockAsTemplate(formData: FormData) {
   } catch {
     throw new Error("Bloc dryland invalide.");
   }
-  if (name.length < 3 || !block.title || !Number.isFinite(block.duration) || !Array.isArray(block.exercises) || block.exercises.length === 0) {
+  if (!name || !block.title || !Number.isFinite(block.duration) || !Array.isArray(block.exercises) || block.exercises.length === 0) {
     throw new Error("Donne un nom au modèle et ajoute au moins un exercice au bloc.");
   }
   const exercises = await query<{id:string}>(`SELECT id FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`,[block.exercises.map((item) => item.exerciseId)]);
@@ -475,6 +500,57 @@ export async function saveDrylandBlockAsTemplate(formData: FormData) {
       };
   await query(`INSERT INTO "SessionTemplate" (id,name,category,"clubId",favorite,payload) VALUES ($1,$2,'Dryland',$3,false,$4::jsonb)`,[randomUUID(),name,clubId,JSON.stringify(payload)]);
   await trackEvent({ type: "session_template.created", message: `Modele dryland cree: ${name}`, clubId, userId: user.id });
+  revalidatePath("/coach/templates");
+  revalidatePath("/coach/library");
+}
+
+export async function savePoolBlockAsTemplate(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const name = String(formData.get("name") ?? "").trim();
+  let rawBlock: unknown;
+  try {
+    rawBlock = JSON.parse(String(formData.get("block") ?? ""));
+  } catch {
+    throw new Error("Bloc piscine invalide.");
+  }
+  const blockSchema = z.object({
+    title: z.string().trim().min(2),
+    duration: z.number().int().min(1),
+    sections: z.array(z.object({
+      height: z.enum(["ONE_METER", "THREE_METER", "PLATFORM", "CUSTOM"]),
+      label: z.string().nullable(),
+      dives: z.array(z.object({ diveCode: z.string(), diveName: z.string(), position: z.string(), repetitions: z.number().int().min(0), notes: z.string().nullable(), order: z.number().int().min(0) }))
+    }))
+  });
+  const parsedBlock = blockSchema.safeParse(rawBlock);
+  if (!name || !parsedBlock.success) {
+    throw new Error("Donne un nom au modèle et vérifie le bloc piscine.");
+  }
+  const block = parsedBlock.data;
+  const volume = block.sections.reduce((sum, section) => sum + section.dives.reduce((diveSum, dive) => diveSum + dive.repetitions, 0), 0);
+  const payload = {
+    version: 1,
+    competitionEvaluationAtStart: false,
+    title: name,
+    duration: block.duration,
+    focus: "",
+    notes: null,
+    blocks: [{
+      type: "POOL",
+      title: block.title,
+      description: null,
+      duration: block.duration,
+      position: 0,
+      estimatedVolume: volume,
+      competitionEvaluation: false,
+      athleteIds: [],
+      drylandExercises: [],
+      poolTraining: { sections: block.sections }
+    }]
+  };
+  parseSessionTemplatePayload(payload);
+  await query(`INSERT INTO "SessionTemplate" (id,name,category,"clubId",favorite,payload) VALUES ($1,$2,'Piscine',$3,false,$4::jsonb)`, [randomUUID(), name, clubId, JSON.stringify(payload)]);
+  await trackEvent({ type: "session_template.created", message: `Modèle piscine créé: ${name}`, clubId, userId: user.id });
   revalidatePath("/coach/templates");
   revalidatePath("/coach/library");
 }

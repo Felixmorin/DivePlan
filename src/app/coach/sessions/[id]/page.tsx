@@ -123,10 +123,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       <Card className="mb-4">
         <CardHeader><CardTitle>Enregistrer comme modele</CardTitle></CardHeader>
         <CardContent>
-          <form action={saveSessionAsTemplate} className="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+          <form action={saveSessionAsTemplate} className="grid gap-3 md:grid-cols-[1fr_auto]">
             <input type="hidden" name="sessionId" value={session.id} />
             <input name="name" defaultValue={session.title} className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]" required />
-            <input name="category" defaultValue={session.week.group.name} className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]" required />
             <Button type="submit" variant="action"><Save className="h-4 w-4" /> Sauver le modele</Button>
           </form>
         </CardContent>

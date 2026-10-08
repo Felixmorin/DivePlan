@@ -33,7 +33,6 @@ export default async function SessionsPage() {
   return (
     <CoachShell active="Seances">
       <div className="mb-6 flex items-center justify-between">
-        <div><h1 className="text-3xl font-black">Seances</h1><p className="text-slate-500">Modeles, duplication rapide et impression bassin.</p></div>
         <Button asChild><Link href="/coach/sessions/new"><Plus className="h-4 w-4" /> Nouvelle seance</Link></Button>
       </div>
       <Card>
