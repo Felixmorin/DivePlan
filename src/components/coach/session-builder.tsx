@@ -228,6 +228,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     ...block,
     sourceBlockId: block.id,
     id: `${block.id}-${athleteId}`,
+    title: `Piscine - ${athleteDisplayName(athletes.find((athlete) => athlete.id === athleteId))}`,
     athleteIds: [athleteId],
     sections: poolRowsToSections(poolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)] ?? poolSectionsToRows(block.sections), block.sections)
   })));
@@ -329,7 +330,9 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title || "Dryland", type: "dryland" as const, subtitle: `${block.exerciseIds.length} exercice${block.exerciseIds.length === 1 ? "" : "s"} · ${block.athleteIds.length === athleteIds.length ? "Équipe entière" : `${block.athleteIds.length} athlète${block.athleteIds.length === 1 ? "" : "s"}`}` })),
     ...activePoolBlocks.map((block) => {
       const assignedCount = effectivePoolAssignments[block.id]?.length ?? 0;
-      return { id: block.id, title: block.title || "Piscine", type: "pool" as const, subtitle: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes · ${assignedCount} athlète${assignedCount === 1 ? "" : "s"}` };
+      const assignedAthletes = (effectivePoolAssignments[block.id] ?? []).map((id) => athletes.find((athlete) => athlete.id === id)).filter(Boolean);
+      const title = assignedAthletes.length === 1 ? `Piscine - ${athleteDisplayName(assignedAthletes[0])}` : block.title || "Piscine";
+      return { id: block.id, title, type: "pool" as const, assigned: effectivePoolAssignments[block.id] ?? [], subtitle: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes · ${assignedCount} athlète${assignedCount === 1 ? "" : "s"}` };
     }),
     ...(cooldown.enabled ? [{ id: "cooldown", title: cooldown.title, type: "cooldown" as const, subtitle: "Récupération du groupe" }] : [])
   ];
@@ -620,6 +623,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
                     <div className="flex gap-1"><button type="button" aria-label={`Monter ${row.title}`} disabled={index === 0} onClick={() => moveContentBlock(row.id, -1)} className="rounded-lg p-2 text-[var(--color-ink-muted)] disabled:opacity-30"><ArrowUp className="h-4 w-4"/></button><button type="button" aria-label={`Descendre ${row.title}`} disabled={index === orderedContentRows.length - 1} onClick={() => moveContentBlock(row.id, 1)} className="rounded-lg p-2 text-[var(--color-ink-muted)] disabled:opacity-30"><ArrowDown className="h-4 w-4"/></button></div>
                     <span className={cn("flex h-11 w-11 items-center justify-center rounded-full", row.type === "warmup" ? "bg-[var(--block-warmup-bg)] text-[var(--block-warmup-fg)]" : row.type === "dryland" ? "bg-[var(--block-dryland-bg)] text-[var(--block-dryland-fg)]" : row.type === "pool" ? "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]" : "bg-[var(--block-cooldown-bg)] text-[var(--block-cooldown-fg)]")}><Icon className="h-5 w-5"/></span>
                     <div className="min-w-0"><div className="truncate font-black">{row.title}</div><div className="text-sm text-[var(--color-ink-muted)]">{row.subtitle}</div></div>
+                    {isAssignable && <AthleteAvatarGroup ids={assignedAthleteIds} athletes={visibleAthletes} limit={4} />}
                     {isAssignable && <button type="button" aria-label={`${assignmentIsOpen ? "Fermer" : "Associer des athlètes à"} ${row.title}`} aria-expanded={assignmentIsOpen} onClick={() => setAssignmentOpenBlockId((current) => current === row.id ? null : row.id)} className={cn("flex h-9 w-9 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", assignmentIsOpen ? "border-[var(--color-brand)] bg-[var(--color-brand)]/10 text-[var(--color-brand-strong)]" : "border-[var(--color-border)] text-[var(--color-brand-strong)] hover:border-[var(--color-brand)] hover:bg-[var(--color-brand)]/5")}><Plus className="h-4 w-4" /></button>}
                     </div>
                     {isAssignable && assignmentIsOpen && <div className="pl-2 sm:pl-16"><AssignmentSelector selected={assignedAthleteIds} onChange={(ids) => row.type === "dryland" ? updateDrylandBlock(row.id, { athleteIds: ids }) : assignPoolBlock(row.id)(ids)} athletes={visibleAthletes} /></div>}
@@ -1413,6 +1417,10 @@ function poolBlockIsValid(block: BuilderPoolBlock) {
 
 function uniqueIds(ids: string[]) {
   return Array.from(new Set(ids));
+}
+
+function athleteDisplayName(athlete: BuilderAthlete | undefined) {
+  return athlete ? `${athlete.firstName} ${athlete.lastName}`.trim() : "Athlète";
 }
 
 function poolAthleteBlockKey(athleteId: string, blockId: string) {
