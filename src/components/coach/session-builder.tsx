@@ -308,13 +308,16 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   const reviewBlocks = [
     ...(warmup.enabled ? [{ id: "warmup", title: warmup.title, type: "warmup" as const, assigned: athleteIds, content: "Préparation du groupe", ready: true }] : []),
     ...effectiveDrylandBlocks.map((block) => ({ id: block.id, title: block.title, type: "dryland" as const, assigned: block.athleteIds, content: `${block.athleteIds.length === athleteIds.length ? "Équipe entière" : `${block.athleteIds.length} athlètes`} · ${block.exerciseIds.length} exercices`, ready: block.title.trim().length > 0 && block.exerciseIds.length > 0 && block.athleteIds.length > 0 })),
-    ...activePoolBlocks.map((block) => {
-      const assigned = effectivePoolAssignments[block.id] ?? [];
-      const readyCount = assigned.filter((athleteId) => {
-        const rows = poolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)] ?? poolSectionsToRows(block.sections);
-        return rows.length > 0 && rows.every((row) => validatePoolListRow(row).errors.length === 0);
-      }).length;
-      return { id: block.id, title: block.title, type: "pool" as const, assigned, content: `${assigned.length} listes individuelles · ${readyCount}/${assigned.length} prêtes`, ready: assigned.length > 0 && readyCount === assigned.length };
+    ...individualPoolBlocks.map((block) => {
+      const ready = poolBlockIsValid(block);
+      return {
+        id: block.id,
+        title: block.title,
+        type: "pool" as const,
+        assigned: block.athleteIds,
+        content: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes · ${ready ? "Liste prête" : "À compléter"}`,
+        ready
+      };
     }),
     ...(cooldown.enabled ? [{ id: "cooldown", title: cooldown.title, type: "cooldown" as const, assigned: athleteIds, content: "Récupération du groupe", ready: true }] : [])
   ];
