@@ -177,6 +177,46 @@ export async function cancelFutureTrainingSchedule(formData: FormData) {
   revalidatePath("/athlete/calendar");
 }
 
+export async function hideCancelledTrainingFromCalendars(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const eventId = String(formData.get("eventId") ?? "");
+  const sessionId = String(formData.get("sessionId") ?? "");
+  if (Boolean(eventId) === Boolean(sessionId)) throw new Error("Entraînement annulé introuvable.");
+
+  await withTransaction(async (tx) => {
+    if (eventId) {
+      const hidden = await tx.query(
+        `UPDATE "PlanningEvent" SET "calendarHiddenAt"=NOW()
+         WHERE id=$1 AND "clubId"=$2 AND type='TRAINING_SCHEDULE' AND "cancelledAt" IS NOT NULL AND "calendarHiddenAt" IS NULL
+         RETURNING id`,
+        [eventId, clubId]
+      );
+      if (!hidden.rowCount) throw new Error("Cet entraînement n’est pas annulé ou a déjà été retiré du calendrier.");
+      return;
+    }
+
+    const hidden = await tx.query<{ planningEventId: string | null }>(
+      `UPDATE "TrainingSession" s SET "calendarHiddenAt"=NOW()
+       FROM "TrainingWeek" w
+       WHERE s.id=$1 AND s."weekId"=w.id AND w."clubId"=$2 AND s.status='CANCELLED' AND s."calendarHiddenAt" IS NULL
+       RETURNING s."planningEventId"`,
+      [sessionId, clubId]
+    );
+    if (!hidden.rowCount) throw new Error("Cet entraînement n’est pas annulé ou a déjà été retiré du calendrier.");
+    const planningEventId = hidden.rows[0]?.planningEventId;
+    if (planningEventId) {
+      await tx.query(
+        `UPDATE "PlanningEvent" SET "calendarHiddenAt"=NOW() WHERE id=$1 AND "clubId"=$2 AND "cancelledAt" IS NOT NULL`,
+        [planningEventId, clubId]
+      );
+    }
+  });
+
+  revalidatePath("/coach/planning");
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/calendar");
+}
+
 function parseTarget(value?: string) {
   if (!value || value === "club") return {};
   if (value.startsWith("group:")) return { groupId: value.slice("group:".length) };

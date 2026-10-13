@@ -1,5 +1,7 @@
 ALTER TYPE "SessionStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
 ALTER TABLE "PlanningEvent" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3);
+ALTER TABLE "PlanningEvent" ADD COLUMN IF NOT EXISTS "calendarHiddenAt" TIMESTAMP(3);
+ALTER TABLE "TrainingSession" ADD COLUMN IF NOT EXISTS "calendarHiddenAt" TIMESTAMP(3);
 
 CREATE TABLE IF NOT EXISTS "SessionCancellationPushDelivery" (
   "id" TEXT NOT NULL,

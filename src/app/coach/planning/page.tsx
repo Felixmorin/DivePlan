@@ -4,6 +4,7 @@ import { CoachShell } from "@/components/coach/coach-shell";
 import { PlanningEventForm } from "@/components/coach/planning-event-form";
 import { PlanningEventEditor } from "@/components/coach/planning-event-editor";
 import { CancelPlannedTrainingButton } from "@/components/coach/cancel-planned-training-button";
+import { DismissCancelledTrainingButton } from "@/components/coach/dismiss-cancelled-training-button";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
@@ -77,8 +78,8 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
   await completeExpiredTrainingSessions();
 
   const [sessionRows,eventRows,groupsResult,athleteRows]=await Promise.all([
-    query<{id:string;title:string;focus:string;date:Date;duration:number;status:string;planningEventId:string|null}>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,period.rangeStart,period.rangeEnd]),
-    query<{id:string;type:string;title:string;startsAt:Date;endsAt:Date|null;duration:number|null;location:string|null;notes:string|null;cancelledAt:Date|null;groupId:string|null;athleteId:string|null;groupName:string|null;firstName:string|null;lastName:string|null}>(`SELECT e.id,e.type,e.title,e."startsAt",e."endsAt",e.duration,e.location,e.notes,e."cancelledAt",e."groupId",e."athleteId",g.name AS "groupName",u."firstName",u."lastName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "User" u ON u.id=a."userId" WHERE e."clubId"=$1 AND e."startsAt"<$3 AND ((e."endsAt" IS NOT NULL AND e."endsAt">=$2) OR (e."endsAt" IS NULL AND e."startsAt">=$2)) ORDER BY e."startsAt"`,[clubId,period.rangeStart,period.rangeEnd]),
+    query<{id:string;title:string;focus:string;date:Date;duration:number;status:string;planningEventId:string|null}>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s."calendarHiddenAt" IS NULL AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,period.rangeStart,period.rangeEnd]),
+    query<{id:string;type:string;title:string;startsAt:Date;endsAt:Date|null;duration:number|null;location:string|null;notes:string|null;cancelledAt:Date|null;groupId:string|null;athleteId:string|null;groupName:string|null;firstName:string|null;lastName:string|null}>(`SELECT e.id,e.type,e.title,e."startsAt",e."endsAt",e.duration,e.location,e.notes,e."cancelledAt",e."groupId",e."athleteId",g.name AS "groupName",u."firstName",u."lastName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "User" u ON u.id=a."userId" WHERE e."clubId"=$1 AND e."calendarHiddenAt" IS NULL AND e."startsAt"<$3 AND ((e."endsAt" IS NOT NULL AND e."endsAt">=$2) OR (e."endsAt" IS NULL AND e."startsAt">=$2)) ORDER BY e."startsAt"`,[clubId,period.rangeStart,period.rangeEnd]),
     query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`,[clubId]),
     query<{id:string;firstName:string;lastName:string}>(`SELECT a.id,u."firstName",u."lastName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId])
   ]);
@@ -337,6 +338,7 @@ function PlanningSessionCard({ session, active, demo }: { session: PlanningSessi
         <Button asChild size="sm" variant="outline"><Link href={editHref}><Edit className="h-4 w-4" /> Modifier</Link></Button>
         <Button asChild size="icon" variant="outline" className="h-9 min-h-9 w-9" aria-label="Imprimer"><Link href={printHref}><Printer className="h-4 w-4" /></Link></Button>
       </div>
+      {!demo && session.status === "CANCELLED" && <div className="mt-2 flex justify-end"><DismissCancelledTrainingButton sessionId={session.id} /></div>}
     </article>
   );
 }
@@ -356,6 +358,7 @@ function PlanningEventCard({ event, targets, demo }: { event: PlanningEvent; tar
         <div>{event.athleteName ?? event.groupName ?? "Club complet"}</div>
       </div>
       {event.notes && <p className="mt-2 text-sm leading-5 opacity-80">{event.notes}</p>}
+      {event.type === "TRAINING_SCHEDULE" && event.cancelledAt && !demo && <div className="mt-3 flex justify-end"><DismissCancelledTrainingButton eventId={event.id} /></div>}
       {event.type === "TRAINING_SCHEDULE" && !event.cancelledAt && <div className="mt-3 space-y-2">
         <Button asChild size="sm" variant="outline" className="w-full justify-between"><Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/new?planningEventId=${event.id}`}>{demo ? "Voir la séance démo" : "Créer la séance"}<CalendarPlus className="h-4 w-4" /></Link></Button>
         {!demo && !event.cancelledAt && event.startsAt > new Date() && <CancelPlannedTrainingButton eventId={event.id} />}
@@ -374,6 +377,7 @@ function MonthSessionItem({ session, active, demo }: { session: PlanningSession;
           {session.title}
         </Link>
       </div>
+      {!demo && session.status === "CANCELLED" && <div className="mt-1 flex justify-end"><DismissCancelledTrainingButton sessionId={session.id} compact /></div>}
     </div>
   );
 }
@@ -388,6 +392,7 @@ function MonthEventItem({ event, targets, demo }: { event: PlanningEvent; target
         <Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/new?planningEventId=${event.id}`} className="inline-flex min-h-8 items-center gap-1 text-[11px] font-black underline">{demo ? "Séance démo" : "Créer la séance"}</Link>
         {!demo && !event.cancelledAt && event.startsAt > new Date() && <CancelPlannedTrainingButton eventId={event.id} compact />}
       </div>}
+      {event.type === "TRAINING_SCHEDULE" && event.cancelledAt && !demo && <div className="mt-1 flex justify-end"><DismissCancelledTrainingButton eventId={event.id} compact /></div>}
     </div>
   );
 }

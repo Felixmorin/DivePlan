@@ -300,6 +300,7 @@ model PlanningEvent {
   location  String?
   notes     String?
   cancelledAt DateTime?
+  calendarHiddenAt DateTime?
   createdAt DateTime          @default(now())
   club      Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
   group     TrainingGroup?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
@@ -334,6 +335,7 @@ model TrainingSession {
   weekId          String
   coachId         String
   status          SessionStatus              @default(DRAFT)
+  calendarHiddenAt DateTime?
   planningEventId String?                    @unique
   competitionEvaluationAtStart Boolean        @default(false)
   week            TrainingWeek               @relation(fields: [weekId], references: [id])
