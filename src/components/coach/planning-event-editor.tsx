@@ -78,7 +78,7 @@ export function PlanningEventEditor({ event, targets, compact = false }: Plannin
               <div className="flex justify-end gap-2 md:col-span-2"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button><Button type="submit" variant="action">Enregistrer</Button></div>
             </form>
 
-            <form
+            {event.type !== "TRAINING_SCHEDULE" && <form
               action={deletePlanningEvent}
               className="mt-4 flex justify-start border-t border-[var(--color-border)] pt-4"
               onSubmit={(submitEvent) => {
@@ -91,7 +91,7 @@ export function PlanningEventEditor({ event, targets, compact = false }: Plannin
               <Button type="submit" variant="outline" className="border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-red-50">
                 <Trash2 className="h-4 w-4" /> Supprimer l’événement
               </Button>
-            </form>
+            </form>}
           </div>
         </div>
       )}

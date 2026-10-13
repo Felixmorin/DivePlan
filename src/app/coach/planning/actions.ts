@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { query, withTransaction } from "@/lib/db";
 import { addMontrealDays, parseMontrealDateTimeInput } from "@/lib/timezone";
+import { dispatchPlanningEventCancellation, savePlanningEventCancellationTargets } from "@/lib/web-push";
 
 const PlanningEventType = { COMPETITION: "COMPETITION", CAMP: "CAMP", TRAINING_SCHEDULE: "TRAINING_SCHEDULE" } as const;
 
@@ -113,7 +114,7 @@ export async function updatePlanningEvent(formData: FormData) {
   });
   const target = parseTarget(data.target);
 
-  const event = await query(`SELECT id FROM "PlanningEvent" WHERE id = $1 AND "clubId" = $2 LIMIT 1`, [eventId, clubId]);
+  const event = await query(`SELECT id FROM "PlanningEvent" WHERE id = $1 AND "clubId" = $2 AND "cancelledAt" IS NULL LIMIT 1`, [eventId, clubId]);
   if (!event.rowCount) throw new Error("Événement introuvable.");
 
   if (target.groupId) {
@@ -127,7 +128,7 @@ export async function updatePlanningEvent(formData: FormData) {
   }
 
   await query(
-    `UPDATE "PlanningEvent" SET type=$1, title=$2, "startsAt"=$3, "endsAt"=$4, duration=$5, location=$6, notes=$7, "groupId"=$8, "athleteId"=$9 WHERE id=$10 AND "clubId"=$11`,
+    `UPDATE "PlanningEvent" SET type=$1, title=$2, "startsAt"=$3, "endsAt"=$4, duration=$5, location=$6, notes=$7, "groupId"=$8, "athleteId"=$9 WHERE id=$10 AND "clubId"=$11 AND "cancelledAt" IS NULL`,
     [data.type, data.title, parseMontrealDateTimeInput(data.startsAt), data.type === PlanningEventType.COMPETITION && data.endsAt ? parseMontrealDateTimeInput(data.endsAt) : null,
       data.duration ?? null, data.location || null, data.notes || null, target.groupId ?? null, target.athleteId ?? null, eventId, clubId]
   );
@@ -143,11 +144,34 @@ export async function deletePlanningEvent(formData: FormData) {
 
   if (!eventId) throw new Error("Événement introuvable.");
 
-  const deleted = await query(`DELETE FROM "PlanningEvent" WHERE id = $1 AND "clubId" = $2`, [eventId, clubId]);
+  const deleted = await query(`DELETE FROM "PlanningEvent" WHERE id = $1 AND "clubId" = $2 AND type <> 'TRAINING_SCHEDULE' AND "cancelledAt" IS NULL`, [eventId, clubId]);
 
   if (!deleted.rowCount) throw new Error("Événement introuvable.");
 
   revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/calendar");
+}
+
+export async function cancelFutureTrainingSchedule(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const eventId = String(formData.get("eventId") ?? "");
+  if (!eventId) throw new Error("Créneau d’entraînement introuvable.");
+
+  await withTransaction(async (tx) => {
+    const cancelled = await tx.query(
+      `UPDATE "PlanningEvent" e SET "cancelledAt"=NOW()
+       WHERE e.id=$1 AND e."clubId"=$2 AND e.type='TRAINING_SCHEDULE' AND e."startsAt">NOW() AND e."cancelledAt" IS NULL
+         AND NOT EXISTS (SELECT 1 FROM "TrainingSession" s WHERE s."planningEventId"=e.id)
+       RETURNING e.id`,
+      [eventId, clubId]
+    );
+    if (!cancelled.rowCount) throw new Error("Ce créneau n’existe plus, est passé ou est déjà lié à une séance.");
+    await savePlanningEventCancellationTargets(tx, eventId);
+  });
+  await dispatchPlanningEventCancellation(eventId).catch(() => undefined);
+
   revalidatePath("/coach/planning");
   revalidatePath("/athlete");
   revalidatePath("/athlete/calendar");

@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, List, MapPin, TentTree, Trophy, Users, Waves } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, List, MapPin, TentTree, Trophy, Users, Waves, XCircle } from "lucide-react";
 import Link from "next/link";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -16,6 +16,7 @@ const eventStyles: Record<PlanningEventType, { label: string; icon: typeof Troph
   CAMP: { label: "Camp", icon: TentTree, className: "bg-cyan-400/14 text-cyan-200" },
   TRAINING_SCHEDULE: { label: "Horaire", icon: Waves, className: "bg-[var(--color-brand)]/18 text-sky-200" }
 };
+const cancelledEventStyle = { label: "Annulé", icon: XCircle, className: "bg-red-500/20 text-red-200" };
 
 export default async function AthleteCalendarPage({ searchParams }: { searchParams: Promise<{ view?: string | string[]; month?: string | string[] }> }) {
   const { athlete, clubId } = await requireAthlete();
@@ -106,7 +107,7 @@ function MonthCalendar({ events, monthKey }: { events: AthletePlanningEvent[]; m
         return <div key={key} className={cn("min-h-28 border-r border-b border-white/8 p-1.5 sm:min-h-32 sm:p-2", !inMonth && "bg-black/20 opacity-35", key === todayKey && "bg-[var(--color-club-red)]/[0.05]")}>
           <div className={cn("mb-1.5 flex items-center justify-between text-xs font-black", key === todayKey && "text-[var(--color-club-red-soft)]")}><span className={cn("grid h-6 w-6 place-items-center rounded-full", key === todayKey && "bg-[var(--color-club-red)] text-white")}>{formatMontrealDate(date, { day: "numeric" })}</span>{dayEvents.length > 0 && <span className="text-[10px] text-white/45">{dayEvents.length}</span>}</div>
           <div className="space-y-1">
-            {dayEvents.slice(0, 3).map((event) => <a key={event.id} href={`#event-${event.id}`} title={`${event.title} · ${formatMontrealTime(event.startsAt)}`} className="block overflow-hidden rounded-lg border border-[var(--color-club-red)]/25 bg-[var(--color-club-red)]/12 px-1.5 py-1.5 text-[11px] font-black leading-tight text-[var(--color-club-red-soft)]"><span className="block text-[10px] font-bold text-white/60">{formatMontrealTime(event.startsAt)}</span><span className="block line-clamp-2">{event.title}</span></a>)}
+            {dayEvents.slice(0, 3).map((event) => <a key={event.id} href={`#event-${event.id}`} title={`${event.title} · ${formatMontrealTime(event.startsAt)}`} className={cn("block overflow-hidden rounded-lg border px-1.5 py-1.5 text-[11px] font-black leading-tight", event.cancelledAt ? "border-red-400/50 bg-red-500/20 text-red-200" : "border-white/10 bg-white/[0.05] text-white/80")}><span className="block text-[10px] font-bold text-white/60">{formatMontrealTime(event.startsAt)}{event.cancelledAt ? " · Annulé" : ""}</span><span className="block line-clamp-2">{event.title}</span></a>)}
             {dayEvents.length > 3 && <div className="px-1 text-[10px] font-bold text-white/55">+{dayEvents.length - 3} autre{dayEvents.length - 3 > 1 ? "s" : ""}</div>}
           </div>
         </div>;
@@ -138,19 +139,19 @@ function daysInMonth(date: Date) {
 }
 
 function CalendarEventRow({ event }: { event: AthletePlanningEvent }) {
-  const style = eventStyles[event.type];
+  const style = event.cancelledAt ? cancelledEventStyle : eventStyles[event.type];
   const Icon = style.icon;
   const audience = event.audience === "athlete" ? "Pour toi" : event.audience === "group" ? event.groupName ?? "Ton groupe" : "Tout le club";
-  return <article id={`event-${event.id}`} className="grid scroll-mt-4 grid-cols-[52px_minmax(0,1fr)] gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3"><div className="flex flex-col items-center justify-center rounded-xl bg-[var(--color-club-red)]/12 py-2 text-center"><span className="text-[10px] font-black uppercase text-white/50">{formatMontrealDate(event.startsAt, { month: "short" })}</span><strong className="mt-0.5 text-2xl font-black leading-none text-white">{formatMontrealDate(event.startsAt, { day: "2-digit" })}</strong><span className="mt-1 text-[11px] font-black text-[var(--color-club-red-soft)]">{formatMontrealTime(event.startsAt)}</span></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-black", style.className)}><Icon className="h-3.5 w-3.5" />{style.label}</span><span className="text-xs font-bold text-white/45">{audience}</span></div><h3 className="mt-2 text-base font-black leading-snug text-white">{event.title}</h3><div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-white/58"><span><MapPin className="mr-1 inline h-3.5 w-3.5 text-white/45" />{event.location || "Lieu à confirmer"}</span>{event.duration && <span><Clock3 className="mr-1 inline h-3.5 w-3.5 text-white/45" />{formatDuration(event.duration)}</span>}</div></div></article>;
+  return <article id={`event-${event.id}`} className={cn("grid scroll-mt-4 grid-cols-[52px_minmax(0,1fr)] gap-3 rounded-2xl border p-3", event.cancelledAt ? "border-red-400/40 bg-red-500/10" : "border-white/10 bg-white/[0.035]")}><div className="flex flex-col items-center justify-center rounded-xl bg-[var(--color-club-red)]/12 py-2 text-center"><span className="text-[10px] font-black uppercase text-white/50">{formatMontrealDate(event.startsAt, { month: "short" })}</span><strong className="mt-0.5 text-2xl font-black leading-none text-white">{formatMontrealDate(event.startsAt, { day: "2-digit" })}</strong><span className="mt-1 text-[11px] font-black text-[var(--color-club-red-soft)]">{formatMontrealTime(event.startsAt)}</span></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-black", style.className)}><Icon className="h-3.5 w-3.5" />{style.label}</span><span className="text-xs font-bold text-white/45">{audience}</span></div><h3 className={cn("mt-2 text-base font-black leading-snug", event.cancelledAt ? "text-red-200 line-through" : "text-white")}>{event.title}</h3><div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-white/58"><span><MapPin className="mr-1 inline h-3.5 w-3.5 text-white/45" />{event.location || "Lieu à confirmer"}</span>{event.duration && <span><Clock3 className="mr-1 inline h-3.5 w-3.5 text-white/45" />{formatDuration(event.duration)}</span>}</div></div></article>;
 }
 
 function EventCard({ event }: { event: AthletePlanningEvent }) {
-  const style = eventStyles[event.type];
+  const style = event.cancelledAt ? cancelledEventStyle : eventStyles[event.type];
   const Icon = style.icon;
   const audience = event.audience === "athlete" ? "Pour toi" : event.audience === "group" ? event.groupName ?? "Ton groupe" : "Tout le club";
 
   return (
-    <article className="overflow-hidden rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-panel)] shadow-[0_14px_35px_rgba(0,0,0,0.18)]">
+    <article className={cn("overflow-hidden rounded-[var(--radius-panel)] border shadow-[0_14px_35px_rgba(0,0,0,0.18)]", event.cancelledAt ? "border-red-400/40 bg-red-500/10" : "border-white/10 bg-[var(--color-athlete-panel)]")}>
       <div className="grid grid-cols-[72px_1fr]">
         <div className="flex flex-col items-center justify-center border-r border-white/10 bg-white/5 px-2 py-4 text-center">
           <span className="text-xs font-black uppercase text-white/45">{formatMontrealDate(event.startsAt, { month: "short" })}</span>
@@ -163,7 +164,7 @@ function EventCard({ event }: { event: AthletePlanningEvent }) {
             <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-black", style.className)}><Icon className="h-3.5 w-3.5" /> {style.label}</span>
             <span className="inline-flex items-center gap-1 text-xs font-bold text-white/45"><Users className="h-3.5 w-3.5" /> {audience}</span>
           </div>
-          <h3 className="mt-3 text-xl font-black leading-tight">{event.title}</h3>
+          <h3 className={cn("mt-3 text-xl font-black leading-tight", event.cancelledAt ? "text-red-200 line-through" : "text-white")}>{event.title}</h3>
           <div className="mt-3 space-y-1.5 text-sm font-semibold text-white/58">
             <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 shrink-0" /> {event.endsAt ? `Du ${formatMontrealDate(event.startsAt, { weekday: "long", day: "numeric", month: "long" })} au ${formatMontrealDate(event.endsAt, { weekday: "long", day: "numeric", month: "long" })}` : formatMontrealDate(event.startsAt, { weekday: "long", day: "numeric", month: "long" })}</div>
             <div className="flex items-center gap-2"><MapPin className="h-4 w-4 shrink-0" /> {event.location || "Lieu à confirmer"}</div>

@@ -85,6 +85,26 @@ export async function saveSessionCancellationTargets(tx: PoolClient, sessionId: 
   }
 }
 
+export async function savePlanningEventCancellationTargets(tx: PoolClient, eventId: string) {
+  await tx.query("SAVEPOINT web_push_planning_event_targets");
+  try {
+    await tx.query(
+      `INSERT INTO "PlanningEventCancellationPushDelivery" (id,"planningEventId","userId")
+       SELECT gen_random_uuid()::text, e.id, u.id
+       FROM "PlanningEvent" e
+       JOIN "Athlete" athlete ON athlete.active=true AND athlete."clubId"=e."clubId"
+         AND (e."athleteId"=athlete.id OR (e."athleteId" IS NULL AND (e."groupId" IS NULL OR e."groupId"=athlete."groupId")))
+       JOIN "User" u ON u.id=athlete."userId" AND u.role='ATHLETE'
+       WHERE e.id=$1
+       ON CONFLICT ("planningEventId","userId") DO NOTHING`, [eventId]
+    );
+    await tx.query("RELEASE SAVEPOINT web_push_planning_event_targets");
+  } catch {
+    await tx.query("ROLLBACK TO SAVEPOINT web_push_planning_event_targets");
+    await tx.query("RELEASE SAVEPOINT web_push_planning_event_targets");
+  }
+}
+
 async function dispatchSessionNotice(sessionId: string, kind: "PUBLISHED" | "CANCELLED") {
   const table = kind === "CANCELLED" ? '"SessionCancellationPushDelivery"' : '"PushDelivery"';
   const deliveries = (await query<{ id: string; userId: string; title: string }>(
@@ -116,6 +136,26 @@ export async function dispatchSessionPublication(sessionId: string) {
 
 export async function dispatchSessionCancellation(sessionId: string) {
   await dispatchSessionNotice(sessionId, "CANCELLED");
+}
+
+export async function dispatchPlanningEventCancellation(eventId: string) {
+  const deliveries = (await query<{ id: string; userId: string; title: string }>(
+    `SELECT d.id,d."userId",e.title FROM "PlanningEventCancellationPushDelivery" d JOIN "PlanningEvent" e ON e.id=d."planningEventId" WHERE d."planningEventId"=$1 AND d.status='PENDING' ORDER BY d.id`, [eventId]
+  )).rows;
+  for (const delivery of deliveries) {
+    try {
+      const subscriptions = (await query<SubscriptionRow>(`SELECT id,endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=$1`, [delivery.userId])).rows;
+      let accepted = 0;
+      for (const subscription of subscriptions) {
+        try {
+          if (await send(subscription, { title: "Entraînement annulé", body: `L’entraînement « ${delivery.title} » a été annulé.`, url: "/athlete/calendar" }) === "sent") accepted++;
+        } catch { /* A push provider failure must not roll back cancelling the schedule. */ }
+      }
+      await query(`UPDATE "PlanningEventCancellationPushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);
+    } catch {
+      await query(`UPDATE "PlanningEventCancellationPushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+    }
+  }
 }
 
 export async function sendDeviceTest(userId: string, endpoint: string) {

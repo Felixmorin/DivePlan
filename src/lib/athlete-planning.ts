@@ -7,6 +7,7 @@ export type AthletePlanningEvent = {
   type: "COMPETITION" | "CAMP" | "TRAINING_SCHEDULE";
   startsAt: Date;
   endsAt: Date | null;
+  cancelledAt: Date | null;
   duration: number | null;
   location: string | null;
   audience: "athlete" | "group" | "club";
@@ -63,9 +64,9 @@ async function findAthletePlanningEvents({
 }): Promise<AthletePlanningEvent[]> {
   const result = await query<{
     id: string; title: string; type: AthletePlanningEvent["type"]; startsAt: Date; endsAt: Date | null;
-    duration: number | null; location: string | null; athleteId: string | null; groupId: string | null; groupName: string | null;
+    duration: number | null; location: string | null; cancelledAt: Date | null; athleteId: string | null; groupId: string | null; groupName: string | null;
   }>(
-    `SELECT e.id, e.title, e.type, e."startsAt", e."endsAt", e.duration, e.location, e."athleteId", e."groupId", g.name AS "groupName"
+    `SELECT e.id, e.title, e.type, e."startsAt", e."endsAt", e.duration, e.location, e."cancelledAt", e."athleteId", e."groupId", g.name AS "groupName"
      FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id = e."groupId"
      WHERE e."clubId" = $1
        AND (e."athleteId" = $2 OR ($3::text IS NOT NULL AND e."groupId" = $3) OR (e."athleteId" IS NULL AND e."groupId" IS NULL))
@@ -75,7 +76,7 @@ async function findAthletePlanningEvents({
   );
 
   return result.rows.map((event) => ({
-    id: event.id, title: event.title, type: event.type, startsAt: event.startsAt, endsAt: event.endsAt,
+    id: event.id, title: event.title, type: event.type, startsAt: event.startsAt, endsAt: event.endsAt, cancelledAt: event.cancelledAt,
     duration: event.duration, location: event.location,
     audience: event.athleteId === athleteId ? "athlete" : event.groupId ? "group" : "club",
     groupName: event.groupName

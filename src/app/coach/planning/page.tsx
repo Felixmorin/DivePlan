@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, Edit, MapPin, Printer, Trophy, Users, Waves } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, Edit, MapPin, Printer, Trophy, Users, Waves, XCircle } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { PlanningEventForm } from "@/components/coach/planning-event-form";
 import { PlanningEventEditor } from "@/components/coach/planning-event-editor";
-import { CancelSessionButton } from "@/components/coach/cancel-session-button";
+import { CancelPlannedTrainingButton } from "@/components/coach/cancel-planned-training-button";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ type PlanningEvent = {
   duration: number | null;
   location: string | null;
   notes: string | null;
+  cancelledAt: Date | null;
   groupId: string | null;
   athleteId: string | null;
   groupName: string | null;
@@ -77,7 +78,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
 
   const [sessionRows,eventRows,groupsResult,athleteRows]=await Promise.all([
     query<{id:string;title:string;focus:string;date:Date;duration:number;status:string;planningEventId:string|null}>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,period.rangeStart,period.rangeEnd]),
-    query<{id:string;type:string;title:string;startsAt:Date;endsAt:Date|null;duration:number|null;location:string|null;notes:string|null;groupId:string|null;athleteId:string|null;groupName:string|null;firstName:string|null;lastName:string|null}>(`SELECT e.id,e.type,e.title,e."startsAt",e."endsAt",e.duration,e.location,e.notes,e."groupId",e."athleteId",g.name AS "groupName",u."firstName",u."lastName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "User" u ON u.id=a."userId" WHERE e."clubId"=$1 AND e."startsAt"<$3 AND ((e."endsAt" IS NOT NULL AND e."endsAt">=$2) OR (e."endsAt" IS NULL AND e."startsAt">=$2)) ORDER BY e."startsAt"`,[clubId,period.rangeStart,period.rangeEnd]),
+    query<{id:string;type:string;title:string;startsAt:Date;endsAt:Date|null;duration:number|null;location:string|null;notes:string|null;cancelledAt:Date|null;groupId:string|null;athleteId:string|null;groupName:string|null;firstName:string|null;lastName:string|null}>(`SELECT e.id,e.type,e.title,e."startsAt",e."endsAt",e.duration,e.location,e.notes,e."cancelledAt",e."groupId",e."athleteId",g.name AS "groupName",u."firstName",u."lastName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "User" u ON u.id=a."userId" WHERE e."clubId"=$1 AND e."startsAt"<$3 AND ((e."endsAt" IS NOT NULL AND e."endsAt">=$2) OR (e."endsAt" IS NULL AND e."startsAt">=$2)) ORDER BY e."startsAt"`,[clubId,period.rangeStart,period.rangeEnd]),
     query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`,[clubId]),
     query<{id:string;firstName:string;lastName:string}>(`SELECT a.id,u."firstName",u."lastName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId])
   ]);
@@ -109,6 +110,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
     duration: event.duration,
     location: event.location,
     notes: event.notes,
+    cancelledAt: event.cancelledAt,
     groupId: event.groupId,
     athleteId: event.athleteId,
     groupName: event.groupName,
@@ -145,6 +147,7 @@ function DemoPlanningPage({ period, weekStartsOn }: { period: PlanningPeriod; we
       duration: 180,
       location: "Centre aquatique",
       notes: "Liste finale des plongeons a confirmer.",
+      cancelledAt: null,
       groupId: "provincial",
       athleteId: null,
       groupName: "Provincial",
@@ -159,6 +162,7 @@ function DemoPlanningPage({ period, weekStartsOn }: { period: PlanningPeriod; we
       duration: 240,
       location: "Bassin principal",
       notes: null,
+      cancelledAt: null,
       groupId: "provincial",
       athleteId: null,
       groupName: "Provincial",
@@ -332,7 +336,6 @@ function PlanningSessionCard({ session, active, demo }: { session: PlanningSessi
       <div className="mt-4 flex gap-2">
         <Button asChild size="sm" variant="outline"><Link href={editHref}><Edit className="h-4 w-4" /> Modifier</Link></Button>
         <Button asChild size="icon" variant="outline" className="h-9 min-h-9 w-9" aria-label="Imprimer"><Link href={printHref}><Printer className="h-4 w-4" /></Link></Button>
-        {!demo && session.status === "READY" && !active && <CancelSessionButton sessionId={session.id} compact />}
       </div>
     </article>
   );
@@ -341,10 +344,10 @@ function PlanningSessionCard({ session, active, demo }: { session: PlanningSessi
 function PlanningEventCard({ event, targets, demo }: { event: PlanningEvent; targets: PlanningTarget[]; demo: boolean }) {
   const target = event.groupId ? `group:${event.groupId}` : event.athleteId ? `athlete:${event.athleteId}` : "club";
   return (
-    <article className={`rounded-2xl border p-3 ${eventTone(event.type)}`}>
+    <article className={`rounded-2xl border p-3 ${eventTone(event.type, Boolean(event.cancelledAt))}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2.5 py-1 text-xs font-black"><Trophy className="h-3.5 w-3.5" /> {eventTypeLabel(event.type)}</span>
-        <div className="flex items-center gap-1"><span className="text-xs font-bold">{formatMontrealTime(event.startsAt)}</span><PlanningEventEditor event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), endsAt: event.endsAt ? toMontrealDateTimeInputValue(event.endsAt) : "", target }} targets={targets} /></div>
+        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black ${event.cancelledAt ? "bg-red-100 text-red-800" : "bg-white/70"}`}>{event.cancelledAt ? <XCircle className="h-3.5 w-3.5" /> : <Trophy className="h-3.5 w-3.5" />} {event.cancelledAt ? "Annulé" : eventTypeLabel(event.type)}</span>
+        <div className="flex items-center gap-1"><span className="text-xs font-bold">{formatMontrealTime(event.startsAt)}</span>{!event.cancelledAt && <PlanningEventEditor event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), endsAt: event.endsAt ? toMontrealDateTimeInputValue(event.endsAt) : "", target }} targets={targets} />}</div>
       </div>
       <div className="mt-3 font-black leading-tight">{event.title}</div>
       <div className="mt-2 space-y-1 text-xs font-bold opacity-80">
@@ -353,7 +356,10 @@ function PlanningEventCard({ event, targets, demo }: { event: PlanningEvent; tar
         <div>{event.athleteName ?? event.groupName ?? "Club complet"}</div>
       </div>
       {event.notes && <p className="mt-2 text-sm leading-5 opacity-80">{event.notes}</p>}
-      {event.type === "TRAINING_SCHEDULE" && <Button asChild size="sm" variant="outline" className="mt-3 w-full justify-between"><Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/new?planningEventId=${event.id}`}>{demo ? "Voir la séance démo" : "Créer la séance"}<CalendarPlus className="h-4 w-4" /></Link></Button>}
+      {event.type === "TRAINING_SCHEDULE" && !event.cancelledAt && <div className="mt-3 space-y-2">
+        <Button asChild size="sm" variant="outline" className="w-full justify-between"><Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/new?planningEventId=${event.id}`}>{demo ? "Voir la séance démo" : "Créer la séance"}<CalendarPlus className="h-4 w-4" /></Link></Button>
+        {!demo && !event.cancelledAt && event.startsAt > new Date() && <CancelPlannedTrainingButton eventId={event.id} />}
+      </div>}
     </article>
   );
 }
@@ -367,7 +373,6 @@ function MonthSessionItem({ session, active, demo }: { session: PlanningSession;
           <span className="block text-[10px] font-bold opacity-70">{formatMontrealTime(session.date)}</span>
           {session.title}
         </Link>
-        {!demo && session.status === "READY" && !active && <CancelSessionButton sessionId={session.id} compact />}
       </div>
     </div>
   );
@@ -376,10 +381,13 @@ function MonthSessionItem({ session, active, demo }: { session: PlanningSession;
 function MonthEventItem({ event, targets, demo }: { event: PlanningEvent; targets: PlanningTarget[]; demo: boolean }) {
   const target = event.groupId ? `group:${event.groupId}` : event.athleteId ? `athlete:${event.athleteId}` : "club";
   return (
-    <div className={`rounded-lg border px-2 py-1.5 text-xs font-black leading-tight ${eventTone(event.type)}`}>
-      <div className="flex items-start justify-between gap-1"><span className="block text-[10px] font-bold opacity-70">{formatMontrealTime(event.startsAt)} · {eventTypeLabel(event.type)}</span><PlanningEventEditor compact event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), endsAt: event.endsAt ? toMontrealDateTimeInputValue(event.endsAt) : "", target }} targets={targets} /></div>
+    <div className={`rounded-lg border px-2 py-1.5 text-xs font-black leading-tight ${eventTone(event.type, Boolean(event.cancelledAt))}`}>
+      <div className="flex items-start justify-between gap-1"><span className="block text-[10px] font-bold opacity-70">{formatMontrealTime(event.startsAt)} · {event.cancelledAt ? "Annulé" : eventTypeLabel(event.type)}</span>{!event.cancelledAt && <PlanningEventEditor compact event={{ ...event, startsAt: toMontrealDateTimeInputValue(event.startsAt), endsAt: event.endsAt ? toMontrealDateTimeInputValue(event.endsAt) : "", target }} targets={targets} />}</div>
       <div>{event.title}</div>
-      {event.type === "TRAINING_SCHEDULE" && <Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/new?planningEventId=${event.id}`} className="mt-1 inline-flex min-h-8 items-center gap-1 text-[11px] font-black underline">{demo ? "Séance démo" : "Créer la séance"}</Link>}
+      {event.type === "TRAINING_SCHEDULE" && !event.cancelledAt && <div className="mt-1 flex flex-col items-start gap-1">
+        <Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/new?planningEventId=${event.id}`} className="inline-flex min-h-8 items-center gap-1 text-[11px] font-black underline">{demo ? "Séance démo" : "Créer la séance"}</Link>
+        {!demo && !event.cancelledAt && event.startsAt > new Date() && <CancelPlannedTrainingButton eventId={event.id} compact />}
+      </div>}
     </div>
   );
 }
@@ -393,7 +401,8 @@ function statusTone(status: string) {
   return "border-[var(--block-pool-fg)]/20 bg-[var(--block-pool-bg)]/45";
 }
 
-function eventTone(type: string) {
+function eventTone(type: string, cancelled = false) {
+  if (cancelled) return "border-red-500/40 bg-red-500/10 text-red-800";
   if (type === "COMPETITION") return "border-[var(--color-action)]/30 bg-[var(--color-action)]/12 text-[var(--color-ink)]";
   if (type === "CAMP") return "border-[var(--block-dryland-fg)]/25 bg-[var(--block-dryland-bg)]/70 text-[var(--block-dryland-fg)]";
   return "border-[var(--color-brand)]/25 bg-[var(--color-surface-raised)] text-[var(--color-brand-strong)]";

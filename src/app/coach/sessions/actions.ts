@@ -634,6 +634,7 @@ export async function cancelTrainingSession(formData: FormData) {
       [SessionStatus.CANCELLED, sessionId, clubId, SessionStatus.READY]
     );
     if (!result.rowCount) throw new Error("Séance publiée introuvable ou déjà annulée.");
+    await tx.query(`UPDATE "PlanningEvent" SET "cancelledAt"=NOW() WHERE id=(SELECT "planningEventId" FROM "TrainingSession" WHERE id=$1) AND type='TRAINING_SCHEDULE'`, [sessionId]);
     await saveSessionCancellationTargets(tx, sessionId);
     return result.rows[0];
   });
