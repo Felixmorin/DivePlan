@@ -9,6 +9,7 @@ import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { buildSessionTemplatePayload, getSessionSnapshot, parseSessionTemplatePayload } from "@/lib/session-template";
 import type { SessionPoolHeight } from "@/lib/session-template";
+import { getCoachPoolInsights } from "@/lib/coach-pool-insights";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +59,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
       [athletesR.rows.map((athlete) => athlete.id), clubId]
     )
     : { rows: [] as { athleteId: string; average: number | string }[] };
+  const [athletePoolInsightsById] = await Promise.all([getCoachPoolInsights(athletesR.rows.map((athlete) => athlete.id), clubId)]);
   const athletePoolAverageById = Object.fromEntries(athletePoolAveragesR.rows.map((row) => [row.athleteId, Number(row.average)]));
   const athleteAvatarUrls = await resolveAvatarUrls(athletesR.rows.map((athlete) => athlete.avatar));
   const athletes=athletesR.rows.map((a,index)=>({id:a.id,groupId:a.groupId,level:a.level,user:{firstName:a.firstName,lastName:a.lastName,avatar:athleteAvatarUrls[index]}}));
@@ -168,6 +170,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
           }))}
           groups={groups}
           athletePoolAverageById={athletePoolAverageById}
+          athletePoolInsightsById={athletePoolInsightsById}
           planningEvents={planningEvents.map((event) => ({ id: event.id, title: event.title, startsAt: event.startsAt, duration: event.duration, groupId: event.groupId, location: event.location }))}
           poolBlocks={poolBlocks.map((block) => ({
             id: block.id,

@@ -20,6 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { SessionTemplatePayload } from "@/lib/session-template";
 import { countPoolContexts, validatePoolListRow, type PoolListRow } from "@/lib/pool-list";
+import { PoolAthleteInsightPanel } from "@/components/coach/pool-athlete-insight-panel";
+import type { AthletePoolInsight } from "@/lib/coach-pool-insights";
 import { toMontrealDateInputValue, toMontrealDateTimeInputValue } from "@/lib/timezone";
 
 const schema = z.object({
@@ -102,6 +104,7 @@ type SessionBuilderProps = {
   drylandLibrary: BuilderExercise[];
   groups: BuilderGroup[];
   athletePoolAverageById: Record<string, number>;
+  athletePoolInsightsById?: Record<string, AthletePoolInsight>;
   planningEvents: BuilderPlanningEvent[];
   poolBlocks: BuilderPoolBlock[];
   initialTemplate?: {
@@ -125,7 +128,7 @@ type SessionBuilderProps = {
 
 const steps = ["Démarrer", "Contenu", "Dryland", "Piscine", "Publier"];
 
-export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAverageById, planningEvents, poolBlocks, initialTemplate, templates, recentSessions, initialPlanningEventId, initialGroupId: providedGroupId, initialDate, initialTime, initialFocus, editingSession = false, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
+export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAverageById, athletePoolInsightsById = {}, planningEvents, poolBlocks, initialTemplate, templates, recentSessions, initialPlanningEventId, initialGroupId: providedGroupId, initialDate, initialTime, initialFocus, editingSession = false, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [assignmentOpenBlockId, setAssignmentOpenBlockId] = useState<string | null>(null);
@@ -761,7 +764,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
             <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 3 sur 5</p><h2 className="mt-1 text-2xl font-black">Dryland</h2></div>
             <DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} templates={templates.filter((template) => template.category === "Dryland")} onLoadTemplate={loadDrylandTemplate} onSaveTemplate={saveDrylandTemplate} warmup={warmup} onUpdateWarmup={(update) => setWarmup((current) => ({ ...current, ...update }))} onRemoveWarmup={() => { setWarmup((current) => ({ ...current, enabled: false })); setContentOrder((current) => current.filter((id) => id !== "warmup")); }} targetAthleteIds={drylandTargetAthleteIds} selectedBlockId={selectedDrylandBlockId} programMode={drylandProgramMode} flashBlock={flashBlock} onSelectBlock={setSelectedDrylandBlockId} onProgramModeChange={(mode) => { setDrylandProgramMode(mode); if (mode === "team") setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: drylandTargetAthleteIds }))); }} onTargetAthletesChange={(ids) => { setDrylandTargetAthleteIds(ids); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: ids }))); }} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onSaveAndContinue={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index >= 0 && index < effectiveDrylandBlocks.length - 1) setSelectedDrylandBlockId(effectiveDrylandBlocks[index + 1].id); else void advanceTo(3); }} onBack={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index > 0) setSelectedDrylandBlockId(effectiveDrylandBlocks[index - 1].id); }} onCreateExercise={addExercise}/>
           </div>}
-          {step === 3 && <PoolAthletesStep athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} averagePoolVolumeByAthlete={athletePoolAverageById} blocks={activePoolBlocks} assignments={effectivePoolAssignments} rowsByAthleteBlock={poolRowsByAthleteBlock} recentBlocks={poolBlocks} poolTemplates={templates.filter((template) => template.category === "Piscine")} totalDuration={totalDuration} onRowsChange={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} onCopyRows={(sourceId, targetId) => setPoolRowsByAthleteBlock((current) => ({ ...current, ...Object.fromEntries(activePoolBlocks.map((block) => [poolAthleteBlockKey(targetId, block.id), current[poolAthleteBlockKey(sourceId, block.id)] ?? poolSectionsToRows(block.sections)])) }))} onLoadRows={onLoadPoolTemplateRows} onLoadTemplate={loadPoolTemplate} onSaveTemplate={(blockId, athleteId) => savePoolTemplate(blockId, athleteId)} onBack={() => setStep(2)} onContinue={() => void advanceTo(4)} />}
+          {step === 3 && <PoolAthletesStep athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} averagePoolVolumeByAthlete={athletePoolAverageById} insightsByAthlete={athletePoolInsightsById} blocks={activePoolBlocks} assignments={effectivePoolAssignments} rowsByAthleteBlock={poolRowsByAthleteBlock} recentBlocks={poolBlocks} poolTemplates={templates.filter((template) => template.category === "Piscine")} totalDuration={totalDuration} onRowsChange={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} onCopyRows={(sourceId, targetId) => setPoolRowsByAthleteBlock((current) => ({ ...current, ...Object.fromEntries(activePoolBlocks.map((block) => [poolAthleteBlockKey(targetId, block.id), current[poolAthleteBlockKey(sourceId, block.id)] ?? poolSectionsToRows(block.sections)])) }))} onLoadRows={onLoadPoolTemplateRows} onLoadTemplate={loadPoolTemplate} onSaveTemplate={(blockId, athleteId) => savePoolTemplate(blockId, athleteId)} onBack={() => setStep(2)} onContinue={() => void advanceTo(4)} />}
           {step === 4 && <PublishStep title={watched.title?.trim() || `${groups.find((group) => group.id === watched.groupId)?.name ?? "Séance"} · ${formatSessionDate(watched.date ?? "")}`} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe à choisir"} date={watched.date ?? ""} time={watched.time ?? ""} duration={totalDuration} athleteCount={visibleAthletes.length} athletes={visibleAthletes} blocks={reviewBlocks} issues={publicationIssues} poolReady={activePoolBlocks.length === 0 || individualPoolBlocks.every(poolBlockIsValid)} assignmentsReady={unassignedBlocks.length === 0} canPublish={canPublish} onSaveTemplate={saveCurrentSessionTemplate} onEditBlock={(block) => setStep(block.type === "pool" ? 3 : block.type === "dryland" ? 1 : 1)} />}
         </div>
 
@@ -1188,7 +1191,7 @@ function AssignmentsStep(props: { athletes: BuilderAthlete[]; drylandBlocks: Bui
   );
 }
 
-function PoolAthletesStep({ athletes, groupName, averagePoolVolumeByAthlete, blocks, assignments, rowsByAthleteBlock, recentBlocks, poolTemplates, totalDuration, onRowsChange, onCopyRows, onLoadRows, onLoadTemplate, onSaveTemplate, onBack, onContinue }: { athletes: BuilderAthlete[]; groupName: string; averagePoolVolumeByAthlete: Record<string, number>; blocks: BuilderPoolBlock[]; assignments: Record<string, string[]>; rowsByAthleteBlock: Record<string, PoolListRow[]>; recentBlocks: BuilderPoolBlock[]; poolTemplates: SessionBuilderProps["templates"]; totalDuration: number; onRowsChange: (athleteId: string, blockId: string, rows: PoolListRow[]) => void; onCopyRows: (sourceId: string, targetId: string) => void; onLoadRows: (athleteId: string, blockId: string, rows: PoolListRow[]) => void; onLoadTemplate: (templateId: string, blockId: string, athleteId: string) => void; onSaveTemplate: (blockId: string, athleteId: string) => void; onBack: () => void; onContinue: () => void }) {
+function PoolAthletesStep({ athletes, groupName, averagePoolVolumeByAthlete, insightsByAthlete, blocks, assignments, rowsByAthleteBlock, recentBlocks, poolTemplates, totalDuration, onRowsChange, onCopyRows, onLoadRows, onLoadTemplate, onSaveTemplate, onBack, onContinue }: { athletes: BuilderAthlete[]; groupName: string; averagePoolVolumeByAthlete: Record<string, number>; insightsByAthlete: Record<string, AthletePoolInsight>; blocks: BuilderPoolBlock[]; assignments: Record<string, string[]>; rowsByAthleteBlock: Record<string, PoolListRow[]>; recentBlocks: BuilderPoolBlock[]; poolTemplates: SessionBuilderProps["templates"]; totalDuration: number; onRowsChange: (athleteId: string, blockId: string, rows: PoolListRow[]) => void; onCopyRows: (sourceId: string, targetId: string) => void; onLoadRows: (athleteId: string, blockId: string, rows: PoolListRow[]) => void; onLoadTemplate: (templateId: string, blockId: string, athleteId: string) => void; onSaveTemplate: (blockId: string, athleteId: string) => void; onBack: () => void; onContinue: () => void }) {
   const [selectedAthleteId, setSelectedAthleteId] = useState(athletes[0]?.id ?? "");
   const [copyTargetId, setCopyTargetId] = useState("");
   const selectedAthlete = athletes.find((athlete) => athlete.id === selectedAthleteId) ?? athletes[0];
@@ -1218,7 +1221,7 @@ function PoolAthletesStep({ athletes, groupName, averagePoolVolumeByAthlete, blo
       <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 4 sur 5</p><h2 className="mt-1 text-2xl font-black">Piscine · Listes des athlètes</h2><p className="mt-1 text-sm text-[var(--color-ink-muted)]">{groupName} · {athletes.length} athlètes · {totalDuration} min</p></div>
       <span className="rounded-full bg-white px-3 py-2 text-xs font-bold text-[var(--color-ink-muted)]">{readyAthleteCount}/{athletes.length} listes prêtes</span>
     </div>
-    <div className="grid gap-3 lg:grid-cols-[228px_minmax(0,1fr)]">
+    <div className="grid gap-3 lg:grid-cols-[228px_minmax(0,1fr)] xl:grid-cols-[228px_minmax(0,1fr)_340px]">
       <aside className="hidden rounded-2xl border border-[var(--color-border)] bg-white p-3 lg:block">
         <h3 className="px-2 pb-2 font-black">Athlètes <span className="text-[var(--color-ink-muted)]">({readyAthleteCount}/{athletes.length})</span></h3>
         <div className="space-y-1" role="tablist" aria-label="Choisir un athlète" aria-orientation="vertical">{athletes.map((athlete) => {
@@ -1252,6 +1255,7 @@ function PoolAthletesStep({ athletes, groupName, averagePoolVolumeByAthlete, blo
           <div className={cn("rounded-xl px-4 py-3 text-sm font-semibold", readyForSelected ? "bg-[var(--color-success-soft)] text-[var(--color-success)]" : "bg-[var(--color-action)]/10 text-[var(--color-action-strong)]")}>{readyForSelected ? "Liste prête pour cet athlète." : "Complète les lignes et vérifie les répétitions pour préparer cette liste."}</div>
         </CardContent></Card> : <Card><CardContent className="p-6"><WarningText>Aucun athlète dans ce groupe.</WarningText></CardContent></Card>}
       </div>
+      {selectedAthlete && <aside className="min-w-0"><PoolAthleteInsightPanel insight={insightsByAthlete[selectedAthlete.id]} /></aside>}
     </div>
     <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-white p-3"><Button type="button" variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4"/>Retour</Button><div className="hidden text-sm font-semibold text-[var(--color-ink-muted)] sm:block">Étape 4 sur 5 · Listes piscine</div><Button type="button" variant="action" onClick={onContinue}>Vérifier<ArrowRight className="h-4 w-4"/></Button></div>
   </div>;

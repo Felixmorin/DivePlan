@@ -41,7 +41,7 @@ type AthleteProfile = {
   skills: Array<{ code: string; name: string; status: string; progress: number; trainings: number; repetitions: number }>;
   planningEvents: Array<{ id: string; title: string; type: string; startsAt: Date; endsAt: Date | null; location?: string | null }>;
   nextCompetition?: { title: string; startsAt: Date; endsAt: Date | null };
-  competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; difficulty: number | null }>;
+  competitionDives: Array<{ id: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; code: string; difficulty: number | null; volume: number }>;
   competitionConfidence: CompetitionConfidencePoint[];
   confidenceSchemaUnavailable: boolean;
   diveNotes: Array<{ id: string; code: string; name: string; height: string; note: string; updatedAt: Date; sessionId: string; sessionTitle: string; sessionDate: Date }>;
@@ -63,13 +63,14 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
   const today=startOfMontrealDay();
   const seasonStartYear=today.getMonth()>=8?today.getFullYear():today.getFullYear()-1;
   const seasonStart=parseMontrealSessionDate(`${seasonStartYear}-09-01`,"00:00");
-  const [completionRows,diveRows,exerciseRows,skillsRows,planningRows,competitionDiveRows,attendanceRows,diveNoteRows,nextSessionRows,nextCompetitionRows]=await Promise.all([
+  const [completionRows,diveRows,exerciseRows,skillsRows,planningRows,competitionDiveRows,competitionDiveVolumeRows,attendanceRows,diveNoteRows,nextSessionRows,nextCompetitionRows]=await Promise.all([
     query<{sessionId:string;status:string;rating:string|null;note:string|null;title:string;date:Date}>(`SELECT c."sessionId",c.status,c.rating,c.note,s.title,s.date FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE c."athleteId"=$1 AND w."clubId"=$2 ORDER BY c."completedAt" DESC,c."startedAt" DESC LIMIT 8`,[athlete.id,clubId]),
     query<{sessionId:string;poolDiveId:string;repetitionsCompleted:number}>(`SELECT l."sessionId",l."poolDiveId",l."repetitionsCompleted" FROM "AthleteDiveLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE l."athleteId"=$1 AND w."clubId"=$2`,[athlete.id,clubId]),
     query<{sessionId:string;exerciseId:string;completed:boolean}>(`SELECT l."sessionId",l."exerciseId",l.completed FROM "AthleteExerciseLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE l."athleteId"=$1 AND w."clubId"=$2`,[athlete.id,clubId]),
     query<{code:string;name:string;status:string;progress:number;trainings:number;repetitions:number}>(`SELECT s.code,s.name,a.status,a.progress,a.trainings,a.repetitions FROM "AthleteSkill" a JOIN "Skill" s ON s.id=a."skillId" WHERE a."athleteId"=$1 ORDER BY a.progress DESC`,[athlete.id]),
     query<{id:string;title:string;type:string;startsAt:Date;endsAt:Date|null;location:string|null}>(`SELECT id,title,type,"startsAt","endsAt",location FROM "PlanningEvent" WHERE "athleteId"=$1 AND "startsAt">=$2 ORDER BY "startsAt" LIMIT 6`,[athlete.id,today]),
     query<{id:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";diveCode:string;difficulty:number|null}>(`SELECT id,height,"diveCode",difficulty FROM "CompetitionDive" WHERE "athleteId"=$1 ORDER BY height,position,"createdAt"`,[athlete.id]),
+    query<{height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";diveCode:string;volume:number}>(`SELECT s.height,d."diveCode",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 GROUP BY s.height,d."diveCode"`,[athlete.id]),
     query<{id:string;date:Date}>(`SELECT s.id,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.status<>'NOT_DONE' AND s.date >= $2 AND s.date < $3 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$4)`,[clubId,seasonStart,addMontrealDays(today,1),athlete.id]),
     query<{poolDiveId:string;note:string;updatedAt:Date;diveCode:string;diveName:string;height:string;sessionId:string;sessionTitle:string;sessionDate:Date}>(`SELECT n."poolDiveId",n.note,n."updatedAt",d."diveCode",d."diveName",s.height,t.id AS "sessionId",t.title AS "sessionTitle",t.date AS "sessionDate" FROM "AthleteDiveNote" n JOIN "PoolDive" d ON d.id=n."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" JOIN "PoolTraining" p ON p."blockId"=s."poolTrainingId" JOIN "SessionBlock" b ON b.id=p."blockId" JOIN "TrainingSession" t ON t.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=t."weekId" WHERE n."athleteId"=$1 AND w."clubId"=$2 ORDER BY n."updatedAt" DESC`,[athlete.id,clubId]),
     query<{id:string;title:string;date:Date;status:string}>(`SELECT s.id,s.title,s.date,s.status FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.status='READY' AND s.date >= $2 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$3) ORDER BY s.date LIMIT 1`,[clubId,today,athlete.id]),
@@ -122,7 +123,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     nextSession:nextSessionRows.rows[0],recentSessions,
     skills:skillsRows.rows.map(row=>({code:row.code,name:row.name,status:row.status,progress:row.progress,trainings:row.trainings,repetitions:row.repetitions})),
     planningEvents:planningRows.rows,nextCompetition:nextCompetitionRows.rows[0],
-    competitionDives:competitionDiveRows.rows.map(row=>({id:row.id,height:row.height,code:row.diveCode,difficulty:row.difficulty})),
+    competitionDives:competitionDiveRows.rows.map(row=>({id:row.id,height:row.height,code:row.diveCode,difficulty:row.difficulty,volume:competitionDiveVolumeRows.rows.find(volume=>volume.height===row.height&&volume.diveCode===row.diveCode)?.volume??0})),
     competitionConfidence:confidenceRows.map(row=>({competitionDiveId:row.competitionDiveId,code:row.diveCode,height:row.height,rating:row.rating,evaluator:row.evaluator,evaluatedAt:row.evaluatedAt.toISOString()})),confidenceSchemaUnavailable,
     diveNotes:diveNoteRows.rows.map(row=>({id:row.poolDiveId,code:row.diveCode,name:row.diveName,height:row.height,note:row.note,updatedAt:row.updatedAt,sessionId:row.sessionId,sessionTitle:row.sessionTitle,sessionDate:row.sessionDate})),progress,previewStats,
     attendance:{seasonLabel:`${seasonStartYear}-${seasonStartYear+1}`,absent:absenceRows.rows.length,total:attendanceRows.rows.length,rate:attendanceRows.rows.length?Math.round(absenceRows.rows.length/attendanceRows.rows.length*100):0,months:attendanceMonths}
@@ -163,9 +164,9 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
           { id: "event-demo", title: "Camp technique", type: "CAMP", startsAt: parseMontrealSessionDate("2026-08-27"), endsAt: null, location: "Bassin principal" }
         ],
         competitionDives: [
-          { id: "competition-1", height: "ONE_METER", code: "203C", difficulty: 2 },
-          { id: "competition-2", height: "ONE_METER", code: "201B", difficulty: 1.6 },
-          { id: "competition-3", height: "THREE_METER", code: "405C", difficulty: 3.1 }
+          { id: "competition-1", height: "ONE_METER", code: "203C", difficulty: 2, volume: 0 },
+          { id: "competition-2", height: "ONE_METER", code: "201B", difficulty: 1.6, volume: 0 },
+          { id: "competition-3", height: "THREE_METER", code: "405C", difficulty: 3.1, volume: 0 }
         ],
         competitionConfidence: [],
         confidenceSchemaUnavailable: false,

@@ -17,6 +17,7 @@ import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { buildSessionTemplatePayload } from "@/lib/session-template";
 import { toMontrealDateInputValue, toMontrealDateTimeInputValue } from "@/lib/timezone";
+import { getCoachPoolInsights } from "@/lib/coach-pool-insights";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +77,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
   }
 
   if (session.status === "DRAFT") {
-    const [groupsR, eventsR, averagesR] = await Promise.all([
+    const [groupsR, eventsR, averagesR, athletePoolInsightsById] = await Promise.all([
       query<{ id: string; name: string }>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`, [clubId]),
       query<{ id: string; title: string; startsAt: Date; duration: number | null; groupId: string | null; location: string | null }>(`SELECT id,title,"startsAt",duration,"groupId",location FROM "PlanningEvent" WHERE "clubId"=$1 AND type='TRAINING_SCHEDULE' ORDER BY "startsAt"`, [clubId]),
       athletesR.rows.length > 0
@@ -90,7 +91,8 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
            GROUP BY c."athleteId"`,
           [athletesR.rows.map((athlete) => athlete.id), clubId]
         )
-        : Promise.resolve({ rows: [] as { athleteId: string; average: number | string }[] })
+        : Promise.resolve({ rows: [] as { athleteId: string; average: number | string }[] }),
+      getCoachPoolInsights(athletesR.rows.map((athlete) => athlete.id), clubId)
     ]);
     const payload = buildSessionTemplatePayload(session);
     return (
@@ -105,6 +107,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
           drylandLibrary={drylandLibrary.map((exercise) => ({ id: exercise.id, name: exercise.name, category: exercise.category, sets: exercise.defaultSets, reps: exercise.defaultReps, duration: exercise.defaultDuration, roundTrip: exercise.roundTrip, equipment: exercise.equipment, tags: exercise.tags }))}
           groups={groupsR.rows}
           athletePoolAverageById={Object.fromEntries(averagesR.rows.map((row) => [row.athleteId, Number(row.average)]))}
+          athletePoolInsightsById={athletePoolInsightsById}
           planningEvents={eventsR.rows}
           poolBlocks={[]}
           initialTemplate={{ id: session.id, name: session.title, category: "Brouillon", payload }}

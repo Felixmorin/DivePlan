@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, GripVertical, Plus, X } from "lucide-react";
+import { GripVertical, Plus, X } from "lucide-react";
 import { addCompetitionDive, removeCompetitionDive, reorderCompetitionDives, updateCompetitionDiveDifficulty } from "@/app/coach/athletes/actions";
 import { worldAquaticsDifficulty } from "@/lib/world-aquatics-dd";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ type CompetitionDive = {
   height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
   code: string;
   difficulty: number | null;
+  volume: number;
 };
 
 const heights = [
@@ -102,14 +103,10 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
                         <Button type="submit" size="sm" variant="outline" disabled={pending}>Enregistrer DD</Button>
                       </form>}
                     </div>
-                    {!demo && <div className="flex shrink-0 items-center">
-                      <Button type="button" variant="ghost" size="icon" disabled={pending || index === 0} aria-label={`Monter ${dive.code}`} onClick={() => saveOrder(height.value, items, dive.id, items[index - 1]?.id ?? dive.id)}>
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                      <Button type="button" variant="ghost" size="icon" disabled={pending || index === items.length - 1} aria-label={`Descendre ${dive.code}`} onClick={() => saveOrder(height.value, items, dive.id, items[index + 1]?.id ?? dive.id)}>
-                        <ArrowDown className="h-4 w-4" />
-                      </Button>
-                    </div>}
+                    <span className="shrink-0 text-right text-xs font-bold text-[var(--color-ink-muted)]" aria-label={`${dive.volume} répétitions effectuées`}>
+                      <strong className="block text-base font-black leading-none text-[var(--color-brand-strong)]">{dive.volume}</strong>
+                      rép.
+                    </span>
                     <form action={demo ? undefined : removeCompetitionDive}>
                       <input type="hidden" name="diveId" value={dive.id} />
                       <Button type="submit" variant="ghost" size="icon" disabled={demo || pending} aria-label={`Retirer ${dive.code}`} className="text-[var(--color-danger)]">
