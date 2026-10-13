@@ -29,8 +29,8 @@ type DashboardSession = {
 };
 type DashboardSchedule = { id: string; title: string; startsAt: Date; duration: number | null; location: string | null; groupName: string | null; sessionId: string | null };
 type SessionRow = {id:string;title:string;focus:string;date:Date;duration:number;status:string;planningEventId:string|null;groupName:string};
-type CompetitionRow = { title: string; startsAt: Date; targetGroupId: string | null; targetGroupName: string | null };
-type GroupCompetition = { groupName: string; title: string; startsAt: Date };
+type PlanningEventRow = { title: string; startsAt: Date; type: string; targetGroupId: string | null; targetGroupName: string | null };
+type GroupEvent = { groupName: string; title: string; startsAt: Date; type: string };
 
 type AvatarAthlete = { id: string; firstName: string; lastName: string; avatar?: string | null };
 
@@ -47,7 +47,7 @@ export default async function CoachDashboard() {
   const dayStart = startOfMontrealDay(today);
   const dayEnd = addMontrealDays(dayStart, 1);
 
-  const [athleteRows, weekSessionRows, scheduleRows, eventRows, completionRows, nextRows, latestRows, competitionRows] = await Promise.all([
+  const [athleteRows, weekSessionRows, scheduleRows, eventRows, completionRows, nextRows, latestRows, planningEventRows] = await Promise.all([
     query<{id:string;firstName:string;lastName:string;avatar:string|null;groupId:string|null;groupName:string|null}>(`SELECT a.id,u."firstName",u."lastName",u.avatar,g.id AS "groupId",g.name AS "groupName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
     query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,weekStart,weekEnd]),
     query<{id:string;title:string;startsAt:Date;duration:number|null;location:string|null;groupName:string|null;sessionId:string|null}>(`SELECT e.id,e.title,e."startsAt",e.duration,e.location,g.name AS "groupName",s.id AS "sessionId" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "TrainingSession" s ON s."planningEventId"=e.id WHERE e."clubId"=$1 AND e.type='TRAINING_SCHEDULE' AND e."startsAt">=$2 AND e."startsAt"<$3 ORDER BY e."startsAt"`,[clubId,weekStart,weekEnd]),
@@ -55,7 +55,7 @@ export default async function CoachDashboard() {
     query<{athleteId:string;sessionId:string;status:string;completedAt:Date|null;startedAt:Date|null;firstName:string;lastName:string;title:string}>(`SELECT c."athleteId",c."sessionId",c.status,c."completedAt",c."startedAt",u."firstName",u."lastName",s.title FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "Athlete" a ON a.id=c."athleteId" JOIN "User" u ON u.id=a."userId" WHERE w."clubId"=$1 ORDER BY c."completedAt" DESC,c."startedAt" DESC LIMIT 5`,[clubId]),
     query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s.date>$2 ORDER BY s.date ASC LIMIT 1`,[clubId,today]),
     query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s.date<=$2 ORDER BY s.date DESC LIMIT 1`,[clubId,today]),
-    query<CompetitionRow>(`SELECT e.title,e."startsAt",COALESCE(g.id,a."groupId") AS "targetGroupId",COALESCE(g.name,ag.name) AS "targetGroupName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "TrainingGroup" ag ON ag.id=a."groupId" WHERE e."clubId"=$1 AND e.type='COMPETITION' AND e."startsAt">=$2 ORDER BY e."startsAt" ASC`,[clubId,today])
+    query<PlanningEventRow>(`SELECT e.title,e."startsAt",e.type,COALESCE(g.id,a."groupId") AS "targetGroupId",COALESCE(g.name,ag.name) AS "targetGroupName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "TrainingGroup" ag ON ag.id=a."groupId" WHERE e."clubId"=$1 AND e."startsAt">=$2 ORDER BY e."startsAt" ASC`,[clubId,today])
   ]);
   const athleteAvatarUrls = await resolveAvatarUrls(athleteRows.rows.map((athlete) => athlete.avatar));
   const activeAthletes=athleteRows.rows.map((a,index)=>({id:a.id,user:{firstName:a.firstName,lastName:a.lastName,avatar:athleteAvatarUrls[index]},group:a.groupName?{id:a.groupId!,name:a.groupName}:null}));
@@ -75,10 +75,10 @@ export default async function CoachDashboard() {
   );
   const activeSessionIds = new Set(sessions.filter((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
   const groups = summarizeGroups(activeAthletes);
-  const groupCompetitions: GroupCompetition[] = groups.flatMap((group) => {
-    const event = competitionRows.rows.find((item) => !item.targetGroupId || item.targetGroupId === group.id);
-    return event ? [{ groupName: group.name, title: event.title, startsAt: event.startsAt }] : [];
-  });
+  const groupEvents: GroupEvent[] = groups.flatMap((group) => planningEventRows.rows
+    .filter((item) => !item.targetGroupId || item.targetGroupId === group.id)
+    .slice(0, 3)
+    .map((item) => ({ groupName: group.name, title: item.title, startsAt: item.startsAt, type: item.type })));
   const dashboardAthletes = activeAthletes.map((athlete) => ({
     id: athlete.id,
     firstName: athlete.user.firstName,
@@ -116,7 +116,7 @@ export default async function CoachDashboard() {
 
       <div className="grid gap-5 xl:grid-cols-[1.45fr_0.85fr]">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={dashboardAthletes} />
-        <QuickReadCard sessions={sessions} groupCompetitions={groupCompetitions} />
+        <QuickReadCard sessions={sessions} groupEvents={groupEvents} />
       </div>
 
       <section className="mt-6">
@@ -206,7 +206,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
 
       <div className="grid gap-5 xl:grid-cols-[1.45fr_0.85fr]">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={athletes} demo />
-        <QuickReadCard sessions={sessions} groupCompetitions={[{groupName:"Groupe pilote",title:"Invitation provinciale",startsAt:addMontrealDays(startOfMontrealWeek(new Date()),4)}]} />
+        <QuickReadCard sessions={sessions} groupEvents={["Invitation provinciale", "Camp régional", "Compétition Mustang"].map((title, index) => ({groupName:"Groupe pilote",title,startsAt:addMontrealDays(startOfMontrealWeek(new Date()),index + 4),type:index === 1 ? "CAMP" : "COMPETITION"}))} />
       </div>
 
       <section className="mt-6">
@@ -321,9 +321,9 @@ function WeekDayCard({ day, sessions, schedules, activeSessionIds, demo = false 
   );
 }
 
-function QuickReadCard({ sessions, groupCompetitions }: {
+function QuickReadCard({ sessions, groupEvents }: {
   sessions: DashboardSession[];
-  groupCompetitions: GroupCompetition[];
+  groupEvents: GroupEvent[];
 }) {
   const weekStart = startOfMontrealWeek(new Date());
   const weekEnd = addMontrealDays(weekStart, 7);
@@ -339,8 +339,8 @@ function QuickReadCard({ sessions, groupCompetitions }: {
             <div className="flex items-center gap-2.5 rounded-xl bg-[var(--color-surface-raised)] p-3"><Users className="h-6 w-6 shrink-0 text-[var(--color-brand-strong)]"/><div><strong className="block text-2xl leading-none">{athleteCount}</strong><span className="text-[11px] text-[var(--color-ink-muted)]">athlètes attendus</span></div></div>
           </div>
           <div className="border-t border-[var(--color-border)] pt-3">
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase text-[var(--color-brand-strong)]"><Timer className="h-4 w-4"/>Temps avant compétition</div>
-            {groupCompetitions.length ? <div className="flex flex-wrap gap-2">{groupCompetitions.map((competition) => <div key={competition.groupName} className="min-w-0 flex-1 rounded-lg bg-[var(--color-surface-raised)] px-2 py-1.5"><p className="truncate text-[11px] font-black">{competition.groupName}</p><p className="truncate text-[10px] text-[var(--color-ink-muted)]">{competition.title}</p><p className="mt-0.5 flex items-center gap-1 text-[11px] font-black text-[var(--color-brand-strong)]"><Trophy className="h-3 w-3 shrink-0 text-amber-500"/>{formatMontrealCountdown(competition.startsAt)}</p></div>)}</div> : <p className="text-xs text-[var(--color-ink-muted)]">Aucune compétition à venir pour les groupes.</p>}
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase text-[var(--color-brand-strong)]"><Timer className="h-4 w-4"/>Événements à venir</div>
+            {groupEvents.length ? <div className="grid grid-cols-3 gap-2">{groupEvents.map((event, index) => <div key={`${event.groupName}-${event.title}-${event.startsAt.toISOString()}-${index}`} className="min-w-0 rounded-lg bg-[var(--color-surface-raised)] px-2 py-1.5"><p className="truncate text-[11px] font-black">{event.groupName}</p><p className="truncate text-[10px] text-[var(--color-ink-muted)]">{event.title}</p><p className="mt-0.5 flex items-center gap-1 text-[11px] font-black text-[var(--color-brand-strong)]"><Trophy className="h-3 w-3 shrink-0 text-amber-500"/>{formatMontrealCountdown(event.startsAt)}</p></div>)}</div> : <p className="text-xs text-[var(--color-ink-muted)]">Aucun événement à venir pour les groupes.</p>}
           </div>
       </CardContent>
     </Card>
