@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, Trash2, XCircle } from "lucide-react";
 import { deleteTrainingSession, markTrainingSessionNotDone } from "@/app/coach/sessions/actions";
+import { CancelSessionButton } from "@/components/coach/cancel-session-button";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +22,7 @@ export default async function SessionsPage() {
 
   await completeExpiredTrainingSessions();
 
-  const result = await query<{ id: string; title: string; focus: string; groupName: string; status: "DRAFT" | "READY" | "COMPLETED" | "NOT_DONE"; duration: number; volume: number; athleteCount: number }>(
+  const result = await query<{ id: string; title: string; focus: string; groupName: string; status: "DRAFT" | "READY" | "COMPLETED" | "NOT_DONE" | "CANCELLED"; duration: number; volume: number; athleteCount: number }>(
     `SELECT s.id, s.title, s.focus, g.name AS "groupName", s.status, s.duration,
        COALESCE((SELECT sum(b."estimatedVolume")::int FROM "SessionBlock" b WHERE b."sessionId" = s.id), 0) AS volume,
        (SELECT count(DISTINCT a."athleteId")::int FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id) AS "athleteCount"
@@ -52,7 +53,8 @@ export default async function SessionsPage() {
               athleteCount={session.athleteCount}
               actions={
                 <>
-                  {session.status !== "NOT_DONE" && (
+                  {session.status === "READY" && <CancelSessionButton sessionId={session.id} compact />}
+                  {session.status !== "NOT_DONE" && session.status !== "CANCELLED" && (
                     <form action={markTrainingSessionNotDone}>
                       <input type="hidden" name="sessionId" value={session.id} />
                       <Button type="submit" variant="outline" size="icon" className="h-9 min-h-9 w-9" aria-label="Marquer non faite"><XCircle className="h-4 w-4" /></Button>

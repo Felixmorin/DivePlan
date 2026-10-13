@@ -63,10 +63,32 @@ export async function saveSessionPublicationTargets(tx: PoolClient, sessionId: s
   }
 }
 
-export async function dispatchSessionPublication(sessionId: string) {
-  if (!isAutomaticSessionPushEnabled()) return;
+export async function saveSessionCancellationTargets(tx: PoolClient, sessionId: string) {
+  await tx.query("SAVEPOINT web_push_cancellation_targets");
+  try {
+    await tx.query(
+      `INSERT INTO "SessionCancellationPushDelivery" (id,"sessionId","userId")
+       SELECT gen_random_uuid()::text, $1, u.id
+       FROM "TrainingSession" s
+       JOIN "TrainingWeek" w ON w.id=s."weekId"
+       JOIN "SessionBlock" b ON b."sessionId"=s.id
+       JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id
+       JOIN "Athlete" athlete ON athlete.id=a."athleteId" AND athlete.active=true AND athlete."clubId"=w."clubId"
+       JOIN "User" u ON u.id=athlete."userId" AND u.role='ATHLETE'
+       WHERE s.id=$1
+       ON CONFLICT ("sessionId","userId") DO NOTHING`, [sessionId]
+    );
+    await tx.query("RELEASE SAVEPOINT web_push_cancellation_targets");
+  } catch {
+    await tx.query("ROLLBACK TO SAVEPOINT web_push_cancellation_targets");
+    await tx.query("RELEASE SAVEPOINT web_push_cancellation_targets");
+  }
+}
+
+async function dispatchSessionNotice(sessionId: string, kind: "PUBLISHED" | "CANCELLED") {
+  const table = kind === "CANCELLED" ? '"SessionCancellationPushDelivery"' : '"PushDelivery"';
   const deliveries = (await query<{ id: string; userId: string; title: string }>(
-    `SELECT d.id,d."userId",s.title FROM "PushDelivery" d JOIN "TrainingSession" s ON s.id=d."sessionId" WHERE d."sessionId"=$1 AND d.status='PENDING' ORDER BY d.id`, [sessionId]
+    `SELECT d.id,d."userId",s.title FROM ${table} d JOIN "TrainingSession" s ON s.id=d."sessionId" WHERE d."sessionId"=$1 AND d.status='PENDING' ORDER BY d.id`, [sessionId]
   )).rows;
   for (const delivery of deliveries) {
     try {
@@ -74,14 +96,26 @@ export async function dispatchSessionPublication(sessionId: string) {
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
-          if (await send(subscription, { title: "Nouvelle séance disponible", body: `L’aperçu de la séance « ${delivery.title} » est prêt.`, url: `/athlete/session/${encodeURIComponent(sessionId)}` }) === "sent") accepted++;
+          const payload = kind === "CANCELLED"
+            ? { title: "Entraînement annulé", body: `La séance « ${delivery.title} » a été annulée.`, url: "/athlete/calendar" }
+            : { title: "Nouvelle séance disponible", body: `L’aperçu de la séance « ${delivery.title} » est prêt.`, url: `/athlete/session/${encodeURIComponent(sessionId)}` };
+          if (await send(subscription, payload) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back publishing. */ }
       }
-      await query(`UPDATE "PushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);
+      await query(`UPDATE ${table} SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);
     } catch {
-      await query(`UPDATE "PushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+      await query(`UPDATE ${table} SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
     }
   }
+}
+
+export async function dispatchSessionPublication(sessionId: string) {
+  if (!isAutomaticSessionPushEnabled()) return;
+  await dispatchSessionNotice(sessionId, "PUBLISHED");
+}
+
+export async function dispatchSessionCancellation(sessionId: string) {
+  await dispatchSessionNotice(sessionId, "CANCELLED");
 }
 
 export async function sendDeviceTest(userId: string, endpoint: string) {

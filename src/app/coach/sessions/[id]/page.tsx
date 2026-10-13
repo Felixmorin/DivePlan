@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
 import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
+import { CancelSessionButton } from "@/components/coach/cancel-session-button";
 import { PoolSectionEditor } from "./pool-section-editor";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
@@ -83,6 +84,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             <input type="hidden" name="sessionId" value={session.id} />
             <Button type="submit" variant="action">Publier pour les athlètes</Button>
           </form>}
+          {session.status === "READY" && <CancelSessionButton sessionId={session.id} />}
           <form action={duplicateTrainingSession}>
             <input type="hidden" name="sessionId" value={session.id} />
             <Button type="submit" variant="outline"><Copy className="h-4 w-4" /> Dupliquer</Button>
@@ -93,7 +95,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
             <Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}/edit`}><Edit className="h-4 w-4" /> Modifier</Link></Button>
           )}
           <Button asChild><Link href={`/coach/sessions/${session.id}/print`}><Printer className="h-4 w-4" /> Imprimer</Link></Button>
-          {session.status !== "NOT_DONE" && (
+          {session.status !== "NOT_DONE" && session.status !== "CANCELLED" && (
             <form action={markTrainingSessionNotDone}>
               <input type="hidden" name="sessionId" value={session.id} />
               <Button type="submit" variant="outline"><XCircle className="h-4 w-4" /> Non faite</Button>

@@ -16,7 +16,7 @@ import {
   ,BlockType, PoolHeight, SessionStatus, WeekStatus, type SessionBlockType, type SessionPoolHeight
 } from "@/lib/session-template";
 import { formatMontrealDate, parseMontrealDateTimeInput, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
-import { dispatchSessionPublication, isAutomaticSessionPushEnabled, saveSessionPublicationTargets } from "@/lib/web-push";
+import { dispatchSessionCancellation, dispatchSessionPublication, isAutomaticSessionPushEnabled, saveSessionCancellationTargets, saveSessionPublicationTargets } from "@/lib/web-push";
 
 const sessionInputSchema = z.object({
   title: z.string(),
@@ -620,6 +620,31 @@ export async function markTrainingSessionNotDone(formData: FormData) {
   revalidatePath("/coach/planning");
   revalidatePath("/coach/sessions");
   revalidatePath(`/coach/sessions/${session.id}`);
+}
+
+export async function cancelTrainingSession(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const session = await withTransaction(async (tx) => {
+    const result = await tx.query<{ id: string; title: string }>(
+      `UPDATE "TrainingSession" s SET status=$1
+       FROM "TrainingWeek" w
+       WHERE s.id=$2 AND w.id=s."weekId" AND w."clubId"=$3 AND s.status=$4
+       RETURNING s.id,s.title`,
+      [SessionStatus.CANCELLED, sessionId, clubId, SessionStatus.READY]
+    );
+    if (!result.rowCount) throw new Error("Séance publiée introuvable ou déjà annulée.");
+    await saveSessionCancellationTargets(tx, sessionId);
+    return result.rows[0];
+  });
+  await dispatchSessionCancellation(session.id).catch(() => undefined);
+  await trackEvent({ type: "session.cancelled", message: `Entraînement annulé: ${session.title}`, clubId, userId: user.id, metadata: { sessionId: session.id } });
+  revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/coach/sessions");
+  revalidatePath(`/coach/sessions/${session.id}`);
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/calendar");
 }
 
 export async function publishTrainingSession(formData: FormData) {

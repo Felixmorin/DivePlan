@@ -9,6 +9,7 @@ const statusMap = {
   DRAFT: { label: "Brouillon", icon: CircleDashed, className: "bg-[var(--block-dryland-bg)] text-[var(--block-dryland-fg)]" },
   Brouillon: { label: "Brouillon", icon: CircleDashed, className: "bg-[var(--block-dryland-bg)] text-[var(--block-dryland-fg)]" },
   NOT_DONE: { label: "Non faite", icon: XCircle, className: "bg-[var(--color-danger)]/10 text-[var(--color-danger)]" },
+  CANCELLED: { label: "Annulée", icon: XCircle, className: "bg-[var(--color-danger)]/10 text-[var(--color-danger)]" },
   PUBLISHED: { label: "Publie", icon: Clock3, className: "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]" },
   Planifie: { label: "Planifie", icon: Clock3, className: "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]" },
   IN_PROGRESS: { label: "En cours", icon: Clock3, className: "bg-[var(--color-action)] text-white" },

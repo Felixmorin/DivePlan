@@ -24,6 +24,7 @@ enum SessionStatus {
   READY
   COMPLETED
   NOT_DONE
+  CANCELLED
 }
 
 enum BlockType {
@@ -110,6 +111,7 @@ model User {
   events        AppEvent[]
   pushSubscriptions PushSubscription[]
   pushDeliveries PushDelivery[]
+  sessionCancellationDeliveries SessionCancellationPushDelivery[]
 }
 
 model AppEvent {
@@ -240,6 +242,22 @@ model PushDelivery {
   @@index([status, createdAt])
 }
 
+model SessionCancellationPushDelivery {
+  id        String   @id
+  sessionId String
+  userId    String
+  status    String   @default("PENDING")
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  sentAt    DateTime?
+  lastError String?
+  session   TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([status, createdAt])
+}
+
 model TrainingGroup {
   id             String          @id @default(cuid())
   name           String
@@ -310,6 +328,7 @@ model TrainingSession {
   planningEvent   PlanningEvent?             @relation(fields: [planningEventId], references: [id], onDelete: SetNull)
   competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
   pushDeliveries PushDelivery[]
+  cancellationPushDeliveries SessionCancellationPushDelivery[]
 }
 
 model SessionBlock {
