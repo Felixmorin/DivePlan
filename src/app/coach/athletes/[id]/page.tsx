@@ -70,7 +70,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     query<{code:string;name:string;status:string;progress:number;trainings:number;repetitions:number}>(`SELECT s.code,s.name,a.status,a.progress,a.trainings,a.repetitions FROM "AthleteSkill" a JOIN "Skill" s ON s.id=a."skillId" WHERE a."athleteId"=$1 ORDER BY a.progress DESC`,[athlete.id]),
     query<{id:string;title:string;type:string;startsAt:Date;endsAt:Date|null;location:string|null}>(`SELECT id,title,type,"startsAt","endsAt",location FROM "PlanningEvent" WHERE "athleteId"=$1 AND "startsAt">=$2 ORDER BY "startsAt" LIMIT 6`,[athlete.id,today]),
     query<{id:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";platformHeight:number|null;diveCode:string;difficulty:number|null}>(`SELECT id,height,"platformHeight","diveCode",difficulty FROM "CompetitionDive" WHERE "athleteId"=$1 ORDER BY height,position,"createdAt"`,[athlete.id]),
-    query<{height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";diveCode:string;volume:number}>(`SELECT s.height,d."diveCode",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 GROUP BY s.height,d."diveCode"`,[athlete.id]),
+    query<{height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";heightLabel:string|null;diveCode:string;volume:number}>(`SELECT s.height,s.label AS "heightLabel",d."diveCode",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 GROUP BY s.height,s.label,d."diveCode"`,[athlete.id]),
     query<{id:string;date:Date}>(`SELECT s.id,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.status<>'NOT_DONE' AND s.date >= $2 AND s.date < $3 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$4)`,[clubId,seasonStart,addMontrealDays(today,1),athlete.id]),
     query<{poolDiveId:string;note:string;updatedAt:Date;diveCode:string;diveName:string;height:string;sessionId:string;sessionTitle:string;sessionDate:Date}>(`SELECT n."poolDiveId",n.note,n."updatedAt",d."diveCode",d."diveName",s.height,t.id AS "sessionId",t.title AS "sessionTitle",t.date AS "sessionDate" FROM "AthleteDiveNote" n JOIN "PoolDive" d ON d.id=n."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" JOIN "PoolTraining" p ON p."blockId"=s."poolTrainingId" JOIN "SessionBlock" b ON b.id=p."blockId" JOIN "TrainingSession" t ON t.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=t."weekId" WHERE n."athleteId"=$1 AND w."clubId"=$2 ORDER BY n."updatedAt" DESC`,[athlete.id,clubId]),
     query<{id:string;title:string;date:Date;status:string}>(`SELECT s.id,s.title,s.date,s.status FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.status='READY' AND s.date >= $2 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$3) ORDER BY s.date LIMIT 1`,[clubId,today,athlete.id]),
@@ -123,7 +123,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     nextSession:nextSessionRows.rows[0],recentSessions,
     skills:skillsRows.rows.map(row=>({code:row.code,name:row.name,status:row.status,progress:row.progress,trainings:row.trainings,repetitions:row.repetitions})),
     planningEvents:planningRows.rows,nextCompetition:nextCompetitionRows.rows[0],
-    competitionDives:competitionDiveRows.rows.map(row=>({id:row.id,height:row.height,platformHeight:row.platformHeight,code:row.diveCode,difficulty:row.difficulty,volume:competitionDiveVolumeRows.rows.find(volume=>volume.height===row.height&&volume.diveCode===row.diveCode)?.volume??0})),
+    competitionDives:competitionDiveRows.rows.map(row=>({id:row.id,height:row.height,platformHeight:row.platformHeight,code:row.diveCode,difficulty:row.difficulty,volume:competitionDiveVolumeRows.rows.filter(volume=>volume.diveCode===row.diveCode&&matchesCompetitionDiveHeight(volume.height,volume.heightLabel,row.height,row.platformHeight)).reduce((sum,volume)=>sum+volume.volume,0)})),
     competitionConfidence:confidenceRows.map(row=>({competitionDiveId:row.competitionDiveId,code:row.diveCode,height:row.height,rating:row.rating,evaluator:row.evaluator,evaluatedAt:row.evaluatedAt.toISOString()})),confidenceSchemaUnavailable,
     diveNotes:diveNoteRows.rows.map(row=>({id:row.poolDiveId,code:row.diveCode,name:row.diveName,height:row.height,note:row.note,updatedAt:row.updatedAt,sessionId:row.sessionId,sessionTitle:row.sessionTitle,sessionDate:row.sessionDate})),progress,previewStats,
     attendance:{seasonLabel:`${seasonStartYear}-${seasonStartYear+1}`,absent:absenceRows.rows.length,total:attendanceRows.rows.length,rate:attendanceRows.rows.length?Math.round(absenceRows.rows.length/attendanceRows.rows.length*100):0,months:attendanceMonths}
@@ -474,4 +474,19 @@ function getDiveIqPlaceholders(profile: AthleteProfile) {
   const suggestion = profile.skills.some((skill) => skill.progress < 50) ? "Revoir les bases ciblées" : "Maintenir la progression";
 
   return { readiness, risk, suggestion };
+}
+
+function matchesCompetitionDiveHeight(
+  volumeHeight: AthleteProfile["competitionDives"][number]["height"],
+  volumeHeightLabel: string | null,
+  competitionHeight: AthleteProfile["competitionDives"][number]["height"],
+  platformHeight: number | null
+) {
+  if (competitionHeight !== "PLATFORM") return volumeHeight === competitionHeight;
+  if (volumeHeight !== "PLATFORM" && volumeHeight !== "CUSTOM") return false;
+  if (volumeHeight === "PLATFORM" && volumeHeightLabel === null) return true;
+  if (platformHeight === null) return false;
+  const label = (volumeHeightLabel ?? "").toLowerCase().replace(/,/g, ".");
+  const matchedHeight = label.match(/(3|5|7\.5|10)\s*m(?:t)?/);
+  return matchedHeight !== null && Number(matchedHeight[1]) === platformHeight;
 }
