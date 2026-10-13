@@ -76,7 +76,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
 
   const [sessionRows,eventRows,groupsResult,athleteRows]=await Promise.all([
     query<{id:string;title:string;focus:string;date:Date;duration:number;status:string;planningEventId:string|null}>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,period.rangeStart,period.rangeEnd]),
-    query<{id:string;type:string;title:string;startsAt:Date;endsAt:Date|null;duration:number|null;location:string|null;notes:string|null;groupId:string|null;athleteId:string|null;groupName:string|null;firstName:string|null;lastName:string|null}>(`SELECT e.id,e.type,e.title,e."startsAt",e."endsAt",e.duration,e.location,e.notes,e."groupId",e."athleteId",g.name AS "groupName",u."firstName",u."lastName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "User" u ON u.id=a."userId" WHERE e."clubId"=$1 AND e."startsAt">=$2 AND e."startsAt"<$3 ORDER BY e."startsAt"`,[clubId,period.rangeStart,period.rangeEnd]),
+    query<{id:string;type:string;title:string;startsAt:Date;endsAt:Date|null;duration:number|null;location:string|null;notes:string|null;groupId:string|null;athleteId:string|null;groupName:string|null;firstName:string|null;lastName:string|null}>(`SELECT e.id,e.type,e.title,e."startsAt",e."endsAt",e.duration,e.location,e.notes,e."groupId",e."athleteId",g.name AS "groupName",u."firstName",u."lastName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "User" u ON u.id=a."userId" WHERE e."clubId"=$1 AND e."startsAt"<$3 AND ((e."endsAt" IS NOT NULL AND e."endsAt">=$2) OR (e."endsAt" IS NULL AND e."startsAt">=$2)) ORDER BY e."startsAt"`,[clubId,period.rangeStart,period.rangeEnd]),
     query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`,[clubId]),
     query<{id:string;firstName:string;lastName:string}>(`SELECT a.id,u."firstName",u."lastName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId])
   ]);
@@ -221,7 +221,7 @@ function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = 
               key={day.key}
               day={day}
               sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))}
-              events={events.filter((event) => sameMontrealDay(event.startsAt, day.date))}
+              events={events.filter((event) => planningEventCoversDay(event, day.date))}
               targets={targets}
               activeSessionIds={activeSessionIds}
               demo={demo}
@@ -283,7 +283,7 @@ function MonthCalendar({ period, sessions, events, activeSessionIds, targets, we
       <div className="grid grid-cols-1 sm:grid-cols-7">
         {days.map((day) => {
           const daySessions = sessions.filter((session) => sameMontrealDay(session.date, day.date));
-          const dayEvents = events.filter((event) => sameMontrealDay(event.startsAt, day.date));
+          const dayEvents = events.filter((event) => planningEventCoversDay(event, day.date));
           return (
             <div key={day.key} className={`min-h-36 border-b border-r border-[var(--color-border)] p-2 ${day.inMonth ? "bg-white" : "bg-[var(--color-surface-raised)]/55 text-[var(--color-ink-soft)]"}`}>
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -450,6 +450,11 @@ function getPlanningPeriod(params: PlanningSearchParams, defaultView: PlanningMo
     rangeEnd: addMontrealDays(weekStart, 7),
     monthKey: toMonthKey(weekStart)
   };
+}
+
+function planningEventCoversDay(event: PlanningEvent, day: Date) {
+  const dayKey = toMontrealDateInputValue(day);
+  return toMontrealDateInputValue(event.startsAt) <= dayKey && toMontrealDateInputValue(event.endsAt ?? event.startsAt) >= dayKey;
 }
 
 function parseWeekParam(value: string | undefined, weekStartsOn: 0 | 1) {

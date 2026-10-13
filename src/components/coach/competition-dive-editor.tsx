@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 import { GripVertical, Plus, X } from "lucide-react";
-import { addCompetitionDive, removeCompetitionDive, reorderCompetitionDives, updateCompetitionDiveDifficulty } from "@/app/coach/athletes/actions";
+import { addCompetitionDive, createCompetitionDiveList, removeCompetitionDive, renameCompetitionDiveList, reorderCompetitionDives, updateCompetitionDiveDifficulty } from "@/app/coach/athletes/actions";
 import { worldAquaticsDifficulty } from "@/lib/world-aquatics-dd";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type CompetitionDive = {
   id: string;
+  listId: string;
   height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
   code: string;
   difficulty: number | null;
@@ -24,13 +25,46 @@ const heights = [
   { value: "PLATFORM", label: "Plateforme" }
 ] as const;
 
-export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: string; dives: CompetitionDive[]; demo: boolean }) {
+export function CompetitionDiveEditor({ athleteId, lists, dives, demo }: { athleteId: string; lists: Array<{ id: string; name: string }>; dives: CompetitionDive[]; demo: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [activeListId, setActiveListId] = useState(lists[0]?.id ?? "");
   const [error, setError] = useState("");
+  const activeList = lists.find((list) => list.id === activeListId) ?? lists[0];
 
-  function saveOrder(height: CompetitionDive["height"], current: CompetitionDive[], dragged: string, target: string) {
+  function createList(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setError("");
+    startTransition(async () => {
+      try {
+        const created = await createCompetitionDiveList(formData);
+        setActiveListId(created.id);
+        form.reset();
+        router.refresh();
+      } catch {
+        setError("Impossible de créer cette liste. Vérifie son nom et réessaie.");
+      }
+    });
+  }
+
+  function renameList(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    setError("");
+    startTransition(async () => {
+      try {
+        await renameCompetitionDiveList(formData);
+        router.refresh();
+      } catch {
+        setError("Impossible de renommer cette liste. Vérifie son nom et réessaie.");
+      }
+    });
+  }
+
+  function saveOrder(listId: string, height: CompetitionDive["height"], current: CompetitionDive[], dragged: string, target: string) {
     if (demo || pending || dragged === target) return;
     const from = current.findIndex((dive) => dive.id === dragged);
     const to = current.findIndex((dive) => dive.id === target);
@@ -42,6 +76,7 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
     startTransition(async () => {
       const formData = new FormData();
       formData.set("athleteId", athleteId);
+      formData.set("listId", listId);
       formData.set("height", height);
       formData.set("diveIds", JSON.stringify(ordered.map((dive) => dive.id)));
       try {
@@ -58,13 +93,27 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
     <Card className="mb-6 overflow-hidden">
       <CardHeader className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
         <CardTitle>Liste de compétition</CardTitle>
-        <p className="text-sm leading-6 text-[var(--color-ink-muted)]">Cette liste est visible dans le profil de l’athlète. Fais glisser les plongeons pour modifier l’ordre de passage.</p>
+        <p className="text-sm leading-6 text-[var(--color-ink-muted)]">Crée des listes avec le nom de ton choix. Chaque liste peut avoir son propre ordre de passage.</p>
+        <div className="flex flex-wrap gap-2" aria-label="Listes de compétition">
+          {lists.map((list) => <button key={list.id} type="button" aria-pressed={activeList?.id === list.id} onClick={() => setActiveListId(list.id)} className={`rounded-full border px-4 py-2 text-sm font-black ${activeList?.id === list.id ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white" : "border-[var(--color-border)] bg-white text-[var(--color-ink-muted)]"}`}>{list.name}<span className="ml-2 opacity-75">{dives.filter((dive) => dive.listId === list.id).length}</span></button>)}
+        </div>
+        {!demo && <form onSubmit={createList} className="flex flex-wrap gap-2">
+          <input type="hidden" name="athleteId" value={athleteId} />
+          <input name="name" required maxLength={60} placeholder="Nom de la nouvelle liste" aria-label="Nom de la nouvelle liste" className="min-h-10 min-w-56 flex-1 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
+          <Button type="submit" variant="outline" disabled={pending}><Plus className="h-4 w-4"/>Créer une liste</Button>
+        </form>}
+        {activeList && !demo && <form onSubmit={renameList} className="flex flex-wrap items-center gap-2">
+          <input type="hidden" name="listId" value={activeList.id} />
+          <label htmlFor={`list-name-${activeList.id}`} className="text-sm font-bold text-[var(--color-ink-muted)]">Nom de la liste</label>
+          <input id={`list-name-${activeList.id}`} name="name" required maxLength={60} defaultValue={activeList.name} className="min-h-10 min-w-48 flex-1 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
+          <Button type="submit" variant="outline" disabled={pending}>Renommer</Button>
+        </form>}
         {error && <p role="alert" className="text-sm font-bold text-[var(--color-danger)]">{error}</p>}
-        {pending && <p role="status" className="text-sm font-semibold text-[var(--color-ink-muted)]">Enregistrement de l’ordre…</p>}
+        {pending && <p role="status" className="text-sm font-semibold text-[var(--color-ink-muted)]">Enregistrement…</p>}
       </CardHeader>
       <CardContent className="grid gap-5 p-5 lg:grid-cols-3">
         {heights.map((height) => {
-          const items = dives.filter((dive) => dive.height === height.value);
+          const items = dives.filter((dive) => dive.listId === activeList?.id && dive.height === height.value);
 
           return (
             <section key={height.value} className="rounded-[var(--radius-ui)] border border-[var(--color-border)] p-4">
@@ -87,7 +136,7 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
                     onDrop={(event) => {
                       event.preventDefault();
                       const dragged = event.dataTransfer.getData("text/plain") || draggedId;
-                      if (dragged) saveOrder(height.value, items, dragged, dive.id);
+                      if (dragged && activeList) saveOrder(activeList.id, height.value, items, dragged, dive.id);
                       setDraggedId(null);
                     }}
                     onDragEnd={() => setDraggedId(null)}
@@ -123,6 +172,7 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
 
               <form action={demo ? undefined : addCompetitionDive} className="mt-4 grid gap-2 border-t border-[var(--color-border)] pt-4">
                 <input type="hidden" name="athleteId" value={athleteId} />
+                <input type="hidden" name="listId" value={activeList?.id ?? ""} />
                 <input type="hidden" name="height" value={height.value} />
                 <div className="grid grid-cols-[1fr_5rem] gap-2">
                   <input name="diveCode" required maxLength={12} placeholder="Code" aria-label={`Code du plongeon ${height.label}`} onChange={(event) => {

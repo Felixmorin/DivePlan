@@ -43,6 +43,7 @@ const athleteAccountSchema = manualAthleteSchema.extend({
 
 const competitionDiveSchema = z.object({
   athleteId: z.string().min(1),
+  listId: z.string().min(1),
   height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM]),
   diveCode: z.string().trim().min(1).max(12),
   difficulty: z.string().trim().optional(),
@@ -51,6 +52,7 @@ const competitionDiveSchema = z.object({
 
 const competitionDiveOrderSchema = z.object({
   athleteId: z.string().min(1),
+  listId: z.string().min(1),
   height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM]),
   diveIds: z.array(z.string().min(1)).max(50)
 });
@@ -283,6 +285,7 @@ export async function addCompetitionDive(formData: FormData) {
   const { clubId } = await requireCoach();
   const parsed = competitionDiveSchema.safeParse({
     athleteId: formData.get("athleteId"),
+    listId: formData.get("listId"),
     height: formData.get("height"),
     diveCode: formData.get("diveCode"),
     difficulty: String(formData.get("difficulty") ?? ""),
@@ -293,7 +296,7 @@ export async function addCompetitionDive(formData: FormData) {
     throw new Error("Les informations du plongeon sont invalides.");
   }
 
-  const athleteResult = await query<{ id: string }>(`SELECT id FROM "Athlete" WHERE id = $1 AND "clubId" = $2 LIMIT 1`, [parsed.data.athleteId, clubId]);
+  const athleteResult = await query<{ id: string }>(`SELECT a.id FROM "Athlete" a JOIN "CompetitionDiveList" l ON l."athleteId"=a.id WHERE a.id = $1 AND l.id=$2 AND a."clubId" = $3 LIMIT 1`, [parsed.data.athleteId, parsed.data.listId, clubId]);
   const athlete = athleteResult.rows[0];
   if (!athlete) {
     throw new Error("Athlète introuvable.");
@@ -308,14 +311,43 @@ export async function addCompetitionDive(formData: FormData) {
     throw new Error("Le degré de difficulté doit être compris entre 0 et 10.");
   }
 
-  const positionResult = await query<{ position: number }>(`SELECT count(*)::int AS position FROM "CompetitionDive" WHERE "athleteId" = $1 AND height = $2`, [athlete.id, parsed.data.height]);
+  const positionResult = await query<{ position: number }>(`SELECT count(*)::int AS position FROM "CompetitionDive" WHERE "athleteId" = $1 AND "listId"=$2 AND height = $3`, [athlete.id, parsed.data.listId, parsed.data.height]);
   await query(
-    `INSERT INTO "CompetitionDive" (id, "athleteId", height, "platformHeight", "diveCode", "diveName", difficulty, position) VALUES ($1, $2, $3, $4, $5, '', $6, $7)`,
-    [randomUUID(), athlete.id, parsed.data.height, parsed.data.height === PoolHeight.PLATFORM && parsed.data.platformHeight ? Number(parsed.data.platformHeight) : null, parsed.data.diveCode.toUpperCase(), difficulty, positionResult.rows[0].position]
+    `INSERT INTO "CompetitionDive" (id, "athleteId", "listId", height, "platformHeight", "diveCode", "diveName", difficulty, position) VALUES ($1, $2, $3, $4, $5, $6, '', $7, $8)`,
+    [randomUUID(), athlete.id, parsed.data.listId, parsed.data.height, parsed.data.height === PoolHeight.PLATFORM && parsed.data.platformHeight ? Number(parsed.data.platformHeight) : null, parsed.data.diveCode.toUpperCase(), difficulty, positionResult.rows[0].position]
   );
 
   revalidatePath(`/coach/athletes/${athlete.id}`);
   revalidatePath("/athlete/profile");
+}
+
+export async function createCompetitionDiveList(formData: FormData): Promise<{ id: string }> {
+  const { clubId } = await requireCoach();
+  const athleteId = String(formData.get("athleteId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!athleteId || !name || name.length > 60) throw new Error("Le nom de la liste doit contenir de 1 à 60 caractères.");
+  const athlete = await query<{ id: string }>(`SELECT id FROM "Athlete" WHERE id=$1 AND "clubId"=$2 LIMIT 1`, [athleteId, clubId]);
+  if (!athlete.rows[0]) throw new Error("Athlète introuvable.");
+  const duplicate = await query(`SELECT id FROM "CompetitionDiveList" WHERE "athleteId"=$1 AND lower(name)=lower($2) LIMIT 1`, [athleteId, name]);
+  if (duplicate.rows[0]) throw new Error("Une liste porte déjà ce nom.");
+  const position = await query<{ position: number }>(`SELECT COALESCE(MAX(position)+1,0)::int AS position FROM "CompetitionDiveList" WHERE "athleteId"=$1`, [athleteId]);
+  const id = randomUUID();
+  await query(`INSERT INTO "CompetitionDiveList" (id,"athleteId",name,position) VALUES ($1,$2,$3,$4)`, [id, athleteId, name, position.rows[0].position]);
+  revalidatePath(`/coach/athletes/${athleteId}`);
+  return { id };
+}
+
+export async function renameCompetitionDiveList(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const listId = String(formData.get("listId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!listId || !name || name.length > 60) throw new Error("Le nom de la liste doit contenir de 1 à 60 caractères.");
+  const list = await query<{ id: string; athleteId: string }>(`SELECT l.id,l."athleteId" FROM "CompetitionDiveList" l JOIN "Athlete" a ON a.id=l."athleteId" WHERE l.id=$1 AND a."clubId"=$2 LIMIT 1`, [listId, clubId]);
+  if (!list.rows[0]) throw new Error("Liste introuvable.");
+  const duplicate = await query(`SELECT id FROM "CompetitionDiveList" WHERE "athleteId"=$1 AND lower(name)=lower($2) AND id<>$3 LIMIT 1`, [list.rows[0].athleteId, name, listId]);
+  if (duplicate.rows[0]) throw new Error("Une liste porte déjà ce nom.");
+  await query(`UPDATE "CompetitionDiveList" SET name=$1 WHERE id=$2`, [name, listId]);
+  revalidatePath(`/coach/athletes/${list.rows[0].athleteId}`);
 }
 
 export async function saveCoachCompetitionDiveEvaluation(input: z.infer<typeof coachCompetitionEvaluationSchema>) {
@@ -395,6 +427,7 @@ export async function reorderCompetitionDives(formData: FormData) {
 
   const parsed = competitionDiveOrderSchema.safeParse({
     athleteId: formData.get("athleteId"),
+    listId: formData.get("listId"),
     height: formData.get("height"),
     diveIds
   });
@@ -402,10 +435,12 @@ export async function reorderCompetitionDives(formData: FormData) {
     throw new Error("L’ordre des plongeons est invalide.");
   }
 
-  const { athleteId, height, diveIds: orderedIds } = parsed.data;
+  const { athleteId, listId, height, diveIds: orderedIds } = parsed.data;
+  const listResult = await query(`SELECT l.id FROM "CompetitionDiveList" l JOIN "Athlete" a ON a.id=l."athleteId" WHERE l.id=$1 AND l."athleteId"=$2 AND a."clubId"=$3 LIMIT 1`, [listId, athleteId, clubId]);
+  if (!listResult.rows[0]) throw new Error("Liste introuvable.");
   const currentResult = await query<{ id: string }>(
-    `SELECT d.id FROM "CompetitionDive" d JOIN "Athlete" a ON a.id = d."athleteId" WHERE d."athleteId" = $1 AND d.height = $2 AND a."clubId" = $3`,
-    [athleteId, height, clubId]
+    `SELECT d.id FROM "CompetitionDive" d JOIN "Athlete" a ON a.id = d."athleteId" WHERE d."athleteId" = $1 AND d."listId"=$2 AND d.height = $3 AND a."clubId" = $4`,
+    [athleteId, listId, height, clubId]
   );
   const currentDives = currentResult.rows;
   if (currentDives.length !== orderedIds.length || currentDives.some(({ id }) => !orderedIds.includes(id))) {

@@ -19,7 +19,7 @@ export default async function AthleteTodayPage() {
   const [readySession, recentCompletions, weekEvents, weekSummary] = await Promise.all([
     getAssignedReadySession(athlete.id),
     getAthleteRecentCompletions(athlete.id),
-    getAthleteWeekPlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId }),
+    getAthleteWeekPlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId, includeOverlapping: true }),
     getAthleteCurrentWeekSummary(athlete.id)
   ]);
 
@@ -27,7 +27,7 @@ export default async function AthleteTodayPage() {
   const weekDays = Array.from({ length: 7 }, (_, index) => {
     const date = addMontrealDays(startOfMontrealWeek(), index);
     const key = toMontrealDateInputValue(date);
-    return { date, key, events: weekEvents.filter((event) => toMontrealDateInputValue(event.startsAt) === key) };
+    return { date, key, events: weekEvents.filter((event) => toMontrealDateInputValue(event.startsAt) <= key && toMontrealDateInputValue(event.endsAt ?? event.startsAt) >= key) };
   });
 
   const sessionDate = readySession ? new Date(readySession.date) : null;

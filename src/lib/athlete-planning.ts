@@ -34,14 +34,16 @@ export async function getAthletePlanningEvents({
 export async function getAthleteWeekPlanningEvents({
   athleteId,
   clubId,
-  groupId
+  groupId,
+  includeOverlapping = false
 }: {
   athleteId: string;
   clubId: string;
   groupId: string | null;
+  includeOverlapping?: boolean;
 }): Promise<AthletePlanningEvent[]> {
   const rangeStart = startOfMontrealWeek();
-  return findAthletePlanningEvents({ athleteId, clubId, groupId, rangeStart, rangeEnd: addMontrealDays(rangeStart, 7) });
+  return findAthletePlanningEvents({ athleteId, clubId, groupId, rangeStart, rangeEnd: addMontrealDays(rangeStart, 7), includeOverlapping });
 }
 
 async function findAthletePlanningEvents({
@@ -67,7 +69,7 @@ async function findAthletePlanningEvents({
      FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id = e."groupId"
      WHERE e."clubId" = $1
        AND (e."athleteId" = $2 OR ($3::text IS NOT NULL AND e."groupId" = $3) OR (e."athleteId" IS NULL AND e."groupId" IS NULL))
-       AND ${includeOverlapping ? 'e."startsAt" < $5 AND (e."endsAt" IS NULL OR e."endsAt" >= $4)' : 'e."startsAt" >= $4 AND e."startsAt" < $5'}
+       AND ${includeOverlapping ? 'e."startsAt" < $5 AND ((e."endsAt" IS NOT NULL AND e."endsAt" >= $4) OR (e."endsAt" IS NULL AND e."startsAt" >= $4))' : 'e."startsAt" >= $4 AND e."startsAt" < $5'}
      ORDER BY e."startsAt" ASC`,
     [clubId, athleteId, groupId, rangeStart, rangeEnd]
   );

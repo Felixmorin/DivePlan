@@ -84,8 +84,9 @@ function MonthCalendar({ events, monthKey }: { events: AthletePlanningEvent[]; m
   });
   const eventsByDay = new Map<string, AthletePlanningEvent[]>();
   for (const event of events) {
-    const end = event.endsAt ?? event.startsAt;
-    for (let date = event.startsAt; date <= end; date = addMontrealDays(date, 1)) {
+    const startKey = toMontrealDateInputValue(event.startsAt);
+    const endKey = toMontrealDateInputValue(event.endsAt ?? event.startsAt);
+    for (let date = parseMontrealSessionDate(startKey, "12:00"); toMontrealDateInputValue(date) <= endKey; date = addMontrealDays(date, 1)) {
       const key = toMontrealDateInputValue(date);
       eventsByDay.set(key, [...(eventsByDay.get(key) ?? []), event]);
     }

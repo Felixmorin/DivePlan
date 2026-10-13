@@ -148,6 +148,7 @@ model Athlete {
   skills           AthleteSkill[]
   planningEvents   PlanningEvent[]
   competitionDives CompetitionDive[]
+  competitionDiveLists CompetitionDiveList[]
   competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
   milestones       AthleteMilestone[]
 }
@@ -163,9 +164,23 @@ model AthleteMilestone {
   @@index([key, awardedAt])
 }
 
+model CompetitionDiveList {
+  id         String            @id @default(cuid())
+  athleteId  String
+  name       String
+  position   Int               @default(0)
+  createdAt  DateTime          @default(now())
+  athlete    Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  dives      CompetitionDive[]
+
+  @@unique([athleteId, name])
+  @@index([athleteId, position])
+}
+
 model CompetitionDive {
   id         String     @id @default(cuid())
   athleteId  String
+  listId     String
   height     PoolHeight
   platformHeight Float?
   diveCode   String
@@ -174,8 +189,9 @@ model CompetitionDive {
   position   Int        @default(0)
   createdAt  DateTime   @default(now())
   athlete    Athlete    @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  list       CompetitionDiveList @relation(fields: [listId], references: [id], onDelete: Cascade)
 
-  @@index([athleteId, height, position])
+  @@index([athleteId, listId, height, position])
 }
 
 model Coach {
