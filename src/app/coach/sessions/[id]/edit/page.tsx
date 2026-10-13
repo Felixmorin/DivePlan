@@ -150,6 +150,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
                 <Field label="Nom"><Input name="title" defaultValue={session.title} required /></Field>
                 <Field label="Date et heure"><Input name="date" type="datetime-local" defaultValue={toMontrealDateTimeInputValue(session.date)} required /></Field>
                 <Field label="Duree"><Input name="duration" type="number" defaultValue={session.duration} required /></Field>
+                <Field label="Focus / objectifs"><Input name="focus" defaultValue={session.focus} maxLength={200} /></Field>
                 <Field label="Statut">
                   <select name="status" defaultValue={session.status} className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]">
                     <option value="DRAFT">Brouillon</option>
