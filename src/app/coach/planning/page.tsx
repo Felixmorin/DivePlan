@@ -3,6 +3,7 @@ import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, Edit, Ma
 import { CoachShell } from "@/components/coach/coach-shell";
 import { PlanningEventForm } from "@/components/coach/planning-event-form";
 import { PlanningEventEditor } from "@/components/coach/planning-event-editor";
+import { CancelSessionButton } from "@/components/coach/cancel-session-button";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
@@ -331,6 +332,7 @@ function PlanningSessionCard({ session, active, demo }: { session: PlanningSessi
       <div className="mt-4 flex gap-2">
         <Button asChild size="sm" variant="outline"><Link href={editHref}><Edit className="h-4 w-4" /> Modifier</Link></Button>
         <Button asChild size="icon" variant="outline" className="h-9 min-h-9 w-9" aria-label="Imprimer"><Link href={printHref}><Printer className="h-4 w-4" /></Link></Button>
+        {!demo && session.status === "READY" && !active && <CancelSessionButton sessionId={session.id} compact />}
       </div>
     </article>
   );
@@ -359,10 +361,15 @@ function PlanningEventCard({ event, targets, demo }: { event: PlanningEvent; tar
 function MonthSessionItem({ session, active, demo }: { session: PlanningSession; active: boolean; demo: boolean }) {
   const href = demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`;
   return (
-    <Link href={href} className={`block rounded-lg border px-2 py-1.5 text-xs font-black leading-tight focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${statusTone(active ? "IN_PROGRESS" : session.status)}`}>
-      <span className="block text-[10px] font-bold opacity-70">{formatMontrealTime(session.date)}</span>
-      {session.title}
-    </Link>
+    <div className={`rounded-lg border px-2 py-1.5 text-xs font-black leading-tight ${statusTone(active ? "IN_PROGRESS" : session.status)}`}>
+      <div className="flex items-start justify-between gap-1">
+        <Link href={href} className="min-w-0 flex-1 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+          <span className="block text-[10px] font-bold opacity-70">{formatMontrealTime(session.date)}</span>
+          {session.title}
+        </Link>
+        {!demo && session.status === "READY" && !active && <CancelSessionButton sessionId={session.id} compact />}
+      </div>
+    </div>
   );
 }
 
@@ -382,6 +389,7 @@ function statusTone(status: string) {
   if (status === "IN_PROGRESS") return "border-[var(--color-action)] bg-white";
   if (status === "COMPLETED") return "border-[var(--color-success)]/25 bg-[var(--color-success-soft)]/55";
   if (status === "NOT_DONE") return "border-[var(--color-danger)]/20 bg-[var(--color-danger)]/10";
+  if (status === "CANCELLED") return "border-[var(--color-danger)]/20 bg-[var(--color-danger)]/10";
   return "border-[var(--block-pool-fg)]/20 bg-[var(--block-pool-bg)]/45";
 }
 
