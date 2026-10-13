@@ -4,6 +4,7 @@ import webpush, { type PushSubscription as WebPushSubscription } from "web-push"
 import type { PoolClient } from "pg";
 import { pool, query } from "@/lib/db";
 import { validatePushEndpoint } from "@/lib/push-endpoint";
+import { formatMontrealDate } from "@/lib/timezone";
 
 let configured = false;
 function configurePush() {
@@ -107,8 +108,8 @@ export async function savePlanningEventCancellationTargets(tx: PoolClient, event
 
 async function dispatchSessionNotice(sessionId: string, kind: "PUBLISHED" | "CANCELLED") {
   const table = kind === "CANCELLED" ? '"SessionCancellationPushDelivery"' : '"PushDelivery"';
-  const deliveries = (await query<{ id: string; userId: string; title: string }>(
-    `SELECT d.id,d."userId",s.title FROM ${table} d JOIN "TrainingSession" s ON s.id=d."sessionId" WHERE d."sessionId"=$1 AND d.status='PENDING' ORDER BY d.id`, [sessionId]
+  const deliveries = (await query<{ id: string; userId: string; date: Date; title: string }>(
+    `SELECT d.id,d."userId",s.title,s.date FROM ${table} d JOIN "TrainingSession" s ON s.id=d."sessionId" WHERE d."sessionId"=$1 AND d.status='PENDING' ORDER BY d.id`, [sessionId]
   )).rows;
   for (const delivery of deliveries) {
     try {
@@ -117,7 +118,7 @@ async function dispatchSessionNotice(sessionId: string, kind: "PUBLISHED" | "CAN
       for (const subscription of subscriptions) {
         try {
           const payload = kind === "CANCELLED"
-            ? { title: "Entraînement annulé", body: `La séance « ${delivery.title} » a été annulée.`, url: "/athlete/calendar" }
+            ? { title: "Entraînement annulé", body: `La séance du ${formatMontrealDate(delivery.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} a été annulée.`, url: "/athlete/calendar" }
             : { title: "Nouvelle séance disponible", body: `L’aperçu de la séance « ${delivery.title} » est prêt.`, url: `/athlete/session/${encodeURIComponent(sessionId)}` };
           if (await send(subscription, payload) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back publishing. */ }
@@ -139,8 +140,8 @@ export async function dispatchSessionCancellation(sessionId: string) {
 }
 
 export async function dispatchPlanningEventCancellation(eventId: string) {
-  const deliveries = (await query<{ id: string; userId: string; title: string }>(
-    `SELECT d.id,d."userId",e.title FROM "PlanningEventCancellationPushDelivery" d JOIN "PlanningEvent" e ON e.id=d."planningEventId" WHERE d."planningEventId"=$1 AND d.status='PENDING' ORDER BY d.id`, [eventId]
+  const deliveries = (await query<{ id: string; userId: string; date: Date; title: string }>(
+    `SELECT d.id,d."userId",e.title,e."startsAt" AS date FROM "PlanningEventCancellationPushDelivery" d JOIN "PlanningEvent" e ON e.id=d."planningEventId" WHERE d."planningEventId"=$1 AND d.status='PENDING' ORDER BY d.id`, [eventId]
   )).rows;
   for (const delivery of deliveries) {
     try {
@@ -148,7 +149,7 @@ export async function dispatchPlanningEventCancellation(eventId: string) {
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
-          if (await send(subscription, { title: "Entraînement annulé", body: `L’entraînement « ${delivery.title} » a été annulé.`, url: "/athlete/calendar" }) === "sent") accepted++;
+          if (await send(subscription, { title: "Entraînement annulé", body: `L’entraînement du ${formatMontrealDate(delivery.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} a été annulé.`, url: "/athlete/calendar" }) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back cancelling the schedule. */ }
       }
       await query(`UPDATE "PlanningEventCancellationPushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);

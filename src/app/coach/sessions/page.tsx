@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Plus, Trash2, XCircle } from "lucide-react";
 import { deleteTrainingSession, markTrainingSessionNotDone } from "@/app/coach/sessions/actions";
-import { CancelSessionButton } from "@/components/coach/cancel-session-button";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,7 +52,6 @@ export default async function SessionsPage() {
               athleteCount={session.athleteCount}
               actions={
                 <>
-                  {session.status === "READY" && <CancelSessionButton sessionId={session.id} compact />}
                   {session.status !== "NOT_DONE" && session.status !== "CANCELLED" && (
                     <form action={markTrainingSessionNotDone}>
                       <input type="hidden" name="sessionId" value={session.id} />
