@@ -797,7 +797,7 @@ function CompetitionEvaluationDialog({ dives, ratings, pending, error, onChange,
             <h3 className="mb-3 text-base font-black text-cyan-100">{group.label}</h3>
             <div className="space-y-3">{group.dives.map((dive) => (
               <fieldset key={dive.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-                <legend className="px-1 text-sm font-black">{dive.code}</legend>
+                <legend className="px-1 text-sm font-black">{dive.code}{dive.height === "PLATFORM" && <span className="ml-2 text-cyan-200">{dive.platformHeight === null ? "Hauteur à préciser" : `${dive.platformHeight} m`}</span>}</legend>
                 <div className="mt-2 grid grid-cols-6 gap-2">
                   {[0, 1, 2, 3, 4, 5].map((rating) => <label key={rating} className={`flex h-11 cursor-pointer items-center justify-center rounded-xl border text-sm font-black transition ${ratings[dive.id] === rating ? "border-cyan-200 bg-cyan-300 text-[#06101d]" : "border-white/12 bg-[#06101d] text-white/70"}`}>
                     <input type="radio" name={`confidence-${dive.id}`} value={rating} checked={ratings[dive.id] === rating} onChange={() => onChange(dive.id, rating)} className="sr-only" />{rating}

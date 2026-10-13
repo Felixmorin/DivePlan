@@ -3,7 +3,7 @@ import { query } from "@/lib/db";
 export type PoolInsightHeight = "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
 export type AthletePoolInsight = {
   families: Array<{ family: string; volume: number }>;
-  competitionDives: Array<{ id: string; position: number; height: PoolInsightHeight; code: string; volume: number; averageRating: number | null; ratingCount: number }>;
+  competitionDives: Array<{ id: string; position: number; height: PoolInsightHeight; platformHeight: number | null; code: string; volume: number; averageRating: number | null; ratingCount: number }>;
 };
 
 /** Historical completed pool volume and athlete-authored confidence for competition dives. */
@@ -21,9 +21,9 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
        JOIN "PoolDive" d ON d.id=l."poolDiveId"
        WHERE l."athleteId"=ANY($1::text[]) AND w."clubId"=$2 AND c.status='COMPLETED'
        GROUP BY l."athleteId", family`, [athleteIds, clubId]),
-      query<{ athleteId: string; id: string; position: number; height: PoolInsightHeight; code: string; volume: number | string; averageRating: number | string | null; ratingCount: number | string | null }>(
+      query<{ athleteId: string; id: string; position: number; height: PoolInsightHeight; platformHeight: number | null; code: string; volume: number | string; averageRating: number | string | null; ratingCount: number | string | null }>(
       `WITH dives AS (
-         SELECT a.id AS "athleteId", cd.id, cd.position, cd.height, cd."diveCode" AS code
+         SELECT a.id AS "athleteId", cd.id, cd.position, cd.height, cd."platformHeight", cd."diveCode" AS code
          FROM "Athlete" a JOIN "CompetitionDive" cd ON cd."athleteId"=a.id
          WHERE a.id=ANY($1::text[])
        ), volume AS (
@@ -39,13 +39,13 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
          FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId"=ANY($1::text[]) AND evaluator='ATHLETE'
          GROUP BY "competitionDiveId"
        )
-       SELECT dives."athleteId", dives.id, dives.position, dives.height, dives.code, COALESCE(volume.volume,0)::int AS volume, ratings."averageRating", ratings."ratingCount"
+       SELECT dives."athleteId", dives.id, dives.position, dives.height, dives."platformHeight", dives.code, COALESCE(volume.volume,0)::int AS volume, ratings."averageRating", ratings."ratingCount"
        FROM dives LEFT JOIN volume ON volume."athleteId"=dives."athleteId" AND volume.code=dives.code AND volume.height=dives.height
        LEFT JOIN ratings ON ratings."competitionDiveId"=dives.id
        ORDER BY dives."athleteId", dives.height, dives.position, dives.id`, [athleteIds, clubId])
   ]);
 
   for (const row of familyRows.rows) result[row.athleteId]?.families.push({ family: row.family, volume: Number(row.volume) });
-  for (const row of competitionRows.rows) result[row.athleteId]?.competitionDives.push({ id: row.id, position: row.position, height: row.height, code: row.code, volume: Number(row.volume), averageRating: row.averageRating === null ? null : Number(row.averageRating), ratingCount: Number(row.ratingCount ?? 0) });
+  for (const row of competitionRows.rows) result[row.athleteId]?.competitionDives.push({ id: row.id, position: row.position, height: row.height, platformHeight: row.platformHeight === null ? null : Number(row.platformHeight), code: row.code, volume: Number(row.volume), averageRating: row.averageRating === null ? null : Number(row.averageRating), ratingCount: Number(row.ratingCount ?? 0) });
   return result;
 }

@@ -45,7 +45,8 @@ const competitionDiveSchema = z.object({
   athleteId: z.string().min(1),
   height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM]),
   diveCode: z.string().trim().min(1).max(12),
-  difficulty: z.string().trim().optional()
+  difficulty: z.string().trim().optional(),
+  platformHeight: z.enum(["5", "7.5", "10"]).optional()
 });
 
 const competitionDiveOrderSchema = z.object({
@@ -284,7 +285,8 @@ export async function addCompetitionDive(formData: FormData) {
     athleteId: formData.get("athleteId"),
     height: formData.get("height"),
     diveCode: formData.get("diveCode"),
-    difficulty: String(formData.get("difficulty") ?? "")
+    difficulty: String(formData.get("difficulty") ?? ""),
+    platformHeight: String(formData.get("platformHeight") ?? "") || undefined
   });
 
   if (!parsed.success) {
@@ -297,6 +299,10 @@ export async function addCompetitionDive(formData: FormData) {
     throw new Error("Athlète introuvable.");
   }
 
+  if (parsed.data.height === PoolHeight.PLATFORM && !parsed.data.platformHeight) {
+    throw new Error("Indique la hauteur pour ce plongeon de plateforme.");
+  }
+
   const difficulty = parsed.data.difficulty ? Number(parsed.data.difficulty.replace(",", ".")) : null;
   if (difficulty !== null && (!Number.isFinite(difficulty) || difficulty < 0 || difficulty > 10)) {
     throw new Error("Le degré de difficulté doit être compris entre 0 et 10.");
@@ -304,8 +310,8 @@ export async function addCompetitionDive(formData: FormData) {
 
   const positionResult = await query<{ position: number }>(`SELECT count(*)::int AS position FROM "CompetitionDive" WHERE "athleteId" = $1 AND height = $2`, [athlete.id, parsed.data.height]);
   await query(
-    `INSERT INTO "CompetitionDive" (id, "athleteId", height, "diveCode", "diveName", difficulty, position) VALUES ($1, $2, $3, $4, '', $5, $6)`,
-    [randomUUID(), athlete.id, parsed.data.height, parsed.data.diveCode.toUpperCase(), difficulty, positionResult.rows[0].position]
+    `INSERT INTO "CompetitionDive" (id, "athleteId", height, "platformHeight", "diveCode", "diveName", difficulty, position) VALUES ($1, $2, $3, $4, $5, '', $6, $7)`,
+    [randomUUID(), athlete.id, parsed.data.height, parsed.data.height === PoolHeight.PLATFORM && parsed.data.platformHeight ? Number(parsed.data.platformHeight) : null, parsed.data.diveCode.toUpperCase(), difficulty, positionResult.rows[0].position]
   );
 
   revalidatePath(`/coach/athletes/${athlete.id}`);
@@ -345,15 +351,18 @@ export async function updateCompetitionDiveDifficulty(formData: FormData) {
   const diveId = String(formData.get("diveId") ?? "");
   const rawDifficulty = String(formData.get("difficulty") ?? "").trim().replace(",", ".");
   const difficulty = rawDifficulty === "" ? null : Number(rawDifficulty);
-  if (!diveId || (difficulty !== null && (!Number.isFinite(difficulty) || difficulty < 0 || difficulty > 10))) {
+  const rawPlatformHeight = String(formData.get("platformHeight") ?? "");
+  const platformHeight = rawPlatformHeight === "" ? null : Number(rawPlatformHeight);
+  if (!diveId || (difficulty !== null && (!Number.isFinite(difficulty) || difficulty < 0 || difficulty > 10)) || (platformHeight !== null && ![5, 7.5, 10].includes(platformHeight))) {
     throw new Error("Le degré de difficulté doit être compris entre 0 et 10.");
   }
-  const diveResult = await query<{ id: string; athleteId: string }>(
-    `SELECT d.id, d."athleteId" FROM "CompetitionDive" d JOIN "Athlete" a ON a.id = d."athleteId" WHERE d.id = $1 AND a."clubId" = $2 LIMIT 1`, [diveId, clubId]
+  const diveResult = await query<{ id: string; athleteId: string; height: string }>(
+    `SELECT d.id, d."athleteId", d.height FROM "CompetitionDive" d JOIN "Athlete" a ON a.id = d."athleteId" WHERE d.id = $1 AND a."clubId" = $2 LIMIT 1`, [diveId, clubId]
   );
   const dive = diveResult.rows[0];
   if (!dive) throw new Error("Plongeon introuvable.");
-  await query(`UPDATE "CompetitionDive" SET difficulty = $1 WHERE id = $2`, [difficulty, dive.id]);
+  if (dive.height === PoolHeight.PLATFORM && platformHeight === null) throw new Error("Indique la hauteur pour ce plongeon de plateforme.");
+  await query(`UPDATE "CompetitionDive" SET difficulty = $1, "platformHeight" = $2 WHERE id = $3`, [difficulty, dive.height === PoolHeight.PLATFORM ? platformHeight : null, dive.id]);
   revalidatePath(`/coach/athletes/${dive.athleteId}`);
   revalidatePath("/athlete/profile");
 }

@@ -8,6 +8,7 @@ type CompetitionDive = {
   id: string;
   code: string;
   height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
+  platformHeight?: number | null;
 };
 
 const heightLabels: Record<CompetitionDive["height"], string> = {
@@ -53,7 +54,7 @@ export function CoachCompetitionEvaluationForm({ athleteId, dives }: { athleteId
           <h3 className="mb-3 text-base font-black">{group.label}</h3>
           <div className="grid gap-3 sm:grid-cols-2">{group.dives.map((dive) => (
             <fieldset key={dive.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3">
-              <legend className="px-1 text-sm font-black">{dive.code}</legend>
+              <legend className="px-1 text-sm font-black">{dive.code}{dive.height === "PLATFORM" && <span className="ml-2 text-xs font-bold text-[var(--color-ink-muted)]">{dive.platformHeight == null ? "Hauteur à préciser" : `${dive.platformHeight} m`}</span>}</legend>
               <div className="mt-2 grid grid-cols-6 gap-2">
                 {[0, 1, 2, 3, 4, 5].map((rating) => <label key={rating} className={`flex h-10 cursor-pointer items-center justify-center rounded-lg border text-sm font-black transition ${ratings[dive.id] === rating ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white" : "border-[var(--color-border)] bg-white text-[var(--color-ink-soft)]"}`}>
                   <input type="radio" name={`coach-confidence-${dive.id}`} value={rating} checked={ratings[dive.id] === rating} onChange={() => { setRatings((current) => ({ ...current, [dive.id]: rating })); setSaved(false); }} className="sr-only" />{rating}

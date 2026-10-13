@@ -9,6 +9,7 @@ export type CompetitionDiveItem = {
   height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
   code: string;
   difficulty: number | null;
+  platformHeight?: number | null;
   volume: number;
   latestConfidence?: number | null;
   confidenceHistory?: CompetitionConfidencePoint[];
@@ -51,7 +52,7 @@ export function CompetitionList({ dives }: { dives: CompetitionDiveItem[] }) {
                 {filtered.map((dive, index) => (
                   <div key={dive.id}>
                     <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 px-4 py-3.5">
-                      <span className="text-lg font-black tracking-tight text-white">{dive.code}</span>
+                      <span className="text-lg font-black tracking-tight text-white">{dive.code}{dive.height === "PLATFORM" && <span className="ml-2 text-sm font-bold text-cyan-200">{dive.platformHeight === null || dive.platformHeight === undefined ? "Hauteur à préciser" : `${dive.platformHeight} m`}</span>}</span>
                       <span className="text-sm font-semibold text-white/45">{dive.difficulty?.toFixed(1) ?? "—"}</span>
                       <span className="min-w-[3.5rem] text-right" aria-label={`${dive.volume} répétitions effectuées`}>
                         <strong className="block text-base font-black leading-none text-cyan-200">{dive.volume}</strong>

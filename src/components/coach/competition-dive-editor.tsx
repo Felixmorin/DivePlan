@@ -14,6 +14,7 @@ type CompetitionDive = {
   height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
   code: string;
   difficulty: number | null;
+  platformHeight: number | null;
   volume: number;
 };
 
@@ -96,11 +97,13 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
                     <span className="w-5 shrink-0 text-xs font-bold text-[var(--color-ink-muted)]">{index + 1}.</span>
                     <div className="min-w-0 flex-1">
                       <div className="font-black">{dive.code} <span className="ml-1 text-sm font-semibold text-[var(--color-ink-muted)]">{dive.difficulty?.toFixed(1) ?? "—"}</span></div>
-                      {!demo && <form action={updateCompetitionDiveDifficulty} className="mt-2 flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+                      {height.value === "PLATFORM" && <p className={`mt-1 text-xs font-bold ${dive.platformHeight === null ? "text-red-700" : "text-[var(--color-ink-muted)]"}`}>{dive.platformHeight === null ? "Hauteur à préciser" : `${dive.platformHeight} m`}</p>}
+                      {!demo && <form action={updateCompetitionDiveDifficulty} className="mt-2 flex flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()}>
                         <input type="hidden" name="diveId" value={dive.id} />
                         <label className="sr-only" htmlFor={`dd-${dive.id}`}>Modifier le DD de {dive.code}</label>
                         <input id={`dd-${dive.id}`} name="difficulty" inputMode="decimal" placeholder="DD" defaultValue={dive.difficulty?.toFixed(1) ?? ""} className="min-h-9 w-20 rounded-lg border border-[var(--color-border)] bg-white px-2 text-sm outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
-                        <Button type="submit" size="sm" variant="outline" disabled={pending}>Enregistrer DD</Button>
+                        {height.value === "PLATFORM" && <><label className="sr-only" htmlFor={`ph-${dive.id}`}>Hauteur de plateforme de {dive.code}</label><select id={`ph-${dive.id}`} name="platformHeight" required defaultValue={dive.platformHeight?.toString() ?? ""} className="min-h-9 rounded-lg border border-[var(--color-border)] bg-white px-2 text-sm"><option value="" disabled>Hauteur</option><option value="5">5 m</option><option value="7.5">7,5 m</option><option value="10">10 m</option></select></>}
+                        <Button type="submit" size="sm" variant="outline" disabled={pending}>Enregistrer</Button>
                       </form>}
                     </div>
                     <span className="shrink-0 text-right text-xs font-bold text-[var(--color-ink-muted)]" aria-label={`${dive.volume} répétitions effectuées`}>
@@ -132,6 +135,7 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
                   }} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
                   <input name="difficulty" inputMode="decimal" placeholder="DD" aria-label={`Degré de difficulté ${height.label}`} className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-base outline-none focus:border-[var(--color-brand)] focus:shadow-[var(--focus-ring)]" />
                 </div>
+                {height.value === "PLATFORM" && <select name="platformHeight" required aria-label="Hauteur du plongeon de plateforme" defaultValue="" className="min-h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold"><option value="" disabled>Hauteur du saut…</option><option value="5">5 m</option><option value="7.5">7,5 m</option><option value="10">10 m</option></select>}
                 <Button type="submit" disabled={demo || pending} variant="default" className="w-full"><Plus className="h-4 w-4" /> Ajouter</Button>
               </form>
             </section>

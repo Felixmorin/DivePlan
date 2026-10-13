@@ -92,6 +92,7 @@ export default async function ProfilePage() {
           height: dive.height,
           code: dive.diveCode,
           difficulty: dive.difficulty,
+          platformHeight: dive.platformHeight,
             latestConfidence: confidenceRows.filter((item) => item.competitionDiveId === dive.id).at(-1)?.rating ?? null,
             confidenceHistory: confidenceRows.filter((item) => item.competitionDiveId === dive.id).map((item) => ({ competitionDiveId: item.competitionDiveId, code: item.diveCode, height: item.height, rating: item.rating, evaluator: item.evaluator, evaluatedAt: item.evaluatedAt.toISOString() })),
             volume: totals.skillDives

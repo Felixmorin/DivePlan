@@ -69,7 +69,7 @@ export type AthleteSessionView = {
   blocks: AthleteSessionBlock[];
   competitionEvaluationAtStart: boolean;
   competitionEvaluationBlockIds: string[];
-  competitionDives: Array<{ id: string; code: string; height: PoolHeight }>;
+  competitionDives: Array<{ id: string; code: string; height: PoolHeight; platformHeight: number | null }>;
   competitionEvaluations: Array<{ competitionDiveId: string; rating: number }>;
 };
 
@@ -119,7 +119,7 @@ export type AthleteCurrentWeekSummary = {
 };
 
 type CurrentUser = {id:string;firstName:string;lastName:string;email:string;username:string|null;avatar:string|null;role:"ADMIN"|"COACH"|"ATHLETE";clubId:string|null;passwordHash:string|null;passwordSetAt:Date|null;createdAt:Date};
-type CurrentAthlete = {id:string;userId:string;clubId:string;groupId:string|null;birthDate:Date;level:string;active:boolean;user:CurrentUser;club:{id:string;name:string;logo:string|null;createdAt:Date};group:({id:string;name:string;clubId:string;coachId:string;coach:{id:string;userId:string;clubId:string;planningDefaultView:string;weekStartsOn:number;printShowCoachNotes:boolean;printShowAthleteNames:boolean;printRepetitionChecks:boolean;user:CurrentUser}})|null;competitionDives:Array<{id:string;athleteId:string;height:PoolHeight;diveCode:string;diveName:string;difficulty:number|null;position:number;createdAt:Date}>};
+type CurrentAthlete = {id:string;userId:string;clubId:string;groupId:string|null;birthDate:Date;level:string;active:boolean;user:CurrentUser;club:{id:string;name:string;logo:string|null;createdAt:Date};group:({id:string;name:string;clubId:string;coachId:string;coach:{id:string;userId:string;clubId:string;planningDefaultView:string;weekStartsOn:number;printShowCoachNotes:boolean;printShowAthleteNames:boolean;printRepetitionChecks:boolean;user:CurrentUser}})|null;competitionDives:Array<{id:string;athleteId:string;height:PoolHeight;platformHeight:number|null;diveCode:string;diveName:string;difficulty:number|null;position:number;createdAt:Date}>};
 
 export async function getCurrentAthlete() {
   const user = await getCurrentUser();
@@ -168,7 +168,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
   if (!session) return null;
   const blocks=(await query<{id:string;title:string;description:string|null;type:AthleteSessionBlock["type"];duration:number;estimatedVolume:number;competitionEvaluation:boolean}>(`SELECT b.id,b.title,b.description,b.type,b.duration,b."estimatedVolume",b."competitionEvaluation" FROM "SessionBlock" b WHERE b."sessionId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlockAssignment" a WHERE a."sessionBlockId"=b.id AND a."athleteId"=$2) ORDER BY b.position`,[sessionId,athleteId])).rows;
   const [competitionDives,competitionEvaluations]=await Promise.all([
-    query<{id:string;diveCode:string;height:PoolHeight}>(`SELECT id,"diveCode",height FROM "CompetitionDive" WHERE "athleteId"=$1 ORDER BY height,position,"createdAt"`,[athleteId]),
+    query<{id:string;diveCode:string;height:PoolHeight;platformHeight:number|null}>(`SELECT id,"diveCode",height,"platformHeight" FROM "CompetitionDive" WHERE "athleteId"=$1 ORDER BY height,position,"createdAt"`,[athleteId]),
     query<{competitionDiveId:string;rating:number}>(`SELECT "competitionDiveId",rating FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId"=$1 AND "sessionId"=$2 AND evaluator='ATHLETE'`,[athleteId,sessionId])
   ]);
 
@@ -185,7 +185,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
     finalNote: session.note ?? null,
     competitionEvaluationAtStart: session.competitionEvaluationAtStart,
     competitionEvaluationBlockIds: blocks.filter((block) => block.competitionEvaluation).map((block) => block.id),
-    competitionDives: competitionDives.rows.map((dive) => ({ id: dive.id, code: dive.diveCode, height: dive.height })),
+    competitionDives: competitionDives.rows.map((dive) => ({ id: dive.id, code: dive.diveCode, height: dive.height, platformHeight: dive.platformHeight })),
     competitionEvaluations:competitionEvaluations.rows,
     blocks: await Promise.all(blocks.map(async (block) => {
       const timing=(await query<{openedAt:Date;closedAt:Date|null}>(`SELECT "openedAt","closedAt" FROM "AthleteBlockTiming" WHERE "athleteId"=$1 AND "blockId"=$2`,[athleteId,block.id])).rows[0];

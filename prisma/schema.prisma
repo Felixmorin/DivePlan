@@ -167,6 +167,7 @@ model CompetitionDive {
   id         String     @id @default(cuid())
   athleteId  String
   height     PoolHeight
+  platformHeight Float?
   diveCode   String
   diveName   String
   difficulty Float?
