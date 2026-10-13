@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 import { GripVertical, Plus, X } from "lucide-react";
-import { addCompetitionDive, createCompetitionDiveList, removeCompetitionDive, renameCompetitionDiveList, reorderCompetitionDives, updateCompetitionDiveDifficulty } from "@/app/coach/athletes/actions";
+import { addCompetitionDive, createCompetitionDiveList, deleteCompetitionDiveList, removeCompetitionDive, renameCompetitionDiveList, reorderCompetitionDives, updateCompetitionDiveDifficulty } from "@/app/coach/athletes/actions";
 import { worldAquaticsDifficulty } from "@/lib/world-aquatics-dd";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,22 @@ export function CompetitionDiveEditor({ athleteId, lists, dives, demo }: { athle
     });
   }
 
+  function deleteList(list: { id: string; name: string }) {
+    const diveCount = dives.filter((dive) => dive.listId === list.id).length;
+    const diveLabel = diveCount === 1 ? "plongeon" : "plongeons";
+    if (!window.confirm(`Supprimer la liste « ${list.name} » et ses ${diveCount} ${diveLabel} ? Les évaluations associées seront aussi supprimées.`)) return;
+    setError("");
+    startTransition(async () => {
+      try {
+        await deleteCompetitionDiveList(list.id);
+        setActiveListId(lists.find((item) => item.id !== list.id)?.id ?? "");
+        router.refresh();
+      } catch {
+        setError("Impossible de supprimer cette liste. Réessaie.");
+      }
+    });
+  }
+
   function saveOrder(listId: string, height: CompetitionDive["height"], current: CompetitionDive[], dragged: string, target: string) {
     if (demo || pending || dragged === target) return;
     const from = current.findIndex((dive) => dive.id === dragged);
@@ -95,7 +111,10 @@ export function CompetitionDiveEditor({ athleteId, lists, dives, demo }: { athle
         <CardTitle>Liste de compétition</CardTitle>
         <p className="text-sm leading-6 text-[var(--color-ink-muted)]">Crée des listes avec le nom de ton choix. Chaque liste peut avoir son propre ordre de passage.</p>
         <div className="flex flex-wrap gap-2" aria-label="Listes de compétition">
-          {lists.map((list) => <button key={list.id} type="button" aria-pressed={activeList?.id === list.id} onClick={() => setActiveListId(list.id)} className={`rounded-full border px-4 py-2 text-sm font-black ${activeList?.id === list.id ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white" : "border-[var(--color-border)] bg-white text-[var(--color-ink-muted)]"}`}>{list.name}<span className="ml-2 opacity-75">{dives.filter((dive) => dive.listId === list.id).length}</span></button>)}
+          {lists.map((list) => <div key={list.id} className={`inline-flex items-center rounded-full border text-sm font-black ${activeList?.id === list.id ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white" : "border-[var(--color-border)] bg-white text-[var(--color-ink-muted)]"}`}>
+            <button type="button" aria-pressed={activeList?.id === list.id} onClick={() => setActiveListId(list.id)} className="rounded-l-full py-2 pl-4 pr-1">{list.name}<span className="ml-2 opacity-75">{dives.filter((dive) => dive.listId === list.id).length}</span></button>
+            {!demo && <button type="button" disabled={pending} onClick={() => deleteList(list)} aria-label={`Supprimer la liste ${list.name}`} title={`Supprimer ${list.name}`} className="mr-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-current opacity-70 transition hover:bg-black/10 hover:opacity-100 disabled:opacity-40"><X className="h-3.5 w-3.5" /></button>}
+          </div>)}
         </div>
         {!demo && <form onSubmit={createList} className="flex flex-wrap gap-2">
           <input type="hidden" name="athleteId" value={athleteId} />
@@ -111,7 +130,7 @@ export function CompetitionDiveEditor({ athleteId, lists, dives, demo }: { athle
         {error && <p role="alert" className="text-sm font-bold text-[var(--color-danger)]">{error}</p>}
         {pending && <p role="status" className="text-sm font-semibold text-[var(--color-ink-muted)]">Enregistrement…</p>}
       </CardHeader>
-      <CardContent className="grid gap-5 p-5 lg:grid-cols-3">
+      {activeList ? <CardContent className="grid gap-5 p-5 lg:grid-cols-3">
         {heights.map((height) => {
           const items = dives.filter((dive) => dive.listId === activeList?.id && dive.height === height.value);
 
@@ -191,7 +210,7 @@ export function CompetitionDiveEditor({ athleteId, lists, dives, demo }: { athle
             </section>
           );
         })}
-      </CardContent>
+      </CardContent> : <CardContent className="p-5 text-sm font-semibold text-[var(--color-ink-muted)]">Aucune liste. Crée une liste pour ajouter des plongeons.</CardContent>}
     </Card>
   );
 }

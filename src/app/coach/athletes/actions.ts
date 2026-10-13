@@ -350,6 +350,19 @@ export async function renameCompetitionDiveList(formData: FormData) {
   revalidatePath(`/coach/athletes/${list.rows[0].athleteId}`);
 }
 
+export async function deleteCompetitionDiveList(listId: string): Promise<{ athleteId: string }> {
+  const { clubId } = await requireCoach();
+  const list = await query<{ id: string; athleteId: string }>(`SELECT l.id,l."athleteId" FROM "CompetitionDiveList" l JOIN "Athlete" a ON a.id=l."athleteId" WHERE l.id=$1 AND a."clubId"=$2 LIMIT 1`, [listId, clubId]);
+  if (!list.rows[0]) throw new Error("Liste introuvable.");
+  await withTransaction(async (tx) => {
+    await tx.query(`DELETE FROM "AthleteCompetitionDiveEvaluation" WHERE "competitionDiveId" IN (SELECT id FROM "CompetitionDive" WHERE "listId"=$1)`, [listId]);
+    await tx.query(`DELETE FROM "CompetitionDiveList" WHERE id=$1`, [listId]);
+  });
+  revalidatePath(`/coach/athletes/${list.rows[0].athleteId}`);
+  revalidatePath("/athlete/profile");
+  return { athleteId: list.rows[0].athleteId };
+}
+
 export async function saveCoachCompetitionDiveEvaluation(input: z.infer<typeof coachCompetitionEvaluationSchema>) {
   const { coach, clubId } = await requireCoach();
   const data = coachCompetitionEvaluationSchema.parse(input);
