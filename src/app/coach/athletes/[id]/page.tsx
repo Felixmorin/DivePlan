@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, Plus, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves, X } from "lucide-react";
+import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves } from "lucide-react";
 import { deleteAthlete, removeAthleteDiveFromVolume, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { CompetitionDiveEditor } from "@/components/coach/competition-dive-editor";
@@ -64,21 +64,24 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
   const today=startOfMontrealDay();
   const seasonStartYear=today.getMonth()>=8?today.getFullYear():today.getFullYear()-1;
   const seasonStart=parseMontrealSessionDate(`${seasonStartYear}-09-01`,"00:00");
-  const [completionRows,diveRows,exerciseRows,skillsRows,planningRows,competitionListRows,competitionDiveRows,competitionDiveVolumeRows,attendanceRows,diveNoteRows,nextSessionRows,nextCompetitionRows]=await Promise.all([
+  const [completionRows,diveTotalResult,skillsRows,planningRows,competitionListRows,competitionDiveRows,competitionDiveVolumeRows,attendanceRows,diveNoteRows,nextSessionRows,nextCompetitionRows]=await Promise.all([
     query<{sessionId:string;status:string;rating:string|null;note:string|null;title:string;date:Date}>(`SELECT c."sessionId",c.status,c.rating,c.note,s.title,s.date FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE c."athleteId"=$1 AND w."clubId"=$2 ORDER BY c."completedAt" DESC,c."startedAt" DESC LIMIT 8`,[athlete.id,clubId]),
-    query<{sessionId:string;poolDiveId:string;repetitionsCompleted:number}>(`SELECT l."sessionId",l."poolDiveId",l."repetitionsCompleted" FROM "AthleteDiveLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE l."athleteId"=$1 AND w."clubId"=$2`,[athlete.id,clubId]),
-    query<{sessionId:string;exerciseId:string;completed:boolean}>(`SELECT l."sessionId",l."exerciseId",l.completed FROM "AthleteExerciseLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE l."athleteId"=$1 AND w."clubId"=$2`,[athlete.id,clubId]),
+    query<{volume:number}>(`SELECT COALESCE(SUM(l."repetitionsCompleted"),0)::int AS volume FROM "AthleteDiveLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE l."athleteId"=$1 AND w."clubId"=$2`,[athlete.id,clubId]),
     query<{code:string;name:string;status:string;progress:number;trainings:number;repetitions:number}>(`SELECT s.code,s.name,a.status,a.progress,a.trainings,a.repetitions FROM "AthleteSkill" a JOIN "Skill" s ON s.id=a."skillId" WHERE a."athleteId"=$1 ORDER BY a.progress DESC`,[athlete.id]),
     query<{id:string;title:string;type:string;startsAt:Date;endsAt:Date|null;location:string|null}>(`SELECT id,title,type,"startsAt","endsAt",location FROM "PlanningEvent" WHERE "athleteId"=$1 AND "startsAt">=$2 ORDER BY "startsAt" LIMIT 6`,[athlete.id,today]),
     query<{id:string;name:string}>(`SELECT id,name FROM "CompetitionDiveList" WHERE "athleteId"=$1 ORDER BY position,"createdAt"`,[athlete.id]),
     query<{id:string;listId:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";platformHeight:number|null;diveCode:string;difficulty:number|null}>(`SELECT id,"listId",height,"platformHeight","diveCode",difficulty FROM "CompetitionDive" WHERE "athleteId"=$1 ORDER BY height,position,"createdAt"`,[athlete.id]),
     query<{height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";heightLabel:string|null;diveCode:string;volume:number}>(`SELECT s.height,s.label AS "heightLabel",d."diveCode",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 GROUP BY s.height,s.label,d."diveCode"`,[athlete.id]),
     query<{id:string;date:Date}>(`SELECT s.id,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.status<>'NOT_DONE' AND s.date >= $2 AND s.date < $3 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$4)`,[clubId,seasonStart,addMontrealDays(today,1),athlete.id]),
-    query<{poolDiveId:string;note:string;updatedAt:Date;diveCode:string;diveName:string;height:string;sessionId:string;sessionTitle:string;sessionDate:Date}>(`SELECT n."poolDiveId",n.note,n."updatedAt",d."diveCode",d."diveName",s.height,t.id AS "sessionId",t.title AS "sessionTitle",t.date AS "sessionDate" FROM "AthleteDiveNote" n JOIN "PoolDive" d ON d.id=n."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" JOIN "PoolTraining" p ON p."blockId"=s."poolTrainingId" JOIN "SessionBlock" b ON b.id=p."blockId" JOIN "TrainingSession" t ON t.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=t."weekId" WHERE n."athleteId"=$1 AND w."clubId"=$2 ORDER BY n."updatedAt" DESC`,[athlete.id,clubId]),
+    query<{poolDiveId:string;note:string;updatedAt:Date;diveCode:string;diveName:string;height:string;sessionId:string;sessionTitle:string;sessionDate:Date}>(`SELECT n."poolDiveId",n.note,n."updatedAt",d."diveCode",d."diveName",s.height,t.id AS "sessionId",t.title AS "sessionTitle",t.date AS "sessionDate" FROM "AthleteDiveNote" n JOIN "PoolDive" d ON d.id=n."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" JOIN "PoolTraining" p ON p."blockId"=s."poolTrainingId" JOIN "SessionBlock" b ON b.id=p."blockId" JOIN "TrainingSession" t ON t.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=t."weekId" WHERE n."athleteId"=$1 AND w."clubId"=$2 ORDER BY n."updatedAt" DESC LIMIT 50`,[athlete.id,clubId]),
     query<{id:string;title:string;date:Date;status:string}>(`SELECT s.id,s.title,s.date,s.status FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.status='READY' AND s.date >= $2 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$3) ORDER BY s.date LIMIT 1`,[clubId,today,athlete.id]),
     query<{title:string;startsAt:Date;endsAt:Date|null}>(`SELECT title,"startsAt","endsAt" FROM "PlanningEvent" WHERE "clubId"=$1 AND type='COMPETITION' AND "startsAt">=$2 AND ("athleteId"=$3 OR ($4::text IS NOT NULL AND "groupId"=$4) OR ("athleteId" IS NULL AND "groupId" IS NULL)) ORDER BY "startsAt" LIMIT 1`,[clubId,today,athlete.id,athlete.groupId])
   ]);
   const recentIds=completionRows.rows.map(row=>row.sessionId);
+  const [diveRows,exerciseRows]=recentIds.length?await Promise.all([
+    query<{sessionId:string;poolDiveId:string;repetitionsCompleted:number}>(`SELECT "sessionId","poolDiveId","repetitionsCompleted" FROM "AthleteDiveLog" WHERE "athleteId"=$1 AND "sessionId"=ANY($2::text[])`,[athlete.id,recentIds]),
+    query<{sessionId:string;exerciseId:string;completed:boolean}>(`SELECT "sessionId","exerciseId",completed FROM "AthleteExerciseLog" WHERE "athleteId"=$1 AND "sessionId"=ANY($2::text[])`,[athlete.id,recentIds])
+  ]):[{rows:[] as Array<{sessionId:string;poolDiveId:string;repetitionsCompleted:number}>},{rows:[] as Array<{sessionId:string;exerciseId:string;completed:boolean}>}];
   const blockRows=recentIds.length?await query<{id:string;sessionId:string;title:string;type:string}>(`SELECT b.id,b."sessionId",b.title,b.type FROM "SessionBlock" b WHERE b."sessionId"=ANY($1::text[]) AND EXISTS (SELECT 1 FROM "SessionBlockAssignment" a WHERE a."sessionBlockId"=b.id AND a."athleteId"=$2) ORDER BY b.position`,[recentIds,athlete.id]):{rows:[] as {id:string;sessionId:string;title:string;type:string}[]};
   const blockIds=blockRows.rows.map(row=>row.id);
   const [poolPlanRows,drylandPlanRows]=await Promise.all([
@@ -121,7 +124,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
   });
   const profile: AthleteProfile = {
     id:athlete.id,firstName:athlete.firstName,lastName:athlete.lastName,avatar:athleteAvatarUrl ?? avatarUrlForPage(athlete.avatar),level:athlete.level,active:athlete.active,groupName:athlete.groupName??"Sans groupe",birthDate:athlete.birthDate,
-    volume:diveRows.rows.reduce((sum,log)=>sum+log.repetitionsCompleted,0),completedSessions:completionRows.rows.filter(row=>row.status==="COMPLETED").length,
+    volume:diveTotalResult.rows[0]?.volume??0,completedSessions:completionRows.rows.filter(row=>row.status==="COMPLETED").length,
     nextSession:nextSessionRows.rows[0],recentSessions,
     skills:skillsRows.rows.map(row=>({code:row.code,name:row.name,status:row.status,progress:row.progress,trainings:row.trainings,repetitions:row.repetitions})),
     planningEvents:planningRows.rows,nextCompetition:nextCompetitionRows.rows[0],

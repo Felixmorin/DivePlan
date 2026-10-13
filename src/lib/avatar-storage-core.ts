@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 
 const STORAGE_REFERENCE_PREFIX = "supabase-storage://";
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
+// Keep URLs stable across server renders so browsers can reuse the same cached
+// avatar instead of downloading the object again on every navigation.
+const SIGNED_URL_REUSE_MS = 55 * 60 * 1000;
+const MAX_CACHED_SIGNED_URLS = 5_000;
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
 export function isAvatarDataUrl(value: string): boolean {
   return /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(value);
@@ -45,6 +50,9 @@ export async function uploadAvatarDataUrl(userId: string, dataUrl: string): Prom
       apikey: serviceKey,
       authorization: `Bearer ${serviceKey}`,
       "content-type": mimeType,
+      // Avatar object paths are unique, so immutable caching is safe and avoids
+      // repeat downloads from Supabase Storage after the first visit.
+      "cache-control": "max-age=31536000, immutable",
       "x-upsert": "true"
     },
     body: Buffer.from(match[2], "base64"),
@@ -68,18 +76,43 @@ export async function resolveAvatarUrls(values: Array<string | null | undefined>
   if (groups.size === 0) return resolved;
   const { projectUrl, serviceKey } = storageConfig();
   for (const [bucket, entries] of groups) {
+    const now = Date.now();
+    const missingByPath = new Map<string, Array<{ index: number; path: string }>>();
+    for (const entry of entries) {
+      const cacheKey = `${bucket}/${entry.path}`;
+      const cached = signedUrlCache.get(cacheKey);
+      if (cached && cached.expiresAt > now) {
+        resolved[entry.index] = cached.url;
+        // Refresh insertion order for a small LRU-style cache.
+        signedUrlCache.delete(cacheKey);
+        signedUrlCache.set(cacheKey, cached);
+      } else {
+        if (cached) signedUrlCache.delete(cacheKey);
+        const pathEntries = missingByPath.get(entry.path) ?? [];
+        pathEntries.push(entry);
+        missingByPath.set(entry.path, pathEntries);
+      }
+    }
+    if (missingByPath.size === 0) continue;
+
     const response = await fetch(`${projectUrl}/storage/v1/object/sign/${encodeURIComponent(bucket)}`, {
       method: "POST",
       headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, "content-type": "application/json" },
-      body: JSON.stringify({ expiresIn: SIGNED_URL_TTL_SECONDS, paths: entries.map((entry) => entry.path) }),
+      body: JSON.stringify({ expiresIn: SIGNED_URL_TTL_SECONDS, paths: [...missingByPath.keys()] }),
       cache: "no-store"
     });
     if (!response.ok) throw new Error(`Impossible de créer les liens privés pour le bucket « ${bucket} » (${response.status}).`);
     const signedObjects = await response.json() as Array<{ path: string; signedURL: string }>;
-    const signedByPath = new Map(signedObjects.map((item) => [item.path, item.signedURL]));
-    for (const entry of entries) {
-      const signedUrl = signedByPath.get(entry.path);
-      if (signedUrl) resolved[entry.index] = signedUrl.startsWith("http") ? signedUrl : `${projectUrl}/storage/v1${signedUrl}`;
+    for (const item of signedObjects) {
+      const url = item.signedURL.startsWith("http") ? item.signedURL : `${projectUrl}/storage/v1${item.signedURL}`;
+      const cacheKey = `${bucket}/${item.path}`;
+      signedUrlCache.set(cacheKey, { url, expiresAt: now + SIGNED_URL_REUSE_MS });
+      for (const entry of missingByPath.get(item.path) ?? []) resolved[entry.index] = url;
+    }
+    while (signedUrlCache.size > MAX_CACHED_SIGNED_URLS) {
+      const oldestKey = signedUrlCache.keys().next().value;
+      if (!oldestKey) break;
+      signedUrlCache.delete(oldestKey);
     }
   }
   return resolved;

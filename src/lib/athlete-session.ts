@@ -210,26 +210,23 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
 export async function getAthleteProgressTotals(athleteId: string): Promise<AthleteProgressTotals> {
   const weekStart = startOfMontrealWeek();
   const weekEnd = addMontrealDays(weekStart, 7);
-  const [completionRows, assignedResult, attendanceRows, diveRows, exerciseResult, skillRows] = await Promise.all([
-    query<{sessionId:string;completedAt:Date|null;rating:string|null;focus:string;duration:number}>(`SELECT c."sessionId",c."completedAt",c.rating,s.focus,COALESCE(pe.duration,s.duration) AS duration FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE c."athleteId"=$1 AND c.status='COMPLETED' ORDER BY c."completedAt" DESC NULLS LAST`,[athleteId]),
+  const [completionCountResult, recentCompletionRows, assignedResult, attendanceResult, diveTotalsResult, dailyDiveRows, skillDiveRows, exerciseResult, skillRows] = await Promise.all([
+    query<{count:number;thisWeek:number}>(`SELECT COUNT(*)::int AS count,COUNT(*) FILTER (WHERE "completedAt">=$2 AND "completedAt"<$3)::int AS "thisWeek" FROM "AthleteSessionCompletion" WHERE "athleteId"=$1 AND status='COMPLETED'`,[athleteId,weekStart,weekEnd]),
+    query<{sessionId:string;completedAt:Date|null;rating:string|null;focus:string;duration:number}>(`SELECT c."sessionId",c."completedAt",c.rating,s.focus,COALESCE(pe.duration,s.duration) AS duration FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE c."athleteId"=$1 AND c.status='COMPLETED' ORDER BY c."completedAt" DESC NULLS LAST LIMIT 8`,[athleteId]),
     query<{count:number}>(`SELECT COUNT(DISTINCT s.id)::int AS count FROM "TrainingSession" s WHERE EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1)`,[athleteId]),
-    query<{date:Date;duration:number}>(`SELECT s.date,COALESCE(pe.duration,s.duration) AS duration FROM "TrainingSession" s LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE s.date <= NOW() AND s.status IN ('READY','COMPLETED') AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1) AND NOT EXISTS (SELECT 1 FROM "AthleteSessionAbsence" absence WHERE absence."athleteId"=$1 AND absence."sessionId"=s.id)`,[athleteId]),
-    query<{sessionId:string;repetitionsCompleted:number;familyOverride:string|null;timestamp:Date;diveCode:string;diveName:string;height:PoolHeight;heightLabel:string|null}>(`SELECT l."sessionId",l."repetitionsCompleted",l."familyOverride",l.timestamp,d."diveCode",COALESCE(l."actualDiveName",d."diveName") AS "diveName",s.height,s.label AS "heightLabel" FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1`,[athleteId]),
+    query<{completedMinutes:number;thisWeekMinutes:number}>(`SELECT COALESCE(SUM(COALESCE(pe.duration,s.duration)) FILTER (WHERE s.date <= NOW()),0)::int AS "completedMinutes",COALESCE(SUM(COALESCE(pe.duration,s.duration)) FILTER (WHERE s.date >= $2 AND s.date < $3 AND s.date <= NOW()),0)::int AS "thisWeekMinutes" FROM "TrainingSession" s LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE s.status IN ('READY','COMPLETED') AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1) AND NOT EXISTS (SELECT 1 FROM "AthleteSessionAbsence" absence WHERE absence."athleteId"=$1 AND absence."sessionId"=s.id)`,[athleteId,weekStart,weekEnd]),
+    query<{total:number;thisWeek:number}>(`SELECT COALESCE(SUM("repetitionsCompleted"),0)::int AS total,COALESCE(SUM("repetitionsCompleted") FILTER (WHERE timestamp >= $2 AND timestamp < $3),0)::int AS "thisWeek" FROM "AthleteDiveLog" WHERE "athleteId"=$1`,[athleteId,weekStart,weekEnd]),
+    query<{date:Date;volume:number}>(`SELECT MIN(timestamp) AS date,SUM("repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" WHERE "athleteId"=$1 GROUP BY (timestamp AT TIME ZONE 'America/Toronto')::date ORDER BY (timestamp AT TIME ZONE 'America/Toronto')::date`,[athleteId]),
+    query<{category:string;code:string;name:string;height:PoolHeight;heightLabel:string|null;volume:number}>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS category,d."diveCode" AS code,COALESCE(l."actualDiveName",d."diveName") AS name,s.height,s.label AS "heightLabel",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 GROUP BY category,d."diveCode",name,s.height,s.label`,[athleteId]),
     query<{count:number}>(`SELECT COUNT(*)::int AS count FROM "AthleteExerciseLog" WHERE "athleteId"=$1 AND completed=true`,[athleteId]),
     query<{category:string}>(`SELECT DISTINCT s.category FROM "AthleteSkill" a JOIN "Skill" s ON s.id=a."skillId" WHERE a."athleteId"=$1`,[athleteId])
   ]);
-  const completedSessions=completionRows.rows.map(row=>({...row,session:{focus:row.focus,duration:row.duration}}));
+  const completedSessions=recentCompletionRows.rows.map(row=>({...row,session:{focus:row.focus,duration:row.duration}}));
   const assignedSessions=assignedResult.rows[0]?.count??0;
-  const diveLogs=diveRows.rows.map(row=>({...row,poolDive:{diveCode:row.diveCode,diveName:row.diveName,poolSection:{height:row.height,label:row.heightLabel}}}));
+  const recentIds=recentCompletionRows.rows.map(row=>row.sessionId);
+  const recentDiveVolumes=recentIds.length?await query<{sessionId:string;volume:number}>(`SELECT "sessionId",SUM("repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" WHERE "athleteId"=$1 AND "sessionId"=ANY($2::text[]) GROUP BY "sessionId"`,[athleteId,recentIds]):{rows:[] as Array<{sessionId:string;volume:number}>};
+  const sessionVolumes=new Map(recentDiveVolumes.rows.map(row=>[row.sessionId,row.volume]));
   const completedExercises=exerciseResult.rows[0]?.count??0;
-
-  const familyLabels: Record<string, string> = {
-    "1": "Avant",
-    "2": "Arriere",
-    "3": "Renverse",
-    "4": "Retourne",
-    "5": "Vrille"
-  };
   const chartTotals = new Map<string, number>([
     ["Avant", 0],
     ["Arriere", 0],
@@ -238,62 +235,29 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
     ["Vrille", 0],
     ["Equilibre", 0]
   ]);
-  const skillDives = new Map<string, { category: string; code: string; name: string; height: PoolHeight; heightLabel: string | null; volume: number }>();
-  const dailyTotals = new Map<string, { date: Date; volume: number }>();
-  const sessionVolumes = new Map<string, number>();
-
-  for (const log of diveLogs) {
-    sessionVolumes.set(log.sessionId, (sessionVolumes.get(log.sessionId) ?? 0) + log.repetitionsCompleted);
-    const label = log.familyOverride ?? familyLabels[log.poolDive.diveCode.charAt(0)] ?? "Equilibre";
-    chartTotals.set(label, (chartTotals.get(label) ?? 0) + log.repetitionsCompleted);
-    const height = log.poolDive.poolSection.height;
-    const heightLabel = log.poolDive.poolSection.label;
-    const diveKey = `${height}:${heightLabel ?? ""}:${label}:${log.poolDive.diveCode}`;
-    const currentDive = skillDives.get(diveKey);
-    skillDives.set(diveKey, {
-      category: label,
-      code: log.poolDive.diveCode,
-      name: log.poolDive.diveName,
-      height,
-      heightLabel,
-      volume: (currentDive?.volume ?? 0) + log.repetitionsCompleted
-    });
-
-    const dateKey = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto" }).format(log.timestamp);
-    const current = dailyTotals.get(dateKey);
-    dailyTotals.set(dateKey, {
-      date: current?.date ?? log.timestamp,
-      volume: (current?.volume ?? 0) + log.repetitionsCompleted
-    });
+  const skillDives = skillDiveRows.rows.map(row => ({category:row.category,code:row.code,name:row.name,height:row.height,heightLabel:row.heightLabel,volume:row.volume}));
+  for (const dive of skillDives) {
+    chartTotals.set(dive.category, (chartTotals.get(dive.category) ?? 0) + dive.volume);
   }
 
-  const completedMinutes = attendanceRows.rows.reduce((sum, session) => sum + session.duration, 0);
-  const totalDiveRepetitions = diveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0);
-  const thisWeekSessions = completedSessions.filter((completion) => {
-    const completedAt = completion.completedAt;
-    return completedAt !== null && completedAt >= weekStart && completedAt < weekEnd;
-  });
-  const thisWeekDiveLogs = diveLogs.filter((log) => log.timestamp >= weekStart && log.timestamp < weekEnd);
-  const completionRate = assignedSessions > 0 ? Math.round((completedSessions.length / assignedSessions) * 100) : 0;
+  const completedMinutes = attendanceResult.rows[0]?.completedMinutes ?? 0;
+  const completedSessionCount = completionCountResult.rows[0]?.count ?? 0;
+  const totalDiveRepetitions = diveTotalsResult.rows[0]?.total ?? 0;
+  const completionRate = assignedSessions > 0 ? Math.round((completedSessionCount / assignedSessions) * 100) : 0;
   const readyScore = Math.min(100, Math.round(completionRate * 0.6 + Math.min(totalDiveRepetitions, 120) * 0.25 + Math.min(completedExercises, 20) * 0.5));
-  const dailyData = Array.from(dailyTotals.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
+  const dailyData = dailyDiveRows.rows;
   const weeklyData = averageByPeriod(dailyData, "week");
   const monthlyData = averageByPeriod(dailyData, "month");
 
   return {
     readyScore,
-    completedSessions: completedSessions.length,
+    completedSessions: completedSessionCount,
     totalDiveRepetitions,
     completedExercises,
     completedMinutes,
-    thisWeekSessions: thisWeekSessions.length,
-    thisWeekDiveRepetitions: thisWeekDiveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0),
-    thisWeekMinutes: attendanceRows.rows
-      .filter((session) => {
-        const scheduledAt = new Date(session.date);
-        return scheduledAt >= weekStart && scheduledAt < weekEnd;
-      })
-      .reduce((sum, session) => sum + session.duration, 0),
+    thisWeekSessions: completionCountResult.rows[0]?.thisWeek ?? 0,
+    thisWeekDiveRepetitions: diveTotalsResult.rows[0]?.thisWeek ?? 0,
+    thisWeekMinutes: attendanceResult.rows[0]?.thisWeekMinutes ?? 0,
     completionRate,
     recentNote: completedSessions[0]?.session.focus || "Complete une seance pour generer une tendance.",
     chartData: dailyData
@@ -321,22 +285,8 @@ export async function getAthleteProgressTotals(athleteId: string): Promise<Athle
 }
 
 export async function getAthleteGoldenReps(athleteId: string): Promise<AthleteGoldenRep[]> {
-  const logs = await query<{goldenRepetitions:number;height:PoolHeight;diveCode:string;diveName:string}>(`SELECT l."goldenRepetitions",s.height,d."diveCode",d."diveName" FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND l."goldenRepetitions">0`,[athleteId]);
-  const totals = new Map<string, AthleteGoldenRep>();
-
-  for (const log of logs.rows) {
-    const height = log.height;
-    const key = `${height}:${log.diveCode}`;
-    const current = totals.get(key);
-    totals.set(key, {
-      code: log.diveCode,
-      name: log.diveName,
-      height,
-      count: (current?.count ?? 0) + log.goldenRepetitions
-    });
-  }
-
-  return Array.from(totals.values()).sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+  const { rows } = await query<AthleteGoldenRep>(`SELECT s.height,d."diveCode" AS code,d."diveName" AS name,SUM(l."goldenRepetitions")::int AS count FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND l."goldenRepetitions">0 GROUP BY s.height,d."diveCode",d."diveName" ORDER BY count DESC,code`,[athleteId]);
+  return rows;
 }
 
 export async function getAthleteCurrentWeekSummary(athleteId: string): Promise<AthleteCurrentWeekSummary> {
@@ -344,8 +294,6 @@ export async function getAthleteCurrentWeekSummary(athleteId: string): Promise<A
   const weekEnd = addMontrealDays(weekStart, 7);
   const {rows:sessions}=await query<{date:Date;duration:number;completionStatus:string|null;present:boolean;volume:number}>(`SELECT s.date,COALESCE(pe.duration,s.duration) AS duration,c.status AS "completionStatus",NOT EXISTS (SELECT 1 FROM "AthleteSessionAbsence" absence WHERE absence."athleteId"=$1 AND absence."sessionId"=s.id) AS present,COALESCE((SELECT SUM(l."repetitionsCompleted") FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id AND l."athleteId"=$1),0)::int AS volume FROM "TrainingSession" s LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$1 WHERE s.date >= $2 AND s.date < $3 AND s.status IN ('READY','COMPLETED') AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1)`,[athleteId,weekStart,weekEnd]);
   const completed = sessions.filter((session) => session.completionStatus === "COMPLETED").length;
-  const completedSessions = sessions.filter((session) => session.completionStatus === "COMPLETED");
-
   return {
     total: sessions.length,
     completed,
