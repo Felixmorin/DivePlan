@@ -186,12 +186,17 @@ export async function hideCancelledTrainingFromCalendars(formData: FormData) {
   await withTransaction(async (tx) => {
     if (eventId) {
       const hidden = await tx.query(
-        `UPDATE "PlanningEvent" SET "calendarHiddenAt"=NOW()
-         WHERE id=$1 AND "clubId"=$2 AND type='TRAINING_SCHEDULE' AND "cancelledAt" IS NOT NULL AND "calendarHiddenAt" IS NULL
+        `UPDATE "PlanningEvent" SET "coachCalendarHiddenAt"=NOW()
+         WHERE id=$1 AND "clubId"=$2 AND type='TRAINING_SCHEDULE' AND "cancelledAt" IS NOT NULL AND "coachCalendarHiddenAt" IS NULL
          RETURNING id`,
         [eventId, clubId]
       );
       if (!hidden.rowCount) throw new Error("Cet entraînement n’est pas annulé ou a déjà été retiré du calendrier.");
+      await tx.query(
+        `UPDATE "TrainingSession" SET "calendarHiddenAt"=NOW()
+         WHERE "planningEventId"=$1 AND status='CANCELLED' AND "calendarHiddenAt" IS NULL`,
+        [eventId]
+      );
       return;
     }
 
@@ -206,7 +211,7 @@ export async function hideCancelledTrainingFromCalendars(formData: FormData) {
     const planningEventId = hidden.rows[0]?.planningEventId;
     if (planningEventId) {
       await tx.query(
-        `UPDATE "PlanningEvent" SET "calendarHiddenAt"=NOW() WHERE id=$1 AND "clubId"=$2 AND "cancelledAt" IS NOT NULL`,
+        `UPDATE "PlanningEvent" SET "coachCalendarHiddenAt"=NOW() WHERE id=$1 AND "clubId"=$2 AND type='TRAINING_SCHEDULE'`,
         [planningEventId, clubId]
       );
     }

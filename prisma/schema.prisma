@@ -301,6 +301,7 @@ model PlanningEvent {
   notes     String?
   cancelledAt DateTime?
   calendarHiddenAt DateTime?
+  coachCalendarHiddenAt DateTime?
   createdAt DateTime          @default(now())
   club      Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
   group     TrainingGroup?    @relation(fields: [groupId], references: [id], onDelete: SetNull)

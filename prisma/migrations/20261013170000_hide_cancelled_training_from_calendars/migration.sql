@@ -1,2 +1,3 @@
 ALTER TABLE "PlanningEvent" ADD COLUMN IF NOT EXISTS "calendarHiddenAt" TIMESTAMP(3);
+ALTER TABLE "PlanningEvent" ADD COLUMN IF NOT EXISTS "coachCalendarHiddenAt" TIMESTAMP(3);
 ALTER TABLE "TrainingSession" ADD COLUMN IF NOT EXISTS "calendarHiddenAt" TIMESTAMP(3);

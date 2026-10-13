@@ -15,7 +15,7 @@ export function DismissCancelledTrainingButton({
   compact?: boolean;
 }) {
   function confirmRemoval(event: FormEvent<HTMLFormElement>) {
-    if (!window.confirm("Retirer cet entraînement annulé des calendriers du club et des athlètes ?")) event.preventDefault();
+    if (!window.confirm("Retirer cet entraînement annulé de votre calendrier ? Il restera visible pour les athlètes.")) event.preventDefault();
   }
 
   return (
