@@ -113,6 +113,7 @@ model User {
   pushDeliveries PushDelivery[]
   sessionCancellationDeliveries SessionCancellationPushDelivery[]
   planningEventCancellationDeliveries PlanningEventCancellationPushDelivery[]
+  planningEventDeliveries PlanningEventPushDelivery[]
 }
 
 model AppEvent {
@@ -275,6 +276,22 @@ model PlanningEventCancellationPushDelivery {
   @@index([status, createdAt])
 }
 
+model PlanningEventPushDelivery {
+  id              String        @id
+  planningEventId String
+  userId          String
+  status          String        @default("PENDING")
+  attempts        Int           @default(0)
+  createdAt       DateTime      @default(now())
+  sentAt          DateTime?
+  lastError       String?
+  planningEvent   PlanningEvent @relation(fields: [planningEventId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([planningEventId, userId])
+  @@index([status, createdAt])
+}
+
 model TrainingGroup {
   id             String          @id @default(cuid())
   name           String
@@ -308,6 +325,7 @@ model PlanningEvent {
   athlete   Athlete?          @relation(fields: [athleteId], references: [id], onDelete: SetNull)
   session   TrainingSession?
   cancellationPushDeliveries PlanningEventCancellationPushDelivery[]
+  pushDeliveries PlanningEventPushDelivery[]
 
   @@index([clubId, startsAt])
   @@index([groupId, startsAt])

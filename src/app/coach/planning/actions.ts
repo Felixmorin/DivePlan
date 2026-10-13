@@ -6,7 +6,7 @@ import { z } from "zod";
 import { requireCoach } from "@/lib/current-user";
 import { query, withTransaction } from "@/lib/db";
 import { addMontrealDays, parseMontrealDateTimeInput } from "@/lib/timezone";
-import { dispatchPlanningEventCancellation, savePlanningEventCancellationTargets } from "@/lib/web-push";
+import { dispatchPlanningEventCancellation, dispatchPlanningEventPublication, savePlanningEventCancellationTargets, savePlanningEventPublicationTargets } from "@/lib/web-push";
 
 const PlanningEventType = { COMPETITION: "COMPETITION", CAMP: "CAMP", TRAINING_SCHEDULE: "TRAINING_SCHEDULE" } as const;
 
@@ -80,17 +80,23 @@ export async function createPlanningEvent(formData: FormData) {
     startsAt.push(occurrence);
   }
 
+  const createdEventIds: string[] = [];
   await withTransaction(async (tx) => {
     for (const occurrence of startsAt) {
-      await tx.query(
+      const created = await tx.query<{ id: string }>(
         `INSERT INTO "PlanningEvent" (id, "clubId", "groupId", "athleteId", type, title, "startsAt", "endsAt", duration, location, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
         [randomUUID(), clubId, target.groupId ?? null, target.athleteId ?? null, data.type, data.title, occurrence,
           data.type === PlanningEventType.COMPETITION && data.endsAt ? parseMontrealDateTimeInput(data.endsAt) : null,
           data.duration ?? null, data.location || null, data.notes || null]
       );
+      const eventId = created.rows[0].id;
+      createdEventIds.push(eventId);
+      await savePlanningEventPublicationTargets(tx, eventId);
     }
   });
+
+  await dispatchPlanningEventPublication(createdEventIds).catch(() => undefined);
 
   revalidatePath("/coach");
   revalidatePath("/coach/planning");
