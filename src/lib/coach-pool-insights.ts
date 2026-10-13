@@ -3,7 +3,7 @@ import { query } from "@/lib/db";
 export type PoolInsightHeight = "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
 export type AthletePoolInsight = {
   families: Array<{ family: string; volume: number }>;
-  competitionDives: Array<{ height: PoolInsightHeight; code: string; volume: number; averageRating: number | null; ratingCount: number }>;
+  competitionDives: Array<{ id: string; position: number; height: PoolInsightHeight; code: string; volume: number; averageRating: number | null; ratingCount: number }>;
 };
 
 /** Historical completed pool volume and athlete-authored confidence for competition dives. */
@@ -21,11 +21,11 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
        JOIN "PoolDive" d ON d.id=l."poolDiveId"
        WHERE l."athleteId"=ANY($1::text[]) AND w."clubId"=$2 AND c.status='COMPLETED'
        GROUP BY l."athleteId", family`, [athleteIds, clubId]),
-      query<{ athleteId: string; height: PoolInsightHeight; code: string; volume: number | string; averageRating: number | string | null; ratingCount: number | string | null }>(
+      query<{ athleteId: string; id: string; position: number; height: PoolInsightHeight; code: string; volume: number | string; averageRating: number | string | null; ratingCount: number | string | null }>(
       `WITH dives AS (
-         SELECT DISTINCT ON (a.id, cd.height, cd."diveCode") a.id AS "athleteId", cd.height, cd."diveCode" AS code
+         SELECT a.id AS "athleteId", cd.id, cd.position, cd.height, cd."diveCode" AS code
          FROM "Athlete" a JOIN "CompetitionDive" cd ON cd."athleteId"=a.id
-         WHERE a.id=ANY($1::text[]) ORDER BY a.id, cd.height, cd."diveCode", cd.position
+         WHERE a.id=ANY($1::text[])
        ), volume AS (
          SELECT l."athleteId", COALESCE(l."actualDiveCode", d."diveCode") AS code, ps.height,
            SUM(l."repetitionsCompleted")::int AS volume
@@ -35,17 +35,17 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
          WHERE l."athleteId"=ANY($1::text[]) AND w."clubId"=$2 AND c.status='COMPLETED'
          GROUP BY l."athleteId", code, ps.height
        ), ratings AS (
-         SELECT "athleteId", height, "diveCode" AS code, AVG(rating)::numeric AS "averageRating", COUNT(*)::int AS "ratingCount"
+         SELECT "competitionDiveId", AVG(rating)::numeric AS "averageRating", COUNT(*)::int AS "ratingCount"
          FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId"=ANY($1::text[]) AND evaluator='ATHLETE'
-         GROUP BY "athleteId", height, "diveCode"
+         GROUP BY "competitionDiveId"
        )
-       SELECT dives."athleteId", dives.height, dives.code, COALESCE(volume.volume,0)::int AS volume, ratings."averageRating", ratings."ratingCount"
+       SELECT dives."athleteId", dives.id, dives.position, dives.height, dives.code, COALESCE(volume.volume,0)::int AS volume, ratings."averageRating", ratings."ratingCount"
        FROM dives LEFT JOIN volume ON volume."athleteId"=dives."athleteId" AND volume.code=dives.code AND volume.height=dives.height
-       LEFT JOIN ratings ON ratings."athleteId"=dives."athleteId" AND ratings.height=dives.height AND ratings.code=dives.code
-       ORDER BY dives.height, dives.code`, [athleteIds, clubId])
+       LEFT JOIN ratings ON ratings."competitionDiveId"=dives.id
+       ORDER BY dives."athleteId", dives.height, dives.position, dives.id`, [athleteIds, clubId])
   ]);
 
   for (const row of familyRows.rows) result[row.athleteId]?.families.push({ family: row.family, volume: Number(row.volume) });
-  for (const row of competitionRows.rows) result[row.athleteId]?.competitionDives.push({ height: row.height, code: row.code, volume: Number(row.volume), averageRating: row.averageRating === null ? null : Number(row.averageRating), ratingCount: Number(row.ratingCount ?? 0) });
+  for (const row of competitionRows.rows) result[row.athleteId]?.competitionDives.push({ id: row.id, position: row.position, height: row.height, code: row.code, volume: Number(row.volume), averageRating: row.averageRating === null ? null : Number(row.averageRating), ratingCount: Number(row.ratingCount ?? 0) });
   return result;
 }

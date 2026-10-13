@@ -90,7 +90,7 @@ export function CompetitionDiveEditor({ athleteId, dives, demo }: { athleteId: s
                       setDraggedId(null);
                     }}
                     onDragEnd={() => setDraggedId(null)}
-                    className={`flex items-center gap-2 rounded-xl bg-[var(--color-surface-raised)] p-3 ${draggedId === dive.id ? "opacity-40" : ""} ${!demo && !pending ? "cursor-grab active:cursor-grabbing" : ""}`}
+                    className={`flex items-center gap-2 rounded-xl border p-3 ${dive.volume === 0 ? "border-red-200 bg-red-100" : dive.volume < 10 ? "border-orange-200 bg-orange-100" : dive.volume <= 20 ? "border-yellow-200 bg-yellow-100" : "border-green-200 bg-green-100"} ${draggedId === dive.id ? "opacity-40" : ""} ${!demo && !pending ? "cursor-grab active:cursor-grabbing" : ""}`}
                   >
                     <GripVertical className="h-5 w-5 shrink-0 text-[var(--color-ink-muted)]" aria-hidden="true" />
                     <span className="w-5 shrink-0 text-xs font-bold text-[var(--color-ink-muted)]">{index + 1}.</span>
