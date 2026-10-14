@@ -40,10 +40,10 @@ export function ProgressChart({ data, sessionData = [], weeklyData = [], monthly
       </div>
       <div className="progress-chart">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData} stackOffset={showFamilyStack ? "expand" : "none"} margin={{ top: 18, right: 4, left: 0, bottom: 0 }}>
+        <BarChart data={chartData} margin={{ top: 18, right: 4, left: 0, bottom: 0 }}>
           <CartesianGrid stroke={lightTheme ? "#e3edf6" : "rgba(137,190,220,.12)"} vertical={false} />
           <XAxis dataKey="name" stroke={lightTheme ? "#607492" : "#a3b6ca"} fontSize={11} tickLine={false} axisLine={false} />
-          <YAxis stroke={lightTheme ? "#607492" : "#a3b6ca"} fontSize={11} tickLine={false} axisLine={false} width={showFamilyStack ? 34 : 24} tickFormatter={showFamilyStack ? (value: number) => `${Math.round(value * 100)}%` : undefined} />
+          <YAxis stroke={lightTheme ? "#607492" : "#a3b6ca"} fontSize={11} tickLine={false} axisLine={false} width={24} />
           <Tooltip cursor={{ fill: lightTheme ? "#eef6fd" : "rgba(255,255,255,.05)" }} contentStyle={{ background: lightTheme ? "#fff" : "#0a1830", border: `1px solid ${lightTheme ? "#dce8f3" : "rgba(255,255,255,.12)"}`, borderRadius: 8, color: lightTheme ? "#102451" : "white" }} />
           {showFamilyStack ? <>
             {familySeries.map(({ key, color }) => <Bar key={key} dataKey={(entry: { familyVolumes?: Record<string, number> }) => entry.familyVolumes?.[key] ?? 0} name={key} stackId="family-volume" fill={color} />)}
