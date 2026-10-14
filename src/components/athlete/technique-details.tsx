@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Activity, ChevronDown, Goal, MoreHorizontal, Waves } from "lucide-react";
 
 type TechniqueItem = {
@@ -19,13 +20,14 @@ type SkillDive = {
   volume: number;
 };
 
-export function TechniqueDetails({ technique, skillDives, athleteId, updateFamilyAction, removeDiveAction, splitByHeight = false }: {
+export function TechniqueDetails({ technique, skillDives, athleteId, updateFamilyAction, removeDiveAction, splitByHeight = false, detailsHref }: {
   technique: TechniqueItem[];
   skillDives: SkillDive[];
   athleteId?: string;
   updateFamilyAction?: (formData: FormData) => void | Promise<void>;
   removeDiveAction?: (formData: FormData) => void | Promise<void>;
   splitByHeight?: boolean;
+  detailsHref?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const visibleTechnique = technique.filter((item) => item.dives > 0);
@@ -43,9 +45,9 @@ export function TechniqueDetails({ technique, skillDives, athleteId, updateFamil
       <div className="section-heading">
         <span className="section-icon cyan"><Goal size={22} /></span>
         <h2>Volume par famille</h2>
-        <button className="details-toggle" type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
+        {detailsHref ? <Link className="details-toggle" href={detailsHref}>Voir détails <ChevronDown size={17} /></Link> : <button className="details-toggle" type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
           {expanded ? "Masquer détails" : "Voir détails"} <ChevronDown className={expanded ? "rotated" : ""} size={17} />
-        </button>
+        </button>}
       </div>
       <div className="technique-list" id="technique">
         {visibleTechnique.length > 0 ? visibleTechnique.map(({ label, dives: techniqueDives, color, icon }) => {

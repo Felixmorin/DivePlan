@@ -467,6 +467,31 @@ a {
 .athlete-app .progress-summary .metric-track { width:100%; height:.45rem; flex:none; margin-top:auto; }
 .athlete-app .progress-card { margin-bottom:.55rem; }
 .athlete-app .progress-card.trend-card, .athlete-app .progress-card.technique-card { padding-top:.65rem; }
+.athlete-app .progress-details-header { display:grid; grid-template-columns:2.8rem minmax(0,1fr) auto; align-items:center; gap:.55rem; margin:.2rem 0 .8rem; }
+.athlete-app .progress-details-header h1 { min-width:0; margin:0; color:#0c1c4b; font-size:clamp(1.2rem,5.4vw,1.65rem); font-weight:850; letter-spacing:-.04em; white-space:nowrap; }
+.athlete-app .progress-details-back { display:grid; width:2.65rem; height:2.65rem; place-items:center; border-radius:50%; background:#f1f3f6; color:#102451; }
+.athlete-app .progress-details-period { width:auto; max-width:8.5rem; min-width:0; appearance:none; border:1px solid #e1e8f0; border-radius:999px; background:#f7f9fc; padding:.68rem 1.8rem .68rem .78rem; color:#17264c; font-size:.78rem; font-weight:650; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23102451' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right .55rem center; }
+.athlete-app .progress-details-total { margin:.9rem 0 1.15rem; color:#64748b; text-align:center; font-size:.95rem; font-weight:600; }
+.athlete-app .progress-details-families { display:flex; min-height:4.35rem; margin-bottom:1rem; overflow-x:auto; border:1px solid #e2eaf3; border-radius:.9rem; background:#fff; scrollbar-width:none; }
+.athlete-app .progress-details-family { display:flex; min-width:0; flex:1; align-items:center; justify-content:center; gap:.55rem; padding:.55rem .35rem; color:#62718a; }
+.athlete-app .progress-details-family + .progress-details-family { border-left:1px solid #e4eaf2; }
+.athlete-app .progress-details-family[aria-current="true"] { border-radius:.8rem; background:color-mix(in srgb,var(--family-color) 12%,white); color:#102451; }
+.athlete-app .progress-details-family > svg { flex:none; color:var(--family-color); }
+.athlete-app .progress-details-family span { display:flex; min-width:0; flex-direction:column; gap:.12rem; }
+.athlete-app .progress-details-family strong { overflow:hidden; color:inherit; font-size:.77rem; text-overflow:ellipsis; }
+.athlete-app .progress-details-family b { color:var(--family-color); font-size:.85rem; }
+.athlete-app .progress-details-list { border:1px solid #e2eaf3; border-radius:.9rem; background:#fff; padding:0 .75rem; }
+.athlete-app .progress-details-dive { display:grid; grid-template-columns:5rem minmax(2rem,1fr) 2rem 1.35rem; min-height:4.7rem; align-items:center; gap:.55rem; border-bottom:1px solid #e7edf4; }
+.athlete-app .progress-details-dive-name { display:flex; flex-direction:column; gap:.1rem; }
+.athlete-app .progress-details-dive-name strong { color:#101f4a; font-size:1.1rem; font-weight:850; }
+.athlete-app .progress-details-dive-name span { color:#718096; font-size:.85rem; }
+.athlete-app .progress-details-dive-track { height:.55rem; overflow:hidden; border-radius:999px; background:#edf1f6; }
+.athlete-app .progress-details-dive-track i { display:block; height:100%; min-width:.75rem; border-radius:inherit; }
+.athlete-app .progress-details-dive-count { color:#102451; text-align:right; font-size:1.2rem; }
+.athlete-app .progress-details-chevron, .athlete-app .progress-details-all svg { color:#63738d; }
+.athlete-app .progress-details-all { display:flex; min-height:3.6rem; align-items:center; justify-content:space-between; color:#087cff; font-size:.9rem; font-weight:700; }
+.athlete-app .progress-details-empty { padding:1.5rem .3rem; color:#64748b; text-align:center; }
+@media (max-width:370px) { .athlete-app .progress-details-family { gap:.25rem; padding-inline:.2rem; } .athlete-app .progress-details-family strong { font-size:.68rem; } .athlete-app .progress-details-dive { grid-template-columns:4rem minmax(2rem,1fr) 1.7rem 1rem; gap:.4rem; } }
 
 @media (prefers-reduced-motion: reduce) {
   *,

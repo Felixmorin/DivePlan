@@ -46,7 +46,7 @@ export default async function AthleteProgressPage() {
       </section>
 
       <section className="progress-card technique-card">
-        <TechniqueDetails technique={techniqueWithVolumes} skillDives={totals?.skillDives ?? []} />
+        <TechniqueDetails technique={techniqueWithVolumes} skillDives={totals?.skillDives ?? []} detailsHref="/athlete/progress/details" />
       </section>
     </AthleteShell>
   );
