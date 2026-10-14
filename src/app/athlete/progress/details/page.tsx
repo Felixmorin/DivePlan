@@ -97,6 +97,8 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
 function heightCategory(dive: DiveVolume) {
   if (dive.height === "ONE_METER") return "1 m";
   if (dive.height === "THREE_METER") return "3 m";
-  if (dive.height === "PLATFORM" || /^(plateforme|\d+(?:[,.]\d+)?\s*m)$/i.test((dive.heightLabel ?? "").trim())) return "Plateforme";
+  const normalizedHeight = (dive.heightLabel ?? "").toLowerCase().replace(/[\s,]/g, "").replace(".", "");
+  if (["3mt", "5m", "75m", "10m"].includes(normalizedHeight)) return "Plateforme";
+  if (!normalizedHeight && dive.height === "PLATFORM") return "Plateforme";
   return "Autres";
 }
