@@ -42,7 +42,7 @@ export default async function AthleteProgressPage() {
 
       <section className="progress-card trend-card" id="tendance">
         <div className="section-heading"><div><h2>Volume de plongeons</h2><p>4 dernières semaines</p></div></div>
-        <ProgressChart data={totals?.chartData ?? []} sessionData={totals?.sessionChartData ?? []} weeklyData={totals?.weeklyChartData ?? []} monthlyData={totals?.monthlyChartData ?? []} initialPeriod="week" lightTheme />
+        <ProgressChart data={totals?.chartData ?? []} dailyFamilyData={totals?.dailyFamilyChartData ?? []} sessionData={totals?.sessionChartData ?? []} weeklyData={totals?.weeklyChartData ?? []} monthlyData={totals?.monthlyChartData ?? []} initialPeriod="week" lightTheme />
       </section>
 
       <section className="progress-card technique-card">
@@ -53,5 +53,5 @@ export default async function AthleteProgressPage() {
 }
 
 function SummaryMetric({ icon, value, label, progress, tone }: { icon: React.ReactNode; value: string; label: string; progress: number; tone: string }) {
-  return <div className="summary-metric"><span className={`metric-icon ${tone}`}>{icon}</span><strong>{value}</strong><span className="metric-label">{label}</span><div className="metric-track"><i className={tone} style={{ width: `${progress}%` }} /></div></div>;
+  return <div className={`summary-metric summary-metric-${tone}`}><span className={`summary-metric-icon ${tone}`}>{icon}</span><strong>{value}</strong><span className="metric-label">{label}</span><div className="metric-track"><i className={tone} style={{ width: `${progress}%` }} /></div></div>;
 }
