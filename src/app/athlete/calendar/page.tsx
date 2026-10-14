@@ -21,7 +21,7 @@ const eventStyles: Record<PlanningEventType, { label: string; icon: typeof Troph
 const cancelledEventStyle = { label: "Annulé", icon: XCircle, className: "bg-red-500/20 text-red-200" };
 
 export default async function AthleteCalendarPage({ searchParams }: { searchParams: Promise<{ view?: string | string[]; month?: string | string[] }> }) {
-  const { athlete, clubId } = await requireAthlete();
+  const { athlete, user, clubId } = await requireAthlete();
   const viewParam = searchParams ? await searchParams : {};
   const selectedView = Array.isArray(viewParam.view) ? viewParam.view[0] : viewParam.view;
   const calendarView = selectedView !== "list";
@@ -38,11 +38,11 @@ export default async function AthleteCalendarPage({ searchParams }: { searchPara
     : events;
   const monthGroups = groupEventsByMonth(events);
   const nextCompetition = countdownEvents.find((event) => event.type === "COMPETITION" && event.startsAt >= new Date());
-  const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);
+  const [avatarUrl] = await resolveAvatarUrls([user.avatar]);
 
   return (
     <AthleteShell>
-      <AthletePageHeader title="Calendrier" avatarUrl={avatarUrl} initials={`${athlete.user.firstName[0]}${athlete.user.lastName[0]}`} />
+      <AthletePageHeader title="Calendrier" avatarUrl={avatarUrl} initials={`${user.firstName[0]}${user.lastName[0]}`} />
       <header className="mb-4 flex flex-wrap items-center justify-between gap-4 calendar-controls">
         <div className="flex rounded-full border border-white/10 bg-white/[0.04] p-1" aria-label="Choisir l’affichage du calendrier">
           <ViewLink href="/athlete/calendar?view=list" active={!calendarView} icon={<List className="h-4 w-4" />}>Liste</ViewLink>
