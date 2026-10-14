@@ -27,7 +27,7 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
   if (!athlete) redirect("/login");
   const params = await searchParams;
   const periodValue = Array.isArray(params.period) ? params.period[0] : params.period;
-  const period = periodValue === "month" || periodValue === "all" ? periodValue : "week";
+  const period = periodValue === "month" || periodValue === "season" ? periodValue : "week";
   const familyValue = Array.isArray(params.family) ? params.family[0] : params.family;
   const showAllValue = Array.isArray(params.all) ? params.all[0] : params.all;
   const showAll = showAllValue === "1";
@@ -42,6 +42,11 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
     from = parseMontrealSessionDate(`${year}-${String(month).padStart(2, "0")}-01`, "00:00");
     const nextMonth = new Date(Date.UTC(year, month, 1));
     until = parseMontrealSessionDate(`${nextMonth.getUTCFullYear()}-${String(nextMonth.getUTCMonth() + 1).padStart(2, "0")}-01`, "00:00");
+  } else {
+    const [year, month] = toMontrealDateInputValue().split("-").map(Number);
+    const seasonStartYear = month >= 9 ? year : year - 1;
+    from = parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00");
+    until = parseMontrealSessionDate(`${seasonStartYear + 1}-08-31`, "00:00");
   }
 
   const rows = (await query<DiveVolume>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,d."diveCode" AS code,s.height,s.label AS "heightLabel",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND ($2::timestamptz IS NULL OR l.timestamp >= $2) AND ($3::timestamptz IS NULL OR l.timestamp < $3) GROUP BY family,d."diveCode",s.height,s.label ORDER BY family,d."diveCode",s.height`, [athlete.id, from, until])).rows;
@@ -50,9 +55,12 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
   const families = Object.keys(familyStyles).filter((family) => (totals.get(family) ?? 0) > 0);
   const selectedFamily = familyValue && families.includes(familyValue) ? familyValue : families[0] ?? "Avant";
   const selectedDives = rows.filter((dive) => dive.family === selectedFamily);
+  const heightGroups = ["1 m", "3 m", "Plateforme", "Autres"].map((label) => ({
+    label,
+    dives: selectedDives.filter((dive) => heightCategory(dive) === label)
+  })).filter((group) => group.dives.reduce((sum, dive) => sum + dive.volume, 0) > 0);
   const maxVolume = Math.max(1, ...selectedDives.map((dive) => dive.volume));
   const total = rows.reduce((sum, dive) => sum + dive.volume, 0);
-  const displayedDives = showAll ? selectedDives : selectedDives.slice(0, 7);
   const familyParam = (family: string, all = false) => `/athlete/progress/details?period=${period}&family=${encodeURIComponent(family)}${all ? "&all=1" : ""}`;
 
   return <AthleteShell className="progress-details-page">
@@ -72,20 +80,25 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
       })}
     </nav>
 
-    <section className="progress-details-list" aria-label={`Plongeons ${selectedFamily}`}>
-      {displayedDives.length ? displayedDives.map((dive) => <div className="progress-details-dive" key={`${dive.code}-${dive.height}`}>
-        <div className="progress-details-dive-name"><strong>{dive.code}</strong><span>{displayHeight(dive)}</span></div>
-        <div className="progress-details-dive-track"><i style={{ width: `${Math.max(16, Math.round(dive.volume / maxVolume * 100))}%`, backgroundColor: familyStyles[selectedFamily].color }} /></div>
-        <b className="progress-details-dive-count">{dive.volume}</b><ChevronRight className="progress-details-chevron" size={23} />
-      </div>) : <p className="progress-details-empty">Aucun plongeon pour cette période.</p>}
-      {selectedDives.length > 7 && <Link className="progress-details-all" href={familyParam(selectedFamily, !showAll)}>{showAll ? "Réduire la liste" : `Voir tous les plongeons ${selectedFamily.toLowerCase()}`}<ChevronRight size={22} /></Link>}
-    </section>
+    {heightGroups.length ? heightGroups.map((group) => {
+      const categoryTotal = group.dives.reduce((sum, dive) => sum + dive.volume, 0);
+      const groupDives = showAll ? group.dives : group.dives.slice(0, 7);
+      return <section className="progress-details-list progress-details-height-group" aria-label={`${group.label} · ${categoryTotal} plongeons`} key={group.label}>
+        <h2 className="progress-details-height-heading"><span>{group.label}</span><b>{categoryTotal}</b></h2>
+        {groupDives.map((dive) => <div className="progress-details-dive" key={`${dive.code}-${dive.height}-${dive.heightLabel}`}>
+          <div className="progress-details-dive-name"><strong>{dive.code}</strong></div>
+          <div className="progress-details-dive-track"><i style={{ width: `${Math.max(16, Math.round(dive.volume / maxVolume * 100))}%`, backgroundColor: familyStyles[selectedFamily].color }} /></div>
+          <b className="progress-details-dive-count">{dive.volume}</b><ChevronRight className="progress-details-chevron" size={23} />
+        </div>)}
+        {group.dives.length > 7 && <Link className="progress-details-all" href={familyParam(selectedFamily, !showAll)}>{showAll ? "Réduire la liste" : `Voir tous les plongeons ${group.label.toLowerCase()}`}<ChevronRight size={22} /></Link>}
+      </section>;
+    }) : <p className="progress-details-empty">Aucun plongeon pour cette période.</p>}
   </AthleteShell>;
 }
 
-function displayHeight(dive: DiveVolume) {
+function heightCategory(dive: DiveVolume) {
   if (dive.height === "ONE_METER") return "1 m";
   if (dive.height === "THREE_METER") return "3 m";
-  if (dive.height === "PLATFORM") return dive.heightLabel ?? "Plateforme";
-  return dive.heightLabel ?? "Autre";
+  if (dive.height === "PLATFORM" || /^(plateforme|\d+(?:[,.]\d+)?\s*m)$/i.test((dive.heightLabel ?? "").trim())) return "Plateforme";
+  return "Autres";
 }

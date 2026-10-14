@@ -9,8 +9,8 @@ export function ProgressDetailsPeriod({ period, family }: { period: string; fami
     if (family) params.set("family", family);
     router.push(`/athlete/progress/details?${params.toString()}`);
   }}>
-    <option value="week">Cette semaine</option>
-    <option value="month">Ce mois</option>
-    <option value="all">Tout le temps</option>
+    <option value="week">Semaine</option>
+    <option value="month">Mois</option>
+    <option value="season">Saison</option>
   </select>;
 }
