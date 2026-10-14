@@ -128,7 +128,7 @@ export default async function AthletesPage() {
     <CoachShell active="Athletes">
       <div className="athlete-directory-page">
       <DirectoryHeader title="Athlètes" description="Suivez votre groupe et accédez aux profils" season={seasonLabel} groups={groupStats} volume={Number(seasonStatsResult.rows[0]?.volume ?? 0)} completedSessions={Number(seasonStatsResult.rows[0]?.completedSessions ?? 0)} />
-      <DirectoryStats rows={rows} season={seasonLabel} />
+      <DirectoryStats rows={rows} />
       <AthleteAccountCard groups={groups} />
       <AthleteDirectory rows={rows} groups={groups} />
       </div>
@@ -156,7 +156,7 @@ function DemoAthletesPage() {
     <CoachShell active="Athletes">
       <div className="athlete-directory-page">
       <DirectoryHeader title="Athlètes" description="Suivez votre groupe et accédez aux profils" season={currentSeasonLabel()} groups={[{ name: "Provincial", athletes: rows.length }]} volume={rows.reduce((sum, row) => sum + row.volume, 0)} completedSessions={rows.reduce((sum, row) => sum + row.completedSessions, 0)} />
-      <DirectoryStats rows={rows} season={currentSeasonLabel()} />
+      <DirectoryStats rows={rows} />
       <AthleteAccountCard groups={[{ id: "provincial", name: "Provincial" }]} demo />
       <AthleteDirectory rows={rows} groups={[{ id: "provincial", name: "Provincial" }]} demo />
       </div>
@@ -170,24 +170,25 @@ function DirectoryHeader({ title, description, season, groups, volume, completed
       <div className="athlete-directory-title">
         <h1>{title}</h1>
         <p>{description}</p>
+        <span className="athlete-directory-season">Saison {season}</span>
       </div>
       <SeasonStatsButton season={season} groups={groups} volume={volume} completedSessions={completedSessions} />
     </div>
   );
 }
 
-function DirectoryStats({ rows, season }: { rows: AthleteRow[]; season: string }) {
+function DirectoryStats({ rows }: { rows: AthleteRow[] }) {
   const sessions = rows.reduce((total, row) => total + row.completedSessions, 0);
   const volume = rows.reduce((total, row) => total + row.volume, 0);
   return <section className="athlete-directory-stats" aria-label="Statistiques du groupe">
-    <Stat icon={<UserRound />} value={rows.filter((row) => row.active).length} label="athlètes actifs" season={season} />
+    <Stat icon={<UserRound />} value={rows.filter((row) => row.active).length} label="athlètes actifs" />
     <Stat icon={<CalendarDays />} value={sessions} label="séances complétées" />
     <Stat icon={<Activity />} value={volume.toLocaleString("fr-CA")} label="répétitions" />
   </section>;
 }
 
-function Stat({ icon, value, label, season }: { icon: ReactNode; value: number | string; label: string; season?: string }) {
-  return <div className={`athlete-directory-stat${season ? " has-season" : ""}`}><span className="athlete-directory-stat-icon">{icon}</span>{season && <span className="athlete-season-label">{season}</span>}<strong>{value}</strong><span>{label}</span></div>;
+function Stat({ icon, value, label }: { icon: ReactNode; value: number | string; label: string }) {
+  return <div className="athlete-directory-stat"><span className="athlete-directory-stat-icon">{icon}</span><strong>{value}</strong><span>{label}</span></div>;
 }
 
 function currentSeasonLabel() {
