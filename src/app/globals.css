@@ -485,7 +485,7 @@ a {
 .athlete-app .progress-details-height-group { margin-bottom:.75rem; }
 .athlete-app .progress-details-height-heading { display:flex; min-height:3.4rem; align-items:center; justify-content:space-between; margin:0; border-bottom:1px solid #e7edf4; color:#102451; font-size:1rem; font-weight:850; }
 .athlete-app .progress-details-height-heading b { color:#607492; font-size:.9rem; }
-.athlete-app .progress-details-dive { display:grid; grid-template-columns:5rem minmax(2rem,1fr) 2rem 1.35rem; min-height:4.7rem; align-items:center; gap:.55rem; border-bottom:1px solid #e7edf4; }
+.athlete-app .progress-details-dive { display:grid; grid-template-columns:minmax(0,1fr) 2.5rem 1.35rem; min-height:4.7rem; align-items:center; gap:.55rem; border-bottom:1px solid #e7edf4; }
 .athlete-app .progress-details-dive-name { display:flex; flex-direction:column; gap:.1rem; }
 .athlete-app .progress-details-dive-name strong { color:#101f4a; font-size:1.1rem; font-weight:850; }
 .athlete-app .progress-details-dive-name span { color:#718096; font-size:.85rem; }
@@ -495,7 +495,7 @@ a {
 .athlete-app .progress-details-chevron, .athlete-app .progress-details-all svg { color:#63738d; }
 .athlete-app .progress-details-all { display:flex; min-height:3.6rem; align-items:center; justify-content:space-between; color:#087cff; font-size:.9rem; font-weight:700; }
 .athlete-app .progress-details-empty { padding:1.5rem .3rem; color:#64748b; text-align:center; }
-@media (max-width:370px) { .athlete-app .progress-details-family { min-width:41%; flex-basis:41%; gap:.25rem; padding-inline:.2rem; } .athlete-app .progress-details-family strong { font-size:.68rem; } .athlete-app .progress-details-dive { grid-template-columns:4rem minmax(2rem,1fr) 1.7rem 1rem; gap:.4rem; } }
+@media (max-width:370px) { .athlete-app .progress-details-family { min-width:41%; flex-basis:41%; gap:.25rem; padding-inline:.2rem; } .athlete-app .progress-details-family strong { font-size:.68rem; } .athlete-app .progress-details-dive { grid-template-columns:minmax(0,1fr) 2rem 1rem; gap:.4rem; } }
 
 @media (prefers-reduced-motion: reduce) {
   *,

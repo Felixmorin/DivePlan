@@ -59,7 +59,6 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
     label,
     dives: selectedDives.filter((dive) => heightCategory(dive) === label)
   })).filter((group) => group.dives.reduce((sum, dive) => sum + dive.volume, 0) > 0);
-  const maxVolume = Math.max(1, ...selectedDives.map((dive) => dive.volume));
   const total = rows.reduce((sum, dive) => sum + dive.volume, 0);
   const familyParam = (family: string, all = false) => `/athlete/progress/details?period=${period}&family=${encodeURIComponent(family)}${all ? "&all=1" : ""}`;
 
@@ -86,8 +85,7 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
       return <section className="progress-details-list progress-details-height-group" aria-label={`${group.label} · ${categoryTotal} plongeons`} key={group.label}>
         <h2 className="progress-details-height-heading"><span>{group.label}</span><b>{categoryTotal}</b></h2>
         {groupDives.map((dive) => <div className="progress-details-dive" key={`${dive.code}-${dive.height}-${dive.heightLabel}`}>
-          <div className="progress-details-dive-name"><strong>{dive.code}</strong></div>
-          <div className="progress-details-dive-track"><i style={{ width: `${Math.max(16, Math.round(dive.volume / maxVolume * 100))}%`, backgroundColor: familyStyles[selectedFamily].color }} /></div>
+          <div className="progress-details-dive-name"><strong>{dive.code}</strong>{(group.label === "Plateforme" || group.label === "Autres") && <span>{dive.heightLabel ?? (group.label === "Plateforme" ? "Plateforme" : "Autre")}</span>}</div>
           <b className="progress-details-dive-count">{dive.volume}</b><ChevronRight className="progress-details-chevron" size={23} />
         </div>)}
         {group.dives.length > 7 && <Link className="progress-details-all" href={familyParam(selectedFamily, !showAll)}>{showAll ? "Réduire la liste" : `Voir tous les plongeons ${group.label.toLowerCase()}`}<ChevronRight size={22} /></Link>}
