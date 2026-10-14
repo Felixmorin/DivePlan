@@ -147,6 +147,7 @@ model Athlete {
   absences         AthleteSessionAbsence[]
   diveLogs         AthleteDiveLog[]
   diveNotes        AthleteDiveNote[]
+  coachSessionNotes CoachAthleteSessionNote[]
   exerciseLogs     AthleteExerciseLog[]
   blockTimings     AthleteBlockTiming[]
   skills           AthleteSkill[]
@@ -369,6 +370,19 @@ model TrainingSession {
   competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
   pushDeliveries PushDelivery[]
   cancellationPushDeliveries SessionCancellationPushDelivery[]
+  coachAthleteNotes CoachAthleteSessionNote[]
+}
+
+model CoachAthleteSessionNote {
+  sessionId String
+  athleteId String
+  note      String
+  updatedAt DateTime        @updatedAt
+  session   TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  athlete   Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, athleteId])
+  @@index([athleteId])
 }
 
 model SessionBlock {

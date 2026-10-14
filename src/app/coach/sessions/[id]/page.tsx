@@ -14,12 +14,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAthleteAverageGoldenRepsByTraining, getAthleteAverageRepsByTraining, getCoachSession } from "@/lib/coach-session";
 import { formatMontrealDate } from "@/lib/timezone";
 import { countPoolContexts } from "@/lib/pool-list";
+import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getCoachSession(id);
+  const coachNotes = (await query<{athleteId:string;note:string}>(`SELECT "athleteId",note FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [session.id])).rows;
   const rawAthletes = session.blocks.flatMap((block) =>
     block.assignments.map((assignment) => ({
       id: assignment.athlete.id,
@@ -239,6 +241,10 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               </CardHeader>
               <CardContent>
                 {block.description && <p className="mb-4 whitespace-pre-line text-sm leading-6 text-[var(--color-ink-muted)]">{block.description}</p>}
+                {block.poolTraining ? block.assignments.flatMap(({ athlete }) => {
+                  const note = coachNotes.find((item) => item.athleteId === athlete.id)?.note;
+                  return note ? [<div key={`coach-note-${athlete.id}`} className="mb-3 rounded-xl border border-[var(--color-action)]/25 bg-[var(--color-action)]/5 p-3"><p className="text-xs font-black uppercase text-[var(--color-action-strong)]">Note personnelle · {athlete.user.firstName} · visible par le coach seulement</p><p className="mt-1 whitespace-pre-line text-sm">{note}</p></div>] : [];
+                }) : null}
                 {block.drylandExercises.length > 0 && <div className="grid gap-2 md:grid-cols-3">{block.drylandExercises.map((item) => <div key={`${item.exerciseId}-${item.order}`} className="rounded-2xl bg-[var(--color-surface-raised)] p-3"><div className="font-bold">{item.exercise.name}</div><div className="text-sm text-[var(--color-ink-muted)]">{item.sets ?? 1} x {item.reps ?? `${item.duration ?? 30} sec`}</div></div>)}</div>}
                 {block.poolTraining && <details className="mt-3">
                   <summary className="cursor-pointer rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-ink-muted)]">Liste de plongeons ({block.poolTraining.sections.reduce((sum, section) => sum + section.dives.length, 0)} plongeons · {block.estimatedVolume} répétitions)</summary>

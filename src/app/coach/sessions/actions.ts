@@ -26,6 +26,7 @@ const sessionInputSchema = z.object({
   duration: z.number().int().min(15).max(600),
   focus: z.string().trim().max(200).default(""),
   notes: z.string().optional(),
+  coachAthleteNotes: z.record(z.string(), z.string().max(2000)).default({}),
   evaluationPlacement: z.string().default("none"),
   planningEventId: z.string().optional(),
   templateId: z.string().optional(),
@@ -277,6 +278,14 @@ export async function createTrainingSession(input: CreateSessionInput) {
       await createPoolBlock(tx, createdSession.id, poolBlock, index + drylandBlocks.length + 2);
     }
 
+    const assignedPoolAthletes = new Set(poolBlocks.flatMap((block) => block.athleteIds));
+    for (const [athleteId, note] of Object.entries(data.coachAthleteNotes)) {
+      const trimmedNote = note.trim();
+      if (trimmedNote && assignedPoolAthletes.has(athleteId) && validAthleteIds.has(athleteId)) {
+        await tx.query(`INSERT INTO "CoachAthleteSessionNote" ("sessionId","athleteId",note,"updatedAt") VALUES ($1,$2,$3,NOW()) ON CONFLICT ("sessionId","athleteId") DO UPDATE SET note=EXCLUDED.note,"updatedAt"=NOW()`, [createdSession.id, athleteId, trimmedNote]);
+      }
+    }
+
     if (data.status === SessionStatus.READY && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, createdSession.id);
 
     if (data.cooldown.enabled) {
@@ -355,6 +364,14 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
       for (const [order, item] of blockExercises.entries()) await tx.query(`INSERT INTO "DrylandBlockExercise" ("blockId","exerciseId",sets,reps,duration,notes,"order") VALUES ($1,$2,$3,$4,$5,$6,$7)`, [created.id, item.id, item.override?.sets ?? item.defaultSets, item.roundTrip ? null : item.override?.reps ?? item.defaultReps, item.roundTrip ? null : item.override?.duration ?? item.defaultDuration, item.override?.notes ?? null, order]);
     }
     for (const [index, block] of data.poolBlocks.entries()) await createPoolBlock(tx, sessionId, { ...block, athleteIds: block.athleteIds.filter((id) => validAthleteIds.has(id)) }, index + data.drylandBlocks.length + 2);
+    await tx.query(`DELETE FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [sessionId]);
+    const assignedPoolAthletes = new Set(data.poolBlocks.flatMap((block) => block.athleteIds).filter((id) => validAthleteIds.has(id)));
+    for (const [athleteId, note] of Object.entries(data.coachAthleteNotes)) {
+      const trimmedNote = note.trim();
+      if (trimmedNote && assignedPoolAthletes.has(athleteId)) {
+        await tx.query(`INSERT INTO "CoachAthleteSessionNote" ("sessionId","athleteId",note,"updatedAt") VALUES ($1,$2,$3,NOW())`, [sessionId, athleteId, trimmedNote]);
+      }
+    }
     if (data.cooldown.enabled) await createBlock(tx, { sessionId, type: BlockType.COOLDOWN, title: data.cooldown.title, description: data.cooldown.description, duration: data.cooldown.duration, position: 99, estimatedVolume: 0, athleteIds: allAthleteIds });
     if (wasPublished && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, sessionId);
     return { id: sessionId, title: data.title.trim() };

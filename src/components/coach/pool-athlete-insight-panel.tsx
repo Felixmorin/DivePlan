@@ -7,10 +7,12 @@ import type { AthletePoolInsight, PoolInsightHeight } from "@/lib/coach-pool-ins
 const heights: Array<{ id: PoolInsightHeight; label: string }> = [
   { id: "ONE_METER", label: "1 m" }, { id: "THREE_METER", label: "3 m" }, { id: "PLATFORM", label: "Plateforme" }, { id: "CUSTOM", label: "Autre" }
 ];
+const familyOrder = ["Avant", "Arriere", "Retourne", "Renverse", "Vrille", "Equilibre"];
+const familyRank = new Map(familyOrder.map((family, index) => [family, index]));
 
 export function PoolAthleteInsightPanel({ insight }: { insight?: AthletePoolInsight }) {
   const [height, setHeight] = useState<PoolInsightHeight>("ONE_METER");
-  const families = insight?.families ?? [];
+  const families = [...(insight?.families ?? [])].sort((a, b) => (familyRank.get(a.family) ?? familyOrder.length) - (familyRank.get(b.family) ?? familyOrder.length));
   const familyMax = Math.max(1, ...families.map((item) => item.volume));
   const profileDives = insight?.competitionDives ?? [];
   const availableHeights = heights.filter((item) => profileDives.some((dive) => dive.height === item.id));
