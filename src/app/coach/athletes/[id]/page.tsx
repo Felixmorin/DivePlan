@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, ShieldAlert, Sparkles, Target, Trash2, Trophy, Waves } from "lucide-react";
-import { deleteAthlete, removeAthleteDiveFromVolume, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
+import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, ShieldAlert, Sparkles, Target, Trophy, Waves } from "lucide-react";
+import { removeAthleteDiveFromVolume, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
+import { DeleteAthleteButton } from "@/app/coach/athletes/delete-athlete-button";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { CompetitionDiveEditor } from "@/components/coach/competition-dive-editor";
 import { CoachCompetitionEvaluationForm } from "@/components/coach/coach-competition-evaluation-form";
@@ -250,12 +251,7 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
                   <Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/${profile.nextSession.id}`}>Prochaine séance</Link>
                 </Button>
               )}
-              <form action={demo ? undefined : deleteAthlete}>
-                <input type="hidden" name="athleteId" value={profile.id} />
-                <Button type="submit" variant="outline" disabled={demo} className="text-[var(--color-danger)] hover:border-[var(--color-danger)]">
-                  <Trash2 className="h-4 w-4" /> Supprimer
-                </Button>
-              </form>
+              <DeleteAthleteButton athleteId={profile.id} demo={demo} />
             </div>
           </CardContent>
         </Card>

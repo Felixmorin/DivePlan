@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Plus, Trash2, UserPlus } from "lucide-react";
-import { deleteAthlete } from "@/app/coach/athletes/actions";
+import { Plus, UserPlus } from "lucide-react";
+import { DeleteAthleteButton } from "@/app/coach/athletes/delete-athlete-button";
 import { CreateAthleteAccountForm } from "@/app/coach/athletes/create-athlete-account-form";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { StatusPill } from "@/components/training/status-pill";
@@ -213,23 +213,12 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
               <div className="col-span-2 lg:col-span-1"><ActivitySummary row={row} /></div>
               <div className="text-lg font-black lg:text-right"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Volume</span>{row.volume}</div>
               <div className="text-lg font-black lg:text-right"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Moyenne</span>{row.averageVolume === null ? "—" : row.averageVolume.toFixed(1)}</div>
-              <div className="col-span-2 lg:col-span-1 lg:text-right"><DeleteAthleteButton athleteId={row.id} demo={demo} /></div>
+              <div className="col-span-2 lg:col-span-1 lg:text-right"><DeleteAthleteButton athleteId={row.id} demo={demo} compact /></div>
             </div>
           ))}
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function DeleteAthleteButton({ athleteId, demo }: { athleteId: string; demo: boolean }) {
-  return (
-    <form action={demo ? undefined : deleteAthlete}>
-      <input type="hidden" name="athleteId" value={athleteId} />
-      <Button type="submit" variant="outline" size="sm" disabled={demo} className="text-[var(--color-danger)] hover:border-[var(--color-danger)]">
-        <Trash2 className="h-4 w-4" /> Supprimer
-      </Button>
-    </form>
   );
 }
 

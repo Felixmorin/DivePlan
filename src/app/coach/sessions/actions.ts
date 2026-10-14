@@ -967,6 +967,9 @@ export async function updateTrainingSession(formData: FormData) {
   await withTransaction(async (tx) => {
     const updated=await tx.query(`UPDATE "TrainingSession" s SET title=$1,focus=$2,duration=$3,date=$4,notes=$5,status=$6 FROM "TrainingWeek" w WHERE s.id=$7 AND s."weekId"=w.id AND w."clubId"=$8 AND (NOT $9 OR s.status='DRAFT') AND NOT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND (c."startedAt" IS NOT NULL OR c.status<>'NOT_STARTED')) AND NOT EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id) AND NOT EXISTS (SELECT 1 FROM "AthleteExerciseLog" l WHERE l."sessionId"=s.id)`,[title,focus,Number.isFinite(duration)?duration:existing.duration,parseMontrealDateTimeInput(date),String(formData.get("notes")??"").trim()||null,status,sessionId,clubId,wasPublished]);
     if(!updated.rowCount) throw new Error("Cette seance a deja ete commencee ou est introuvable.");
+    if (existing.planningEventId) {
+      await tx.query(`UPDATE "PlanningEvent" SET "startsAt"=$1,duration=$2 WHERE id=$3 AND "clubId"=$4 AND type='TRAINING_SCHEDULE' AND "cancelledAt" IS NULL`, [parseMontrealDateTimeInput(date), Number.isFinite(duration) ? duration : existing.duration, existing.planningEventId, clubId]);
+    }
     await tx.query(`DELETE FROM "SessionBlock" WHERE "sessionId"=$1 AND NOT (id=ANY($2::text[]))`,[sessionId,Array.from(includedBlockIds)]);
 
     for (const block of existing.blocks) {
@@ -1029,6 +1032,7 @@ export async function updateTrainingSession(formData: FormData) {
   revalidatePath("/coach/planning");
   revalidatePath("/coach/sessions");
   revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath("/athlete/calendar");
   redirect(`/coach/sessions/${sessionId}`);
 }
 
