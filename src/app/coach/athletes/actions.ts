@@ -230,9 +230,9 @@ export async function createAthleteAccount(_: CreateAthleteAccountState, formDat
 
   const data = parsed.data;
   const groupId = data.groupId || null;
-  const existingAccount = await query(`SELECT id FROM "User" WHERE username = $1 LIMIT 1`, [data.username]);
+  const existingAccount = await query<{ id: string }>(`SELECT id FROM "User" WHERE username = $1 LIMIT 1`, [data.username]);
 
-  if (existingAccount) {
+  if (existingAccount.rows.length > 0) {
     return { error: "Ce nom d'utilisateur est déjà utilisé." };
   }
 
@@ -279,6 +279,39 @@ export async function createAthleteAccount(_: CreateAthleteAccountState, formDat
       temporaryPassword
     }
   };
+}
+
+export async function updateAthleteProfile(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const parsed = manualAthleteSchema.extend({
+    athleteId: z.string().min(1),
+    active: z.enum(["true", "false"])
+  }).safeParse({
+    athleteId: formData.get("athleteId"),
+    firstName: formData.get("firstName"),
+    lastName: formData.get("lastName"),
+    level: formData.get("level"),
+    groupId: String(formData.get("groupId") ?? ""),
+    birthDate: String(formData.get("birthDate") ?? ""),
+    active: formData.get("active")
+  });
+  if (!parsed.success) throw new Error("Vérifie les informations du profil.");
+
+  const { athleteId, firstName, lastName, level, groupId: rawGroupId, birthDate, active } = parsed.data;
+  const athlete = await query<{ userId: string }>(`SELECT "userId" FROM "Athlete" WHERE id=$1 AND "clubId"=$2 LIMIT 1`, [athleteId, clubId]);
+  if (!athlete.rows[0]) throw new Error("Athlète introuvable.");
+  const groupId = rawGroupId || null;
+  if (groupId) {
+    const group = await query(`SELECT id FROM "TrainingGroup" WHERE id=$1 AND "clubId"=$2 LIMIT 1`, [groupId, clubId]);
+    if (!group.rows[0]) throw new Error("Ce groupe n’appartient pas à ton club.");
+  }
+  const parsedBirthDate = birthDate ? parseMontrealSessionDate(birthDate, "12:00") : parseMontrealSessionDate("2015-01-01", "12:00");
+  await withTransaction(async (tx) => {
+    await tx.query(`UPDATE "User" SET "firstName"=$1,"lastName"=$2 WHERE id=$3`, [firstName, lastName, athlete.rows[0].userId]);
+    await tx.query(`UPDATE "Athlete" SET level=$1,"groupId"=$2,"birthDate"=$3,active=$4 WHERE id=$5 AND "clubId"=$6`, [level, groupId, parsedBirthDate, active === "true", athleteId, clubId]);
+  });
+  revalidatePath("/coach/athletes");
+  revalidatePath(`/coach/athletes/${athleteId}`);
 }
 
 export async function addCompetitionDive(formData: FormData) {
