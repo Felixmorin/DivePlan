@@ -69,10 +69,9 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
             })}
           </nav>
         </div>
-        <div className="mt-4 flex items-center justify-center gap-2 border-t border-white/10 pt-4 text-xs font-semibold text-white/55">
-          <span>Powered By</span>
-          <Image src="/icons/diveplan.svg" alt="DivePlan" width={20} height={20} />
-          <span className="font-black text-white/75">DivePlan</span>
+        <div className="mt-4 flex flex-col items-center gap-2 border-t border-white/10 pt-4">
+          <span className="text-xs font-semibold text-white/55">Powered By</span>
+          <Image src="/icons/diveplan-powered-by.png" alt="DivePlan" width={168} height={56} className="h-auto w-42" />
         </div>
       </aside>
       <header className="sticky top-0 z-20 border-b border-[var(--color-border)] bg-[var(--color-coach-bg)]/95 px-4 py-3 backdrop-blur lg:hidden">
