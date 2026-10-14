@@ -505,6 +505,127 @@ a {
 .athlete-app .progress-details-empty { padding:1.5rem .3rem; color:#64748b; text-align:center; }
 @media (max-width:370px) { .athlete-app .progress-details-family { min-width:41%; flex-basis:41%; gap:.25rem; padding-inline:.2rem; } .athlete-app .progress-details-family strong { font-size:.68rem; } .athlete-app .progress-details-dive { grid-template-columns:minmax(0,1fr) 2rem 1rem; gap:.4rem; } }
 
+.athlete-app .profile-edit-link { position:absolute; z-index:2; right:1rem; top:1rem; display:grid; width:2.65rem; height:2.65rem; place-items:center; border:1px solid #dce8f3; border-radius:50%; background:#fff; color:#0c1c4b; }
+.athlete-app .profile-competition-preview { display:block; border-radius:1rem; background:#eef8fd; padding:.8rem; color:#0c1c4b; }
+.athlete-app .profile-competition-title { display:flex; align-items:center; justify-content:space-between; margin:0 .1rem .65rem; }
+.athlete-app .profile-competition-title h2 { margin:0; font-size:1rem; font-weight:850; }
+.athlete-app .profile-competition-heights { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.55rem; }
+.athlete-app .profile-competition-height { display:flex; min-width:0; min-height:4rem; align-items:center; gap:.5rem; border:1px solid #dce8f3; border-left:4px solid #58b4ff; border-radius:.65rem; background:#fff; padding:.45rem; color:#526987; }
+.athlete-app .profile-competition-height.is-three { border-left-color:#20c9c7; }
+.athlete-app .profile-competition-icon { display:grid; width:2.25rem; height:2.25rem; flex:none; place-items:center; border-radius:50%; background:#e5f5ff; color:#1685f7; }
+.athlete-app .is-three .profile-competition-icon { background:#e1f9f7; color:#12bfc2; }
+.athlete-app .profile-competition-copy { display:flex; min-width:0; flex:1; flex-direction:column; }
+.athlete-app .profile-competition-copy strong { color:#102451; font-size:.9rem; }
+.athlete-app .profile-competition-copy small { overflow:hidden; color:#63738d; font-size:.7rem; text-overflow:ellipsis; white-space:nowrap; }
+.athlete-app .profile-edit-page { padding-bottom:calc(7.5rem + env(safe-area-inset-bottom)); }
+.athlete-app .profile-edit-header, .athlete-app .athlete-preferences-header { display:flex; align-items:center; gap:.75rem; margin:0 0 1rem; }
+.athlete-app .profile-edit-header > a, .athlete-app .athlete-preferences-header > a { display:grid; width:2.8rem; height:2.8rem; flex:none; place-items:center; border-radius:50%; background:#f1f3f6; color:#102451; }
+.athlete-app .profile-edit-header h1, .athlete-app .athlete-preferences-header h1 { margin:0; color:#0c1c4b; font-size:clamp(1.55rem,7vw,2rem); font-weight:850; letter-spacing:-.04em; }
+.athlete-app .profile-edit-photo { display:flex; flex-direction:column; align-items:center; padding:.2rem 0 1.1rem; }
+.athlete-app .profile-edit-avatar { position:relative; width:8.3rem; height:8.3rem; }
+.athlete-app .profile-edit-avatar [data-slot="avatar"] { width:100%; height:100%; border:0; border-radius:50%; background:#dff5fb; }
+.athlete-app .profile-edit-avatar img { width:100%; height:100%; object-fit:cover; }
+.athlete-app .profile-edit-avatar > span { position:absolute; right:-.1rem; bottom:.2rem; display:grid; width:2.5rem; height:2.5rem; place-items:center; border:3px solid #fff; border-radius:50%; background:#f5f8fc; color:#087cff; }
+.athlete-app .profile-edit-photo-link { margin-top:.55rem; background:transparent; color:#087cff; font-size:.95rem; }
+.athlete-app .profile-edit-form { display:grid; gap:.85rem; border:1px solid #dce8f3; border-radius:1rem; background:#fff; padding:1rem; }
+.athlete-app .profile-edit-form label { display:grid; gap:.4rem; color:#607492; font-size:.88rem; }
+.athlete-app .profile-edit-form input { min-width:0; height:3.1rem; border:1px solid #dce8f3; border-radius:.8rem; background:#fff; padding:0 .8rem; color:#0c1c4b; font-size:1.1rem; outline:none; }
+.athlete-app .profile-edit-form input:focus { border-color:#1685f7; box-shadow:0 0 0 3px #1685f722; }
+.athlete-app .profile-edit-form input[readonly] { background:#f7f9fc; }
+.athlete-app .profile-edit-sports { margin-top:.85rem; border-radius:1rem; background:#eef8fd; padding:.9rem; }
+.athlete-app .profile-edit-sports h2 { margin:0 0 .65rem; color:#0c1c4b; font-size:1.25rem; font-weight:850; }
+.athlete-app .profile-edit-info-row { display:flex; min-height:4rem; align-items:center; gap:.65rem; margin-top:.45rem; border:1px solid #dce8f3; border-radius:.8rem; background:#fff; padding:.55rem .7rem; color:#607492; }
+.athlete-app .profile-edit-info-row > span { display:grid; width:2.6rem; height:2.6rem; flex:none; place-items:center; border-radius:50%; background:#def5f7; color:#0da9bb; }
+.athlete-app .profile-edit-info-row > span svg { width:1.25rem; }
+.athlete-app .profile-edit-info-row > div { display:flex; flex:1; flex-direction:column; }
+.athlete-app .profile-edit-info-row small { font-size:.75rem; }
+.athlete-app .profile-edit-info-row strong { color:#102451; font-size:.95rem; }
+.athlete-app .profile-edit-events-label { margin:.7rem 0 .4rem; color:#607492; }
+.athlete-app .profile-edit-event-options { display:flex; gap:.55rem; }
+.athlete-app .profile-edit-event { display:flex; min-width:7.7rem; min-height:2.7rem; align-items:center; justify-content:center; gap:.5rem; border:1px solid #dce8f3; border-radius:.75rem; background:#fff; color:#607492; font-weight:750; }
+.athlete-app .profile-edit-event.is-active { border-color:#08c9c7; background:#e8fbfa; color:#0c1c4b; }
+.athlete-app .profile-edit-event svg { color:#fff; background:#09bdc2; border-radius:50%; padding:.2rem; }
+.athlete-app .profile-edit-note { display:flex; align-items:center; gap:.65rem; margin-top:.7rem; border-radius:.9rem; background:#eef8fd; padding:.85rem; color:#607492; font-size:.85rem; }
+.athlete-app .profile-edit-note svg { width:1.5rem; height:1.5rem; flex:none; color:#1685f7; }
+.athlete-app .profile-edit-message { margin:.65rem 0; color:#cf3434; font-size:.85rem; }
+.athlete-app .profile-edit-message.is-success { color:#058c8f; }
+.athlete-app .profile-edit-footer { position:fixed; z-index:30; right:0; bottom:0; left:0; max-width:430px; margin:auto; padding:.7rem 1rem calc(.8rem + env(safe-area-inset-bottom)); border:1px solid #edf2f7; border-bottom:0; border-radius:1.35rem 1.35rem 0 0; background:rgba(255,255,255,.97); box-shadow:0 -8px 25px #20375414; }
+.athlete-app .profile-edit-footer button { width:100%; min-height:3.25rem; border-radius:999px; background:#09285a; color:#fff; font-size:.98rem; font-weight:800; }
+.athlete-app .profile-edit-footer button:disabled { opacity:.65; }
+
+.athlete-app .competition-progress-header { display:grid; grid-template-columns:2.7rem 1fr 2.7rem; align-items:center; margin:.1rem 0 1rem; }
+.athlete-app .competition-progress-header a { display:grid; width:2.6rem; height:2.6rem; place-items:center; border-radius:50%; background:#f1f3f6; color:#102451; }
+.athlete-app .competition-progress-header h1 { grid-column:2; margin:0; color:#0c1c4b; text-align:center; font-size:2rem; font-weight:850; }
+.athlete-app .competition-progress-tabs { display:flex; margin-bottom:1rem; overflow:hidden; border-radius:999px; background:#f1f3f6; }
+.athlete-app .competition-progress-tabs button { min-height:3.25rem; flex:1; border-radius:999px; color:#344766; font-weight:800; }
+.athlete-app .competition-progress-tabs button[aria-selected="true"] { background:#09285a; color:#fff; box-shadow:0 4px 12px #09285a20; }
+.athlete-app .competition-progress-summary { display:grid; grid-template-columns:3.8rem minmax(0,1fr) auto; align-items:center; gap:.7rem; margin-bottom:1rem; border-radius:1rem; background:#eef8fd; padding:.9rem; }
+.athlete-app .competition-progress-summary > span { display:grid; width:3.5rem; height:3.5rem; place-items:center; border-radius:50%; background:#ddf5fb; color:#19b9c8; }
+.athlete-app .competition-progress-summary > div { min-width:0; }
+.athlete-app .competition-progress-summary strong { color:#102451; font-size:.84rem; }
+.athlete-app .competition-progress-summary strong i { padding:0 .15rem; font-style:normal; }
+.athlete-app .competition-progress-summary p { margin:.15rem 0 .5rem; color:#64748b; font-size:.85rem; }
+.athlete-app .competition-progress-track, .athlete-app .competition-progress-detail > div { height:.55rem; overflow:hidden; border-radius:99px; background:#dfe8f1; }
+.athlete-app .competition-progress-track i, .athlete-app .competition-progress-detail > div i { display:block; height:100%; border-radius:inherit; background:#25c9c5; }
+.athlete-app .competition-progress-summary > b { color:#64748b; font-size:.8rem; }
+.athlete-app .competition-progress-rows { display:grid; gap:.5rem; }
+.athlete-app .competition-progress-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) 2.2rem 1rem; min-height:5rem; align-items:center; gap:.55rem; border:1px solid #dce8f3; border-left:5px solid #d9edfc; border-radius:.75rem; background:#fff; padding:.55rem .6rem; }
+.athlete-app .competition-progress-row.is-complete { border-left-color:#56d8d3; }
+.athlete-app .competition-progress-code { display:flex; min-width:0; flex-direction:column; gap:.12rem; }
+.athlete-app .competition-progress-code strong { overflow:hidden; color:#0c1c4b; font-size:1.25rem; font-weight:850; text-overflow:ellipsis; }
+.athlete-app .competition-progress-code span { color:#64748b; font-size:.78rem; white-space:nowrap; }
+.athlete-app .competition-progress-detail > span { display:block; margin-bottom:.35rem; color:#102451; font-size:.85rem; }
+.athlete-app .competition-progress-detail > div i { background:#459eff; }
+.athlete-app .is-complete .competition-progress-detail > div i { background:#24c9c5; }
+.athlete-app .competition-progress-check { display:grid; width:2rem; height:2rem; place-items:center; border-radius:50%; background:#dcf8f6; color:#08b8b5; }
+.athlete-app .competition-progress-chevron { color:#425675; }
+
+.athlete-app .athlete-badges-header { display:flex; align-items:flex-start; gap:.9rem; margin:.1rem 0 1.2rem; }
+.athlete-app .athlete-badges-header > a { display:grid; width:2.7rem; height:2.7rem; flex:none; place-items:center; border-radius:50%; background:#f1f3f6; color:#102451; }
+.athlete-app .athlete-badges-header h1 { margin:0; color:#0c1c4b; font-size:2rem; font-weight:850; letter-spacing:-.04em; }
+.athlete-app .athlete-badges-header p { margin:.1rem 0 0; color:#64748b; font-size:1.05rem; }
+.athlete-app .athlete-badges-golden { display:flex; min-height:7.4rem; align-items:center; gap:1rem; margin-bottom:.8rem; border:1px solid #f3df9b; border-radius:1rem; background:#fff9e8; padding:1rem; }
+.athlete-app .athlete-badges-golden > span { display:grid; width:5rem; height:5rem; flex:none; place-items:center; border-radius:50%; background:#ffe7a1; color:#f1a900; }
+.athlete-app .athlete-badges-golden > span svg { width:3rem; height:3rem; }
+.athlete-app .athlete-badges-golden h2 { margin:0; color:#102451; font-size:1.45rem; font-weight:850; }
+.athlete-app .athlete-badges-golden p { margin:.15rem 0 0; color:#64748b; font-size:1.1rem; }
+.athlete-app .athlete-badges-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; }
+.athlete-app .athlete-badge-card { display:flex; min-width:0; min-height:13rem; flex-direction:column; align-items:center; border:1px solid #e1eaf3; border-radius:1rem; background:#fff; padding:.85rem .65rem; text-align:center; }
+.athlete-app .athlete-badge-icon { position:relative; display:grid; width:6.1rem; height:6.1rem; place-items:center; border-radius:50%; background:#eaf6ff; color:#339bff; }
+.athlete-app .athlete-badge-icon > svg { width:3.3rem; height:3.3rem; stroke-width:2.5; }
+.athlete-app .athlete-badge-card.mint .athlete-badge-icon { background:#e3f9f8; color:#10bfbd; }
+.athlete-app .athlete-badge-icon i { position:absolute; top:.1rem; right:-.1rem; display:grid; width:1.7rem; height:1.7rem; place-items:center; border-radius:50%; background:#0fc0c1; color:#fff; }
+.athlete-app .athlete-badge-icon i svg { width:1.15rem; }
+.athlete-app .athlete-badge-card h2 { min-height:2.7rem; display:grid; place-items:center; margin:.45rem 0 .1rem; color:#102451; font-size:.95rem; font-weight:850; line-height:1.15; }
+.athlete-app .athlete-badge-card p { margin:0 0 .5rem; color:#718096; font-size:.9rem; }
+.athlete-app .athlete-badge-track { width:100%; height:.55rem; margin-top:auto; overflow:hidden; border-radius:99px; background:#e9eff5; }
+.athlete-app .athlete-badge-track i { display:block; height:100%; border-radius:inherit; background:#389bfa; }
+.athlete-app .athlete-badge-card.mint .athlete-badge-track i, .athlete-app .athlete-badge-card.is-earned .athlete-badge-track i { background:#0fc4c2; }
+
+.athlete-app .athlete-preferences-page { padding-bottom:calc(2.5rem + env(safe-area-inset-bottom)); }
+.athlete-app .athlete-preferences-header { margin:.2rem 0 1.2rem; }
+.athlete-app .athlete-preferences-header h1 { font-size:2rem; }
+.athlete-app .preference-group { margin-bottom:.8rem; overflow:hidden; border:1px solid #d4e9ff; border-radius:1rem; background:#eff8ff; padding:.75rem 0 0; }
+.athlete-app .preference-group > h2 { margin:0; padding:.15rem .85rem .55rem; color:#102451; font-size:1.2rem; font-weight:850; }
+.athlete-app .preference-rows { overflow:hidden; border-radius:.9rem; background:#fff; }
+.athlete-app .preference-row { display:flex; min-height:4rem; align-items:center; gap:.65rem; border-bottom:1px solid #e6eef6; background:#fff; padding:.6rem .8rem; color:#102451; text-decoration:none; }
+.athlete-app .preference-row:last-child { border-bottom:0; }
+.athlete-app .preference-row > strong { flex:1; font-size:.92rem; font-weight:800; }
+.athlete-app .preference-icon { display:grid; width:2.8rem; height:2.8rem; flex:none; place-items:center; border-radius:50%; background:#eaf6ff; color:#2188ed; }
+.athlete-app .preference-icon.mint { background:#e2f9f8; color:#0cb9c2; }
+.athlete-app .preference-icon svg { width:1.5rem; height:1.5rem; }
+.athlete-app .preference-value { color:#64748b; font-size:.9rem; }
+.athlete-app .preference-chevron { color:#607492; font-size:1.8rem; line-height:1; }
+.athlete-app .preference-notifications { padding:.2rem .5rem .6rem; }
+.athlete-app .preference-notifications > section { margin:0; border:0; border-radius:.85rem; background:#fff; padding:.65rem; color:#102451; box-shadow:none; }
+.athlete-app .preference-notifications > section h3 { color:#102451; font-size:.9rem; }
+.athlete-app .preference-notifications > section p { color:#607492; font-size:.75rem; }
+.athlete-app .preference-notifications > section fieldset { margin-top:.6rem; }
+.athlete-app .preference-notifications > section label { border-color:#dce8f3; color:#536987; }
+.athlete-app .preference-notifications > section label:has(input:checked) { border-color:#15bfc6; background:#e5f9f8; color:#0c1c4b; }
+.athlete-app .preference-notifications > section button { color:#087cff; }
+.athlete-app .preference-signout { display:flex; width:100%; min-height:3.8rem; align-items:center; justify-content:center; gap:.7rem; border-radius:1rem; background:#fff0f0; color:#e94343; font-weight:850; }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

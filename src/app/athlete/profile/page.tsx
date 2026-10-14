@@ -1,15 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, ChevronRight, LogOut, Medal, Settings, Star, UserRound, Waves } from "lucide-react";
+import { Award, Building2, ChevronRight, LogOut, Medal, Pencil, Settings, Star, UserRound, Waves } from "lucide-react";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
-import { CompetitionList } from "@/components/athlete/competition-list";
-import { MilestonesDialog } from "@/components/athlete/milestones-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
-import { query } from "@/lib/db";
+import { getAthleteCurrentWeekSummary, getAthleteGoldenReps, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
-import { getClubMilestones } from "@/lib/milestone-data";
 import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
 import { AthletePageHeader } from "@/components/athlete/page-header";
 
@@ -21,16 +17,11 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const [totals, weekSummary, confidenceResult, milestoneResult, milestones] = await Promise.all([
+  const [totals, weekSummary, goldenReps] = await Promise.all([
     getAthleteProgressTotals(athlete.id),
     getAthleteCurrentWeekSummary(athlete.id),
-    query<{ competitionDiveId: string; diveCode: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; rating: number; evaluator: "COACH" | "ATHLETE"; evaluatedAt: Date }>(
-      `SELECT "competitionDiveId", "diveCode", height, rating, evaluator, "evaluatedAt" FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId" = $1 AND evaluator = 'ATHLETE' ORDER BY "evaluatedAt" ASC`, [athlete.id]
-    ),
-    query<{ key: string; awardedAt: Date }>(`SELECT key, "awardedAt" FROM "AthleteMilestone" WHERE "athleteId" = $1 ORDER BY "awardedAt"`, [athlete.id]),
-    getClubMilestones(athlete.clubId)
+    getAthleteGoldenReps(athlete.id)
   ]);
-  const confidenceRows = confidenceResult.rows;
   const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);
   const coachName = athlete.group?.coach.user
     ? `${athlete.group.coach.user.firstName} ${athlete.group.coach.user.lastName}`
@@ -40,10 +31,10 @@ export default async function ProfilePage() {
     <AthleteShell>
       <div className="profile-page-top mb-4">
           <AthletePageHeader title="Profil" showAvatar={false} avatarUrl={avatarUrl} initials={`${athlete.user.firstName[0]}${athlete.user.lastName[0]}`} />
-          <Link href="/athlete/preferences" aria-label="Paramètres" className="profile-settings"><Settings /></Link>
       </div>
 
       <section className="profile-hero relative overflow-hidden rounded-[1.4rem] border border-cyan-300/25 bg-[#092238] p-5 shadow-[0_20px_55px_rgba(0,0,0,0.3)]">
+        <Link href="/athlete/profile/edit" aria-label="Modifier mon profil" className="profile-edit-link"><Pencil size={20} /></Link>
         <div className="relative z-10 flex items-center gap-4">
           <Avatar className="h-24 w-24 shrink-0 border-2 border-cyan-200 bg-[#06101d] shadow-[0_0_0_4px_rgba(34,211,238,0.08)]">
             <AvatarImage src={avatarUrl ?? undefined} />
@@ -68,13 +59,10 @@ export default async function ProfilePage() {
       <h2 className="mb-3 text-xl font-black">Mes accomplissements</h2>
       <Link href="/athlete/profile/golden-reps" className="flex min-h-16 items-center gap-3 rounded-[1.2rem] border border-amber-300/25 bg-white px-4 transition hover:border-amber-300/50 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400 text-[#281500]"><Star className="h-5 w-5 fill-current" /></span>
-        <span className="flex-1"><span className="block text-base font-black">Golden rep</span></span>
+        <span className="flex-1"><span className="block text-base font-black">Golden reps</span><span className="block text-sm text-slate-600">{goldenReps.reduce((sum, dive) => sum + dive.count, 0)} répétitions remarquables</span></span>
         <ChevronRight className="h-5 w-5 text-amber-200/70" />
       </Link>
-      <div className="milestone-row"><span>Voir mes badges</span><MilestonesDialog milestones={milestoneResult.rows.flatMap((earned) => {
-        const milestone = milestones.find((item) => item.key === earned.key);
-        return milestone ? [{ ...milestone, awardedAt: earned.awardedAt.toISOString() }] : [];
-      })} /></div>
+      <Link href="/athlete/profile/badges" className="milestone-row"><span>Voir mes badges</span><Award className="h-5 w-5 text-red-500" /><ChevronRight className="h-5 w-5 text-slate-500" /></Link>
       </section>
 
       <section aria-label="Résumé de la semaine" className="mt-3 rounded-[1.2rem] border border-[var(--color-club-red)]/25 bg-[var(--color-athlete-panel)] px-4 py-3">
@@ -83,26 +71,18 @@ export default async function ProfilePage() {
       </section>
 
       <section className="mt-7">
-        <div className="mb-3 flex items-end justify-between gap-3">
-          <div>
-            <h2 className="mt-1 text-xl font-black">Ma liste de compétition</h2>
+        <Link href="/athlete/profile/competition" className="profile-competition-preview">
+          <div className="profile-competition-title"><h2>Ma liste de compétition</h2><ChevronRight size={21} /></div>
+          <div className="profile-competition-heights">
+            {(["ONE_METER", "THREE_METER"] as const).map((height) => {
+              const heightDives = athlete.competitionDives.filter((dive) => dive.height === height);
+              if (!heightDives.length) return null;
+              return <div className={`profile-competition-height ${height === "ONE_METER" ? "is-one" : "is-three"}`} key={height}>
+                <span className="profile-competition-icon"><Waves size={19} /></span><span className="profile-competition-copy"><strong>{height === "ONE_METER" ? "1 m" : "3 m"}</strong><small>{heightDives.length} plongeons</small></span><ChevronRight size={19} />
+              </div>;
+            })}
           </div>
-          <span className="text-xs font-bold text-white/35">{athlete.competitionDives.length} plongeons</span>
-        </div>
-        <CompetitionList
-          dives={athlete.competitionDives.map((dive) => ({
-            id: dive.id,
-          height: dive.height,
-          code: dive.diveCode,
-          difficulty: dive.difficulty,
-          platformHeight: dive.platformHeight,
-            latestConfidence: confidenceRows.filter((item) => item.competitionDiveId === dive.id).at(-1)?.rating ?? null,
-            confidenceHistory: confidenceRows.filter((item) => item.competitionDiveId === dive.id).map((item) => ({ competitionDiveId: item.competitionDiveId, code: item.diveCode, height: item.height, rating: item.rating, evaluator: item.evaluator, evaluatedAt: item.evaluatedAt.toISOString() })),
-            volume: totals.skillDives
-              .filter((trackedDive) => trackedDive.code === dive.diveCode && trackedDive.height === dive.height)
-              .reduce((sum, trackedDive) => sum + trackedDive.volume, 0)
-          }))}
-        />
+        </Link>
       </section>
 
       <section className="mt-7">

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CircleHelp, Globe, LogOut, Shield, Sun } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
-import { ProfileForm } from "@/components/athlete/profile-form";
 import { NotificationSettings } from "@/components/notifications/notification-settings";
-import { Button } from "@/components/ui/button";
+import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
+import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { getCurrentAthlete } from "@/lib/athlete-session";
 
 export const dynamic = "force-dynamic";
@@ -13,19 +13,24 @@ export default async function AthletePreferencesPage() {
   const athlete = await getCurrentAthlete();
   if (!athlete) redirect("/login");
 
-  return (
-    <AthleteShell>
-      <div className="mb-5">
-        <Button asChild variant="ghost" className="mb-5 -ml-3 text-white/65 hover:bg-white/8 hover:text-white">
-          <Link href="/athlete/profile"><ArrowLeft className="h-4 w-4" /> Retour au profil</Link>
-        </Button>
-        <h1 className="text-3xl font-black">Préférences</h1>
-        <p className="mt-2 text-sm text-white/55">Gère les notifications et les informations de ton profil.</p>
+  return <AthleteShell hideNav className="athlete-preferences-page">
+    <header className="athlete-preferences-header"><Link href="/athlete/profile" aria-label="Retour au profil"><ArrowLeft /></Link><h1>Préférences</h1></header>
+    <section className="preference-group">
+      <h2>Notifications</h2>
+      <div className="preference-notifications"><NotificationSettings /></div>
+    </section>
+    <section className="preference-group">
+      <h2>Application</h2><div className="preference-rows">
+        <div className="preference-row"><span className="preference-icon blue"><Globe /></span><strong>Langue</strong><span className="preference-value">Français</span><span className="preference-chevron">›</span></div>
+        <div className="preference-row"><span className="preference-icon mint"><Sun /></span><strong>Apparence</strong><span className="preference-value">Système</span><span className="preference-chevron">›</span></div>
       </div>
-      <div className="space-y-3">
-        <NotificationSettings />
-        <ProfileForm firstName={athlete.user.firstName} lastName={athlete.user.lastName} username={athlete.user.username} />
+    </section>
+    <section className="preference-group">
+      <h2>Compte</h2><div className="preference-rows">
+        <div className="preference-row"><span className="preference-icon blue"><Shield /></span><strong>Confidentialité</strong><span className="preference-chevron">›</span></div>
+        <div className="preference-row"><span className="preference-icon mint"><CircleHelp /></span><strong>Aide</strong><span className="preference-chevron">›</span></div>
       </div>
-    </AthleteShell>
-  );
+    </section>
+    <SignOutWithPushCleanup action={signOutAthlete}><button type="submit" className="preference-signout"><LogOut />Se déconnecter</button></SignOutWithPushCleanup>
+  </AthleteShell>;
 }
