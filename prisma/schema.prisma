@@ -81,6 +81,22 @@ model Club {
   templates      SessionTemplate[]
   planningEvents PlanningEvent[]
   milestones     ClubMilestone[]
+  transferTelemetry TransferTelemetryHour[]
+}
+
+model TransferTelemetryHour {
+  clubId        String
+  hour          DateTime @db.Timestamptz(6)
+  route         String
+  resourceType  String
+  requests      Int      @default(0)
+  transferBytes BigInt   @default(0)
+  cacheHits     Int      @default(0)
+  updatedAt     DateTime @default(now()) @db.Timestamptz(6)
+  club          Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@id([clubId, hour, route, resourceType])
+  @@index([clubId, hour(sort: Desc)])
 }
 
 model ClubMilestone {
