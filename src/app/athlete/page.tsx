@@ -47,7 +47,7 @@ export default async function AthleteTodayPage() {
 
   return (
     <AthleteShell>
-      <AthletePageHeader brand title={`Salut ${athlete.user.firstName} 👋`} subtitle="Prête pour ta prochaine séance ?" showAvatar={false} />
+      <AthletePageHeader brand title={`Salut ${athlete.user.firstName} 👋`} showAvatar={false} />
 
       <section className="today-card" aria-labelledby="today-title">
         <div className="today-card-content">

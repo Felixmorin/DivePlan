@@ -29,7 +29,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[var(--color-coach-bg)] text-[var(--color-ink)]">
-      <aside className="fixed left-0 top-0 z-10 hidden h-screen w-68 border-r border-[var(--color-border)] bg-[var(--color-navy)] px-4 py-6 text-white lg:block">
+      <aside className="fixed left-0 top-0 z-10 hidden h-screen w-68 flex-col border-r border-[var(--color-border)] bg-[var(--color-navy)] px-4 py-6 text-white lg:flex">
         <Link href="/coach" className="mb-8 flex items-center gap-3 rounded-2xl px-2 py-1 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
           <BrandMark logo={logo} clubName={clubName} />
           <div>
@@ -68,6 +68,11 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
               );
             })}
           </nav>
+        </div>
+        <div className="mt-4 flex items-center justify-center gap-2 border-t border-white/10 pt-4 text-xs font-semibold text-white/55">
+          <span>Powered By</span>
+          <Image src="/icons/diveplan.svg" alt="DivePlan" width={20} height={20} />
+          <span className="font-black text-white/75">DivePlan</span>
         </div>
       </aside>
       <header className="sticky top-0 z-20 border-b border-[var(--color-border)] bg-[var(--color-coach-bg)]/95 px-4 py-3 backdrop-blur lg:hidden">
