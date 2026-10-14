@@ -36,7 +36,7 @@ export default async function AthleteProgressPage() {
         <div className="summary-grid">
           <SummaryMetric icon={<Waves />} value={`${sessions} / 5`} label="séances" progress={Math.min(100, sessions * 20)} tone="blue" />
           <SummaryMetric icon={<Dumbbell />} value={String(dives)} label="plongeons" progress={Math.min(100, dives / 1.5)} tone="purple" />
-          <SummaryMetric icon={<Clock3 />} value={`${Math.floor(minutes / 60)} h ${minutes % 60 ? `${minutes % 60}` : "00"}`} label="temps d’entraînement" progress={Math.min(100, minutes / 3)} tone="mint" />
+          <SummaryMetric icon={<Clock3 />} value={`${Math.floor(minutes / 60)} h ${minutes % 60 ? `${minutes % 60}` : "00"}`} label="d’entraînement" progress={Math.min(100, minutes / 3)} tone="mint" />
         </div>
       </section>
 
