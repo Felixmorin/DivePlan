@@ -9,6 +9,8 @@ import { getAssignedReadySession, getAthleteCurrentWeekSummary, getAthleteRecent
 import { getAthleteWeekPlanningEvents } from "@/lib/athlete-planning";
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
+import { resolveAvatarUrls } from "@/lib/avatar-storage";
+import { AthletePageHeader } from "@/components/athlete/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,7 @@ export default async function AthleteTodayPage() {
   ]);
 
   const todayKey = toMontrealDateInputValue(new Date());
+  const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);
   const weekDays = Array.from({ length: 7 }, (_, index) => {
     const date = addMontrealDays(startOfMontrealWeek(), index);
     const key = toMontrealDateInputValue(date);
@@ -43,11 +46,7 @@ export default async function AthleteTodayPage() {
 
   return (
     <AthleteShell>
-      <header className="athlete-header">
-        <div>
-          <h1>Salut {athlete.user.firstName} <span aria-hidden="true">👋</span></h1>
-        </div>
-      </header>
+      <AthletePageHeader brand title={`Salut ${athlete.user.firstName} 👋`} subtitle="Prête pour ta prochaine séance ?" avatarUrl={avatarUrl} initials={`${athlete.user.firstName[0]}${athlete.user.lastName[0]}`} />
 
       <section className="today-card" aria-labelledby="today-title">
         <div className="today-card-content">

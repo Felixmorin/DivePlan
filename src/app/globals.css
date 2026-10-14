@@ -319,6 +319,113 @@ a {
 .athlete-app .today-cta { background: linear-gradient(90deg, var(--color-club-red-dark), var(--color-club-red)); color: white; box-shadow: 0 8px 24px rgba(237,22,61,.24); }
 .athlete-app .today-card, .athlete-app .week-card, .athlete-app .schedule-card, .athlete-app .latest-card, .athlete-app .progress-card { border-color: rgba(237,22,61,.22); background: linear-gradient(145deg, rgba(24,24,24,.98), rgba(8,8,8,.98)); }
 .athlete-app .section-heading a, .athlete-app .details-toggle, .athlete-app .schedule-icon, .athlete-app .section-icon, .athlete-app .section-icon.mint { color: var(--color-club-red-soft); }
+
+/* Athlete app redesign: bright, calm surfaces shared by the four main tabs. */
+.athlete-app {
+  --color-athlete-bg: #fff;
+  --color-athlete-panel: #fff;
+  --color-athlete-panel-2: #eff8fd;
+  --color-action: #147dff;
+  --color-action-strong: #0869e8;
+  --color-club-red: #1485f7;
+  --color-club-red-dark: #0874ef;
+  --color-club-red-soft: #1786fa;
+  color: #0c1c4b;
+  background: #fff;
+}
+.athlete-app main { color: #0c1c4b; }
+.athlete-app .athlete-page-header { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:1.1rem .15rem 1rem; }
+.athlete-page-header h1 { margin:0; color:#0c1c4b; font-size:2.35rem; font-weight:900; letter-spacing:-.055em; line-height:1; }
+.athlete-page-header p { margin:.55rem 0 0; color:#657895; font-size:.98rem; }
+.athlete-home-header { align-items:flex-start !important; padding-top:.5rem !important; }
+.athlete-home-header h1 { margin-top:.65rem; font-size:1.8rem; }
+.athlete-brand { color:#102451; font-size:2rem; font-weight:950; letter-spacing:-.07em; line-height:1; }
+.athlete-brand span { color:#167cff; }
+.athlete-header-avatar { width:3.5rem !important; height:3.5rem !important; flex:none; border:2px solid #d9f3fb; background:#ddf7fb; }
+.athlete-app .today-card, .athlete-app .week-card, .athlete-app .schedule-card, .athlete-app .latest-card, .athlete-app .progress-card {
+  border:1px solid #dce9f5; border-radius:1rem; background:#fff; color:#0c1c4b; box-shadow:0 3px 15px rgba(30,75,120,.035);
+}
+.athlete-app .today-card { background:linear-gradient(135deg,#f0f8ff 0%,#f7fbff 72%,#e6f5ff 100%); }
+.athlete-app .today-card-content { min-height:0; padding:1.1rem 1rem .65rem; }
+.athlete-app .today-badge { padding:0; background:none; color:#147dff; text-transform:uppercase; }
+.athlete-app .today-card h2 { max-width:100%; margin:.55rem 0 .75rem; color:#0c1c4b; font-size:1.45rem; }
+.athlete-app .session-facts, .athlete-app .session-facts span:last-child .rounded-full { color:#536987; }
+.athlete-app .session-facts svg { color:#1685fb; }
+.athlete-app .today-cta { width:calc(100% - 2rem); height:3.2rem; margin:0 1rem 1rem; border-radius:.85rem; background:linear-gradient(90deg,#218cff,#0875f5); color:white; box-shadow:none; }
+.athlete-app .section-heading { margin:1.1rem .1rem .65rem; }
+.athlete-app .section-heading h2 { color:#0c1c4b; }
+.athlete-app .section-heading a, .athlete-app .details-toggle { color:#087cff; }
+.athlete-app .week-metrics { gap:.45rem; padding:.75rem; }
+.athlete-app .week-metric { border:0; border-radius:.8rem; background:#f0f8fd; padding:.7rem .55rem; }
+.athlete-app .week-metric:nth-child(2) { background:#f5f3fc; }
+.athlete-app .week-metric:nth-child(3) { background:#effaf8; }
+.athlete-app .week-metric strong, .athlete-app .week-day > strong { color:#0c1c4b; }
+.athlete-app .week-metric > span, .athlete-app .week-day, .athlete-app .week-day > small { color:#647895; }
+.athlete-app .week-days { border-top:0; background:transparent; }
+.athlete-app .week-day.is-today { border-color:transparent; background:#1685f7; color:white; }
+.athlete-app .week-day.is-today > strong, .athlete-app .week-day.is-today > small { color:white; }
+.athlete-app .schedule-row { border-color:#e5edf6; }
+.athlete-app .schedule-date { background:#edf7ff; color:#26466d; }
+.athlete-app .schedule-copy strong, .athlete-app .schedule-copy span, .athlete-app .schedule-copy em { color:#172a54; }
+.athlete-app .latest-card { background:linear-gradient(110deg,#effbf9,#eff8ff); }
+.athlete-app .progress-head { padding:.4rem .15rem .85rem; }
+.athlete-app .summary-grid { gap:.55rem; }
+.athlete-app .summary-metric { min-height:9rem; border:0; border-radius:.8rem; background:#f0f8fd; padding:.8rem .65rem; }
+.athlete-app .summary-metric:nth-child(2) { background:#f5f3fc; }
+.athlete-app .summary-metric:nth-child(3) { background:#effaf8; }
+.athlete-app .summary-metric strong { color:#0c1c4b; font-size:1.8rem; }
+.athlete-app .metric-label, .athlete-app .section-heading p { color:#607492; }
+.athlete-app .metric-track, .athlete-app .technique-track { background:#e9eff5; }
+.athlete-app .trend-card .progress-chart { height:13rem; }
+.athlete-app .select-button { border-color:#dbe8f3; background:#f6faff; color:#20345c; }
+.athlete-app .trend-chart-toolbar, .athlete-app .technique-row, .athlete-app .technique-dive, .athlete-app .technique-dive b { color:#54698a; }
+.athlete-app .technique-dives { background:#f5f9fc; }
+.athlete-app .profile-hero, .athlete-app .bg-\[\#0b1e30\] { background:#fff !important; color:#0c1c4b !important; }
+.athlete-app main .text-white { color:#0c1c4b !important; }
+.athlete-app main [class*="text-white/"] { color:#566b8c !important; }
+.athlete-app [class*="border-white/"] { border-color:#dce8f3 !important; }
+.athlete-app [class*="bg-white/"] { background-color:#f3f8fc !important; }
+.athlete-app .text-cyan-200, .athlete-app .text-cyan-300, .athlete-app .text-\[var\(--color-club-red-soft\)\] { color:#117df0 !important; }
+.athlete-app .data-\[state\=active\]\:bg-cyan-300[data-state="active"] { background:#dff5fb !important; color:#0c1c4b !important; }
+.athlete-app .today-cta .text-white, .athlete-app .today-cta { color:white !important; }
+.athlete-app .rounded-\[1\.4rem\] { border-radius:1rem !important; }
+.athlete-app .profile-hero::after { opacity:.25; }
+.athlete-app .profile-page-top { display:flex; align-items:center; gap:.5rem; }
+.athlete-app .profile-page-top > .athlete-page-header { min-width:0; flex:1; }
+.athlete-app .profile-settings { display:grid; width:3rem; height:3rem; flex:none; place-items:center; border-radius:50%; background:#f0f3f7; color:#102451; }
+.athlete-app .milestone-row { display:flex; min-height:4.2rem; align-items:center; justify-content:space-between; margin-top:.55rem; border:1px solid #f2e7c8; border-radius:1rem; background:white; padding:.4rem .8rem; font-weight:700; }
+.athlete-app .milestone-row > button { border:0; background:#fff4d8; color:#986500; }
+.athlete-app .profile-hero { min-height:10.5rem; border-color:#dce8f3; box-shadow:none; }
+.athlete-app .profile-hero .rounded-full { border-color:#bfeaf3; }
+.athlete-app .bg-amber-400\/10 { background:#fff9e9 !important; }
+.athlete-app .border-amber-300\/25 { border-color:#f6e8bc !important; }
+.athlete-app .text-amber-200 { color:#9c6900 !important; }
+.athlete-app .bg-amber-400 { background:#ffca35 !important; }
+.athlete-app .border-cyan-200\/15 { border-color:#dce8f3 !important; }
+.athlete-app .bg-\[\#06101d\] { background:#f2f8fc !important; }
+.athlete-app .text-cyan-200\/75 { color:#1278e8 !important; }
+.athlete-app .text-\[\#06101d\] { color:#0c1c4b !important; }
+.athlete-app .text-rose-300 { color:#dc4a42 !important; }
+.athlete-app .text-\[var\(--color-ink-muted\)\] { color:#526987 !important; }
+.athlete-app .technique-row svg { background:#eef9fc; border-radius:50%; box-sizing:content-box; padding:.42rem; }
+.athlete-app .today-card .today-cta, .athlete-app .today-card .today-cta * { color:#fff !important; }
+.athlete-app nav.fixed a.bg-white\/8 { background:transparent; }
+.athlete-app nav.fixed a[aria-current="page"] { color:#102451; }
+.athlete-app nav.fixed a[aria-current="page"] svg { color:#102451; fill:currentColor; }
+.athlete-app nav.fixed a:not([aria-current="page"]) svg { color:#8997ac; }
+.athlete-app [aria-label="Calendrier mensuel"] > .grid:first-of-type { color:#77869d; }
+.athlete-app nav.fixed { border:1px solid #edf2f7; border-bottom:0; border-radius:1.4rem 1.4rem 0 0; background:rgba(255,255,255,.96); padding-top:.45rem; box-shadow:0 -10px 30px rgba(20,48,84,.08); backdrop-filter:blur(12px); }
+.athlete-app nav.fixed a { color:#8190a8; }
+.athlete-app nav.fixed a[aria-current="page"], .athlete-app nav.fixed a[aria-current="page"] svg { color:#0d2254; }
+.athlete-app nav.fixed svg { width:1.45rem; height:1.45rem; }
+.athlete-app .calendar-controls > div:first-of-type { display:none; }
+.athlete-app [aria-label="Calendrier mensuel"] { border-color:#dce8f3; border-radius:1rem; background:#fff; box-shadow:none; }
+.athlete-app [aria-label="Calendrier mensuel"] h2 { color:#0c1c4b; }
+.athlete-app [aria-label="Calendrier mensuel"] .grid > div { color:#17264c; }
+.athlete-app [aria-label="Calendrier mensuel"] .grid > div[class*="border-white"] { border-color:#e8eef5; }
+.athlete-app [aria-label="Calendrier mensuel"] .grid > div[class*="text-white"] { color:#74839b; }
+.athlete-app [aria-label="Calendrier mensuel"] a { color:#157cf0; }
+.athlete-app .calendar-controls > div:last-child a { color:#516887; }
 .athlete-app .metric-progress.blue, .athlete-app .metric-progress.purple, .athlete-app .metric-progress.mint, .athlete-app .metric-track i.blue, .athlete-app .metric-track i.purple, .athlete-app .metric-track i.mint { background: linear-gradient(90deg, var(--color-club-red-dark), var(--color-club-red-soft)); }
 .athlete-app .completed-pill { background: var(--color-club-red); }
 .athlete-app .quick-link { border-color: rgba(237,22,61,.22); background: rgba(20,20,20,.94); }

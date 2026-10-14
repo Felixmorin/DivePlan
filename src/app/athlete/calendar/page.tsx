@@ -6,6 +6,8 @@ import { getAthletePlanningEvents, type AthletePlanningEvent } from "@/lib/athle
 import { requireAthlete } from "@/lib/current-user";
 import { addMontrealDays, formatMontrealCountdown, formatMontrealDate, formatMontrealTime, parseMontrealSessionDate, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
+import { AthletePageHeader } from "@/components/athlete/page-header";
+import { resolveAvatarUrls } from "@/lib/avatar-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,8 @@ const cancelledEventStyle = { label: "Annulé", icon: XCircle, className: "bg-re
 export default async function AthleteCalendarPage({ searchParams }: { searchParams: Promise<{ view?: string | string[]; month?: string | string[] }> }) {
   const { athlete, clubId } = await requireAthlete();
   const viewParam = searchParams ? await searchParams : {};
-  const calendarView = (Array.isArray(viewParam.view) ? viewParam.view[0] : viewParam.view) === "calendar";
+  const selectedView = Array.isArray(viewParam.view) ? viewParam.view[0] : viewParam.view;
+  const calendarView = selectedView !== "list";
   const requestedMonth = Array.isArray(viewParam.month) ? viewParam.month[0] : viewParam.month;
   const monthKey = getValidMonthKey(requestedMonth);
   const monthStart = parseMontrealSessionDate(`${monthKey}-01`, "00:00");
@@ -35,13 +38,12 @@ export default async function AthleteCalendarPage({ searchParams }: { searchPara
     : events;
   const monthGroups = groupEventsByMonth(events);
   const nextCompetition = countdownEvents.find((event) => event.type === "COMPETITION" && event.startsAt >= new Date());
+  const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);
 
   return (
     <AthleteShell>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black">Calendrier</h1>
-        </div>
+      <AthletePageHeader title="Calendrier" avatarUrl={avatarUrl} initials={`${athlete.user.firstName[0]}${athlete.user.lastName[0]}`} />
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-4 calendar-controls">
         <div className="flex rounded-full border border-white/10 bg-white/[0.04] p-1" aria-label="Choisir l’affichage du calendrier">
           <ViewLink href="/athlete/calendar?view=list" active={!calendarView} icon={<List className="h-4 w-4" />}>Liste</ViewLink>
           <ViewLink href="/athlete/calendar?view=calendar" active={calendarView} icon={<CalendarDays className="h-4 w-4" />}>Calendrier</ViewLink>
@@ -104,11 +106,11 @@ function MonthCalendar({ events, monthKey }: { events: AthletePlanningEvent[]; m
     <div className="grid grid-cols-7">
       {days.map(({ date, key, inMonth }) => {
         const dayEvents = eventsByDay.get(key) ?? [];
-        return <div key={key} className={cn("min-h-28 border-r border-b border-white/8 p-1.5 sm:min-h-32 sm:p-2", !inMonth && "bg-black/20 opacity-35", key === todayKey && "bg-[var(--color-club-red)]/[0.05]")}>
-          <div className={cn("mb-1.5 flex items-center justify-between text-xs font-black", key === todayKey && "text-[var(--color-club-red-soft)]")}><span className={cn("grid h-6 w-6 place-items-center rounded-full", key === todayKey && "bg-[var(--color-club-red)] text-white")}>{formatMontrealDate(date, { day: "numeric" })}</span>{dayEvents.length > 0 && <span className="text-[10px] text-white/45">{dayEvents.length}</span>}</div>
-          <div className="space-y-1">
-            {dayEvents.slice(0, 3).map((event) => <a key={event.id} href={`#event-${event.id}`} title={`${event.title} · ${formatMontrealTime(event.startsAt)}`} className={cn("block overflow-hidden rounded-lg border px-1.5 py-1.5 text-[11px] font-black leading-tight", event.cancelledAt ? "border-red-400/50 bg-red-500/20 text-red-200" : "border-white/10 bg-white/[0.05] text-white/80")}><span className="block text-[10px] font-bold text-white/60">{formatMontrealTime(event.startsAt)}{event.cancelledAt ? " · Annulé" : ""}</span><span className="block line-clamp-2">{event.title}</span></a>)}
-            {dayEvents.length > 3 && <div className="px-1 text-[10px] font-bold text-white/55">+{dayEvents.length - 3} autre{dayEvents.length - 3 > 1 ? "s" : ""}</div>}
+        return <div key={key} className={cn("min-h-16 border-r border-b border-white/8 p-1.5 sm:min-h-20 sm:p-2", !inMonth && "bg-black/20 opacity-35", key === todayKey && "bg-[var(--color-club-red)]/[0.05]")}>
+          <div className={cn("mb-1 flex justify-center text-xs font-semibold", key === todayKey && "text-[var(--color-club-red-soft)]")}><span className={cn("grid h-7 w-7 place-items-center rounded-full", key === todayKey && "bg-[var(--color-club-red)] text-white")}>{formatMontrealDate(date, { day: "numeric" })}</span></div>
+          <div className="flex min-h-3 justify-center gap-1">
+            {dayEvents.slice(0, 3).map((event) => <a key={event.id} href={`#event-${event.id}`} title={`${event.title} · ${formatMontrealTime(event.startsAt)}`} aria-label={`${event.title}, ${formatMontrealTime(event.startsAt)}`} className={cn("h-2 w-2 rounded-full", event.type === "COMPETITION" ? "bg-rose-400" : "bg-sky-400")} />)}
+            {dayEvents.length > 3 && <span className="text-[9px] leading-3 text-slate-500">+{dayEvents.length - 3}</span>}
           </div>
         </div>;
       })}

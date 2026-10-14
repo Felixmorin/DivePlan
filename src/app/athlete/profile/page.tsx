@@ -11,6 +11,7 @@ import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { getClubMilestones } from "@/lib/milestone-data";
 import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
+import { AthletePageHeader } from "@/components/athlete/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -37,15 +38,10 @@ export default async function ProfilePage() {
 
   return (
     <AthleteShell>
-      <header className="mb-5 pt-2">
-        <div className="flex items-center justify-between">
-          <h1 className="text-[2rem] font-black leading-none tracking-tight">Profil</h1>
-          <MilestonesDialog milestones={milestoneResult.rows.flatMap((earned) => {
-            const milestone = milestones.find((item) => item.key === earned.key);
-            return milestone ? [{ ...milestone, awardedAt: earned.awardedAt.toISOString() }] : [];
-          })} />
-        </div>
-      </header>
+      <div className="profile-page-top mb-4">
+          <AthletePageHeader title="Profil" showAvatar={false} avatarUrl={avatarUrl} initials={`${athlete.user.firstName[0]}${athlete.user.lastName[0]}`} />
+          <Link href="/athlete/preferences" aria-label="Paramètres" className="profile-settings"><Settings /></Link>
+      </div>
 
       <section className="profile-hero relative overflow-hidden rounded-[1.4rem] border border-cyan-300/25 bg-[#092238] p-5 shadow-[0_20px_55px_rgba(0,0,0,0.3)]">
         <div className="relative z-10 flex items-center gap-4">
@@ -68,11 +64,18 @@ export default async function ProfilePage() {
         <ProfileStat icon={<span className="text-base font-black">h</span>} label="Entraînement" value={formatTrainingHours(totals.completedMinutes)} />
       </section>
 
-      <Link href="/athlete/profile/golden-reps" className="mt-4 flex min-h-16 items-center gap-3 rounded-[1.2rem] border border-amber-300/25 bg-gradient-to-r from-amber-400/15 to-transparent px-4 transition hover:border-amber-300/50 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+      <section className="mt-5 rounded-[1.2rem] bg-amber-50 p-3">
+      <h2 className="mb-3 text-xl font-black">Mes accomplissements</h2>
+      <Link href="/athlete/profile/golden-reps" className="flex min-h-16 items-center gap-3 rounded-[1.2rem] border border-amber-300/25 bg-white px-4 transition hover:border-amber-300/50 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400 text-[#281500]"><Star className="h-5 w-5 fill-current" /></span>
         <span className="flex-1"><span className="block text-base font-black">Golden rep</span></span>
         <ChevronRight className="h-5 w-5 text-amber-200/70" />
       </Link>
+      <div className="milestone-row"><span>Voir mes badges</span><MilestonesDialog milestones={milestoneResult.rows.flatMap((earned) => {
+        const milestone = milestones.find((item) => item.key === earned.key);
+        return milestone ? [{ ...milestone, awardedAt: earned.awardedAt.toISOString() }] : [];
+      })} /></div>
+      </section>
 
       <section aria-label="Résumé de la semaine" className="mt-3 rounded-[1.2rem] border border-[var(--color-club-red)]/25 bg-[var(--color-athlete-panel)] px-4 py-3">
         <p className="text-sm font-semibold text-white/58">Cette semaine,</p>
