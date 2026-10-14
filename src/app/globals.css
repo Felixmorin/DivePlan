@@ -465,6 +465,8 @@ a {
 .athlete-app .progress-summary .summary-metric > strong { max-width:100%; margin-top:.55rem; overflow:hidden; font-size:clamp(1.05rem,4.8vw,1.65rem); line-height:1.05; text-overflow:ellipsis; }
 .athlete-app .progress-summary .metric-label { min-height:2.4em; margin-top:.25rem; font-size:.78rem; line-height:1.2; }
 .athlete-app .progress-summary .metric-track { width:100%; height:.45rem; flex:none; margin-top:auto; }
+.athlete-app .progress-card { margin-bottom:.55rem; }
+.athlete-app .progress-card.trend-card, .athlete-app .progress-card.technique-card { padding-top:.65rem; }
 
 @media (prefers-reduced-motion: reduce) {
   *,

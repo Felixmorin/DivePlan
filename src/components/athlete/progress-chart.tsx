@@ -45,14 +45,12 @@ export function ProgressChart({ data, sessionData = [], weeklyData = [], monthly
           <XAxis dataKey="name" stroke={lightTheme ? "#607492" : "#a3b6ca"} fontSize={11} tickLine={false} axisLine={false} />
           <YAxis stroke={lightTheme ? "#607492" : "#a3b6ca"} fontSize={11} tickLine={false} axisLine={false} width={24} />
           <Tooltip cursor={{ fill: lightTheme ? "#eef6fd" : "rgba(255,255,255,.05)" }} contentStyle={{ background: lightTheme ? "#fff" : "#0a1830", border: `1px solid ${lightTheme ? "#dce8f3" : "rgba(255,255,255,.12)"}`, borderRadius: 8, color: lightTheme ? "#102451" : "white" }} />
-          {showFamilyStack ? familySeries.map(({ key, color }, familyIndex) => <Bar key={key} dataKey={(entry: { familyVolumes?: Record<string, number> }) => entry.familyVolumes?.[key] ?? 0} name={key} stackId="family-volume" fill={color}>
-            <LabelList position="top" offset={8} fill="#102451" fontSize={12} fontWeight={800} valueAccessor={(_entry, index) => {
-              const point = dailyFamilyData[index];
-              const familyVolume = point?.familyVolumes[key] ?? 0;
-              const hasLaterFamily = familySeries.slice(familyIndex + 1).some((family) => (point?.familyVolumes[family.key] ?? 0) > 0);
-              return point && familyVolume > 0 && !hasLaterFamily ? point.volume : "";
-            }} />
-          </Bar>) : <Bar dataKey="volume" fill={lightTheme ? "#50a8f8" : "#ed163d"} radius={[7, 7, 2, 2]}>
+          {showFamilyStack ? <>
+            {familySeries.map(({ key, color }) => <Bar key={key} dataKey={(entry: { familyVolumes?: Record<string, number> }) => entry.familyVolumes?.[key] ?? 0} name={key} stackId="family-volume" fill={color} />)}
+            <Bar dataKey={() => 0.1} name="Total" stackId="family-volume" fill="transparent" isAnimationActive={false} legendType="none" tooltipType="none">
+              <LabelList dataKey="volume" position="top" offset={8} fill="#102451" fontSize={12} fontWeight={800} />
+            </Bar>
+          </> : <Bar dataKey="volume" fill={lightTheme ? "#50a8f8" : "#ed163d"} radius={[7, 7, 2, 2]}>
             {isSessionRating ? (
               <LabelList dataKey="finalRating" position="center" fill="#ffffff" fontSize={11} fontWeight={700} />
             ) : (
