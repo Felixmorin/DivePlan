@@ -61,7 +61,7 @@ export function ProfileForm({ firstName, lastName, username }: ProfileFormProps)
                     required={required}
                     minLength={key === "username" ? 3 : undefined}
                     maxLength={key === "username" ? 30 : 50}
-                    pattern={key === "username" ? "[A-Za-z0-9._-]+" : undefined}
+                    pattern={key === "username" ? "[A-Za-z0-9._\x2d]+" : undefined}
                     autoComplete={key === "username" ? "username" : "off"}
                     className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/15 bg-white/[0.06] px-3 text-base text-white outline-none focus:border-cyan-300/60 focus:shadow-[var(--focus-ring)]"
                   />

@@ -41,7 +41,7 @@ export function CreateAthleteAccountForm({ groups, disabled = false }: { groups:
       <form action={action} className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <Input name="firstName" placeholder="Prénom" disabled={disabled} required />
         <Input name="lastName" placeholder="Nom" disabled={disabled} required />
-        <Input name="username" placeholder="Nom d'utilisateur (ex. emma.roy)" autoComplete="off" disabled={disabled} required minLength={3} maxLength={30} pattern="[A-Za-z0-9._-]+" />
+        <Input name="username" placeholder="Nom d'utilisateur (ex. emma.roy)" autoComplete="off" disabled={disabled} required minLength={3} maxLength={30} pattern="[A-Za-z0-9._\x2d]+" />
         <Input name="temporaryPassword" type="text" placeholder="Mot de passe temporaire (généré si vide)" autoComplete="off" disabled={disabled} minLength={10} />
         <Input name="level" placeholder="Niveau" disabled={disabled} required />
         <Input name="birthDate" type="date" aria-label="Date de naissance" disabled={disabled} />

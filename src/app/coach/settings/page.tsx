@@ -87,7 +87,7 @@ export default async function CoachSettingsPage() {
 
                 <div className="grid gap-2">
                   <label htmlFor="coach-username" className="text-xs font-black uppercase text-[var(--color-ink-muted)]">Nom d’utilisateur</label>
-                  <Input id="coach-username" name="username" defaultValue={user.username ?? ""} autoComplete="username" minLength={3} maxLength={30} pattern="[A-Za-z0-9._-]+" placeholder="ex. felix.lavoie" />
+                  <Input id="coach-username" name="username" defaultValue={user.username ?? ""} autoComplete="username" minLength={3} maxLength={30} pattern="[A-Za-z0-9._\x2d]+" placeholder="ex. felix.lavoie" />
                   <p className="text-xs font-semibold text-[var(--color-ink-muted)]">3 à 30 caractères : lettres, chiffres, points, tirets ou tirets bas.</p>
                 </div>
 
