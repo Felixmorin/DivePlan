@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { deleteAthlete, updateAthleteProfile } from "@/app/coach/athletes/actions";
 
@@ -15,14 +16,51 @@ export function AthleteActionsMenu({ athlete, groups, demo = false }: {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const deleteForm = useRef<HTMLFormElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top?: number; bottom?: number; right: number }>({ top: 0, right: 0 });
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOnOutsideClick(event: PointerEvent) {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !triggerRef.current?.contains(target)) setOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  function toggleMenu() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const opensUp = window.innerHeight - rect.bottom < 112;
+      setMenuPosition({
+        top: opensUp ? undefined : rect.bottom + 4,
+        bottom: opensUp ? window.innerHeight - rect.top + 4 : undefined,
+        right: Math.max(8, window.innerWidth - rect.right)
+      });
+    }
+    setOpen(true);
+  }
 
   return (
     <div className="relative inline-flex justify-end">
-      <button type="button" aria-label={`Actions pour ${athlete.firstName} ${athlete.lastName}`} aria-expanded={open} onClick={() => setOpen((value) => !value)} disabled={demo} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-ink)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] disabled:opacity-40"><MoreVertical className="h-5 w-5" /></button>
-      {open && <div className="absolute right-0 top-full z-20 mt-1 min-w-48 rounded-xl border border-[var(--color-border)] bg-white p-1.5 shadow-xl">
+      <button ref={triggerRef} type="button" aria-label={`Actions pour ${athlete.firstName} ${athlete.lastName}`} aria-expanded={open} onClick={toggleMenu} disabled={demo} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-ink)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] disabled:opacity-40"><MoreVertical className="h-5 w-5" /></button>
+      {open && createPortal(<div ref={menuRef} style={{ position: "fixed", top: menuPosition.top, bottom: menuPosition.bottom, right: menuPosition.right }} className="z-[110] min-w-48 rounded-xl border border-[var(--color-border)] bg-white p-1.5 shadow-xl">
         <button type="button" onClick={() => { setEditing(true); setOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-[var(--color-ink)] hover:bg-[var(--color-surface-raised)]"><Pencil className="h-4 w-4" />Modifier le profil</button>
         <button type="button" onClick={() => { setConfirmDelete(true); setOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-[var(--color-danger)] hover:bg-red-50"><Trash2 className="h-4 w-4" />Supprimer</button>
-      </div>}
+      </div>, document.body)}
 
       {editing && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(false); }}>
         <section role="dialog" aria-modal="true" aria-labelledby={`edit-athlete-title-${athlete.id}`} className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-white p-6 shadow-2xl">
