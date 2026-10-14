@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import { Camera, Check, ChevronRight, Info, Users, ChartNoAxesColumnIncreasing } from "lucide-react";
-import { updateAthleteAvatar, updateAthleteProfileField } from "@/app/athlete/profile/actions";
+import { useState, useTransition } from "react";
+import { Check, ChevronRight, Info, Users, ChartNoAxesColumnIncreasing } from "lucide-react";
+import { updateAthleteProfileField } from "@/app/athlete/profile/actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function ProfileEditor({ firstName, lastName, avatarUrl, level, club, competitionHeights }: {
@@ -13,10 +13,8 @@ export function ProfileEditor({ firstName, lastName, avatarUrl, level, club, com
   club: string;
   competitionHeights: string[];
 }) {
-  const fileInput = useRef<HTMLInputElement>(null);
   const [first, setFirst] = useState(firstName);
   const [last, setLast] = useState(lastName);
-  const [photo, setPhoto] = useState(avatarUrl);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -31,34 +29,11 @@ export function ProfileEditor({ firstName, lastName, avatarUrl, level, club, com
     });
   }
 
-  function selectPhoto(file?: File) {
-    if (!file) return;
-    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 5 * 1024 * 1024) {
-      setMessage("Choisis une image JPG, PNG ou WebP de moins de 5 Mo.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") return;
-      setMessage("");
-      startTransition(async () => {
-        const result = await updateAthleteAvatar(reader.result as string);
-        if (!result.ok) { setMessage(result.error); return; }
-        setPhoto(reader.result as string);
-        setMessage("Photo enregistrée.");
-      });
-    };
-    reader.readAsDataURL(file);
-  }
-
   return <>
     <section className="profile-edit-photo">
-      <button type="button" className="profile-edit-avatar" onClick={() => fileInput.current?.click()} aria-label="Changer la photo de profil">
-        <Avatar><AvatarImage src={photo ?? undefined} /><AvatarFallback>{first[0]}{last[0]}</AvatarFallback></Avatar>
-        <span><Camera size={19} /></span>
-      </button>
-      <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => selectPhoto(event.target.files?.[0])} />
-      <button type="button" className="profile-edit-photo-link" onClick={() => fileInput.current?.click()}>Changer la photo</button>
+      <div className="profile-edit-avatar">
+        <Avatar><AvatarImage src={avatarUrl ?? undefined} /><AvatarFallback>{first[0]}{last[0]}</AvatarFallback></Avatar>
+      </div>
     </section>
 
     <section className="profile-edit-form">

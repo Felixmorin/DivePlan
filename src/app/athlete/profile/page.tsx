@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Award, Building2, ChevronRight, LogOut, Medal, Pencil, Settings, Star, UserRound, Waves } from "lucide-react";
+import { Award, Building2, ChevronRight, Clock3, LogOut, Medal, Pencil, Settings, Star, UserRound, Waves } from "lucide-react";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAthleteCurrentWeekSummary, getAthleteGoldenReps, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
+import { getAthleteGoldenReps, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
 import { AthletePageHeader } from "@/components/athlete/page-header";
@@ -17,9 +17,8 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const [totals, weekSummary, goldenReps] = await Promise.all([
+  const [totals, goldenReps] = await Promise.all([
     getAthleteProgressTotals(athlete.id),
-    getAthleteCurrentWeekSummary(athlete.id),
     getAthleteGoldenReps(athlete.id)
   ]);
   const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);
@@ -35,7 +34,7 @@ export default async function ProfilePage() {
 
       <section className="profile-hero relative overflow-hidden rounded-[1.4rem] border border-cyan-300/25 bg-[#092238] p-5 shadow-[0_20px_55px_rgba(0,0,0,0.3)]">
         <Link href="/athlete/profile/edit" aria-label="Modifier mon profil" className="profile-edit-link"><Pencil size={20} /></Link>
-        <div className="relative z-10 flex items-center gap-4">
+        <div className="relative z-10 flex items-center gap-4 pr-12">
           <Avatar className="h-24 w-24 shrink-0 border-2 border-cyan-200 bg-[#06101d] shadow-[0_0_0_4px_rgba(34,211,238,0.08)]">
             <AvatarImage src={avatarUrl ?? undefined} />
             <AvatarFallback>{athlete.user.firstName[0]}{athlete.user.lastName[0]}</AvatarFallback>
@@ -52,7 +51,7 @@ export default async function ProfilePage() {
       <section aria-label="Statistiques du profil" className="mt-4 grid grid-cols-3 divide-x divide-white/10 rounded-[1.4rem] border border-white/10 bg-[#0b1e30] px-2 py-5 text-center shadow-[0_16px_40px_rgba(0,0,0,0.18)]">
         <ProfileStat icon={<Medal className="h-5 w-5" />} label="Séances" value={totals.completedSessions} />
         <ProfileStat icon={<Waves className="h-5 w-5" />} label="Plongeons" value={totals.totalDiveRepetitions} />
-        <ProfileStat icon={<span className="text-base font-black">h</span>} label="Entraînement" value={formatTrainingHours(totals.completedMinutes)} />
+        <ProfileStat icon={<Clock3 className="h-5 w-5" />} label="Entraînement" value={formatTrainingHours(totals.completedMinutes)} />
       </section>
 
       <section className="mt-5 rounded-[1.2rem] bg-amber-50 p-3">
@@ -63,11 +62,6 @@ export default async function ProfilePage() {
         <ChevronRight className="h-5 w-5 text-amber-200/70" />
       </Link>
       <Link href="/athlete/profile/badges" className="milestone-row"><span>Voir mes badges</span><Award className="h-5 w-5 text-red-500" /><ChevronRight className="h-5 w-5 text-slate-500" /></Link>
-      </section>
-
-      <section aria-label="Résumé de la semaine" className="mt-3 rounded-[1.2rem] border border-[var(--color-club-red)]/25 bg-[var(--color-athlete-panel)] px-4 py-3">
-        <p className="text-sm font-semibold text-white/58">Cette semaine,</p>
-        <p className="mt-1 text-base font-black"><span className="text-[var(--color-club-red-soft)]">{weekSummary.total}</span> entraînement{weekSummary.total > 1 ? "s" : ""} <span className="font-semibold text-white/55">· {weekSummary.remaining} restant{weekSummary.remaining > 1 ? "s" : ""}</span></p>
       </section>
 
       <section className="mt-7">

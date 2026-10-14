@@ -5,7 +5,6 @@ import { z } from "zod";
 import { signOut } from "@/auth";
 import { getCurrentAthlete } from "@/lib/athlete-session";
 import { query } from "@/lib/db";
-import { uploadAvatarDataUrl } from "@/lib/avatar-storage";
 
 const athleteProfileFieldSchema = z.discriminatedUnion("field", [
   z.object({ field: z.literal("firstName"), value: z.string().trim().min(1).max(50) }),
@@ -37,23 +36,6 @@ export async function updateAthleteProfileField(field: "firstName" | "lastName" 
   revalidatePath("/athlete/profile");
   revalidatePath("/athlete/profile/edit");
   return { ok: true };
-}
-
-export async function updateAthleteAvatar(dataUrl: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const athlete = await getCurrentAthlete();
-  if (!athlete) return { ok: false, error: "Session invalide. Reconnecte-toi puis réessaie." };
-  if (dataUrl.length > 7_000_000 || !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(dataUrl)) {
-    return { ok: false, error: "Choisis une image JPG, PNG ou WebP de moins de 5 Mo." };
-  }
-  try {
-    const avatar = await uploadAvatarDataUrl(athlete.userId, dataUrl);
-    await query(`UPDATE "User" SET avatar=$1 WHERE id=$2`, [avatar, athlete.userId]);
-    revalidatePath("/athlete/profile");
-    revalidatePath("/athlete/profile/edit");
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "La photo n’a pas pu être enregistrée." };
-  }
 }
 
 export async function signOutAthlete() {

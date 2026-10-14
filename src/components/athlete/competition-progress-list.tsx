@@ -11,7 +11,7 @@ const heights = [
   { key: "PLATFORM", label: "Plateforme" },
   { key: "CUSTOM", label: "Autres" }
 ] as const;
-const repetitionsTarget = 3;
+const repetitionsTarget = 5;
 
 export function CompetitionProgressList({ dives }: { dives: CompetitionDiveItem[] }) {
   const available = heights.filter(({ key }) => dives.some((dive) => dive.height === key));
