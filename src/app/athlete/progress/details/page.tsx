@@ -17,6 +17,7 @@ const familyStyles: Record<string, { color: string; icon: typeof Waves }> = {
   Vrille: { color: "#08a9c5", icon: Waves },
   Equilibre: { color: "#edb52b", icon: Clock3 }
 };
+const familyOrder = ["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"] as const;
 
 type DiveVolume = { family: string; code: string; height: string; heightLabel: string | null; volume: number };
 type DiveDateVolume = DiveVolume & { date: string };
@@ -61,7 +62,7 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
   }
   const totals = new Map<string, number>();
   for (const dive of rows) totals.set(dive.family, (totals.get(dive.family) ?? 0) + dive.volume);
-  const families = Object.keys(familyStyles).filter((family) => (totals.get(family) ?? 0) > 0);
+  const families = familyOrder.filter((family) => (totals.get(family) ?? 0) > 0);
   const selectedFamily = familyValue && families.includes(familyValue) ? familyValue : families[0] ?? "Avant";
   const selectedDives = rows.filter((dive) => dive.family === selectedFamily);
   const heightGroups = ["1 m", "3 m", "Plateforme", "Autres"].map((label) => ({
