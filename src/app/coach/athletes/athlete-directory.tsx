@@ -15,7 +15,7 @@ export function AthleteDirectory({ rows, groups, demo = false }: { rows: Athlete
   const [search, setSearch] = useState("");
   const [selectedGroup, setSelectedGroup] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("");
-  const groups = useMemo(() => [...new Set(rows.map((row) => row.groupName))].sort((a, b) => a.localeCompare(b, "fr")), [rows]);
+  const groupNames = useMemo(() => [...new Set(rows.map((row) => row.groupName))].sort((a, b) => a.localeCompare(b, "fr")), [rows]);
   const levels = useMemo(() => [...new Set(rows.map((row) => row.level))].sort((a, b) => a.localeCompare(b, "fr")), [rows]);
   const normalizedSearch = search.trim().toLocaleLowerCase("fr-CA");
   const visibleRows = rows.filter((row) => {
@@ -34,7 +34,7 @@ export function AthleteDirectory({ rows, groups, demo = false }: { rows: Athlete
           <label className="athlete-search"><span className="sr-only">Rechercher un athlète</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un athlète…" /></label>
           <select aria-label="Filtrer par groupe" value={selectedGroup} onChange={(event) => setSelectedGroup(event.target.value)}>
             <option value="">Tous les groupes</option>
-            {groups.map((group) => <option key={group} value={group}>{group}</option>)}
+            {groupNames.map((group) => <option key={group} value={group}>{group}</option>)}
           </select>
           <select aria-label="Filtrer par niveau" value={selectedLevel} onChange={(event) => setSelectedLevel(event.target.value)}>
             <option value="">Tous les niveaux</option>

@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { Activity, CalendarDays, Plus, UserRound, UserPlus } from "lucide-react";
+import { Activity, CalendarDays, UserRound, UserPlus } from "lucide-react";
 import { AthleteDirectory } from "@/app/coach/athletes/athlete-directory";
+import { SeasonStatsButton } from "@/app/coach/athletes/season-stats-button";
 import { CreateAthleteAccountForm } from "@/app/coach/athletes/create-athlete-account-form";
 import { CoachShell } from "@/components/coach/coach-shell";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
@@ -75,7 +74,12 @@ export default async function AthletesPage() {
   const athleteAvatarUrls = await resolveAvatarUrls(athletes.map((athlete) => athlete.avatar));
   const groups = groupsResult.rows;
   const athleteIds = athletes.map((athlete) => athlete.id);
-  const sessions = athleteIds.length ? await query<{ athleteId: string; id: string; title: string; date: Date; status: string }>(
+  const today = startOfMontrealDay();
+  const seasonStartYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
+  const seasonLabel = `${seasonStartYear}-${seasonStartYear + 1}`;
+  const seasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00");
+  const seasonEnd = parseMontrealSessionDate(`${seasonStartYear + 1}-09-01`, "00:00");
+  const [sessions, seasonStatsResult] = await Promise.all([athleteIds.length ? query<{ athleteId: string; id: string; title: string; date: Date; status: string }>(
     `SELECT DISTINCT ON (assignment."athleteId") assignment."athleteId", s.id, s.title, s.date, s.status
      FROM "TrainingSession" s
      JOIN "TrainingWeek" w ON w.id = s."weekId"
@@ -85,7 +89,13 @@ export default async function AthletesPage() {
        AND assignment."athleteId" = ANY($3::text[])
      ORDER BY assignment."athleteId", s.date ASC, s.id`,
     [clubId, startOfMontrealDay(), athleteIds]
-  ) : { rows: [] as Array<{ athleteId: string; id: string; title: string; date: Date; status: string }> };
+  ) : Promise.resolve({ rows: [] as Array<{ athleteId: string; id: string; title: string; date: Date; status: string }> }),
+  query<{ volume: number; completedSessions: number }>(
+    `SELECT
+       (SELECT COALESCE(SUM(l."repetitionsCompleted"),0)::int FROM "AthleteDiveLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3) AS volume,
+       (SELECT COUNT(*)::int FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 AND c.status='COMPLETED') AS "completedSessions"`,
+    [clubId, seasonStart, seasonEnd]
+  )]);
 
   const nextByAthlete = new Map<string, AthleteRow["nextSession"]>();
   sessions.rows.forEach((session) => {
@@ -110,12 +120,15 @@ export default async function AthletesPage() {
       completedSessions: athlete.completedSessions,
       averageVolume: athlete.averageVolume === null ? null : Number(athlete.averageVolume)
     }));
+  const groupStats = groups.map((group) => ({ name: group.name, athletes: rows.filter((row) => row.groupId === group.id).length }));
+  const ungroupedAthletes = rows.filter((row) => !row.groupId).length;
+  if (ungroupedAthletes > 0) groupStats.push({ name: "Sans groupe", athletes: ungroupedAthletes });
 
   return (
     <CoachShell active="Athletes">
       <div className="athlete-directory-page">
-      <DirectoryHeader title="Athlètes" description="Suivez votre groupe et accédez aux profils" actionHref="/coach/sessions/new" actionLabel="Créer une séance" />
-      <DirectoryStats rows={rows} />
+      <DirectoryHeader title="Athlètes" description="Suivez votre groupe et accédez aux profils" season={seasonLabel} groups={groupStats} volume={Number(seasonStatsResult.rows[0]?.volume ?? 0)} completedSessions={Number(seasonStatsResult.rows[0]?.completedSessions ?? 0)} />
+      <DirectoryStats rows={rows} season={seasonLabel} />
       <AthleteAccountCard groups={groups} />
       <AthleteDirectory rows={rows} groups={groups} />
       </div>
@@ -142,8 +155,8 @@ function DemoAthletesPage() {
   return (
     <CoachShell active="Athletes">
       <div className="athlete-directory-page">
-      <DirectoryHeader title="Athlètes" description="Suivez votre groupe et accédez aux profils" actionHref="/coach/sessions/demo" actionLabel="Voir la séance" />
-      <DirectoryStats rows={rows} />
+      <DirectoryHeader title="Athlètes" description="Suivez votre groupe et accédez aux profils" season={currentSeasonLabel()} groups={[{ name: "Provincial", athletes: rows.length }]} volume={rows.reduce((sum, row) => sum + row.volume, 0)} completedSessions={rows.reduce((sum, row) => sum + row.completedSessions, 0)} />
+      <DirectoryStats rows={rows} season={currentSeasonLabel()} />
       <AthleteAccountCard groups={[{ id: "provincial", name: "Provincial" }]} demo />
       <AthleteDirectory rows={rows} groups={[{ id: "provincial", name: "Provincial" }]} demo />
       </div>
@@ -151,32 +164,36 @@ function DemoAthletesPage() {
   );
 }
 
-function DirectoryHeader({ title, description, actionHref, actionLabel }: { title: string; description: string; actionHref: string; actionLabel: string }) {
+function DirectoryHeader({ title, description, season, groups, volume, completedSessions }: { title: string; description: string; season: string; groups: Array<{ name: string; athletes: number }>; volume: number; completedSessions: number }) {
   return (
     <div className="athlete-directory-hero">
       <div className="athlete-directory-title">
         <h1>{title}</h1>
         <p>{description}</p>
       </div>
-      <Button asChild variant="action">
-        <Link href={actionHref}><Plus className="h-4 w-4" /> {actionLabel}</Link>
-      </Button>
+      <SeasonStatsButton season={season} groups={groups} volume={volume} completedSessions={completedSessions} />
     </div>
   );
 }
 
-function DirectoryStats({ rows }: { rows: AthleteRow[] }) {
+function DirectoryStats({ rows, season }: { rows: AthleteRow[]; season: string }) {
   const sessions = rows.reduce((total, row) => total + row.completedSessions, 0);
   const volume = rows.reduce((total, row) => total + row.volume, 0);
   return <section className="athlete-directory-stats" aria-label="Statistiques du groupe">
-    <Stat icon={<UserRound />} value={rows.filter((row) => row.active).length} label="athlètes actifs" />
+    <Stat icon={<UserRound />} value={rows.filter((row) => row.active).length} label="athlètes actifs" season={season} />
     <Stat icon={<CalendarDays />} value={sessions} label="séances complétées" />
     <Stat icon={<Activity />} value={volume.toLocaleString("fr-CA")} label="répétitions" />
   </section>;
 }
 
-function Stat({ icon, value, label }: { icon: ReactNode; value: number | string; label: string }) {
-  return <div className="athlete-directory-stat"><span className="athlete-directory-stat-icon">{icon}</span><strong>{value}</strong><span>{label}</span></div>;
+function Stat({ icon, value, label, season }: { icon: ReactNode; value: number | string; label: string; season?: string }) {
+  return <div className={`athlete-directory-stat${season ? " has-season" : ""}`}><span className="athlete-directory-stat-icon">{icon}</span>{season && <span className="athlete-season-label">{season}</span>}<strong>{value}</strong><span>{label}</span></div>;
+}
+
+function currentSeasonLabel() {
+  const today = startOfMontrealDay();
+  const startYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
+  return `${startYear}-${startYear + 1}`;
 }
 
 function AthleteAccountCard({ groups, demo = false }: { groups: AthleteGroup[]; demo?: boolean }) {
