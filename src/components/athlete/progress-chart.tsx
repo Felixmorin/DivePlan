@@ -45,7 +45,12 @@ export function ProgressChart({ data, sessionData = [], weeklyData = [], monthly
           <XAxis dataKey="name" stroke={lightTheme ? "#607492" : "#a3b6ca"} fontSize={11} tickLine={false} axisLine={false} />
           <YAxis stroke={lightTheme ? "#607492" : "#a3b6ca"} fontSize={11} tickLine={false} axisLine={false} width={24} />
           <Tooltip cursor={{ fill: lightTheme ? "#eef6fd" : "rgba(255,255,255,.05)" }} contentStyle={{ background: lightTheme ? "#fff" : "#0a1830", border: `1px solid ${lightTheme ? "#dce8f3" : "rgba(255,255,255,.12)"}`, borderRadius: 8, color: lightTheme ? "#102451" : "white" }} />
-          {showFamilyStack ? familySeries.map(({ key, color }) => <Bar key={key} dataKey={(entry: { familyVolumes?: Record<string, number> }) => entry.familyVolumes?.[key] ?? 0} name={key} stackId="family-volume" fill={color} radius={key === familySeries[familySeries.length - 1].key ? [7, 7, 0, 0] : [0, 0, 0, 0]} />) : <Bar dataKey="volume" fill={lightTheme ? "#50a8f8" : "#ed163d"} radius={[7, 7, 2, 2]}>
+          {showFamilyStack ? <>
+            {familySeries.map(({ key, color }) => <Bar key={key} dataKey={(entry: { familyVolumes?: Record<string, number> }) => entry.familyVolumes?.[key] ?? 0} name={key} stackId="family-volume" fill={color} />)}
+            <Bar dataKey={() => 0} name="Total" stackId="family-volume" fill="transparent" isAnimationActive={false} legendType="none">
+              <LabelList dataKey="volume" position="top" offset={8} fill="#102451" fontSize={12} fontWeight={800} />
+            </Bar>
+          </> : <Bar dataKey="volume" fill={lightTheme ? "#50a8f8" : "#ed163d"} radius={[7, 7, 2, 2]}>
             {isSessionRating ? (
               <LabelList dataKey="finalRating" position="center" fill="#ffffff" fontSize={11} fontWeight={700} />
             ) : (
@@ -55,9 +60,6 @@ export function ProgressChart({ data, sessionData = [], weeklyData = [], monthly
         </BarChart>
       </ResponsiveContainer>
       </div>
-      {showFamilyStack && <div className="family-chart-legend" aria-label="Familles de plongeons dans le graphique">
-        {familySeries.map(({ key, color }) => <span key={key}><i style={{ backgroundColor: color }} />{key}</span>)}
-      </div>}
     </div>
   );
 }
