@@ -438,6 +438,20 @@ a {
 .athlete-app [class*="text-cyan"], .athlete-app [class*="text-sky"] { color: var(--color-club-red-soft) !important; }
 .athlete-app [class*="bg-[#092238]"], .athlete-app [class*="bg-[#0b1e30]"], .athlete-app [class*="bg-[#101927]"], .athlete-app [class*="bg-[#0b1320]"] { background-color: var(--color-athlete-panel) !important; }
 .athlete-app .progress-chart svg .recharts-bar-rectangle path { fill: var(--color-club-red) !important; }
+.athlete-app .calendar-next-competition { border-color:#f0d27c; background:#fff5d6; color:#5b4300; }
+.athlete-app .calendar-next-competition svg { color:#a46b00; }
+.athlete-app .calendar-event-card { border-color:#dce8f3; background:#fff; box-shadow:0 3px 14px rgba(30,75,120,.04); }
+.athlete-app .calendar-event-competition { border-color:#f0d997; background:#fff9e9; }
+.athlete-app .calendar-event-competition .calendar-event-date { background:#fff0bf; color:#674900; }
+.athlete-app .calendar-event-competition .calendar-event-date > span, .athlete-app .calendar-event-competition .calendar-event-date > strong { color:#674900; }
+.athlete-app .calendar-event-competition .calendar-event-date > span:last-child { color:#926400; }
+.athlete-app .calendar-event-competition .calendar-event-badge { background:#ffe9a3; color:#795400; }
+.athlete-app .calendar-event-camp { border-color:#cceef0; background:#f0fbfb; }
+.athlete-app .calendar-event-camp .calendar-event-date { background:#dcf7f6; color:#087a88; }
+.athlete-app .calendar-event-camp .calendar-event-badge { background:#d9f7f5; color:#087987; }
+.athlete-app .calendar-event-training_schedule .calendar-event-date { background:#e9f4ff; color:#1769bf; }
+.athlete-app .calendar-event-cancelled { border-color:#fecaca; background:#fff1f2; }
+.athlete-app .selected-calendar-day { color:#fff !important; }
 
 @media (prefers-reduced-motion: reduce) {
   *,

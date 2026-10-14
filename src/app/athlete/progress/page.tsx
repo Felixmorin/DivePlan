@@ -5,7 +5,6 @@ import { TechniqueDetails } from "@/components/athlete/technique-details";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 import { AthletePageHeader } from "@/components/athlete/page-header";
-import { resolveAvatarUrls } from "@/lib/avatar-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +15,6 @@ export default async function AthleteProgressPage() {
   }
 
   const totals = athlete ? await getAthleteProgressTotals(athlete.id) : null;
-  const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);
   const sessions = totals?.thisWeekSessions ?? 0;
   const dives = totals?.thisWeekDiveRepetitions ?? 0;
   const minutes = totals?.thisWeekMinutes ?? 0;
@@ -31,7 +29,7 @@ export default async function AthleteProgressPage() {
   const techniqueWithVolumes = technique.map((item) => ({ ...item, dives: totals?.skillData.find((entry) => entry.name === item.label)?.volume ?? 0 }));
   return (
     <AthleteShell>
-      <AthletePageHeader title="Progression" avatarUrl={avatarUrl} initials={`${athlete.user.firstName[0]}${athlete.user.lastName[0]}`} />
+      <AthletePageHeader title="Progression" showAvatar={false} />
 
       <section className="progress-card progress-summary">
         <div className="section-heading"><h2>Cette semaine</h2></div>

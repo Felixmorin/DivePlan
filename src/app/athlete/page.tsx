@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, BarChart3, Check, ChevronRight, Clock3, History, ListChecks, Play, UserRound, Waves } from "lucide-react";
+import { ArrowRight, Check, ChevronRight, Clock3, History, ListChecks, Play, TentTree, Trophy, Waves } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAssignedReadySession, getAthleteCurrentWeekSummary, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
-import { getAthleteWeekPlanningEvents } from "@/lib/athlete-planning";
+import { getAthletePlanningEvents, getAthleteWeekPlanningEvents } from "@/lib/athlete-planning";
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
-import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { AthletePageHeader } from "@/components/athlete/page-header";
 
 export const dynamic = "force-dynamic";
@@ -18,15 +17,15 @@ export default async function AthleteTodayPage() {
   const athlete = await getCurrentAthlete();
   if (!athlete) redirect("/login");
 
-  const [readySession, recentCompletions, weekEvents, weekSummary] = await Promise.all([
+  const [readySession, recentCompletions, weekEvents, weekSummary, upcomingEvents] = await Promise.all([
     getAssignedReadySession(athlete.id),
     getAthleteRecentCompletions(athlete.id),
     getAthleteWeekPlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId, includeOverlapping: true }),
-    getAthleteCurrentWeekSummary(athlete.id)
+    getAthleteCurrentWeekSummary(athlete.id),
+    getAthletePlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId })
   ]);
 
   const todayKey = toMontrealDateInputValue(new Date());
-  const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);
   const weekDays = Array.from({ length: 7 }, (_, index) => {
     const date = addMontrealDays(startOfMontrealWeek(), index);
     const key = toMontrealDateInputValue(date);
@@ -38,15 +37,17 @@ export default async function AthleteTodayPage() {
   const completionStatus = readySession?.completions[0]?.status ?? "NOT_STARTED";
   const canStart = sessionDate ? isSessionStartAvailable(sessionDate) : false;
   const blocks = readySession?.blocks ?? [];
-  const totalVolume = blocks.reduce((sum, block) => sum + block.estimatedVolume, 0);
   const blockTypes = Array.from(new Set(blocks.map((block) => block.type)));
   const sessionTime = sessionDate ? formatMontrealTime(sessionDate) : "--:--";
   const sessionDateLabel = sessionDate ? formatMontrealDate(sessionDate, { weekday: "short", day: "numeric", month: "short" }) : "À venir";
   const latestCompletion = recentCompletions[0];
+  const nextHighlights = upcomingEvents
+    .filter((event) => (event.type === "COMPETITION" || event.type === "CAMP") && !event.cancelledAt && event.startsAt >= new Date())
+    .slice(0, 2);
 
   return (
     <AthleteShell>
-      <AthletePageHeader brand title={`Salut ${athlete.user.firstName} 👋`} subtitle="Prête pour ta prochaine séance ?" avatarUrl={avatarUrl} initials={`${athlete.user.firstName[0]}${athlete.user.lastName[0]}`} />
+      <AthletePageHeader brand title={`Salut ${athlete.user.firstName} 👋`} subtitle="Prête pour ta prochaine séance ?" showAvatar={false} />
 
       <section className="today-card" aria-labelledby="today-title">
         <div className="today-card-content">
@@ -85,9 +86,7 @@ export default async function AthleteTodayPage() {
 
       <SectionHeading title="À venir" href="/athlete/calendar" linkLabel="Voir calendrier" />
       <section className="schedule-card">
-        {readySession ? (
-          <ScheduleRow date={sessionDateLabel} icon={<Waves />} title={readySession.title} details={`${sessionTime}  ·  ${readySession.duration} min  ·  ${totalVolume || "—"} plongeons`} meta={readySession.focus} href={sessionHref ?? "/athlete"} />
-        ) : <EmptyState className="border-0 bg-transparent p-4" title="Rien de prévu" description="Les prochaines séances apparaîtront ici." />}
+        {nextHighlights.length ? nextHighlights.map((event) => <ScheduleRow key={event.id} date={formatMontrealDate(event.startsAt, { weekday: "short", day: "numeric", month: "short" })} icon={event.type === "COMPETITION" ? <Trophy /> : <TentTree />} title={event.title} details={`${formatMontrealDate(event.startsAt, { weekday: "long", day: "numeric", month: "short" })} · ${formatMontrealTime(event.startsAt)}${event.location ? ` · ${event.location}` : ""}`} meta={event.type === "COMPETITION" ? "Compétition" : "Camp"} href={`/athlete/calendar?view=list#event-${event.id}`} />) : <EmptyState className="border-0 bg-transparent p-4" title="Aucun camp ou compétition à venir" description="Les prochains événements publiés par ton club apparaîtront ici." />}
       </section>
 
       <SectionHeading title="Dernière séance" href="/athlete/week" linkLabel="Voir l’historique" />
@@ -97,11 +96,6 @@ export default async function AthleteTodayPage() {
         ) : <EmptyState className="border-0 bg-transparent p-4" title="Aucun historique" description="Tes séances terminées apparaîtront ici." />}
       </section>
 
-      <SectionHeading title="Accès rapides" />
-      <div className="quick-links">
-        <QuickLink href="/athlete/progress" icon={<BarChart3 />} label="Ma progression" />
-        <QuickLink href="/athlete/profile" icon={<UserRound />} label="Mon profil" />
-      </div>
     </AthleteShell>
   );
 }
@@ -130,8 +124,4 @@ function formatMinutes(minutes: number) {
 
 function ScheduleRow({ date, icon, title, details, meta, href, status }: { date: string; icon?: React.ReactNode; title: string; details: string; meta: string; href: string; status?: boolean }) {
   return <Link href={href} className={`schedule-row ${icon ? "" : "schedule-row-no-icon"}`}><span className="schedule-date">{date}</span>{icon && <span className="schedule-icon">{icon}</span>}<span className="schedule-copy"><strong>{title}</strong><span>{details}</span>{meta && <em>{meta}</em>}</span>{status ? <span className="completed-pill"><Check /> Complétée</span> : <ChevronRight className="row-arrow" />}</Link>;
-}
-
-function QuickLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
-  return <Link href={href} className="quick-link"><span>{icon}</span>{label}<ChevronRight /></Link>;
 }
