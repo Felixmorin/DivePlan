@@ -6,7 +6,7 @@ export type AthletePoolInsight = {
   competitionDives: Array<{ id: string; position: number; height: PoolInsightHeight; platformHeight: number | null; code: string; volume: number; averageRating: number | null; ratingCount: number }>;
 };
 
-/** Historical completed pool volume and athlete-authored confidence for competition dives. */
+/** Historical logged pool volume and athlete-authored confidence for competition dives. */
 export async function getCoachPoolInsights(athleteIds: string[], clubId: string): Promise<Record<string, AthletePoolInsight>> {
   const result = Object.fromEntries(athleteIds.map((id) => [id, { families: [], competitionDives: [] }])) as Record<string, AthletePoolInsight>;
   if (!athleteIds.length) return result;
@@ -27,21 +27,29 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
          FROM "Athlete" a JOIN "CompetitionDive" cd ON cd."athleteId"=a.id
          WHERE a.id=ANY($1::text[])
        ), volume AS (
-         SELECT l."athleteId", COALESCE(l."actualDiveCode", d."diveCode") AS code, ps.height,
+         SELECT l."athleteId", d."diveCode" AS code, ps.height, ps.label AS "heightLabel",
            SUM(l."repetitionsCompleted")::int AS volume
-         FROM "AthleteDiveLog" l JOIN "AthleteSessionCompletion" c ON c."athleteId"=l."athleteId" AND c."sessionId"=l."sessionId"
-         JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
+         FROM "AthleteDiveLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
          JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" ps ON ps.id=d."poolSectionId"
-         WHERE l."athleteId"=ANY($1::text[]) AND w."clubId"=$2 AND c.status='COMPLETED'
-         GROUP BY l."athleteId", code, ps.height
+         WHERE l."athleteId"=ANY($1::text[]) AND w."clubId"=$2
+         GROUP BY l."athleteId", code, ps.height, ps.label
        ), ratings AS (
          SELECT "competitionDiveId", AVG(rating)::numeric AS "averageRating", COUNT(*)::int AS "ratingCount"
          FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId"=ANY($1::text[]) AND evaluator='ATHLETE'
          GROUP BY "competitionDiveId"
        )
-       SELECT dives."athleteId", dives.id, dives.position, dives.height, dives."platformHeight", dives.code, COALESCE(volume.volume,0)::int AS volume, ratings."averageRating", ratings."ratingCount"
-       FROM dives LEFT JOIN volume ON volume."athleteId"=dives."athleteId" AND volume.code=dives.code AND volume.height=dives.height
+       SELECT dives."athleteId", dives.id, dives.position, dives.height, dives."platformHeight", dives.code, COALESCE(SUM(volume.volume),0)::int AS volume, ratings."averageRating", ratings."ratingCount"
+       FROM dives LEFT JOIN volume ON volume."athleteId"=dives."athleteId" AND volume.code=dives.code AND (
+         (dives.height<>'PLATFORM' AND volume.height=dives.height) OR
+         (dives.height='PLATFORM' AND volume.height IN ('PLATFORM','CUSTOM') AND (
+           volume."heightLabel" IS NULL OR (
+             dives."platformHeight" IS NOT NULL AND
+             (regexp_match(lower(replace(volume."heightLabel", ',', '.')), '(3|5|7\\.5|10)\\s*m(?:t)?'))[1]::numeric=dives."platformHeight"
+           )
+         ))
+       )
        LEFT JOIN ratings ON ratings."competitionDiveId"=dives.id
+       GROUP BY dives."athleteId", dives.id, dives.position, dives.height, dives."platformHeight", dives.code, ratings."averageRating", ratings."ratingCount"
        ORDER BY dives."athleteId", dives.height, dives.position, dives.id`, [athleteIds, clubId])
   ]);
 

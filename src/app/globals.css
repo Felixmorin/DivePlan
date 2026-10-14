@@ -612,6 +612,7 @@ a {
 .athlete-app .preference-row { display:flex; min-height:4rem; align-items:center; gap:.65rem; border-bottom:1px solid #e6eef6; background:#fff; padding:.6rem .8rem; color:#102451; text-decoration:none; }
 .athlete-app .preference-row:last-child { border-bottom:0; }
 .athlete-app .preference-row > strong { flex:1; font-size:.92rem; font-weight:800; }
+.athlete-app .preference-row.preference-disabled { width:100%; cursor:not-allowed; opacity:.55; text-align:left; }
 .athlete-app .preference-icon { display:grid; width:2.8rem; height:2.8rem; flex:none; place-items:center; border-radius:50%; background:#eaf6ff; color:#2188ed; }
 .athlete-app .preference-icon.mint { background:#e2f9f8; color:#0cb9c2; }
 .athlete-app .preference-icon svg { width:1.5rem; height:1.5rem; }
