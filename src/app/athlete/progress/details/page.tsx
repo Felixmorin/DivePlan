@@ -19,6 +19,7 @@ const familyStyles: Record<string, { color: string; icon: typeof Waves }> = {
 };
 
 type DiveVolume = { family: string; code: string; height: string; heightLabel: string | null; volume: number };
+type DiveDateVolume = DiveVolume & { date: string };
 
 export default async function AthleteDiveDetailsPage({ searchParams }: {
   searchParams: Promise<{ period?: string | string[]; family?: string | string[]; all?: string | string[] }>;
@@ -49,7 +50,15 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
     until = parseMontrealSessionDate(`${seasonStartYear + 1}-08-31`, "00:00");
   }
 
-  const rows = (await query<DiveVolume>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,d."diveCode" AS code,s.height,s.label AS "heightLabel",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND ($2::timestamptz IS NULL OR l.timestamp >= $2) AND ($3::timestamptz IS NULL OR l.timestamp < $3) GROUP BY family,d."diveCode",s.height,s.label ORDER BY family,d."diveCode",s.height`, [athlete.id, from, until])).rows;
+  const [rows, dateRows] = await Promise.all([
+    query<DiveVolume>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,d."diveCode" AS code,s.height,s.label AS "heightLabel",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND ($2::timestamptz IS NULL OR l.timestamp >= $2) AND ($3::timestamptz IS NULL OR l.timestamp < $3) GROUP BY family,d."diveCode",s.height,s.label HAVING SUM(l."repetitionsCompleted") > 0 ORDER BY family,d."diveCode",s.height`, [athlete.id, from, until]),
+    query<DiveDateVolume>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,d."diveCode" AS code,s.height,s.label AS "heightLabel",to_char(l.timestamp AT TIME ZONE 'America/Toronto','YYYY-MM-DD') AS date,SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND ($2::timestamptz IS NULL OR l.timestamp >= $2) AND ($3::timestamptz IS NULL OR l.timestamp < $3) GROUP BY family,d."diveCode",s.height,s.label,date HAVING SUM(l."repetitionsCompleted") > 0 ORDER BY date DESC`, [athlete.id, from, until])
+  ]).then(([dives, dates]) => [dives.rows, dates.rows] as const);
+  const datesByDive = new Map<string, DiveDateVolume[]>();
+  for (const row of dateRows) {
+    const key = diveKey(row);
+    datesByDive.set(key, [...(datesByDive.get(key) ?? []), row]);
+  }
   const totals = new Map<string, number>();
   for (const dive of rows) totals.set(dive.family, (totals.get(dive.family) ?? 0) + dive.volume);
   const families = Object.keys(familyStyles).filter((family) => (totals.get(family) ?? 0) > 0);
@@ -84,10 +93,15 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
       const groupDives = showAll ? group.dives : group.dives.slice(0, 7);
       return <section className="progress-details-list progress-details-height-group" aria-label={`${group.label} · ${categoryTotal} plongeons`} key={group.label}>
         <h2 className="progress-details-height-heading"><span>{group.label}</span><b>{categoryTotal}</b></h2>
-        {groupDives.map((dive) => <div className="progress-details-dive" key={`${dive.code}-${dive.height}-${dive.heightLabel}`}>
-          <div className="progress-details-dive-name"><strong>{dive.code}</strong>{(group.label === "Plateforme" || group.label === "Autres") && <span>{dive.heightLabel ?? (group.label === "Plateforme" ? "Plateforme" : "Autre")}</span>}</div>
-          <b className="progress-details-dive-count">{dive.volume}</b><ChevronRight className="progress-details-chevron" size={23} />
-        </div>)}
+        {groupDives.map((dive) => <details className="progress-dive-details" key={diveKey(dive)}>
+          <summary className="progress-details-dive">
+            <div className="progress-details-dive-name"><strong>{dive.code}</strong>{(group.label === "Plateforme" || group.label === "Autres") && <span>{dive.heightLabel ?? (group.label === "Plateforme" ? "Plateforme" : "Autre")}</span>}</div>
+            <b className="progress-details-dive-count">{dive.volume}</b><ChevronRight className="progress-details-chevron" size={23} />
+          </summary>
+          <div className="progress-dive-dates" aria-label={`Dates du plongeon ${dive.code}`}>
+            {(datesByDive.get(diveKey(dive)) ?? []).map((dateRow) => <div className="progress-dive-date" key={dateRow.date}><span>{formatDiveDate(dateRow.date)}</span><b>{dateRow.volume} répétition{dateRow.volume === 1 ? "" : "s"}</b></div>)}
+          </div>
+        </details>)}
         {group.dives.length > 7 && <Link className="progress-details-all" href={familyParam(selectedFamily, !showAll)}>{showAll ? "Réduire la liste" : `Voir tous les plongeons ${group.label.toLowerCase()}`}<ChevronRight size={22} /></Link>}
       </section>;
     }) : <p className="progress-details-empty">Aucun plongeon pour cette période.</p>}
@@ -101,4 +115,13 @@ function heightCategory(dive: DiveVolume) {
   if (["3mt", "5m", "75m", "10m"].includes(normalizedHeight)) return "Plateforme";
   if (!normalizedHeight && dive.height === "PLATFORM") return "Plateforme";
   return "Autres";
+}
+
+function diveKey(dive: DiveVolume) {
+  return `${dive.family}|${dive.code}|${dive.height}|${dive.heightLabel ?? ""}`;
+}
+
+function formatDiveDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("fr-CA", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day, 12)));
 }
