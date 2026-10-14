@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Plus, UserPlus } from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
+import { Activity, CalendarDays, Plus, UserRound, UserPlus } from "lucide-react";
 import { DeleteAthleteButton } from "@/app/coach/athletes/delete-athlete-button";
 import { CreateAthleteAccountForm } from "@/app/coach/athletes/create-athlete-account-form";
 import { CoachShell } from "@/components/coach/coach-shell";
@@ -112,9 +113,12 @@ export default async function AthletesPage() {
 
   return (
     <CoachShell active="Athletes">
-      <DirectoryHeader title="Athletes" description="Voir les athlètes et leurs informations" actionHref="/coach/sessions/new" actionLabel="Creer une seance" />
+      <div className="athlete-directory-page">
+      <DirectoryHeader title="Athlètes" description="Suivez votre groupe et accédez aux profils" actionHref="/coach/sessions/new" actionLabel="Créer une séance" />
+      <DirectoryStats rows={rows} />
       <AthleteAccountCard groups={groups} />
       <AthleteDirectory rows={rows} />
+      </div>
     </CoachShell>
   );
 }
@@ -137,19 +141,22 @@ function DemoAthletesPage() {
 
   return (
     <CoachShell active="Athletes">
-      <DirectoryHeader title="Athletes" description="Mode demo local sans PostgreSQL." actionHref="/coach/sessions/demo" actionLabel="Voir la seance" />
+      <div className="athlete-directory-page">
+      <DirectoryHeader title="Athlètes" description="Suivez votre groupe et accédez aux profils" actionHref="/coach/sessions/demo" actionLabel="Voir la séance" />
+      <DirectoryStats rows={rows} />
       <AthleteAccountCard groups={[{ id: "provincial", name: "Provincial" }]} demo />
       <AthleteDirectory rows={rows} demo />
+      </div>
     </CoachShell>
   );
 }
 
 function DirectoryHeader({ title, description, actionHref, actionLabel }: { title: string; description: string; actionHref: string; actionLabel: string }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="mt-2 text-3xl font-black text-[var(--color-ink)]">{title}</h1>
-        <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{description}</p>
+    <div className="athlete-directory-hero">
+      <div className="athlete-directory-title">
+        <h1>{title}</h1>
+        <p>{description}</p>
       </div>
       <Button asChild variant="action">
         <Link href={actionHref}><Plus className="h-4 w-4" /> {actionLabel}</Link>
@@ -158,20 +165,28 @@ function DirectoryHeader({ title, description, actionHref, actionLabel }: { titl
   );
 }
 
+function DirectoryStats({ rows }: { rows: AthleteRow[] }) {
+  const sessions = rows.reduce((total, row) => total + row.completedSessions, 0);
+  const volume = rows.reduce((total, row) => total + row.volume, 0);
+  return <section className="athlete-directory-stats" aria-label="Statistiques du groupe">
+    <Stat icon={<UserRound />} value={rows.filter((row) => row.active).length} label="athlètes actifs" />
+    <Stat icon={<CalendarDays />} value={sessions} label="séances complétées" />
+    <Stat icon={<Activity />} value={volume.toLocaleString("fr-CA")} label="répétitions" />
+  </section>;
+}
+
+function Stat({ icon, value, label }: { icon: ReactNode; value: number | string; label: string }) {
+  return <div className="athlete-directory-stat"><span className="athlete-directory-stat-icon">{icon}</span><strong>{value}</strong><span>{label}</span></div>;
+}
+
 function AthleteAccountCard({ groups, demo = false }: { groups: AthleteGroup[]; demo?: boolean }) {
   return (
-    <Card className="mb-6 overflow-hidden">
-      <CardHeader className="border-b border-[var(--color-border)] bg-white">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-success-soft)] text-[var(--color-success)]">
-            <UserPlus className="h-5 w-5" />
-          </div>
-          <div>
-            <CardTitle>Créer un compte athlète</CardTitle>
-          </div>
-        </div>
+    <Card className="athlete-account-card mb-4 overflow-hidden">
+      <CardHeader className="athlete-directory-card-heading border-b border-[var(--color-border)] bg-white">
+        <div><CardTitle>Ajouter un athlète</CardTitle><CardDescription>Créez un nouveau compte athlète rapidement</CardDescription></div>
+        <UserPlus className="h-5 w-5" />
       </CardHeader>
-      <CardContent className="p-5">
+      <CardContent className="p-4">
         <CreateAthleteAccountForm groups={groups} disabled={demo} />
       </CardContent>
     </Card>
@@ -189,14 +204,14 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
   }
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b border-[var(--color-border)] bg-white">
+    <Card className="athlete-list-card overflow-hidden">
+      <CardHeader className="athlete-list-heading border-b border-[var(--color-border)] bg-white">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Liste active</CardTitle>
-            <CardDescription>{rows.length} athletes</CardDescription>
+          <div className="athlete-list-title">
+            <CardTitle>Votre groupe</CardTitle>
+            <CardDescription>{rows.length} athlètes</CardDescription>
           </div>
-          <span className="text-sm font-bold text-[var(--color-ink-muted)]">{rows.length} athlètes</span>
+          <div className="athlete-list-controls"><label className="athlete-search"><span className="sr-only">Rechercher un athlète</span><input type="search" placeholder="Rechercher un athlète…" /></label><select aria-label="Tous les groupes"><option>Tous les groupes</option></select><select aria-label="Tous les niveaux"><option>Tous les niveaux</option></select></div>
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -211,7 +226,7 @@ function AthleteDirectory({ rows, demo = false }: { rows: AthleteRow[]; demo?: b
               <div className="col-span-2 lg:col-span-1"><Badge variant="outline">{row.groupName}</Badge></div>
               <div className="col-span-2 lg:col-span-1"><NextSession nextSession={row.nextSession} demo={demo} /></div>
               <div className="col-span-2 lg:col-span-1"><ActivitySummary row={row} /></div>
-              <div className="text-lg font-black lg:text-right"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Volume</span>{row.volume}</div>
+              <div className="athlete-volume"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Volume</span><strong>{row.volume}</strong><i style={{ "--volume": `${Math.max(10, Math.min(100, row.volume / Math.max(...rows.map((item) => item.volume), 1) * 100))}%` } as CSSProperties} /></div>
               <div className="text-lg font-black lg:text-right"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Moyenne</span>{row.averageVolume === null ? "—" : row.averageVolume.toFixed(1)}</div>
               <div className="col-span-2 lg:col-span-1 lg:text-right"><DeleteAthleteButton athleteId={row.id} demo={demo} compact /></div>
             </div>
