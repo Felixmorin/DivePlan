@@ -1,25 +1,46 @@
 "use client";
 
-import { useActionState } from "react";
-import { LogIn } from "lucide-react";
+import { useActionState, useState } from "react";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 import { login, type LoginState } from "@/app/login/actions";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import styles from "./login.module.css";
 
 const initialState: LoginState = {};
 
 export function LoginForm() {
   const [state, action, pending] = useActionState(login, initialState);
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <form action={action} className="space-y-4">
-      <Input name="email" type="text" autoComplete="username" placeholder="Courriel ou nom d'utilisateur" />
-      <Input name="password" type="password" placeholder="Mot de passe" />
-      {state.error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-[var(--color-danger)]">{state.error}</p>}
-      <Button type="submit" variant="action" className="w-full" disabled={pending}>
-        <LogIn className="h-4 w-4" />
-        {pending ? "Connexion..." : "Entrer"}
-      </Button>
+    <form action={action} className={styles.form}>
+      <label className={styles.fieldLabel} htmlFor="login-email">Adresse courriel</label>
+      <div className={styles.inputWrap}>
+        <Mail className={styles.inputIcon} aria-hidden="true" />
+        <input id="login-email" name="email" type="text" autoComplete="username" placeholder="nom@exemple.com" />
+      </div>
+
+      <label className={styles.fieldLabel} htmlFor="login-password">Mot de passe</label>
+      <div className={styles.inputWrap}>
+        <LockKeyhole className={styles.inputIcon} aria-hidden="true" />
+        <input id="login-password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" placeholder="Ton mot de passe" />
+        <button className={styles.passwordToggle} type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
+          {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+        </button>
+      </div>
+
+      <div className={styles.formOptions}>
+        <label className={styles.remember}>
+          <input type="checkbox" />
+          <span>Se souvenir de moi</span>
+        </label>
+        <a href="mailto:?subject=Mot%20de%20passe%20DivePlan">Mot de passe oublié ?</a>
+      </div>
+
+      {state.error && <p role="alert" className={styles.error}>{state.error}</p>}
+      <button type="submit" className={styles.submit} disabled={pending}>
+        {pending ? "Connexion..." : "Se connecter"}
+        <ArrowRight aria-hidden="true" />
+      </button>
     </form>
   );
 }
