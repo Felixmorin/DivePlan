@@ -20,18 +20,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className={styles.page}>
       <section className={styles.shell} aria-label="Connexion à DivePlan">
-        <aside className={styles.hero}>
-          <div className={styles.heroContent}>
-            <p className={styles.heroTitle}>Chaque<br />séance compte.</p>
-            <p className={styles.heroSubtitle}>Planifie. Plonge. Progresse.</p>
-          </div>
-        </aside>
-
         <div className={styles.panel}>
           <div className={styles.brand} aria-label="DivePlan">
-            <Image src="/icons/diveplan.svg" alt="" width={54} height={54} priority />
-            <span>Dive<span>Plan</span></span>
-            <Image className={styles.mobileLogo} src="/icons/diveplan-powered-by-light.png" alt="DivePlan" width={240} height={80} priority />
+            <Image src="/icons/diveplan-powered-by-light.png" alt="DivePlan" width={360} height={120} priority />
           </div>
 
           <div className={styles.formCard}>

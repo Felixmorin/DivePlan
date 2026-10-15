@@ -2,20 +2,12 @@
   min-height: 100svh;
   display: grid;
   place-items: center;
-  padding: 28px;
-  background: #f2f6fb;
+  padding: 32px 20px;
+  background: radial-gradient(ellipse at 50% 0%, #fff 0%, #f4f7fc 72%);
 }
 
 .shell {
-  display: grid;
-  grid-template-columns: 1.04fr 1fr;
-  width: min(100%, 1430px);
-  min-height: min(805px, calc(100svh - 56px));
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, .82);
-  border-radius: 30px;
-  background: #fff;
-  box-shadow: 0 22px 70px rgba(31, 64, 103, .13);
+  width: min(100%, 560px);
 }
 
 .hero {
@@ -67,26 +59,16 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px clamp(30px, 6vw, 82px) 24px;
-  background: linear-gradient(145deg, #fff 0%, #fff 68%, #f9fbff 100%);
+  width: 100%;
+  padding: 12px 0;
 }
 
 .brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
+  width: min(100%, 340px);
   margin: 0 auto 34px;
-  color: #0a1b36;
-  font-size: clamp(2.6rem, 4vw, 3.4rem);
-  font-weight: 850;
-  letter-spacing: -.065em;
-  line-height: 1;
 }
 
-.brand img { width: 54px; height: 54px; }
-.brand > span > span { color: #0788f9; }
-.brand .mobileLogo { display: none; }
+.brand img { display: block; width: 100%; height: auto; }
 
 .formCard {
   width: min(100%, 530px);
@@ -145,16 +127,14 @@
 
 @media (max-width: 760px) {
   .page { display: block; min-height: 100svh; padding: 0; background: #f7f9fc; }
-  .shell { display: flex; width: 100%; min-height: 100svh; flex-direction: column; overflow: hidden; border: 0; border-radius: 0; box-shadow: none; }
+  .shell { display: flex; width: 100%; min-height: 100svh; flex-direction: column; }
   .hero { display: none; }
   .hero::after { border: 0; }
   .heroContent { padding: 20px 24px 24px; }
   .heroTitle { font-size: clamp(1.8rem, 7.4vw, 2.5rem); }
   .heroSubtitle { margin-top: 7px; font-size: 1rem; }
   .panel { flex: 1; justify-content: flex-start; padding: 20px 20px max(22px, env(safe-area-inset-bottom)); }
-  .brand { width: min(100%, 290px); gap: 7px; margin-bottom: 20px; }
-  .brand > img:first-child, .brand > span { display: none; }
-  .brand .mobileLogo { display: block; width: 100%; height: auto; }
+  .brand { width: min(100%, 290px); margin-bottom: 20px; }
   .formCard { width: 100%; max-width: 470px; padding: 22px 20px 20px; border-color: transparent; border-radius: 18px; background: #fff; box-shadow: 0 12px 35px rgba(32, 67, 112, .08); }
   .formCard h1 { font-size: 1.65rem; }
   .intro { margin-bottom: 21px; font-size: 1rem; }
