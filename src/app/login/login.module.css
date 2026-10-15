@@ -152,7 +152,7 @@
   .heroTitle { font-size: clamp(1.8rem, 7.4vw, 2.5rem); }
   .heroSubtitle { margin-top: 7px; font-size: 1rem; }
   .panel { flex: 1; justify-content: flex-start; padding: 20px 20px max(22px, env(safe-area-inset-bottom)); }
-  .brand { width: min(100%, 270px); min-height: 82px; gap: 7px; margin-bottom: 20px; padding: 9px 18px; border-radius: 16px; background: #071b2d; }
+  .brand { width: min(100%, 290px); gap: 7px; margin-bottom: 20px; }
   .brand > img:first-child, .brand > span { display: none; }
   .brand .mobileLogo { display: block; width: 100%; height: auto; }
   .formCard { width: 100%; max-width: 470px; padding: 22px 20px 20px; border-color: transparent; border-radius: 18px; background: #fff; box-shadow: 0 12px 35px rgba(32, 67, 112, .08); }

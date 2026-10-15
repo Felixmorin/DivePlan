@@ -31,7 +31,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <div className={styles.brand} aria-label="DivePlan">
             <Image src="/icons/diveplan.svg" alt="" width={54} height={54} priority />
             <span>Dive<span>Plan</span></span>
-            <Image className={styles.mobileLogo} src="/icons/diveplan-powered-by.png" alt="DivePlan" width={240} height={80} priority />
+            <Image className={styles.mobileLogo} src="/icons/diveplan-powered-by-light.png" alt="DivePlan" width={240} height={80} priority />
           </div>
 
           <div className={styles.formCard}>
