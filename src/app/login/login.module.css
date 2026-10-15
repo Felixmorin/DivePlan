@@ -86,6 +86,7 @@
 
 .brand img { width: 54px; height: 54px; }
 .brand > span > span { color: #0788f9; }
+.brand .mobileLogo { display: none; }
 
 .formCard {
   width: min(100%, 530px);
@@ -145,14 +146,15 @@
 @media (max-width: 760px) {
   .page { display: block; min-height: 100svh; padding: 0; background: #f7f9fc; }
   .shell { display: flex; width: 100%; min-height: 100svh; flex-direction: column; overflow: hidden; border: 0; border-radius: 0; box-shadow: none; }
-  .hero { flex: none; align-items: flex-end; min-height: 0; height: clamp(180px, 32svh, 255px); background-position: center 44%; }
+  .hero { display: none; }
   .hero::after { border: 0; }
   .heroContent { padding: 20px 24px 24px; }
   .heroTitle { font-size: clamp(1.8rem, 7.4vw, 2.5rem); }
   .heroSubtitle { margin-top: 7px; font-size: 1rem; }
   .panel { flex: 1; justify-content: flex-start; padding: 20px 20px max(22px, env(safe-area-inset-bottom)); }
-  .brand { gap: 7px; margin-bottom: 18px; font-size: 2.35rem; }
-  .brand img { width: 42px; height: 42px; }
+  .brand { width: min(100%, 270px); min-height: 82px; gap: 7px; margin-bottom: 20px; padding: 9px 18px; border-radius: 16px; background: #071b2d; }
+  .brand > img:first-child, .brand > span { display: none; }
+  .brand .mobileLogo { display: block; width: 100%; height: auto; }
   .formCard { width: 100%; max-width: 470px; padding: 22px 20px 20px; border-color: transparent; border-radius: 18px; background: #fff; box-shadow: 0 12px 35px rgba(32, 67, 112, .08); }
   .formCard h1 { font-size: 1.65rem; }
   .intro { margin-bottom: 21px; font-size: 1rem; }
