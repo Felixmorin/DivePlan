@@ -688,13 +688,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
 
         <section className="rounded-[2rem] border border-[#dce9f5] bg-[#f8fbff] p-3.5 shadow-[0_8px_28px_rgba(18,66,112,.04)]">
           {isPoolBlock && <>
-            <div className="mb-3 flex min-h-24 items-center gap-4 rounded-[1.5rem] border border-[#e1edf8] bg-gradient-to-r from-[#edf7ff] to-[#f7fbff] px-4 py-3">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0878ff] shadow-sm"><Waves className="h-8 w-8" /></div>
-              <div className="min-w-0 border-l-2 border-[#c8ddf0] pl-4">
-                <div className="text-xs font-black uppercase tracking-[.08em] text-[#526984]">Hauteur du tremplin</div>
-                <div className="mt-0.5 truncate text-3xl font-black leading-none text-[#0878ff]">{activeStep?.section.label.replace(/\s*(?:mètres?|metres?)$/i, " m")}</div>
-              </div>
-            </div>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
               <h1 className="min-w-0 flex-1 text-2xl font-black leading-tight text-[#0b1640]">{block.title}</h1>
               <Button type="button" size="sm" variant="outline" className="!h-10 !shrink-0 !rounded-xl !border-2 !border-[#0878ff] !bg-white !px-3 !text-[#0878ff] hover:!bg-blue-50" onClick={completeCurrentPage}>
@@ -731,8 +724,11 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
               <div key={dive.id} className="rounded-[1.5rem] border border-[#dce8f3] bg-white p-3.5 shadow-[0_3px_12px_rgba(19,54,92,.035)]">
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0"><div className={`truncate text-xl font-black text-[#0b1640] ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "!text-red-500" : ""}`}>{dive.postSessionModified ? dive.code : dive.actualCode ?? dive.code} <span className="text-base font-bold text-slate-700">{dive.name}</span></div><div className="mt-0.5 text-base text-slate-500">{dive.repetitions} répétition{dive.repetitions === 1 ? "" : "s"}{golden > 0 ? ` · ${golden} golden rep${golden > 1 ? "s" : ""}` : ""}</div></div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#eaf5ff] px-3 py-1.5 text-sm font-black text-[#0878ff]"><Waves className="h-4 w-4" />{activeStep.section.label.replace(/\s*(?:mètres?|metres?)$/i, " m")}</span>
                         <span className="text-sm font-black text-[#0b1640]">{completed}/{checks.length}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
                         <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-9 w-9 items-center justify-center rounded-lg ${diveNotes[dive.id] ? "text-[var(--color-action)]" : "text-slate-500"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}><FilePenLine className="h-5 w-5" /></button>
                       </div>
                     </div>
