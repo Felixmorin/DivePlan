@@ -643,12 +643,12 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   return (
     <AthleteShell hideNav className="session-player-light">
       <div className="space-y-4">
-        <header className="sticky top-0 z-30 -mx-4 bg-white/95 px-4 pb-3 pt-2 backdrop-blur">
+        <header className="sticky top-0 z-30 -mx-4 bg-[#f7fbff]/95 px-4 pb-3 pt-2 backdrop-blur">
           <div className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <button type="button" onClick={leaveSession} className="min-h-10 justify-self-start rounded-xl px-1 text-sm font-bold text-[var(--color-action)]">Quitter</button>
             <div className="w-44">
-              <div className="mb-1 text-center text-xs font-bold">Bloc {current + 1}/{blocks.length}</div>
-              <Progress value={progress} className="h-2 bg-slate-200" />
+              <div className="mb-1 text-center text-sm font-black text-[#0b1640]">Bloc {current + 1}/{blocks.length}</div>
+              <Progress value={progress} className="h-2.5 bg-slate-200 [&>div]:bg-[#39cdb8]" />
               <div className="mt-1 flex justify-center"><SaveIndicator status={saveStatus} compact /></div>
             </div>
             <button type="button" aria-label="Aperçu des blocs" aria-expanded={sessionPreviewOpen} aria-controls="active-session-preview" onClick={() => setSessionPreviewOpen((open) => !open)} className="flex h-10 w-10 items-center justify-center justify-self-end rounded-xl border border-[var(--color-action)] text-[var(--color-action)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><Eye className="h-5 w-5" /></button>
@@ -686,13 +686,27 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
           </div>
         </section>
 
-        <section className="rounded-[var(--radius-panel)] border border-white/10 bg-[var(--color-athlete-bg)] p-3">
-          {isPoolBlock && <h1 className="mb-3 px-1 text-3xl font-black leading-tight">{block.title}</h1>}
-          <div className="mb-3 flex justify-end">
+        <section className="rounded-[2rem] border border-[#dce9f5] bg-[#f8fbff] p-3.5 shadow-[0_8px_28px_rgba(18,66,112,.04)]">
+          {isPoolBlock && <>
+            <div className="mb-3 flex min-h-24 items-center gap-4 rounded-[1.5rem] border border-[#e1edf8] bg-gradient-to-r from-[#edf7ff] to-[#f7fbff] px-4 py-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#0878ff] shadow-sm"><Waves className="h-8 w-8" /></div>
+              <div className="min-w-0 border-l-2 border-[#c8ddf0] pl-4">
+                <div className="text-xs font-black uppercase tracking-[.08em] text-[#526984]">Hauteur du tremplin</div>
+                <div className="mt-0.5 truncate text-3xl font-black leading-none text-[#0878ff]">{activeStep?.section.label.replace(/\s*(?:mètres?|metres?)$/i, " m")}</div>
+              </div>
+            </div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+              <h1 className="min-w-0 flex-1 text-2xl font-black leading-tight text-[#0b1640]">{block.title}</h1>
+              <Button type="button" size="sm" variant="outline" className="!h-10 !shrink-0 !rounded-xl !border-2 !border-[#0878ff] !bg-white !px-3 !text-[#0878ff] hover:!bg-blue-50" onClick={completeCurrentPage}>
+              <CheckCircle2 className="h-4 w-4" /> Tout complété
+            </Button>
+            </div>
+          </>}
+          {!isPoolBlock && <div className="mb-3 flex justify-end">
             <Button type="button" size="sm" variant="outline" className="!border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" onClick={completeCurrentPage}>
               <CheckCircle2 className="h-4 w-4" /> Tout complété
             </Button>
-          </div>
+          </div>}
           {!isPoolBlock && block.exercises.length > 0 && (
             <div className="space-y-3">
               {block.exercises.map((exercise) => {
@@ -714,9 +728,9 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                 const completed = checks.filter((state) => state > 0).length;
                 const golden = checks.filter((state) => state === 2).length;
                 return (
-                  <div key={dive.id} className="rounded-2xl border border-white/10 bg-white p-3">
+              <div key={dive.id} className="rounded-[1.5rem] border border-[#dce8f3] bg-white p-3.5 shadow-[0_3px_12px_rgba(19,54,92,.035)]">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0"><div className={`truncate text-lg font-black ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "text-red-500" : ""}`}>{dive.postSessionModified ? dive.code : dive.actualCode ?? dive.code} <span className="text-base font-bold text-slate-700">{dive.name}</span></div><div className="mt-0.5 text-sm text-slate-500">{activeStep.section.label} · {dive.repetitions} répétition{dive.repetitions === 1 ? "" : "s"}{golden > 0 ? ` · ${golden} golden rep${golden > 1 ? "s" : ""}` : ""}</div></div>
+                      <div className="min-w-0"><div className={`truncate text-xl font-black text-[#0b1640] ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "!text-red-500" : ""}`}>{dive.postSessionModified ? dive.code : dive.actualCode ?? dive.code} <span className="text-base font-bold text-slate-700">{dive.name}</span></div><div className="mt-0.5 text-base text-slate-500">{dive.repetitions} répétition{dive.repetitions === 1 ? "" : "s"}{golden > 0 ? ` · ${golden} golden rep${golden > 1 ? "s" : ""}` : ""}</div></div>
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-black text-[#0b1640]">{completed}/{checks.length}</span>
                         <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-9 w-9 items-center justify-center rounded-lg ${diveNotes[dive.id] ? "text-[var(--color-action)]" : "text-slate-500"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}><FilePenLine className="h-5 w-5" /></button>
@@ -734,15 +748,15 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                     )}
                     <div className="mt-3 flex flex-wrap gap-2">
                       {checks.map((state, index) => (
-                        <button key={index} type="button" onClick={() => toggleDiveRep(dive.id, index)} className={`flex h-10 w-10 items-center justify-center rounded-full border text-sm font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${state === 2 ? "border-amber-300 bg-amber-400 text-[#281500]" : state === 1 ? "border-[var(--color-success)] bg-[var(--color-success)] text-[#06133a]" : "border-slate-300 bg-white text-slate-500"} ${pulseKey === `${dive.id}-${index}` ? "builder-pulse" : ""}`} aria-label={`Répétition ${index + 1}${state === 2 ? ", étoile" : state === 1 ? ", complétée" : ""}`}>
+                        <button key={index} type="button" onClick={() => toggleDiveRep(dive.id, index)} className={`flex h-12 w-12 items-center justify-center rounded-full border-2 text-base font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${state === 2 ? "border-amber-300 bg-amber-400 text-[#281500]" : state === 1 ? "border-[var(--color-success)] bg-[var(--color-success)] text-[#06133a]" : "border-[#d2deea] bg-white text-slate-500"} ${pulseKey === `${dive.id}-${index}` ? "builder-pulse" : ""}`} aria-label={`Répétition ${index + 1}${state === 2 ? ", étoile" : state === 1 ? ", complétée" : ""}`}>
                           {state === 2 ? "★" : state === 1 ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
                         </button>
                       ))}
                     </div>
                     <div className="mt-2 flex justify-end gap-2">
-                    <button type="button" disabled={checks.length <= dive.repetitions} onClick={() => removeDiveRep(dive.id, dive.repetitions)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-lg font-bold text-slate-700 disabled:opacity-40" aria-label={`Retirer une répétition à ${dive.code}`}>−</button>
-                    <button type="button" onClick={() => addDiveRep(dive.id)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-lg font-bold text-[#0878ff]" aria-label={`Ajouter une répétition à ${dive.code}`}>
-                      <Plus className="h-4 w-4" />
+                    <button type="button" disabled={checks.length <= dive.repetitions} onClick={() => removeDiveRep(dive.id, dive.repetitions)} className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-2xl font-bold text-slate-600 disabled:opacity-40" aria-label={`Retirer une répétition à ${dive.code}`}>−</button>
+                    <button type="button" onClick={() => addDiveRep(dive.id)} className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#0878ff] text-white shadow-sm" aria-label={`Ajouter une répétition à ${dive.code}`}>
+                      <Plus className="h-6 w-6" />
                     </button>
                     </div>
                   </div>
