@@ -82,6 +82,7 @@ model Club {
   planningEvents PlanningEvent[]
   milestones     ClubMilestone[]
   transferTelemetry TransferTelemetryHour[]
+  performanceTelemetry PerformanceTelemetryHour[]
 }
 
 model TransferTelemetryHour {
@@ -96,6 +97,21 @@ model TransferTelemetryHour {
   club          Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
   @@id([clubId, hour, route, resourceType])
+  @@index([clubId, hour(sort: Desc)])
+}
+
+model PerformanceTelemetryHour {
+  clubId     String
+  hour       DateTime @db.Timestamptz(6)
+  route      String
+  metric     String
+  samples    Int      @default(0)
+  totalValue Float    @default(0) @db.DoublePrecision
+  maxValue   Float    @default(0) @db.DoublePrecision
+  updatedAt  DateTime @default(now()) @db.Timestamptz(6)
+  club       Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@id([clubId, hour, route, metric])
   @@index([clubId, hour(sort: Desc)])
 }
 

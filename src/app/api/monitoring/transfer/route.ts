@@ -5,10 +5,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const resourceTypes = new Set(["document", "script", "style", "image", "font", "fetch", "other"]);
+const vitalNames = new Set(["LCP", "INP", "CLS", "FCP", "TTFB"]);
 const maxRequestBytes = 20_000;
 const maxEntries = 40;
 
 type Entry = { route: string; resourceType: string; requests: number; transferBytes: number; cacheHits: number };
+type Vital = { route: string; name: string; value: number };
 
 function normalizeRoute(input: unknown): string | null {
   if (typeof input !== "string" || input.length > 200 || !input.startsWith("/") || input.startsWith("//")) return null;
@@ -39,12 +41,15 @@ export async function POST(request: Request) {
   }
 
   const rawEntries = (body as { entries?: unknown } | null)?.entries;
-  if (!Array.isArray(rawEntries) || rawEntries.length === 0 || rawEntries.length > maxEntries) {
+  const rawVitals = (body as { vitals?: unknown } | null)?.vitals;
+  if ((!Array.isArray(rawEntries) && !Array.isArray(rawVitals))
+    || (Array.isArray(rawEntries) && rawEntries.length > maxEntries)
+    || (Array.isArray(rawVitals) && rawVitals.length > 10)) {
     return Response.json({ error: "invalid_entries" }, { status: 400 });
   }
 
   const entries: Entry[] = [];
-  for (const value of rawEntries) {
+  for (const value of Array.isArray(rawEntries) ? rawEntries : []) {
     if (!value || typeof value !== "object") continue;
     const item = value as Record<string, unknown>;
     const route = normalizeRoute(item.route);
@@ -57,19 +62,45 @@ export async function POST(request: Request) {
       || !Number.isInteger(cacheHits) || cacheHits < 0 || cacheHits > requests) continue;
     entries.push({ route, resourceType: item.resourceType, requests, transferBytes, cacheHits });
   }
-  if (entries.length === 0) return Response.json({ error: "invalid_entries" }, { status: 400 });
+  const vitals: Vital[] = [];
+  for (const value of Array.isArray(rawVitals) ? rawVitals : []) {
+    if (!value || typeof value !== "object") continue;
+    const item = value as Record<string, unknown>;
+    const route = normalizeRoute(item.route);
+    const name = item.name;
+    const numericValue = Number(item.value);
+    if (!route || !/^\/(coach|athlete)(\/|$)/.test(route)
+      || typeof name !== "string" || !vitalNames.has(name)
+      || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 60_000
+      || (name === "CLS" && numericValue > 10)) continue;
+    vitals.push({ route, name, value: numericValue });
+  }
+  if (entries.length === 0 && vitals.length === 0) return Response.json({ error: "invalid_entries" }, { status: 400 });
 
-  await query(
-    `INSERT INTO "TransferTelemetryHour" ("clubId", hour, route, "resourceType", requests, "transferBytes", "cacheHits", "updatedAt")
-     SELECT $1, date_trunc('hour', NOW()), item.route, item."resourceType", item.requests, item."transferBytes", item."cacheHits", NOW()
-     FROM jsonb_to_recordset($2::jsonb) AS item(route text, "resourceType" text, requests integer, "transferBytes" bigint, "cacheHits" integer)
-     ON CONFLICT ("clubId", hour, route, "resourceType") DO UPDATE SET
-       requests = "TransferTelemetryHour".requests + EXCLUDED.requests,
-       "transferBytes" = "TransferTelemetryHour"."transferBytes" + EXCLUDED."transferBytes",
-       "cacheHits" = "TransferTelemetryHour"."cacheHits" + EXCLUDED."cacheHits",
-       "updatedAt" = NOW()`,
-    [user.clubId, JSON.stringify(entries)]
-  );
+  const writes: Promise<unknown>[] = [];
+  if (entries.length > 0) writes.push(query(
+      `INSERT INTO "TransferTelemetryHour" ("clubId", hour, route, "resourceType", requests, "transferBytes", "cacheHits", "updatedAt")
+       SELECT $1, date_trunc('hour', NOW()), item.route, item."resourceType", item.requests, item."transferBytes", item."cacheHits", NOW()
+       FROM jsonb_to_recordset($2::jsonb) AS item(route text, "resourceType" text, requests integer, "transferBytes" bigint, "cacheHits" integer)
+       ON CONFLICT ("clubId", hour, route, "resourceType") DO UPDATE SET
+         requests = "TransferTelemetryHour".requests + EXCLUDED.requests,
+         "transferBytes" = "TransferTelemetryHour"."transferBytes" + EXCLUDED."transferBytes",
+         "cacheHits" = "TransferTelemetryHour"."cacheHits" + EXCLUDED."cacheHits",
+         "updatedAt" = NOW()`,
+      [user.clubId, JSON.stringify(entries)]
+    ));
+  if (vitals.length > 0) writes.push(query(
+      `INSERT INTO "PerformanceTelemetryHour" ("clubId", hour, route, metric, samples, "totalValue", "maxValue", "updatedAt")
+       SELECT $1, date_trunc('hour', NOW()), item.route, item.metric, 1, item.value, item.value, NOW()
+       FROM jsonb_to_recordset($2::jsonb) AS item(route text, metric text, value double precision)
+       ON CONFLICT ("clubId", hour, route, metric) DO UPDATE SET
+         samples = "PerformanceTelemetryHour".samples + 1,
+         "totalValue" = "PerformanceTelemetryHour"."totalValue" + EXCLUDED."totalValue",
+         "maxValue" = GREATEST("PerformanceTelemetryHour"."maxValue", EXCLUDED."maxValue"),
+         "updatedAt" = NOW()`,
+      [user.clubId, JSON.stringify(vitals)]
+    ));
+  await Promise.all(writes);
 
   return Response.json({ ok: true }, { headers: { "cache-control": "no-store" } });
 }

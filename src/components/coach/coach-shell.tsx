@@ -18,6 +18,7 @@ const nav = [
 ];
 
 const utilityNav = [
+  { href: "/coach/observability", label: "Observabilité", icon: Activity },
   { href: "/coach/monitoring", label: "Monitoring", icon: Computer },
   { href: "/coach/settings", label: "Réglages", match: "Reglages", icon: Settings }
 ];

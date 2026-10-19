@@ -30,7 +30,7 @@ export default async function MonitoringPage() {
   }
 
   const since = sinceHours(24);
-  const [eventsResult, failedResult, completedResult, previewResult, transferResult] = await Promise.all([
+  const [eventsResult, failedResult, completedResult, previewResult] = await Promise.all([
     query<{ id: string; type: string; message: string; email: string | null; createdAt: Date }>(
       `SELECT e.id, e.type, e.message, u.email, e."createdAt" FROM "AppEvent" e
        LEFT JOIN "User" u ON u.id = e."userId" WHERE e."clubId" = $1 OR e."clubId" IS NULL
@@ -52,16 +52,6 @@ export default async function MonitoringPage() {
              AND c."sessionId" = e.metadata ->> 'sessionId'
              AND c."startedAt" IS NOT NULL
          )`, [clubId, ATHLETE_SESSION_PREVIEW_EVENT, since]
-    ),
-    query<{ route: string; resourceType: string; requests: string; transferBytes: string; cacheHits: string; totalBytes: string }>(
-      `SELECT route, "resourceType", SUM(requests)::text AS requests,
-         SUM("transferBytes")::text AS "transferBytes", SUM("cacheHits")::text AS "cacheHits",
-         SUM(SUM("transferBytes")) OVER ()::text AS "totalBytes"
-       FROM "TransferTelemetryHour"
-       WHERE "clubId" = $1 AND hour >= NOW() - INTERVAL '24 hours'
-       GROUP BY route, "resourceType"
-       ORDER BY SUM("transferBytes") DESC, SUM(requests) DESC
-       LIMIT 12`, [clubId]
     )
   ]);
   const events = eventsResult.rows;
@@ -73,13 +63,6 @@ export default async function MonitoringPage() {
     <CoachShell active="Monitoring">
       <PageHeader description="Evenements produit et signaux de support visibles pour le role connecte." />
       <MonitoringStats events={events.length} previewViews={previewViews} failedLogins={failedLogins} completedSessions={completedSessions} />
-      <TransferReport totalBytes={Number(transferResult.rows[0]?.totalBytes ?? 0)} rows={transferResult.rows.map((row) => ({
-        route: row.route,
-        resourceType: row.resourceType,
-        requests: Number(row.requests),
-        transferBytes: Number(row.transferBytes),
-        cacheHits: Number(row.cacheHits)
-      }))} />
       <EventJournal
         events={events.map((event) => ({
           id: event.id,
@@ -91,46 +74,6 @@ export default async function MonitoringPage() {
       />
     </CoachShell>
   );
-}
-
-function TransferReport({ totalBytes, rows }: { totalBytes: number; rows: Array<{ route: string; resourceType: string; requests: number; transferBytes: number; cacheHits: number }> }) {
-  return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle>Top transferts observés · 24 h</CardTitle>
-        <CardDescription>
-          {formatBytes(totalBytes)} mesurés dans les navigateurs connectés. Estimation des réponses et ressources de même origine; ne mesure pas le transfert Fast Origin entre Vercel et ses fonctions.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {rows.length === 0 ? <p className="text-sm text-[var(--color-ink-muted)]">Aucune mesure pour le moment. Les données apparaîtront après les prochaines visites en production.</p> : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[38rem] text-left text-sm">
-              <thead className="text-xs uppercase text-[var(--color-ink-muted)]">
-                <tr><th className="pb-2 pr-4">Route</th><th className="pb-2 pr-4">Type</th><th className="pb-2 pr-4">Requêtes</th><th className="pb-2 pr-4">Transfert sortant</th><th className="pb-2">Cache navigateur</th></tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => <tr key={`${row.route}:${row.resourceType}`} className="border-t border-[var(--color-border)]">
-                  <td className="py-2 pr-4 font-semibold">{row.route}</td><td className="py-2 pr-4">{row.resourceType}</td>
-                  <td className="py-2 pr-4">{row.requests.toLocaleString("fr-CA")}</td><td className="py-2 pr-4">{formatBytes(row.transferBytes)}</td>
-                  <td className="py-2">{row.requests ? `${Math.round(row.cacheHits / row.requests * 100)} %` : "—"}</td>
-                </tr>)}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} o`;
-  const units = ["Ko", "Mo", "Go"];
-  let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; }
-  return `${value.toLocaleString("fr-CA", { maximumFractionDigits: 1 })} ${units[unit]}`;
 }
 
 function PageHeader({ description }: { description: string }) {
