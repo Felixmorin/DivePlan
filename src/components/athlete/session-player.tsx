@@ -728,7 +728,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                   <div key={dive.id} className="rounded-[1.5rem] border border-[#dce8f3] bg-white p-3.5 shadow-[0_3px_12px_rgba(19,54,92,.035)]">
                     <div className="flex items-center gap-2">
                       <span className="inline-flex shrink-0 items-center rounded-full bg-[#eaf5ff] px-3 py-1.5 text-sm font-black text-[#0878ff]">{activeStep.section.label.replace(/\s*(?:mètres?|metres?)$/i, " m")}</span>
-                      <div className={`min-w-0 flex-1 truncate text-lg font-black text-[#0b1640] ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "!text-red-500" : ""}`}>{displayedDiveCode}{dive.name !== displayedDiveCode && <span className="ml-1 font-bold">{dive.name}</span>}</div>
+                      <div className={`min-w-0 flex-1 truncate text-lg font-black text-[#0b1640] ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "!text-red-500" : ""}`}>{displayedDiveCode}</div>
                       <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${diveNotes[dive.id] ? "text-[var(--color-action)]" : "text-slate-500"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}><FilePenLine className="h-5 w-5" /></button>
                     </div>
                     <div className="mt-0.5 text-base text-slate-500">{dive.repetitions} répétition{dive.repetitions === 1 ? "" : "s"}{golden > 0 ? ` · ${golden} golden rep${golden > 1 ? "s" : ""}` : ""}</div>
