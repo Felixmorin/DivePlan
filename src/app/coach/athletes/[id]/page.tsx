@@ -10,6 +10,7 @@ import { CoachCompetitionEvaluationForm } from "@/components/coach/coach-competi
 import { CompetitionConfidenceChart, type CompetitionConfidencePoint } from "@/components/athlete/competition-confidence-chart";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { CoachAthleteSessionHistory, type AthleteHistorySession } from "@/components/coach/coach-athlete-session-history";
+import { AthleteFamilyDiveDetails } from "@/components/coach/athlete-family-dive-details";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,15 +24,6 @@ import { countPoolContexts } from "@/lib/pool-list";
 import { addMontrealDays, formatMontrealCountdown, formatMontrealDate, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
-
-const diveFamilyColors: Record<string,string> = {
-  Avant: "#08c9c7",
-  Arriere: "#ff655c",
-  Renverse: "#36a0ff",
-  Retourne: "#9147ed",
-  Vrille: "#08a9c5",
-  Equilibre: "#edb52b"
-};
 
 type AthleteProfile = {
   id: string;
@@ -268,7 +260,7 @@ function AthleteDetail({ profile, groups = [], demo = false }: { profile: Athlet
         <section className="athlete-panel"><h2>Prochaine séance</h2>{profile.nextSession?<Link className="athlete-feature-link" href={demo?"/coach/sessions/demo":`/coach/sessions/${profile.nextSession.id}`}><CalendarDays className="h-5 w-5"/><span><b>{formatMontrealDate(profile.nextSession.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</b><small>{profile.nextSession.title}</small></span><ChevronRight className="ml-auto h-4 w-4"/></Link>:<p className="athlete-empty">Aucune séance planifiée.</p>}</section>
         <section className="athlete-panel"><h2>État actuel</h2><div className="athlete-state-grid"><div><span>Plongeons à 10 reps ou +</span><b>{divesWithTenReps} / {activeListDives.length}</b><i>{activeList?.name ?? "Aucune liste active"}</i></div><div><span>Assiduité</span><b>{profile.attendance.total?`${Math.max(0,100-profile.attendance.rate)}%`:"—"}</b><i>présence saison</i></div></div></section>
       </div>
-      <section className="athlete-panel"><h2>Charge d’entraînement par famille de plongeon</h2><div className="athlete-family-bars">{profile.progress.skillData.slice(0,6).map((item)=>{const max=Math.max(1,...profile.progress.skillData.map(skill=>skill.volume));return <div className="athlete-family-row" key={item.name}><span>{item.name}</span><i><b style={{width:`${Math.max(2,item.volume/max*100)}%`,background:diveFamilyColors[item.name]??"#94a3b8"}}/></i><strong>{item.volume}</strong></div>})}{profile.progress.skillData.length===0&&<p className="athlete-empty">Aucune donnée de volume par famille.</p>}</div></section>
+      <section className="athlete-panel">{profile.progress.skillData.length>0?<AthleteFamilyDiveDetails dives={profile.progress.skillDives} totals={profile.progress.skillData}/>:<><h2>Charge d’entraînement par famille de plongeon</h2><p className="athlete-empty">Aucune donnée de volume par famille.</p></>}</section>
       <div id="competition-list"><CompetitionListPreview name={activeList?.name??"Liste de compétition"} dives={activeListDives}/></div>
       <section className="athlete-panel athlete-volume-trend-panel"><h2>Évolution du volume</h2><p>Volume et ressenti à la fin de chaque séance.</p><div className="coach-athlete-progress"><ProgressChart data={profile.progress.chartData} sessionData={profile.progress.sessionChartData} weeklyData={profile.progress.weeklyChartData} monthlyData={profile.progress.monthlyChartData} initialPeriod="session-rating" lightTheme barColor="#ed163d"/></div></section>
     </main>
