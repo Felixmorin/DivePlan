@@ -46,7 +46,7 @@ export function AthleteFamilyDiveDetails({ dives, totals }: { dives: FamilyDive[
         const familyDives = dives.filter((dive) => dive.category === family && dive.volume > 0);
         return <div key={family}>
           <div className="athlete-family-row"><span>{family}</span><i><b style={{ width: `${Math.max(2, item.volume / max * 100)}%`, background: familyColors[family] ?? "#94a3b8" }} /></i><strong>{item.volume}</strong></div>
-          {expanded && familyDives.length > 0 && <div className="mt-2 grid gap-3 border-b border-slate-100 pb-3 sm:grid-cols-2">
+          {expanded && familyDives.length > 0 && <div className="mt-2 grid grid-cols-4 gap-1 border-b border-slate-100 pb-3">
           {heightGroups.map(({ key, label }) => {
             const heightDives = familyDives.filter((dive) => heightGroup(dive) === key);
             if (!heightDives.length) return null;
