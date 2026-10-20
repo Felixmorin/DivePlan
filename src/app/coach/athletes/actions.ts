@@ -54,7 +54,7 @@ const competitionDiveSchema = z.object({
 const competitionDiveOrderSchema = z.object({
   athleteId: z.string().min(1),
   listId: z.string().min(1),
-  height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM]),
+  height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM, PoolHeight.CUSTOM]),
   diveIds: z.array(z.string().min(1)).max(50)
 });
 
@@ -373,6 +373,31 @@ export async function createCompetitionDiveList(formData: FormData): Promise<{ i
   return { id };
 }
 
+export async function copyCompetitionDiveList(formData: FormData): Promise<{ id: string }> {
+  const { clubId } = await requireCoach();
+  const athleteId = String(formData.get("athleteId") ?? "");
+  const sourceListId = String(formData.get("sourceListId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!athleteId || !sourceListId || !name || name.length > 60) throw new Error("Choisis une liste à copier et donne un nom de 1 à 60 caractères à la nouvelle liste.");
+  const athlete = await query<{ id: string }>(`SELECT id FROM "Athlete" WHERE id=$1 AND "clubId"=$2 LIMIT 1`, [athleteId, clubId]);
+  if (!athlete.rows[0]) throw new Error("Athlète introuvable.");
+  const source = await query<{ id: string; heights: string[] }>(`SELECT l.id,l.heights FROM "CompetitionDiveList" l JOIN "Athlete" a ON a.id=l."athleteId" WHERE l.id=$1 AND l."athleteId"=$2 AND a."clubId"=$3 LIMIT 1`, [sourceListId, athleteId, clubId]);
+  if (!source.rows[0]) throw new Error("La liste à copier est introuvable.");
+  const duplicate = await query(`SELECT id FROM "CompetitionDiveList" WHERE "athleteId"=$1 AND lower(name)=lower($2) LIMIT 1`, [athleteId, name]);
+  if (duplicate.rows[0]) throw new Error("Une liste porte déjà ce nom.");
+  const position = await query<{ position: number }>(`SELECT COALESCE(MAX(position)+1,0)::int AS position FROM "CompetitionDiveList" WHERE "athleteId"=$1`, [athleteId]);
+  const sourceDives = await query<{height:string;platformHeight:number|null;diveCode:string;diveName:string;difficulty:number|null;status:string;position:number}>(`SELECT height,"platformHeight","diveCode","diveName",difficulty,status,position FROM "CompetitionDive" WHERE "listId"=$1 ORDER BY height,position,"createdAt"`, [sourceListId]);
+  const id = randomUUID();
+  await withTransaction(async (tx) => {
+    await tx.query(`INSERT INTO "CompetitionDiveList" (id,"athleteId",name,position,heights) VALUES ($1,$2,$3,$4,$5)`, [id, athleteId, name, position.rows[0].position, source.rows[0].heights]);
+    for (const dive of sourceDives.rows) {
+      await tx.query(`INSERT INTO "CompetitionDive" (id,"athleteId","listId",height,"platformHeight","diveCode","diveName",difficulty,status,position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [randomUUID(), athleteId, id, dive.height, dive.platformHeight, dive.diveCode, dive.diveName, dive.difficulty, dive.status, dive.position]);
+    }
+  });
+  revalidatePath(`/coach/athletes/${athleteId}`);
+  return { id };
+}
+
 export async function setActiveCompetitionDiveList(listId: string) {
   const { clubId } = await requireCoach();
   const list = await query<{ id: string; athleteId: string }>(`SELECT l.id,l."athleteId" FROM "CompetitionDiveList" l JOIN "Athlete" a ON a.id=l."athleteId" WHERE l.id=$1 AND a."clubId"=$2 LIMIT 1`, [listId, clubId]);
@@ -462,6 +487,26 @@ export async function updateCompetitionDiveDifficulty(formData: FormData) {
   revalidatePath("/athlete/profile");
 }
 
+export async function updateCompetitionDiveDetails(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const diveId = String(formData.get("diveId") ?? "");
+  const diveCode = String(formData.get("diveCode") ?? "").trim().toUpperCase();
+  const rawDifficulty = String(formData.get("difficulty") ?? "").trim().replace(",", ".");
+  const difficulty = rawDifficulty === "" ? null : Number(rawDifficulty);
+  const rawPlatformHeight = String(formData.get("platformHeight") ?? "");
+  const platformHeight = rawPlatformHeight === "" ? null : Number(rawPlatformHeight);
+  if (!diveId || !diveCode || diveCode.length > 12 || (difficulty !== null && (!Number.isFinite(difficulty) || difficulty < 0 || difficulty > 10)) || (platformHeight !== null && ![5, 7.5, 10].includes(platformHeight))) {
+    throw new Error("Le code, le DD ou la hauteur du plongeon est invalide.");
+  }
+  const diveResult = await query<{ id: string; athleteId: string; height: string }>(`SELECT d.id,d."athleteId",d.height FROM "CompetitionDive" d JOIN "Athlete" a ON a.id=d."athleteId" WHERE d.id=$1 AND a."clubId"=$2 LIMIT 1`, [diveId, clubId]);
+  const dive = diveResult.rows[0];
+  if (!dive) throw new Error("Plongeon introuvable.");
+  if (dive.height === PoolHeight.PLATFORM && platformHeight === null) throw new Error("Indique la hauteur pour ce plongeon de plateforme.");
+  await query(`UPDATE "CompetitionDive" SET "diveCode"=$1,difficulty=$2,"platformHeight"=$3 WHERE id=$4`, [diveCode, difficulty, dive.height === PoolHeight.PLATFORM ? platformHeight : null, dive.id]);
+  revalidatePath(`/coach/athletes/${dive.athleteId}`);
+  revalidatePath("/athlete/profile");
+}
+
 export async function updateCompetitionDiveStatus(formData: FormData) {
   const { clubId } = await requireCoach();
   const diveId = String(formData.get("diveId") ?? "");
@@ -480,8 +525,8 @@ export async function updateCompetitionDiveStatus(formData: FormData) {
 export async function removeCompetitionDive(formData: FormData) {
   const { clubId } = await requireCoach();
   const diveId = String(formData.get("diveId") ?? "");
-  const diveResult = await query<{ id: string; athleteId: string }>(
-    `SELECT d.id, d."athleteId" FROM "CompetitionDive" d JOIN "Athlete" a ON a.id = d."athleteId" WHERE d.id = $1 AND a."clubId" = $2 LIMIT 1`, [diveId, clubId]
+  const diveResult = await query<{ id: string; athleteId: string; listId: string; height: string }>(
+    `SELECT d.id,d."athleteId",d."listId",d.height FROM "CompetitionDive" d JOIN "Athlete" a ON a.id=d."athleteId" WHERE d.id=$1 AND a."clubId"=$2 LIMIT 1`, [diveId, clubId]
   );
   const dive = diveResult.rows[0];
 
@@ -489,7 +534,14 @@ export async function removeCompetitionDive(formData: FormData) {
     throw new Error("Plongeon introuvable.");
   }
 
-  await query(`DELETE FROM "CompetitionDive" WHERE id = $1`, [dive.id]);
+  await withTransaction(async (tx) => {
+    await tx.query(`DELETE FROM "AthleteCompetitionDiveEvaluation" WHERE "competitionDiveId"=$1`, [dive.id]);
+    await tx.query(`DELETE FROM "CompetitionDive" WHERE id=$1`, [dive.id]);
+    const remaining = await tx.query<{id:string}>(`SELECT id FROM "CompetitionDive" WHERE "athleteId"=$1 AND "listId"=$2 AND height=$3 ORDER BY position,"createdAt"`, [dive.athleteId,dive.listId,dive.height]);
+    for (const [position, item] of remaining.rows.entries()) {
+      await tx.query(`UPDATE "CompetitionDive" SET position=$1 WHERE id=$2`, [position,item.id]);
+    }
+  });
   revalidatePath(`/coach/athletes/${dive.athleteId}`);
   revalidatePath("/athlete/profile");
 }

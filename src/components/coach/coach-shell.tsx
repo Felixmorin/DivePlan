@@ -8,7 +8,8 @@ import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with
 
 const nav = [
   { href: "/coach", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/coach/planning", label: "Planning", icon: CalendarDays },
+  { href: "/coach/planning", label: "Calendrier", icon: CalendarDays },
+  { href: "/coach/planification", label: "Planification", icon: CalendarDays },
   { href: "/coach/sessions", label: "Séances", match: "Seances", icon: Activity },
   { href: "/coach/athletes", label: "Athlètes", match: "Athletes", icon: Users },
   { href: "/coach/milestones", label: "Milestones", icon: Award },

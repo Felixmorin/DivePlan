@@ -558,6 +558,18 @@ a {
 .coach-competition-table th:nth-child(5),.coach-competition-table td:nth-child(5) { width:9rem; }
 .coach-competition-table th:last-child,.coach-competition-table td:last-child { width:6.5rem; }
 .coach-competition-table td:nth-child(2) small { display:inline; color:#63788f; font-size:.72rem; font-weight:600; }
+.coach-dive-edit-trigger { display:grid; width:2rem; height:2rem; place-items:center; border:1px solid transparent; border-radius:.55rem; background:transparent; color:#64788f; cursor:pointer; }
+.coach-dive-edit-trigger:hover:not(:disabled) { border-color:#d5eaf1; background:#effaff; color:#087f9b; }
+.coach-dive-edit-trigger:disabled { cursor:not-allowed; opacity:.45; }
+.coach-competition-table .coach-dive-editor-row > td { height:auto; border-bottom:1px solid #dfeaf1; background:#f7fbfd; padding:.7rem 1rem; }
+.coach-dive-editor-form { display:flex; flex-wrap:wrap; align-items:flex-end; gap:.65rem; }
+.coach-dive-editor-form > label { display:grid; min-width:7rem; gap:.25rem; color:#526984; font-size:.68rem; font-weight:750; }
+.coach-dive-editor-form input,.coach-dive-editor-form select { min-height:2.2rem; width:100%; border:1px solid #dce7ef; border-radius:.5rem; background:white; padding:.35rem .55rem; color:#17304f; font:inherit; font-size:.78rem; }
+.coach-dive-editor-actions { display:flex; flex:1; flex-wrap:wrap; justify-content:flex-end; gap:.35rem; }
+.coach-dive-editor-actions button { display:inline-flex; min-height:2.2rem; align-items:center; justify-content:center; gap:.3rem; border:1px solid #dce7ef; border-radius:.5rem; background:white; padding:.35rem .55rem; color:#526984; font-size:.72rem; font-weight:750; cursor:pointer; }
+.coach-dive-editor-actions button:first-child { border-color:#a7e5e8; background:#e9fbfb; color:#087f9b; }
+.coach-dive-editor-actions button.is-danger { border-color:#f2d0d3; color:#b42336; }
+.coach-dive-editor-actions button:disabled { cursor:not-allowed; opacity:.45; }
 .coach-dive-status-form { margin:0; }
 .coach-dive-status-select { min-width:8.5rem; min-height:2rem; appearance:none; border:0; border-radius:.5rem; padding:.35rem 1.75rem .35rem .7rem; color:#0f513a; font:inherit; font-size:.76rem; font-weight:800; cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230f513a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right .5rem center; }
 .coach-dive-status-select:disabled { cursor:default; opacity:.8; }
@@ -603,9 +615,15 @@ a {
 .coach-competition-name-label { display:grid; gap:.4rem; color:#425a76; font-size:.8rem; font-weight:800; }
 .coach-competition-name-label input { min-height:2.8rem; border:1px solid #dce7ef; border-radius:.6rem; padding:0 .75rem; color:#152a47; font:inherit; font-size:.9rem; }
 .coach-competition-modal fieldset { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.55rem; margin:0; border:0; padding:0; }
+.coach-competition-copy-source { display:grid; gap:.4rem; color:#425a76; font-size:.8rem; font-weight:800; }
+.coach-competition-copy-source > span { display:flex; align-items:center; gap:.4rem; }
+.coach-competition-copy-source > span svg { color:#087f9b; }
+.coach-competition-copy-source small { color:#70839a; font-size:.72rem; font-weight:600; }
+.coach-competition-copy-source select { min-height:2.6rem; border:1px solid #dce7ef; border-radius:.65rem; background:white; padding:.5rem .7rem; color:#17304f; font:inherit; font-size:.8rem; }
 .coach-competition-modal legend { margin-bottom:.45rem; color:#425a76; font-size:.8rem; font-weight:800; }
 .coach-competition-height-option { display:flex; min-height:2.7rem; align-items:center; gap:.5rem; border:1px solid #dce7ef; border-radius:.6rem; background:#fbfdff; padding:.5rem .65rem; color:#203b5c; font-size:.82rem; font-weight:750; cursor:pointer; }
 .coach-competition-height-option input { width:1rem; height:1rem; accent-color:#11b8c9; }
+.coach-competition-height-option.is-disabled { opacity:.55; }
 .coach-competition-modal form > footer { display:flex; justify-content:flex-end; gap:.55rem; border-top:1px solid #e8eff4; padding-top:.85rem; }
 .coach-competition-modal form > footer button { display:flex; min-height:2.4rem; align-items:center; justify-content:center; gap:.35rem; border-radius:.55rem; padding:0 .8rem; font-size:.8rem; font-weight:800; cursor:pointer; }
 .coach-competition-cancel { border:1px solid #dce7ef; background:white; color:#52677f; }

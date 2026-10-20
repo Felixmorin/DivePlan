@@ -182,7 +182,7 @@ function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = 
   const activeSessionIds = new Set(sessions.filter((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
 
   return (
-    <CoachShell active="Planning">
+    <CoachShell active="Calendrier">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand-strong)]">Planning {period.mode === "week" ? "hebdomadaire" : "mensuel"}</p>
