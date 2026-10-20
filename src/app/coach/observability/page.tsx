@@ -134,10 +134,13 @@ function Recommendations({ rows, performanceRows }: { rows: TransferRow[]; perfo
     }
 
     if (staticTypes.has(row.resourceType) && row.requests >= 20 && row.cacheHits / row.requests < 0.7) {
+      const cacheAction = row.resourceType === "script" || row.resourceType === "style" || row.resourceType === "font"
+        ? "Dans DevTools → Réseau, vérifie une URL précise : les ressources /_next/static/ devraient avoir un nom fingerprinté et répondre Cache-Control: public, max-age=31536000, immutable. Les fichiers de public/ ont max-age=0 par défaut. Ce taux agrège plusieurs fichiers, visites et déploiements."
+        : "Dans DevTools → Réseau, vérifie l’URL et l’en-tête Cache-Control de quelques réponses représentatives. Les fichiers de public/ ont max-age=0 par défaut; réserve le cache immutable aux URL fingerprintées.";
       recommendations.push({
         title: `Vérifier le cache navigateur des ressources ${row.resourceType}`,
         evidence: `${Math.round(row.cacheHits / row.requests * 100)} % de cache navigateur sur ${row.requests} requêtes à ${row.route}.`,
-        action: "Vérifier les en-têtes Cache-Control et les noms de fichiers versionnés. Cette mesure concerne le cache du navigateur, pas le cache CDN Vercel.",
+        action: `${cacheAction} Ce taux mesure le cache du navigateur; le cache CDN Vercel est distinct.`,
         priority: "À surveiller"
       });
     }
