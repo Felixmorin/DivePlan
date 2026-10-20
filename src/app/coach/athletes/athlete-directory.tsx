@@ -44,12 +44,12 @@ export function AthleteDirectory({ rows, groups, demo = false }: { rows: Athlete
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="hidden grid-cols-[minmax(15rem,1.3fr)_minmax(7rem,.7fr)_minmax(13rem,1fr)_minmax(11rem,1fr)_6rem_9rem_7rem_7rem] border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-xs font-black uppercase text-[var(--color-ink-muted)] lg:grid">
-          <span>Athlète</span><span>Groupe</span><span>Prochaine séance</span><span>Activité</span><span className="text-right">Volume</span><span className="text-right">Moy. / séance</span><span className="text-right">Liste.comp</span><span className="text-right">Actions</span>
+        <div className="hidden grid-cols-[minmax(15rem,1.3fr)_minmax(7rem,.7fr)_minmax(13rem,1fr)_minmax(11rem,1fr)_6rem_9rem_7rem] border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-xs font-black uppercase text-[var(--color-ink-muted)] lg:grid">
+          <span>Athlète</span><span>Groupe</span><span>Prochaine séance</span><span>Activité</span><span className="text-right">Volume</span><span className="text-right">Moy. / séance</span><span className="text-right">Actions</span>
         </div>
         {visibleRows.length > 0 ? <div className="divide-y divide-[var(--color-border)]">
           {visibleRows.map((row) => (
-            <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 p-4 transition duration-[var(--duration-fast)] hover:bg-[var(--color-surface-raised)] lg:grid-cols-[minmax(15rem,1.3fr)_minmax(7rem,.7fr)_minmax(13rem,1fr)_minmax(11rem,1fr)_6rem_9rem_7rem_7rem] lg:px-5">
+            <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 p-4 transition duration-[var(--duration-fast)] hover:bg-[var(--color-surface-raised)] lg:grid-cols-[minmax(15rem,1.3fr)_minmax(7rem,.7fr)_minmax(13rem,1fr)_minmax(11rem,1fr)_6rem_9rem_7rem] lg:px-5">
               <div className="min-w-0"><Identity row={row} /></div>
               <div className="lg:hidden"><Badge variant={row.active ? "success" : "outline"}>{row.active ? "Actif" : "Inactif"}</Badge></div>
               <div className="col-span-2 lg:col-span-1"><Badge variant="outline">{row.groupName}</Badge></div>
@@ -57,7 +57,6 @@ export function AthleteDirectory({ rows, groups, demo = false }: { rows: Athlete
               <div className="col-span-2 lg:col-span-1"><ActivitySummary row={row} /></div>
               <div className="athlete-volume"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Volume</span><strong>{row.volume}</strong><i style={{ "--volume": `${Math.max(10, Math.min(100, row.volume / Math.max(...visibleRows.map((item) => item.volume), 1) * 100))}%` } as CSSProperties} /></div>
               <div className="text-lg font-black lg:text-right"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Moyenne</span>{row.averageVolume === null ? "—" : row.averageVolume.toFixed(1)}</div>
-              <div className="text-lg font-black lg:text-right" title="Plongeons de la liste de compétition ayant au moins 5 répétitions"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Liste.comp</span>{row.competitionDivesAtLeastFive}</div>
               <div className="col-span-2 lg:col-span-1 lg:text-right"><AthleteActionsMenu athlete={row} groups={groups} demo={demo} /></div>
             </div>
           ))}
