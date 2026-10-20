@@ -46,9 +46,11 @@ export function CoachAthleteSessionHistory({ sessions, attendance, totalVolume, 
     return matchesSearch && (type === "all" || session.type === type) && (status === "all" || session.status === status) && (month === "all" || sessionMonth === month);
   });
   const now = new Date();
+  const seasonStartYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+  const seasonStart = new Date(seasonStartYear, 8, 1);
   const durationMinutes = sessions.filter((session) => {
     const date = new Date(session.date);
-    return session.status === "COMPLETED" && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    return session.status === "COMPLETED" && date >= seasonStart && date <= now;
   }).reduce((sum, session) => sum + session.duration, 0);
   const durationLabel = `${Math.floor(durationMinutes / 60)} h ${String(durationMinutes % 60).padStart(2, "0")}`;
 
@@ -63,7 +65,7 @@ export function CoachAthleteSessionHistory({ sessions, attendance, totalVolume, 
     <div className="athlete-history-stats">
       <section><span className="athlete-icon-box"><CalendarDays className="h-4 w-4"/></span><div><small>Séances complétées</small><b>{attendance.total - attendance.absent} <i>/ {attendance.total}</i></b><em>{attendance.total ? `${Math.max(0, 100 - attendance.rate)}% cette saison` : "cette saison"}</em></div><strong>{attendance.total ? `${Math.max(0, 100 - attendance.rate)}%` : "—"}</strong></section>
       <section><span className="athlete-icon-box"><span className="athlete-history-bars">▮</span></span><div><small>Volume d’entraînement</small><b>{totalVolume}</b><em>répétitions cumulées</em></div></section>
-      <section><span className="athlete-icon-box"><CalendarDays className="h-4 w-4"/></span><div><small>Temps d’entraînement</small><b>{durationLabel}</b><em>ce mois-ci</em></div></section>
+      <section><span className="athlete-icon-box"><CalendarDays className="h-4 w-4"/></span><div><small>Temps d’entraînement</small><b>{durationLabel}</b><em>cette saison</em></div></section>
     </div>
 
     <section className="athlete-history-panel">
@@ -78,16 +80,15 @@ export function CoachAthleteSessionHistory({ sessions, attendance, totalVolume, 
       </div>
 
       <header className="athlete-history-heading"><h2>Historique des séances <span>(plus récentes en premier)</span></h2><Link href="/coach/sessions/new"><Plus className="h-4 w-4"/> Ajouter une séance</Link></header>
-      <div className="athlete-history-table-wrap"><table className="athlete-history-table"><thead><tr><th>Date</th><th>Type</th><th>Statut</th><th>Volume</th><th>Notes entraîneur</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>
+      <div className="athlete-history-table-wrap"><table className="athlete-history-table"><thead><tr><th>Date</th><th>Statut</th><th>Volume</th><th>Notes entraîneur</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>
         {filtered.map((session) => <tr key={session.id}>
           <td>{formatMontrealDate(new Date(session.date), { day: "numeric", month: "short", year: "numeric" })}</td>
-          <td>{session.type || "Entraînement"}</td>
           <td><span className={`athlete-history-status status-${session.status.toLowerCase()}`}>{statusLabels[session.status] ?? session.status}</span></td>
           <td>{session.volume || "—"}</td>
           <td>{session.coachNote || "—"}</td>
           <td><Link className="athlete-history-open" href={demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`} aria-label={`Ouvrir ${session.title}`}><MoreHorizontal className="h-4 w-4"/></Link></td>
         </tr>)}
-        {filtered.length === 0 && <tr><td colSpan={6} className="athlete-history-no-results">Aucune séance ne correspond à ces filtres.</td></tr>}
+        {filtered.length === 0 && <tr><td colSpan={5} className="athlete-history-no-results">Aucune séance ne correspond à ces filtres.</td></tr>}
       </tbody></table></div>
     </section>
   </div>;

@@ -11,7 +11,15 @@ type Dive = {
   repetitions: number;
   athleteEvaluation: number | null;
   note?: string | null;
+  status: "READY" | "TO_WORK_ON" | "DIFFICULT" | "NOT_READY";
 };
+
+const statusLabels = {
+  READY: "Prêt",
+  TO_WORK_ON: "À travailler",
+  DIFFICULT: "Difficile",
+  NOT_READY: "Pas prêt"
+} as const;
 
 const heights = [
   { value: "ONE_METER", label: "1 m" },
@@ -36,7 +44,7 @@ export function CompetitionListPreview({ name, dives }: { name: string; dives: D
             const rows = dives.filter((dive) => dive.height === value);
             return <TabsContent key={value} value={value} className="athlete-list-preview-table-wrap">
               <table className="athlete-list-preview-table">
-                <thead><tr><th>#</th><th>Code</th><th>DD</th><th>Répétitions</th><th>Évaluation athlète</th><th>Note athlète</th></tr></thead>
+                <thead><tr><th>#</th><th>Code</th><th>DD</th><th>Répétitions</th><th>Évaluation athlète</th><th>Note athlète</th><th>Statut</th></tr></thead>
                 <tbody>{rows.map((dive, index) => <tr key={dive.id}>
                   <td>{index + 1}</td>
                   <td className="athlete-list-preview-code">{dive.code}{dive.height === "PLATFORM" && dive.platformHeight !== null ? <small className="ml-1 text-slate-500">{dive.platformHeight} m</small> : null}</td>
@@ -44,6 +52,7 @@ export function CompetitionListPreview({ name, dives }: { name: string; dives: D
                   <td>{dive.repetitions}</td>
                   <td>{dive.athleteEvaluation === null ? "—" : `${dive.athleteEvaluation} / 5`}</td>
                   <td className="athlete-list-preview-note">{dive.note?.trim() || "—"}</td>
+                  <td><span className={`athlete-list-preview-status status-${dive.status.toLowerCase()}`}>{statusLabels[dive.status]}</span></td>
                 </tr>)}</tbody>
               </table>
             </TabsContent>;
