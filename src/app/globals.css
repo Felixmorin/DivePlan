@@ -418,6 +418,11 @@ a {
 .athlete-history-row small,.athlete-history-row p { margin:.14rem 0 0; color:#6b7d94; font-size:.57rem; }
 @media (max-width: 900px) { .athlete-dashboard-grid { grid-template-columns:1fr; } .athlete-dashboard-side { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; } .athlete-detail-sections { grid-template-columns:1fr; } }
 @media (max-width: 600px) { .athlete-profile-head { grid-template-columns:1fr; padding:.8rem .75rem 0; } .athlete-head-actions { justify-content:flex-start; } .athlete-dashboard .athlete-stats { grid-template-columns:1fr; } .athlete-top-panels,.athlete-dashboard-side { grid-template-columns:1fr; } .athlete-tabs { gap:.9rem; overflow:auto; white-space:nowrap; } }
+/* Slightly enlarge the complete profile dashboard while retaining its responsive layout. */
+.athlete-dashboard { zoom: 1.045; }
+@media (max-width: 600px) { .athlete-dashboard { zoom: 1.02; } }
+/* Let the profile fill the coach content area instead of stopping at a fixed cap. */
+.athlete-dashboard { width:100%; max-width:none; margin-inline:0; }
 
 /* Coach athlete directory */
 .athlete-directory-page { display: grid; gap: .7rem; color: #10243b; }
