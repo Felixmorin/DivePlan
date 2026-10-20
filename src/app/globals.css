@@ -654,9 +654,9 @@ a {
 /* Improve readability across every coach athlete profile tab on desktop. */
 @media (min-width: 900px) {
   .athlete-dashboard {
-    width: 89.3%;
-    max-width: 1285px;
-    zoom: 1.12;
+    width: 100%;
+    max-width: none;
+    zoom: 1.045;
     font-family: Inter, "Segoe UI", Arial, sans-serif;
   }
 }
