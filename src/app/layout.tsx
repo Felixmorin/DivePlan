@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { PerformanceVitals } from "@/components/performance-vitals";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +18,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body><PerformanceVitals />{children}</body>
     </html>
   );
 }

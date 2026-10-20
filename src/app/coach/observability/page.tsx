@@ -8,7 +8,7 @@ import { query } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 type TransferRow = { route: string; resourceType: string; requests: number; transferBytes: number; cacheHits: number };
-type PerformanceRow = { route: string; metric: string; samples: number; average: number; maximum: number };
+type PerformanceRow = { route: string; metric: string; average: number; maximum: number; ratedSamples: number; goodSamples: number; needsImprovementSamples: number };
 type Recommendation = { title: string; evidence: string; action: string; priority: "Élevée" | "À surveiller" };
 
 export default async function ObservabilityPage() {
@@ -38,14 +38,16 @@ export default async function ObservabilityPage() {
        ORDER BY SUM("transferBytes") DESC, SUM(requests) DESC
        LIMIT 20`, [clubId]
     ),
-    query<{ route: string; metric: string; samples: string; average: string; maximum: string }>(
-      `SELECT route, metric, SUM(samples)::text AS samples,
-         (SUM("totalValue") / NULLIF(SUM(samples), 0))::text AS average,
-         MAX("maxValue")::text AS maximum
+    query<{ route: string; metric: string; average: string; maximum: string; ratedSamples: string; goodSamples: string; needsImprovementSamples: string }>(
+      `SELECT route, metric,
+         (SUM("ratedTotalValue") / NULLIF(SUM("ratedSamples"), 0))::text AS average,
+         MAX("ratedMaxValue")::text AS maximum,
+         SUM("ratedSamples")::text AS "ratedSamples", SUM("goodSamples")::text AS "goodSamples",
+         SUM("needsImprovementSamples")::text AS "needsImprovementSamples"
        FROM "PerformanceTelemetryHour"
        WHERE "clubId" = $1 AND hour >= NOW() - INTERVAL '24 hours'
        GROUP BY route, metric
-       ORDER BY MAX("maxValue") DESC
+       ORDER BY MAX("ratedMaxValue") DESC
        LIMIT 30`, [clubId]
     )
   ]);
@@ -60,9 +62,11 @@ export default async function ObservabilityPage() {
   const performanceRows: PerformanceRow[] = performanceResult.rows.map((row) => ({
     route: row.route,
     metric: row.metric,
-    samples: Number(row.samples),
     average: Number(row.average),
-    maximum: Number(row.maximum)
+    maximum: Number(row.maximum),
+    ratedSamples: Number(row.ratedSamples),
+    goodSamples: Number(row.goodSamples),
+    needsImprovementSamples: Number(row.needsImprovementSamples)
   }));
   const totalBytes = Number(transferResult.rows[0]?.totalBytes ?? 0);
 
@@ -71,7 +75,7 @@ export default async function ObservabilityPage() {
       <PageHeader description="Règles basées sur les mesures des dernières 24 heures pour réduire les transferts et repérer les pages lentes." />
       <div className="mb-6 grid gap-4 md:grid-cols-2">
         <MetricCard label="Transfert observé" value={formatBytes(totalBytes)} detail="réponses même origine · 24 h" />
-        <MetricCard label="Mesures de performance" value={performanceRows.reduce((sum, row) => sum + row.samples, 0).toLocaleString("fr-CA")} detail="échantillons navigateur · 24 h" />
+        <MetricCard label="Mesures de performance" value={performanceRows.reduce((sum, row) => sum + row.ratedSamples, 0).toLocaleString("fr-CA")} detail="visites classées · 24 h" />
       </div>
       <Recommendations rows={transferRows} performanceRows={performanceRows} />
       <TransferReport totalBytes={totalBytes} rows={transferRows} />
@@ -148,12 +152,12 @@ function Recommendations({ rows, performanceRows }: { rows: TransferRow[]; perfo
   };
   for (const row of performanceRows) {
     const threshold = thresholds[row.metric];
-    if (!threshold || row.samples < 3 || row.average <= threshold.limit) continue;
+    if (!threshold || row.ratedSamples < 10 || row.goodSamples / row.ratedSamples >= 0.75) continue;
     recommendations.push({
-      title: `Améliorer ${threshold.label} sur ${row.route}`,
-      evidence: `Moyenne de ${formatMetric(row.metric, row.average)} sur ${row.samples} échantillons; seuil de référence : ${formatMetric(row.metric, threshold.limit)}.`,
-      action: threshold.action,
-      priority: "À surveiller"
+      title: `${threshold.label} à améliorer sur ${row.route}`,
+      evidence: `${Math.round(row.goodSamples / row.ratedSamples * 100)} % des ${row.ratedSamples} visites classées sont dans la zone bonne; ${Math.round((row.ratedSamples - row.goodSamples - row.needsImprovementSamples) / row.ratedSamples * 100)} % sont dans la zone mauvaise.`,
+      action: `${threshold.action} Repère : au moins 75 % des visites devraient rester dans la zone bonne.`,
+      priority: (row.ratedSamples - row.goodSamples - row.needsImprovementSamples) / row.ratedSamples >= 0.25 ? "Élevée" : "À surveiller"
     });
   }
 
@@ -161,7 +165,7 @@ function Recommendations({ rows, performanceRows }: { rows: TransferRow[]; perfo
     <Card className="mb-6">
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Lightbulb aria-hidden="true" className="h-5 w-5" /> Règles d’optimisation</CardTitle>
-        <CardDescription>Règles automatiques sur les dernières 24 h : JavaScript/images &gt; 100 Ko par requête, réponses fetch &gt; 50 Ko, cache navigateur &lt; 70 % après 20 requêtes; LCP &gt; 2 500 ms, INP estimé &gt; 200 ms, CLS &gt; 0,1, FCP &gt; 1 800 ms ou TTFB &gt; 800 ms (avec au moins 3 échantillons).</CardDescription>
+        <CardDescription>Règles sur les dernières 24 h : poids et cache navigateur, plus part des visites dans les zones bonnes, à améliorer ou mauvaises pour les Web Vitals. Les recommandations de performance demandent au moins 10 visites classées.</CardDescription>
       </CardHeader>
       <CardContent>
         {recommendations.length === 0 ? (
@@ -216,15 +220,17 @@ function PerformanceReport({ rows }: { rows: PerformanceRow[] }) {
     <Card className="mb-6">
       <CardHeader>
         <CardTitle>Performance ressentie · 24 h</CardTitle>
-        <CardDescription>LCP, INP, CLS, FCP et TTFB. L’INP est estimé par la plus longue durée d’événement mesurée dans le navigateur.</CardDescription>
+        <CardDescription>LCP, INP, CLS, FCP et TTFB collectés avec le rapport Web Vitals de Next.js. Le taux « bon » aide à vérifier l’objectif habituel de 75 % des visites au 75e percentile; 10 visites classées au minimum sont nécessaires pour les recommandations.</CardDescription>
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? <p className="text-sm text-[var(--color-ink-muted)]">Aucune mesure de performance pour le moment.</p> : (
           <div className="overflow-x-auto"><table className="w-full min-w-[38rem] text-left text-sm">
-            <thead className="text-xs uppercase text-[var(--color-ink-muted)]"><tr><th className="pb-2 pr-4">Route</th><th className="pb-2 pr-4">Mesure</th><th className="pb-2 pr-4">Échantillons</th><th className="pb-2 pr-4">Moyenne</th><th className="pb-2">Maximum</th></tr></thead>
+            <thead className="text-xs uppercase text-[var(--color-ink-muted)]"><tr><th className="pb-2 pr-4">Route</th><th className="pb-2 pr-4">Mesure</th><th className="pb-2 pr-4">Échantillons</th><th className="pb-2 pr-4">Moyenne</th><th className="pb-2 pr-4">Maximum</th><th className="pb-2 pr-4">Bon</th><th className="pb-2">À améliorer / mauvais</th></tr></thead>
             <tbody>{rows.map((row) => <tr key={`${row.route}:${row.metric}`} className="border-t border-[var(--color-border)]">
-              <td className="py-2 pr-4 font-semibold">{row.route}</td><td className="py-2 pr-4">{row.metric === "INP" ? "INP estimé" : row.metric}</td>
-              <td className="py-2 pr-4">{row.samples.toLocaleString("fr-CA")}</td><td className="py-2 pr-4">{formatMetric(row.metric, row.average)}</td><td className="py-2">{formatMetric(row.metric, row.maximum)}</td>
+              <td className="py-2 pr-4 font-semibold">{row.route}</td><td className="py-2 pr-4">{row.metric}</td>
+              <td className="py-2 pr-4">{row.ratedSamples.toLocaleString("fr-CA")}</td><td className="py-2 pr-4">{row.ratedSamples ? formatMetric(row.metric, row.average) : "—"}</td><td className="py-2 pr-4">{row.ratedSamples ? formatMetric(row.metric, row.maximum) : "—"}</td>
+              <td className="py-2 pr-4">{row.ratedSamples ? `${Math.round(row.goodSamples / row.ratedSamples * 100)} %` : "En attente"}</td>
+              <td className="py-2">{row.ratedSamples ? `${Math.round(row.needsImprovementSamples / row.ratedSamples * 100)} % / ${Math.round((row.ratedSamples - row.goodSamples - row.needsImprovementSamples) / row.ratedSamples * 100)} %` : "En attente"}</td>
             </tr>)}</tbody>
           </table></div>
         )}

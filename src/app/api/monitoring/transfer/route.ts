@@ -10,7 +10,15 @@ const maxRequestBytes = 20_000;
 const maxEntries = 40;
 
 type Entry = { route: string; resourceType: string; requests: number; transferBytes: number; cacheHits: number };
-type Vital = { route: string; name: string; value: number };
+type Vital = { route: string; name: string; value: number; goodSamples: number; needsImprovementSamples: number };
+
+function ratingThresholds(name: string, value: number) {
+  const limits: Record<string, [number, number]> = {
+    LCP: [2500, 4000], INP: [200, 500], CLS: [0.1, 0.25], FCP: [1800, 3000], TTFB: [800, 1800]
+  };
+  const [good, needsImprovement] = limits[name];
+  return { goodSamples: Number(value <= good), needsImprovementSamples: Number(value > good && value <= needsImprovement) };
+}
 
 function normalizeRoute(input: unknown): string | null {
   if (typeof input !== "string" || input.length > 200 || !input.startsWith("/") || input.startsWith("//")) return null;
@@ -73,7 +81,7 @@ export async function POST(request: Request) {
       || typeof name !== "string" || !vitalNames.has(name)
       || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 60_000
       || (name === "CLS" && numericValue > 10)) continue;
-    vitals.push({ route, name, value: numericValue });
+    vitals.push({ route, name, value: numericValue, ...ratingThresholds(name, numericValue) });
   }
   if (entries.length === 0 && vitals.length === 0) return Response.json({ error: "invalid_entries" }, { status: 400 });
 
@@ -90,13 +98,18 @@ export async function POST(request: Request) {
       [user.clubId, JSON.stringify(entries)]
     ));
   if (vitals.length > 0) writes.push(query(
-      `INSERT INTO "PerformanceTelemetryHour" ("clubId", hour, route, metric, samples, "totalValue", "maxValue", "updatedAt")
-       SELECT $1, date_trunc('hour', NOW()), item.route, item.metric, 1, item.value, item.value, NOW()
-       FROM jsonb_to_recordset($2::jsonb) AS item(route text, metric text, value double precision)
+      `INSERT INTO "PerformanceTelemetryHour" ("clubId", hour, route, metric, samples, "totalValue", "maxValue", "ratedSamples", "ratedTotalValue", "ratedMaxValue", "goodSamples", "needsImprovementSamples", "updatedAt")
+       SELECT $1, date_trunc('hour', NOW()), item.route, item.metric, 1, item.value, item.value, 1, item.value, item.value, item."goodSamples", item."needsImprovementSamples", NOW()
+       FROM jsonb_to_recordset($2::jsonb) AS item(route text, metric text, value double precision, "goodSamples" integer, "needsImprovementSamples" integer)
        ON CONFLICT ("clubId", hour, route, metric) DO UPDATE SET
          samples = "PerformanceTelemetryHour".samples + 1,
          "totalValue" = "PerformanceTelemetryHour"."totalValue" + EXCLUDED."totalValue",
          "maxValue" = GREATEST("PerformanceTelemetryHour"."maxValue", EXCLUDED."maxValue"),
+         "ratedSamples" = "PerformanceTelemetryHour"."ratedSamples" + 1,
+         "ratedTotalValue" = "PerformanceTelemetryHour"."ratedTotalValue" + EXCLUDED."ratedTotalValue",
+         "ratedMaxValue" = GREATEST("PerformanceTelemetryHour"."ratedMaxValue", EXCLUDED."ratedMaxValue"),
+         "goodSamples" = "PerformanceTelemetryHour"."goodSamples" + EXCLUDED."goodSamples",
+         "needsImprovementSamples" = "PerformanceTelemetryHour"."needsImprovementSamples" + EXCLUDED."needsImprovementSamples",
          "updatedAt" = NOW()`,
       [user.clubId, JSON.stringify(vitals)]
     ));

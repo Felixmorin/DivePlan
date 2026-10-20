@@ -2,11 +2,11 @@
 
 DivePlan includes lightweight browser-side transfer and performance monitoring for signed-in coaches and athletes.
 
-The collector records same-origin browser resource timing by hourly bucket, route pattern, and resource type. It also records LCP, INP, CLS, FCP, and TTFB when a page is hidden or closed. It stores aggregate transfer counts and performance samples without storing user IDs, email addresses, query strings, referrers, or full resource URLs. Dynamic path identifiers are normalized before storage. **Monitoring** keeps the connection and activity logs; **Observabilité** shows consumption metrics and rules-based optimization suggestions for the last 24 hours.
+The collector records same-origin browser resource timing by hourly bucket, route pattern, and resource type. It also records LCP, INP, CLS, FCP, and TTFB using Next.js Web Vitals and sends the final values when a page is hidden or closed. INP uses the browser's interaction metric calculation rather than the longest raw event approximation. It stores hourly aggregates and performance quality counts without storing user IDs, email addresses, query strings, referrers, or full resource URLs. Dynamic path identifiers are normalized before storage. **Monitoring** keeps the connection and activity logs; **Observabilité** shows consumption metrics and rules-based optimization suggestions for the last 24 hours.
 
 ## Enable it
 
-1. If it has not already been applied, review and apply `db/migrations/0002_transfer_telemetry.sql`, then apply `db/migrations/0003_performance_telemetry.sql` to the intended PostgreSQL database. Migration files are applied explicitly; the application build does not run them.
+1. If they have not already been applied, review and apply `db/migrations/0002_transfer_telemetry.sql`, `db/migrations/0003_performance_telemetry.sql`, then `db/migrations/0004_performance_ratings.sql` to the intended PostgreSQL database. Migration files are applied explicitly; the application build does not run them.
 2. Deploy the application code, or run it locally with a real club account and database.
 3. For local collection in PowerShell, run `$env:NEXT_PUBLIC_ENABLE_LOCAL_TELEMETRY="true"` before `npm run dev`. Production collection is enabled automatically.
 4. After signed-in users visit the app, open **Coach → Observabilité** to see the collected report.
@@ -26,5 +26,6 @@ Apply the required migrations before deploying the code: the collector and repor
 - Only same-origin resources are included; cross-origin storage and third-party resources are excluded.
 - Browser cache hits are counted, while their transferred bytes remain zero.
 - The client batches measurements at most once per minute and when the page is hidden or closed. The telemetry endpoint requires an authenticated coach or athlete session.
-- Web Vitals are reported once per page when it becomes hidden or closes. CLS uses the largest layout-shift session window seen on that page; INP is approximated by the longest supported event duration. A browser that is closed abruptly may not send its final sample.
+- Web Vitals are reported once per page when it becomes hidden or closes. The INP value comes from Next.js Web Vitals. A browser that is closed abruptly may not send its final sample.
+- Performance ratings use the standard good boundaries (LCP 2.5 s, INP 200 ms, CLS 0.1, FCP 1.8 s, TTFB 800 ms); poor begins above 4 s, 500 ms, 0.25, 3 s, and 1.8 s respectively. Observabilité shows the share of rated visits in each band. At least 10 rated visits are required before it creates a performance recommendation; 75% good visits is the reference target.
 - Reports aggregate by club, hour, route, and resource type. No per-user history is retained.
