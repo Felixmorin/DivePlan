@@ -29,6 +29,7 @@ export type AthleteRow = {
   volume: number;
   completedSessions: number;
   averageVolume: number | null;
+  competitionDivesAtLeastFive: number;
 };
 
 type AthleteGroup = {
@@ -43,7 +44,7 @@ export default async function AthletesPage() {
   }
 
   type AthleteListResult = { id: string; firstName: string; lastName: string; avatar: string | null; level: string; groupName: string | null; active: boolean; lastActivity: string | null; completedSessions: number; volume: number; averageVolume: number | null };
-  const [athletesResult, groupsResult] = await Promise.all([
+  const [athletesResult, groupsResult, competitionListResult] = await Promise.all([
       query<AthleteListResult & { groupId: string | null; birthDate: Date | null }>(
       `WITH completion_stats AS (
          SELECT "athleteId", count(*) FILTER (WHERE status = 'COMPLETED')::int AS completed_sessions
@@ -68,11 +69,38 @@ export default async function AthletesPage() {
        LEFT JOIN volume_stats ON volume_stats."athleteId" = a.id
        WHERE a."clubId" = $1 ORDER BY g.name ASC NULLS LAST, u."firstName" ASC`, [clubId]
     ),
-    query<{ id: string; name: string }>(`SELECT id, name FROM "TrainingGroup" WHERE "clubId" = $1 ORDER BY name ASC`, [clubId])
+    query<{ id: string; name: string }>(`SELECT id, name FROM "TrainingGroup" WHERE "clubId" = $1 ORDER BY name ASC`, [clubId]),
+    query<{ athleteId: string; diveCount: number }>(
+      `WITH dive_volumes AS (
+         SELECT l."athleteId", d."diveCode", s.height, s.label AS "heightLabel", SUM(l."repetitionsCompleted")::int AS volume
+         FROM "AthleteDiveLog" l
+         JOIN "PoolDive" d ON d.id = l."poolDiveId"
+         JOIN "PoolSection" s ON s.id = d."poolSectionId"
+         GROUP BY l."athleteId", d."diveCode", s.height, s.label
+       ), competition_dive_volumes AS (
+         SELECT cd.id, cd."athleteId", COALESCE(SUM(dv.volume), 0)::int AS volume
+         FROM "CompetitionDiveList" cl
+         JOIN "CompetitionDive" cd ON cd."listId" = cl.id
+         LEFT JOIN dive_volumes dv ON dv."athleteId" = cd."athleteId" AND dv."diveCode" = cd."diveCode"
+           AND CASE
+             WHEN cd.height <> 'PLATFORM' THEN dv.height = cd.height
+             WHEN dv.height NOT IN ('PLATFORM', 'CUSTOM') THEN FALSE
+             WHEN dv.height = 'PLATFORM' AND dv."heightLabel" IS NULL THEN TRUE
+             WHEN cd."platformHeight" IS NULL THEN FALSE
+             ELSE (regexp_match(lower(replace(COALESCE(dv."heightLabel", ''), ',', '.')), '(3|5|7\\.5|10)\\s*m(?:t)?'))[1] = cd."platformHeight"::text
+           END
+         WHERE cl.name = 'Liste de compétition'
+         GROUP BY cd.id, cd."athleteId"
+       )
+       SELECT "athleteId", COUNT(*) FILTER (WHERE volume >= 5)::int AS "diveCount"
+       FROM competition_dive_volumes
+       GROUP BY "athleteId"`, []
+    )
   ]);
   const athletes = athletesResult.rows;
   const athleteAvatarUrls = await resolveAvatarUrls(athletes.map((athlete) => athlete.avatar));
   const groups = groupsResult.rows;
+  const competitionDiveCountByAthlete = new Map(competitionListResult.rows.map((row) => [row.athleteId, Number(row.diveCount)]));
   const athleteIds = athletes.map((athlete) => athlete.id);
   const today = startOfMontrealDay();
   const seasonStartYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
@@ -127,7 +155,8 @@ export default async function AthletesPage() {
       lastActivity: athlete.lastActivity ?? undefined,
       volume: Number(athlete.volume),
       completedSessions: athlete.completedSessions,
-      averageVolume: athlete.averageVolume === null ? null : Number(athlete.averageVolume)
+      averageVolume: athlete.averageVolume === null ? null : Number(athlete.averageVolume),
+      competitionDivesAtLeastFive: competitionDiveCountByAthlete.get(athlete.id) ?? 0
     }));
   const groupStats = groups.map((group) => ({ name: group.name, athletes: rows.filter((row) => row.groupId === group.id).length }));
   const ungroupedAthletes = rows.filter((row) => !row.groupId).length;
@@ -158,7 +187,8 @@ function DemoAthletesPage() {
     lastActivity: athlete.lastSession,
     volume: athlete.recentVolume,
     completedSessions: 0,
-    averageVolume: null
+    averageVolume: null,
+    competitionDivesAtLeastFive: 0
   }));
 
   return (
