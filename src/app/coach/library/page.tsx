@@ -1,5 +1,5 @@
 import { CoachShell } from "@/components/coach/coach-shell";
-import { requireCoach } from "@/lib/current-user";
+import { requireFullAccessCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { sessionTemplatePayloadSchema } from "@/lib/session-template";
 import { LibraryClient } from "./library-client";
@@ -7,7 +7,7 @@ import { LibraryClient } from "./library-client";
 export const dynamic = "force-dynamic";
 
 export default async function LibraryPage() {
-  const { clubId } = await requireCoach();
+  const { clubId } = await requireFullAccessCoach();
   if (clubId === "dev-club") return <CoachShell active="Bibliotheque"><LibraryClient exercises={[]} dives={[]} templates={[]} /></CoachShell>;
   const [exerciseResult, diveResult, templateResult] = await Promise.all([
     query<{ id: string; name: string; category: string; level: string | null; description: string; bodyArea: string | null; equipment: string | null; setup: string | null; defaultSets: number | null; defaultReps: number | null; defaultDuration: number | null; roundTrip: boolean; restSeconds: number | null; coachNotes: string | null; favorite: boolean; lastUsed: Date | null }>(

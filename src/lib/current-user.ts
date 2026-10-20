@@ -100,6 +100,16 @@ export async function requireCoach() {
   return { user, coach: user.coach, clubId: user.clubId };
 }
 
+export async function requireFullAccessCoach() {
+  const result = await requireCoach();
+
+  if (result.user.email.trim().toLowerCase() !== "felix@diveplan.com") {
+    redirect("/coach");
+  }
+
+  return result;
+}
+
 export async function requireAthlete() {
   const user = await requireCurrentUser("ATHLETE");
 

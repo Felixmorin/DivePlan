@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireCoach } from "@/lib/current-user";
+import { requireFullAccessCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { MILESTONES } from "@/lib/milestones";
 
@@ -14,7 +14,7 @@ const milestoneTextSchema = z.object({
 });
 
 export async function saveMilestoneText(formData: FormData) {
-  const { clubId } = await requireCoach();
+  const { clubId } = await requireFullAccessCoach();
   const parsed = milestoneTextSchema.safeParse({
     key: formData.get("key"),
     title: formData.get("title"),

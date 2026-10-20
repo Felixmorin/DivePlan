@@ -5,14 +5,14 @@ import { CoachShell } from "@/components/coach/coach-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { requireCoach } from "@/lib/current-user";
+import { requireFullAccessCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { sessionTemplatePayloadSchema } from "@/lib/session-template";
 
 export const dynamic = "force-dynamic";
 
 export default async function TemplatesPage() {
-  const { clubId } = await requireCoach();
+  const { clubId } = await requireFullAccessCoach();
 
   if (clubId === "dev-club") {
     return (

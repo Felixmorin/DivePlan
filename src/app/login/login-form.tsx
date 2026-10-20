@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, UserRound } from "lucide-react";
 import { login, type LoginState } from "@/app/login/actions";
 import styles from "./login.module.css";
 
@@ -13,10 +13,10 @@ export function LoginForm() {
 
   return (
     <form action={action} className={styles.form}>
-      <label className={styles.fieldLabel} htmlFor="login-email">Adresse courriel</label>
+      <label className={styles.fieldLabel} htmlFor="login-email">Nom d’utilisateur (prenom.nom)</label>
       <div className={styles.inputWrap}>
-        <Mail className={styles.inputIcon} aria-hidden="true" />
-        <input id="login-email" name="email" type="text" autoComplete="username" placeholder="nom@exemple.com" />
+        <UserRound className={styles.inputIcon} aria-hidden="true" />
+        <input id="login-email" name="email" type="text" autoComplete="username" placeholder="prenom.nom" />
       </div>
 
       <label className={styles.fieldLabel} htmlFor="login-password">Mot de passe</label>

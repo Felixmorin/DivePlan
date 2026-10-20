@@ -6,14 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { requireCoach } from "@/lib/current-user";
+import { requireFullAccessCoach } from "@/lib/current-user";
 import { NotificationSettings } from "@/components/notifications/notification-settings";
 import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
 
 export const dynamic = "force-dynamic";
 
 export default async function CoachSettingsPage() {
-  const { user } = await requireCoach();
+  const { user } = await requireFullAccessCoach();
   const clubName = user.club?.name ?? "Performance aquatique";
   const logo = user.club?.logo ?? "";
 

@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, Lightbulb } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { requireCoach } from "@/lib/current-user";
+import { requireFullAccessCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ type PerformanceRow = { route: string; metric: string; samples: number; average:
 type Recommendation = { title: string; evidence: string; action: string; priority: "Élevée" | "À surveiller" };
 
 export default async function ObservabilityPage() {
-  const { clubId } = await requireCoach();
+  const { clubId } = await requireFullAccessCoach();
   if (clubId === "dev-club") {
     return (
       <CoachShell active="Observabilité">

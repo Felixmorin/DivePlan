@@ -2,7 +2,7 @@ import { Award, Medal, Trophy } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MilestonePreviewButton } from "@/components/coach/milestone-preview-button";
-import { requireCoach } from "@/lib/current-user";
+import { requireFullAccessCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { MILESTONES } from "@/lib/milestones";
 import { getClubMilestones } from "@/lib/milestone-data";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 type AwardRow = { key: string; athleteId: string; firstName: string; lastName: string; groupName: string | null; awardedAt: Date };
 
 export default async function CoachMilestonesPage() {
-  const { clubId } = await requireCoach();
+  const { clubId } = await requireFullAccessCoach();
   const isDemo = clubId === "dev-club";
   const [result, milestones] = await Promise.all([
     isDemo ? Promise.resolve(null) : query<AwardRow>(

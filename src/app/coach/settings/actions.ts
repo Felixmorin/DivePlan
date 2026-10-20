@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { signOut } from "@/auth";
-import { requireCoach } from "@/lib/current-user";
+import { requireFullAccessCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
 import { query } from "@/lib/db";
 
@@ -36,7 +36,7 @@ const coachAccountSchema = z.object({
 });
 
 export async function updateClubSettings(formData: FormData) {
-  const { user, clubId } = await requireCoach();
+  const { user, clubId } = await requireFullAccessCoach();
   const name = cleanText(formData.get("name"));
   const logo = cleanLogo(formData.get("logo"));
 
@@ -62,7 +62,7 @@ export async function updateClubSettings(formData: FormData) {
 }
 
 export async function updateCoachAccount(formData: FormData) {
-  const { user } = await requireCoach();
+  const { user } = await requireFullAccessCoach();
   const rawUsername = cleanText(formData.get("username"));
   const parsed = coachAccountSchema.safeParse({
     email: formData.get("email"),
@@ -100,7 +100,7 @@ export async function updateCoachAccount(formData: FormData) {
 }
 
 export async function updateCoachPreferences(formData: FormData) {
-  const { user, coach } = await requireCoach();
+  const { user, coach } = await requireFullAccessCoach();
   const planningDefaultView = formData.get("planningDefaultView");
   const weekStartsOn = formData.get("weekStartsOn");
 

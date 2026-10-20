@@ -4,7 +4,7 @@ import { CoachShell } from "@/components/coach/coach-shell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { requireCoach } from "@/lib/current-user";
+import { requireFullAccessCoach } from "@/lib/current-user";
 import { ATHLETE_SESSION_PREVIEW_EVENT } from "@/lib/monitoring";
 import { formatMontrealDate } from "@/lib/timezone";
 import { query } from "@/lib/db";
@@ -12,7 +12,7 @@ import { query } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function MonitoringPage() {
-  const { clubId } = await requireCoach();
+  const { clubId } = await requireFullAccessCoach();
   if (clubId === "dev-club") {
     const events = [
       { id: "demo-auth", type: "auth.login", message: "Connexion demo locale", source: "system demo" },

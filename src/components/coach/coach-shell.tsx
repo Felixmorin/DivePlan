@@ -26,6 +26,9 @@ const utilityNav = [
 
 export async function CoachShell({ children, active }: { children: React.ReactNode; active: string }) {
   const { user } = await requireCoach();
+  const hasFullAccess = user.email.trim().toLowerCase() === "felix@diveplan.com";
+  const visibleNav = hasFullAccess ? nav : nav.filter((item) => ["/coach", "/coach/planning", "/coach/sessions", "/coach/athletes", "/coach/groups"].includes(item.href));
+  const visibleUtilityNav = hasFullAccess ? utilityNav : [];
   const clubName = user.club?.name ?? "Performance aquatique";
   const logo = user.club?.logo?.trim();
 
@@ -41,7 +44,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
         </Link>
         <div className="flex min-h-0 flex-1 flex-col">
           <nav className="space-y-1">
-            {nav.map((item) => {
+            {visibleNav.map((item) => {
               const Icon = item.icon;
               const isActive = active === item.label || active === item.match;
               return (
@@ -53,7 +56,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
             })}
           </nav>
           <nav aria-label="Outils" className="mt-auto flex items-center justify-end gap-2 border-t border-white/10 pt-4">
-            {utilityNav.map((item) => {
+            {visibleUtilityNav.map((item) => {
               const Icon = item.icon;
               const isActive = active === item.label || active === item.match;
               return (
@@ -69,6 +72,11 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
                 </Link>
               );
             })}
+            {!hasFullAccess && <SignOutWithPushCleanup action={signOutCoach} className="ml-auto shrink-0">
+              <button type="submit" aria-label="Déconnexion" title="Déconnexion" className="flex h-8 w-8 items-center justify-center rounded-xl text-white/55 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+                <LogOut className="h-4 w-4" />
+              </button>
+            </SignOutWithPushCleanup>}
           </nav>
         </div>
         <div className="mt-4 flex flex-col items-center gap-2 border-t border-white/10 pt-4">
@@ -85,7 +93,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
           <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[var(--color-ink-muted)] shadow-sm">{active}</span>
         </div>
         <nav className="coach-mobile-nav -mx-1 flex max-w-full gap-1 overflow-x-auto pb-1">
-          {nav.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.icon;
             const isActive = active === item.label || active === item.match;
             return (
@@ -97,7 +105,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
           })}
         </nav>
         <div className="mt-2 flex items-center gap-1 border-t border-[var(--color-border)] pt-2">
-          {utilityNav.map((item) => {
+          {visibleUtilityNav.map((item) => {
             const Icon = item.icon;
             const isActive = active === item.label || active === item.match;
             return (

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { requireCoach } from "@/lib/current-user";
+import { requireFullAccessCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 
 const exerciseSchema = z.object({
@@ -30,7 +30,7 @@ function clean(value?: string | null) {
 }
 
 export async function saveLibraryExercise(input: LibraryExerciseInput) {
-  await requireCoach();
+  await requireFullAccessCoach();
   const data = exerciseSchema.parse(input);
   const payload = {
     name: data.name,
