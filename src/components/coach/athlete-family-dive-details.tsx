@@ -54,7 +54,7 @@ export function AthleteFamilyDiveDetails({ dives, totals }: { dives: FamilyDive[
               <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-slate-600">{label}</h3>
               <ul className="space-y-1.5">
                 {heightDives.map((dive) => <li key={`${dive.height}-${dive.code}-${dive.heightLabel ?? ""}`} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-xs">
-                  <span className="min-w-0"><strong>{dive.code}</strong><span className="ml-2 text-slate-600">{dive.name}</span>{heightGroup(dive) === "PLATFORM" && dive.heightLabel && <small className="ml-2 text-slate-500">{dive.heightLabel}</small>}</span>
+                  <span className="min-w-0"><strong>{dive.code}</strong>{dive.name && dive.name !== dive.code && <span className="ml-2 text-slate-600">{dive.name}</span>}{heightGroup(dive) === "PLATFORM" && dive.heightLabel && <small className="ml-2 text-slate-500">{dive.heightLabel}</small>}</span>
                   <b className="ml-3 shrink-0 text-slate-700">{dive.volume} rép.</b>
                 </li>)}
               </ul>
