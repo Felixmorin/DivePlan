@@ -185,8 +185,8 @@ function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = 
     <CoachShell active="Calendrier">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand-strong)]">Planning {period.mode === "week" ? "hebdomadaire" : "mensuel"}</p>
-          <h1 className="mt-1 text-3xl font-black">Planning</h1>
+          <p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand-strong)]">Calendrier {period.mode === "week" ? "hebdomadaire" : "mensuel"}</p>
+          <h1 className="mt-1 text-3xl font-black">Calendrier</h1>
           <p className="mt-1 text-sm font-medium text-[var(--color-ink-muted)]">{periodLabel(period)}</p>
         </div>
         <PlanningEventForm targets={targets} demo={demo} />
