@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BrainCircuit, CalendarClock, Dumbbell, Eye, ShieldAlert, Sparkles, Target, Trophy, Waves } from "lucide-react";
+import { ArrowLeft, Dumbbell, Eye, Sparkles, Target, Trophy, Waves, ChevronRight, CalendarDays, Activity, FileText } from "lucide-react";
 import { removeAthleteDiveFromVolume, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
 import { DeleteAthleteButton } from "@/app/coach/athletes/delete-athlete-button";
 import { CoachShell } from "@/components/coach/coach-shell";
@@ -218,78 +218,58 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
 
 function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; demo?: boolean }) {
   const fullName = `${profile.firstName} ${profile.lastName}`;
-  const diveIq = getDiveIqPlaceholders(profile);
+  const nextCompetition = profile.nextCompetition;
+  const latestNote = profile.diveNotes[0];
+  const skillProgress = profile.skills.length ? Math.round(profile.skills.reduce((sum,skill)=>sum+skill.progress,0)/profile.skills.length) : 0;
+  const volumePoints = profile.progress.chartData.slice(-7);
+  const volumeValues = volumePoints.map((point) => point.volume);
+  const volumeMin = Math.min(0, ...volumeValues);
+  const volumeMax = Math.max(1, ...volumeValues);
+  const volumeLine = volumePoints.map((point,index) => `${volumePoints.length < 2 ? 50 : index/(volumePoints.length-1)*100},${38-(point.volume-volumeMin)/(volumeMax-volumeMin)*30}`).join(" ");
 
   return (
     <CoachShell active="Athletes">
-      <div className="mb-6">
-        <Button asChild variant="outline" size="sm"><Link href="/coach/athletes"><ArrowLeft className="h-4 w-4" /> Athlètes</Link></Button>
-      </div>
+      <div className="athlete-dashboard">
+        <div className="athlete-profile-head">
+          <Link href="/coach/athletes" className="athlete-back"><ArrowLeft className="h-4 w-4"/> Athlètes</Link>
+          <div className="athlete-identity">
+            <Avatar className="h-14 w-14 border-0 bg-cyan-100 text-cyan-700"><AvatarImage src={profile.avatar ?? undefined}/><AvatarFallback>{profile.firstName[0]}{profile.lastName[0]}</AvatarFallback></Avatar>
+            <div className="min-w-0"><h1>{fullName}</h1><p>{profile.groupName} · {profile.birthDate ? `${formatMontrealDate(profile.birthDate)} · ` : ""}{profile.active ? "Athlète actif" : "Profil inactif"}</p><div className="mt-2 flex flex-wrap gap-1.5"><Badge variant="success">{profile.level}</Badge><Badge variant="outline">{profile.groupName}</Badge></div></div>
+          </div>
+          <div className="athlete-head-actions">{profile.nextSession && <Button asChild size="sm" variant="outline"><Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/${profile.nextSession.id}`}><CalendarDays className="h-4 w-4"/> Prochaine séance</Link></Button>}<DeleteAthleteButton athleteId={profile.id} demo={demo}/></div>
+        </div>
 
-      <div className="mb-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="overflow-hidden">
-          <div className="h-2 bg-[var(--color-brand)]" />
-          <CardContent className="p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-center gap-4">
-                <Avatar className="h-20 w-20 border border-[var(--color-border)]">
-                  <AvatarImage src={profile.avatar ?? undefined} />
-                  <AvatarFallback>{profile.firstName[0]}{profile.lastName[0]}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Fiche athlète</p>
-                  <h1 className="mt-1 truncate text-3xl font-black">{fullName}</h1>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge variant="outline">{profile.groupName}</Badge>
-                    <Badge variant={profile.active ? "success" : "outline"}>{profile.active ? "Actif" : "Inactif"}</Badge>
-                    <Badge variant="outline">{profile.level}</Badge>
-                  </div>
-                </div>
-              </div>
-              {profile.nextSession && (
-                <Button asChild variant="action">
-                  <Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/${profile.nextSession.id}`}>Prochaine séance</Link>
-                </Button>
-              )}
-              <DeleteAthleteButton athleteId={profile.id} demo={demo} />
+        <div className="athlete-dashboard-grid">
+          <main className="athlete-dashboard-main">
+            <div className="athlete-stats">
+              <Metric icon={<Dumbbell className="h-4 w-4"/>} label="Séances complétées" value={profile.completedSessions}/>
+              <Metric icon={<Activity className="h-4 w-4"/>} label="Volume d’entraînement" value={`${profile.volume} reps`}/>
+              <Metric icon={<Trophy className="h-4 w-4"/>} label="Plongeons suivis" value={profile.competitionDives.length}/>
             </div>
-          </CardContent>
-        </Card>
+            <div className="athlete-top-panels">
+              <Card><CardHeader><CardTitle>Prochaine séance</CardTitle></CardHeader><CardContent>{profile.nextSession ? <Link className="athlete-feature-link" href={demo ? "/coach/sessions/demo" : `/coach/sessions/${profile.nextSession.id}`}><span className="athlete-icon-box"><CalendarDays className="h-5 w-5"/></span><span><b>{formatMontrealDate(profile.nextSession.date,{weekday:"long",day:"numeric",month:"long"})}</b><small>{profile.nextSession.title}</small></span><ChevronRight className="ml-auto h-4 w-4"/></Link> : <p className="text-sm text-[var(--color-ink-muted)]">Aucune séance planifiée.</p>}</CardContent></Card>
+              <Card><CardHeader><CardTitle>État actuel</CardTitle></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2"><MiniMetric icon={<Waves className="h-4 w-4"/>} label="Présence" value={`${100-profile.attendance.rate}%`} detail={`${profile.attendance.total} entraînements`}/><MiniMetric icon={<Sparkles className="h-4 w-4"/>} label="Progression moyenne" value={profile.skills.length ? `${skillProgress}%` : "—"} detail={`${profile.skills.length} compétences suivies`}/></CardContent></Card>
+            </div>
+            <Card><CardHeader><CardTitle>Charge d’entraînement par famille de plongeon</CardTitle></CardHeader><CardContent><div className="athlete-family-bars">{profile.progress.skillData.slice(0,6).map((item,index)=>{const max=Math.max(1,...profile.progress.skillData.map(skill=>skill.volume));const colors=["#fb405e","#e91e49","#43bfd0","#30b8cb","#64748b","#9aa8b8"];return <div className="athlete-family-row" key={item.name}><span>{item.name}</span><i><b style={{width:`${Math.max(2,item.volume/max*100)}%`,background:colors[index%colors.length]}}/></i><strong>{item.volume}</strong></div>})}{profile.progress.skillData.length===0&&<p className="text-sm text-[var(--color-ink-muted)]">Aucune donnée de volume par famille.</p>}</div></CardContent></Card>
+            <Card><CardHeader><CardTitle>Sauts de compétition</CardTitle></CardHeader><CardContent className="p-0"><CompetitionDiveEditor athleteId={profile.id} lists={profile.competitionLists} dives={profile.competitionDives} demo={demo}/></CardContent></Card>
+            <CompetitionConfidenceChart data={profile.competitionConfidence}/>
+            <AthleteProgress profile={profile}/>
+            <AttendanceCard attendance={profile.attendance}/>
+            <PreviewStatsCard stats={profile.previewStats}/>
+          </main>
+          <aside className="athlete-dashboard-side">
+            <Card><CardHeader><CardTitle>Prochaine compétition</CardTitle></CardHeader><CardContent>{nextCompetition ? <div className="athlete-event-card"><div className="athlete-event-art"><Trophy className="h-8 w-8"/></div><div><b>{nextCompetition.title}</b><small>{formatMontrealDate(nextCompetition.startsAt,{day:"numeric",month:"short",year:"numeric"})}</small>{nextCompetition.endsAt&&<small>Au {formatMontrealDate(nextCompetition.endsAt)}</small>}</div><span className="athlete-countdown"><small>Dans</small><b>{formatMontrealCountdown(nextCompetition.startsAt)}</b></span></div> : <p className="text-sm text-[var(--color-ink-muted)]">Aucune compétition prévue.</p>}</CardContent></Card>
+            <Card><CardHeader><CardTitle>Tendance du volume</CardTitle></CardHeader><CardContent><div className="athlete-wellbeing"><strong>{profile.volume}</strong><span> répétitions cumulées</span></div><div className="athlete-wellbeing-chart"><svg viewBox="0 0 100 44" preserveAspectRatio="none" role="img" aria-label="Évolution récente du volume d’entraînement"><polyline points={volumeLine} fill="none" stroke="#ff526e" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>{volumePoints.map((point,index)=><circle key={`${point.name}-${index}`} cx={volumePoints.length<2?50:index/(volumePoints.length-1)*100} cy={38-(point.volume-volumeMin)/(volumeMax-volumeMin)*30} r="1.5" fill="#ff526e" vectorEffect="non-scaling-stroke"/>)}</svg><div className="athlete-wellbeing-labels"><span>{volumePoints[0]?.name??"Début"}</span><span>{volumePoints[Math.floor(volumePoints.length/2)]?.name??""}</span><span>{volumePoints.at(-1)?.name??"Récent"}</span></div></div></CardContent></Card>
+            <Card><CardHeader><div className="flex items-center justify-between"><CardTitle>Dernières notes</CardTitle><a className="text-xs font-bold text-[var(--color-brand-strong)]" href="#athlete-notes">Voir tout</a></div></CardHeader><CardContent className="space-y-3">{profile.diveNotes.slice(0,3).map(note=><div className="athlete-note-row" key={note.id}><span className="athlete-icon-box"><FileText className="h-4 w-4"/></span><div><b>{note.code} · {formatMontrealDate(note.sessionDate,{day:"numeric",month:"short"})}</b><p>{note.note}</p></div><ChevronRight className="h-4 w-4 shrink-0"/></div>)}{!latestNote&&<p className="text-sm text-[var(--color-ink-muted)]">Aucune note pour le moment.</p>}</CardContent></Card>
+            <Card><CardHeader><CardTitle>Séances récentes</CardTitle></CardHeader><CardContent className="p-0"><div className="athlete-session-list">{profile.recentSessions.slice(0,6).map(session=><Link key={session.id} href={demo?"/coach/sessions/demo":`/coach/sessions/${session.id}`}><span>{formatMontrealDate(session.date,{day:"numeric",month:"short"})}</span><b>{session.title}</b><em>{session.poolActual} reps</em><ChevronRight className="h-3.5 w-3.5"/></Link>)}{profile.recentSessions.length===0&&<p className="p-4 text-sm text-[var(--color-ink-muted)]">Aucune séance terminée.</p>}</div></CardContent></Card>
+            <Card><CardHeader><CardTitle>Compétences</CardTitle></CardHeader><CardContent className="space-y-3">{profile.skills.slice(0,5).map(skill=><div key={`${skill.code}-${skill.name}`}><div className="flex justify-between gap-2 text-xs"><b>{skill.code} · {skill.name}</b><span>{skill.progress}%</span></div><div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[var(--color-brand)]" style={{width:`${Math.min(100,skill.progress)}%`}}/></div></div>)}{profile.skills.length===0&&<p className="text-sm text-[var(--color-ink-muted)]">Aucune compétence suivie.</p>}</CardContent></Card>
+          </aside>
+        </div>
 
-        <Card>
-          <CardHeader><CardTitle>Repères</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
-            <Metric icon={<Dumbbell className="h-4 w-4" />} label="Séances complétées" value={profile.completedSessions} />
-            <Metric icon={<Waves className="h-4 w-4" />} label="Volume réalisé" value={`${profile.volume} reps`} />
-            <Metric icon={<CalendarClock className="h-4 w-4" />} label="Naissance" value={profile.birthDate ? formatMontrealDate(profile.birthDate) : "Non indiquée"} />
-            <Metric icon={<Trophy className="h-4 w-4" />} label="Prochaine compétition" value={profile.nextCompetition ? formatMontrealCountdown(profile.nextCompetition.startsAt) : "Aucune prévue"} />
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <DiveIqCard icon={<BrainCircuit className="h-5 w-5" />} label="DiveIQ readiness" value={diveIq.readiness} detail="Placeholder temporaire basé sur l'historique local." />
-        <DiveIqCard icon={<ShieldAlert className="h-5 w-5" />} label="Risque charge" value={diveIq.risk} detail="Placeholder temporaire, aucune analyse médicale." />
-        <DiveIqCard icon={<Sparkles className="h-5 w-5" />} label="Suggestion" value={diveIq.suggestion} detail="À remplacer par DiveIQ quand l'intégration sera disponible." />
-      </div>
-
-      <PreviewStatsCard stats={profile.previewStats} />
-
-      <AttendanceCard attendance={profile.attendance} />
-
-      <AthleteProgress profile={profile} />
-
-      <CompetitionDiveEditor athleteId={profile.id} lists={profile.competitionLists} dives={profile.competitionDives} demo={demo} />
-
-      {profile.confidenceSchemaUnavailable && <div role="status" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-950">Les évaluations sont temporairement indisponibles. La migration de la base de données doit être appliquée avant de pouvoir les consulter ou en saisir.</div>}
-
-      {!profile.confidenceSchemaUnavailable && <CoachCompetitionEvaluationForm athleteId={profile.id} dives={profile.competitionDives.map(({ id, code, height, platformHeight }) => ({ id, code, height, platformHeight }))} />}
-
-      <CompetitionConfidenceChart data={profile.competitionConfidence} />
-
-      <DiveNotesCard notes={profile.diveNotes} />
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        {profile.confidenceSchemaUnavailable && <div role="status" className="my-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-950">Les évaluations sont temporairement indisponibles. La migration de la base de données doit être appliquée avant de pouvoir les consulter ou en saisir.</div>}
+        {!profile.confidenceSchemaUnavailable && <CoachCompetitionEvaluationForm athleteId={profile.id} dives={profile.competitionDives.map(({id,code,height,platformHeight})=>({id,code,height,platformHeight}))}/>}
+        <div id="athlete-notes"><DiveNotesCard notes={profile.diveNotes}/></div>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Card>
           <CardHeader><CardTitle>Historique récent</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -449,17 +429,8 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
   );
 }
 
-function DiveIqCard({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]">{icon}</div>
-        <div className="text-xs font-black uppercase text-[var(--color-brand-strong)]">{label}</div>
-        <div className="mt-2 text-2xl font-black">{value}</div>
-        <p className="mt-2 text-sm leading-6 text-[var(--color-ink-muted)]">{detail}</p>
-      </CardContent>
-    </Card>
-  );
+function MiniMetric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
+  return <div className="athlete-mini-metric"><span className="athlete-icon-box">{icon}</span><div><small>{label}</small><b>{value}</b><em>{detail}</em></div></div>;
 }
 
 function LinkedItem({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
@@ -469,14 +440,6 @@ function LinkedItem({ icon, title, detail }: { icon: React.ReactNode; title: str
       <div className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{detail}</div>
     </div>
   );
-}
-
-function getDiveIqPlaceholders(profile: AthleteProfile) {
-  const readiness = profile.volume > 140 ? "Élevée" : profile.volume > 80 ? "Stable" : "À bâtir";
-  const risk = profile.completedSessions > 5 ? "Normal" : "Données limitées";
-  const suggestion = profile.skills.some((skill) => skill.progress < 50) ? "Revoir les bases ciblées" : "Maintenir la progression";
-
-  return { readiness, risk, suggestion };
 }
 
 function matchesCompetitionDiveHeight(
