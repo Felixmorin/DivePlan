@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Plus, X } from "lucide-react";
+import { ChevronDown, Pencil, Plus, X } from "lucide-react";
 import { createCompetitionDiveList, renameCompetitionDiveList, setActiveCompetitionDiveList, updateCompetitionDiveStatus } from "@/app/coach/athletes/actions";
 
 type Dive = {
@@ -147,7 +147,7 @@ export function CoachCompetitionListsTab({ athleteId, lists, dives, demo }: {
 
   return <div className="coach-competition-tab">
     <section className="athlete-panel coach-competition-list-panel">
-      <header className="coach-competition-heading"><div><h2>Liste de plongeon de compétition</h2><p>Sélectionnez une liste et consultez les plongeons prévus pour les compétitions.</p></div><div className="coach-competition-list-controls"><label>Liste à consulter<select value={selectedList?.id??""} onChange={(event)=>{setSelectedListId(event.target.value);setActiveHeight("ONE_METER");}} disabled={!lists.length}><option value="" disabled>Aucune liste</option>{lists.map((list)=><option key={list.id} value={list.id}>{list.name}{list.position===0?" · Liste active":""}</option>)}</select><ChevronDown className="h-4 w-4"/></label><button type="button" className="coach-competition-create-button" onClick={()=>{setError("");setCreateOpen(true);}} disabled={demo}><Plus className="h-4 w-4"/> Créer une nouvelle liste</button><button type="button" className="coach-competition-rename-button" onClick={()=>{setError("");setRenameOpen(true);}} disabled={demo||!selectedList}><span aria-hidden="true">✎</span> Renommer cette liste</button></div></header>
+      <header className="coach-competition-heading"><div><div className="coach-competition-title-row"><h2>Liste de plongeon de compétition</h2><button type="button" className="coach-competition-rename-icon" onClick={()=>{setError("");setRenameOpen(true);}} disabled={demo||!selectedList} aria-label="Renommer cette liste" title="Renommer cette liste"><Pencil className="h-3.5 w-3.5"/></button></div><p>Sélectionnez une liste et consultez les plongeons prévus pour les compétitions.</p></div><div className="coach-competition-list-controls"><label>Liste à consulter<select value={selectedList?.id??""} onChange={(event)=>{setSelectedListId(event.target.value);setActiveHeight("ONE_METER");}} disabled={!lists.length}><option value="" disabled>Aucune liste</option>{lists.map((list)=><option key={list.id} value={list.id}>{list.name}{list.position===0?" · Liste active":""}</option>)}</select><ChevronDown className="h-4 w-4"/></label><button type="button" className="coach-competition-create-button" onClick={()=>{setError("");setCreateOpen(true);}} disabled={demo}><Plus className="h-4 w-4"/> Créer une nouvelle liste</button></div></header>
       {availableHeights.length>0&&<nav className="coach-competition-heights" aria-label="Hauteur du plongeon">{availableHeights.map(({value,label})=><button key={value} type="button" aria-pressed={selectedHeight?.value===value} onClick={()=>setActiveHeight(value)}>{label}</button>)}</nav>}
       {selectedHeight ? (
         <div className="coach-competition-table-wrap">
@@ -188,8 +188,9 @@ export function CoachCompetitionListsTab({ athleteId, lists, dives, demo }: {
       <section className="athlete-panel coach-competition-insight-card coach-competition-dd-card">
         <h3>Somme des DD</h3>
         <strong className="coach-competition-dd-total">{totalDifficulty.toFixed(1)}</strong>
-        <p>DD total ({diveCount} {diveCount === 1 ? "plongeon" : "plongeons"})</p>
+        <p>DD total ({visibleDives.length} {visibleDives.length === 1 ? "plongeon" : "plongeons"})</p>
         <div className="coach-competition-dd-range"><span>Plage recommandée</span><strong>N/A</strong></div>
+        <div className="coach-competition-dd-track" aria-hidden="true"><i/></div>
       </section>
     </div>
     {createOpen&&<div className="coach-competition-modal-backdrop" onMouseDown={(event)=>{if(event.target===event.currentTarget)setCreateOpen(false);}}><section className="coach-competition-modal" role="dialog" aria-modal="true" aria-labelledby="create-competition-list-title"><header><div><h2 id="create-competition-list-title">Créer une liste de compétition</h2><p>Donnez-lui un nom et cochez les épreuves qu’elle contiendra.</p></div><button type="button" onClick={()=>setCreateOpen(false)} aria-label="Fermer"><X className="h-5 w-5"/></button></header><form onSubmit={createList}><input type="hidden" name="athleteId" value={athleteId}/><label className="coach-competition-name-label">Nom de la liste<input name="name" maxLength={60} required autoFocus placeholder="Ex. Coupe du Québec"/></label><fieldset><legend>Épreuves</legend>{heights.filter(({value})=>value!=="CUSTOM").map(({value,label})=><label key={value} className="coach-competition-height-option"><input type="checkbox" name="heights" value={value} defaultChecked={value==="ONE_METER"}/><span>{label}</span></label>)}</fieldset>{error&&<p className="coach-competition-error" role="alert">{error}</p>}<footer><button type="button" className="coach-competition-cancel" onClick={()=>setCreateOpen(false)}>Annuler</button><button type="submit" className="coach-competition-submit" disabled={pending}><Plus className="h-4 w-4"/>{pending?"Création…":"Créer la liste"}</button></footer></form></section></div>}
