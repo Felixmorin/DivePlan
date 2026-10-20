@@ -73,8 +73,7 @@ export function CoachCompetitionListsTab({ athleteId, lists, dives, demo }: {
         return `${diveStatusColors[status]} ${start}% ${statusOffset}%`;
       }).join(", ")
     : "#e8eff4 0% 100%";
-  const totalDifficulty = listDives.reduce((sum, dive) => sum + (dive.difficulty ?? 0), 0);
-  const ddProgress = Math.min(100, (totalDifficulty / 12) * 100);
+  const totalDifficulty = visibleDives.reduce((sum, dive) => sum + (dive.difficulty ?? 0), 0);
 
   async function createList(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -190,8 +189,7 @@ export function CoachCompetitionListsTab({ athleteId, lists, dives, demo }: {
         <h3>Somme des DD</h3>
         <strong className="coach-competition-dd-total">{totalDifficulty.toFixed(1)}</strong>
         <p>DD total ({diveCount} {diveCount === 1 ? "plongeon" : "plongeons"})</p>
-        <div className="coach-competition-dd-range"><span>Plage recommandée</span><strong>9.0 – 12.0</strong></div>
-        <div className="coach-competition-dd-track" aria-label={`Somme des DD : ${totalDifficulty.toFixed(1)} sur 12`}><i style={{ width: `${ddProgress}%` }}/></div>
+        <div className="coach-competition-dd-range"><span>Plage recommandée</span><strong>N/A</strong></div>
       </section>
     </div>
     {createOpen&&<div className="coach-competition-modal-backdrop" onMouseDown={(event)=>{if(event.target===event.currentTarget)setCreateOpen(false);}}><section className="coach-competition-modal" role="dialog" aria-modal="true" aria-labelledby="create-competition-list-title"><header><div><h2 id="create-competition-list-title">Créer une liste de compétition</h2><p>Donnez-lui un nom et cochez les épreuves qu’elle contiendra.</p></div><button type="button" onClick={()=>setCreateOpen(false)} aria-label="Fermer"><X className="h-5 w-5"/></button></header><form onSubmit={createList}><input type="hidden" name="athleteId" value={athleteId}/><label className="coach-competition-name-label">Nom de la liste<input name="name" maxLength={60} required autoFocus placeholder="Ex. Coupe du Québec"/></label><fieldset><legend>Épreuves</legend>{heights.filter(({value})=>value!=="CUSTOM").map(({value,label})=><label key={value} className="coach-competition-height-option"><input type="checkbox" name="heights" value={value} defaultChecked={value==="ONE_METER"}/><span>{label}</span></label>)}</fieldset>{error&&<p className="coach-competition-error" role="alert">{error}</p>}<footer><button type="button" className="coach-competition-cancel" onClick={()=>setCreateOpen(false)}>Annuler</button><button type="submit" className="coach-competition-submit" disabled={pending}><Plus className="h-4 w-4"/>{pending?"Création…":"Créer la liste"}</button></footer></form></section></div>}
