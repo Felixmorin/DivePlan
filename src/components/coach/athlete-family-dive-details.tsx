@@ -20,19 +20,20 @@ function heightGroup(dive: FamilyDive) {
 }
 
 export function AthleteFamilyDiveDetails({ dives }: { dives: FamilyDive[] }) {
-  const [expandedFamily, setExpandedFamily] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const families = ["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"];
 
-  return <div className="mt-3 space-y-2">
+  return <div className="mt-3">
+    <button type="button" className="flex items-center gap-1 text-xs font-bold text-sky-700 hover:text-sky-900" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+      {expanded ? "Masquer détails" : "Voir détails"} <ChevronDown size={14} className={expanded ? "rotate-180" : ""} />
+    </button>
+    {expanded && <div className="mt-3 space-y-3">
     {families.map((family) => {
       const familyDives = dives.filter((dive) => dive.category === family && dive.volume > 0);
       if (!familyDives.length) return null;
-      const expanded = expandedFamily === family;
       return <div key={family} className="border-t border-slate-100 pt-2">
-        <button type="button" className="flex items-center gap-1 text-xs font-bold text-sky-700 hover:text-sky-900" aria-expanded={expanded} onClick={() => setExpandedFamily(expanded ? null : family)}>
-          {expanded ? "Masquer détail" : "Voir détail"} · {family} <ChevronDown size={14} className={expanded ? "rotate-180" : ""} />
-        </button>
-        {expanded && <div className="mt-2 grid gap-3 sm:grid-cols-2">
+        <h3 className="mb-2 text-sm font-black text-slate-800">{family}</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
           {heightGroups.map(({ key, label }) => {
             const heightDives = familyDives.filter((dive) => heightGroup(dive) === key);
             if (!heightDives.length) return null;
@@ -46,8 +47,9 @@ export function AthleteFamilyDiveDetails({ dives }: { dives: FamilyDive[] }) {
               </ul>
             </section>;
           })}
-        </div>}
+        </div>
       </div>;
     })}
+    </div>}
   </div>;
 }
