@@ -445,6 +445,19 @@ a {
 .athlete-competition-panel [class*="CardHeader"] { display:none; }
 .athlete-competition-panel [class*="CardContent"] { padding:0; }
 .athlete-detail-sections { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.athlete-history-full { width:100%; margin-top:.7rem; }
+.athlete-tabs button { position:relative; flex:0 0 auto; border:0; background:transparent; padding:.55rem .12rem; color:#516987; font-size:.65rem; cursor:pointer; }
+.athlete-tabs button[aria-selected="true"] { color:#087f9b; font-weight:800; }
+.athlete-tabs button[aria-selected="true"]:after { position:absolute; right:0; bottom:-1px; left:0; height:2px; background:#12bfd1; content:""; }
+.athlete-tabs button:focus-visible { outline:2px solid #12bfd1; outline-offset:2px; }
+.athlete-tab-panel { min-width:0; }
+.athlete-evaluations-page { display:grid; gap:.7rem; }
+.athlete-evaluation-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; }
+.athlete-evaluation-stats > div { display:flex; min-width:0; min-height:5rem; flex-direction:column; justify-content:center; padding:.7rem .85rem; border:1px solid #e4edf3; border-radius:.75rem; background:#fff; box-shadow:0 5px 17px rgba(17,47,78,.04); }
+.athlete-evaluation-stats small,.athlete-evaluation-stats span { color:#62758d; font-size:.62rem; }
+.athlete-evaluation-stats b { margin:.12rem 0; color:#142947; font-size:1.1rem; font-weight:900; }
+.athlete-evaluations-page > .rounded-\[var\(--radius-panel\)\] { margin:0; }
+@media (max-width:600px) { .athlete-evaluation-stats { grid-template-columns:1fr; } }
 
 /* Coach athlete directory */
 .athlete-directory-page { display: grid; gap: .7rem; color: #10243b; }

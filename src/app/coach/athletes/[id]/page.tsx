@@ -4,13 +4,13 @@ import { Dumbbell, Trophy, ChevronRight, CalendarDays, Activity, FileText } from
 import { AthleteActionsMenu } from "@/app/coach/athletes/athlete-actions-menu";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { CompetitionListPreview } from "@/components/coach/competition-list-preview";
+import { AthleteProfileTabs } from "@/components/coach/athlete-profile-tabs";
 import { CoachCompetitionEvaluationForm } from "@/components/coach/coach-competition-evaluation-form";
 import { CompetitionConfidenceChart, type CompetitionConfidencePoint } from "@/components/athlete/competition-confidence-chart";
 import { StatusPill } from "@/components/training/status-pill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { athletes as demoAthletes } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
@@ -222,67 +222,54 @@ function AthleteDetail({ profile, groups = [], demo = false }: { profile: Athlet
   const wellnessMin = Math.min(0,...wellnessValues);
   const wellnessMax = Math.max(10,...wellnessValues);
   const wellnessLine = wellnessPoints.map((point,index)=>`${wellnessPoints.length<2?50:index/(wellnessPoints.length-1)*100},${38-(point.rating*2-wellnessMin)/(wellnessMax-wellnessMin)*30}`).join(" ");
+  const evaluations = profile.competitionConfidence;
+  const evaluationDates = new Set(evaluations.map((item)=>item.evaluatedAt));
+  const athleteRatings = evaluations.filter((item)=>item.evaluator==="ATHLETE").map((item)=>item.rating);
+  const athleteAverage = athleteRatings.length ? athleteRatings.reduce((sum,rating)=>sum+rating,0)/athleteRatings.length : null;
+  const latestEvaluation = evaluations.length ? [...evaluations].sort((a,b)=>b.evaluatedAt.localeCompare(a.evaluatedAt))[0] : null;
+  const overview = <div className="athlete-dashboard-grid" id="overview">
+    <main className="athlete-dashboard-main">
+      <div className="athlete-stats">
+        <div className="athlete-stat-card"><span className="athlete-icon-box"><Dumbbell className="h-4 w-4"/></span><div><small>Séances complétées</small><b>{profile.attendance.total-profile.attendance.absent} <i>/ {profile.attendance.total}</i></b><em>{profile.attendance.total ? `${Math.max(0,100-profile.attendance.rate)}% présence` : "cette saison"}</em></div><span className="athlete-stat-accent">{profile.attendance.total?`${Math.max(0,100-profile.attendance.rate)}%`:"—"}</span></div>
+        <div className="athlete-stat-card"><span className="athlete-icon-box"><Activity className="h-4 w-4"/></span><div><small>Volume d’entraînement</small><b>{profile.volume}</b><em>plongeons enregistrés</em></div><span className="athlete-stat-accent">↗</span></div>
+        <div className="athlete-stat-card"><span className="athlete-icon-box athlete-trophy"><Trophy className="h-4 w-4"/></span><div><small>Prochaine compétition</small><b>{nextCompetition ? formatMontrealCountdown(nextCompetition.startsAt) : "À planifier"}</b><em>{nextCompetition?.title ?? "Aucune compétition"}</em></div><ChevronRight className="ml-auto h-4 w-4"/></div>
+      </div>
+      <div className="athlete-top-panels">
+        <section className="athlete-panel"><h2>Prochaine séance</h2>{profile.nextSession?<Link className="athlete-feature-link" href={demo?"/coach/sessions/demo":`/coach/sessions/${profile.nextSession.id}`}><CalendarDays className="h-5 w-5"/><span><b>{formatMontrealDate(profile.nextSession.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</b><small>{profile.nextSession.title}</small></span><ChevronRight className="ml-auto h-4 w-4"/></Link>:<p className="athlete-empty">Aucune séance planifiée.</p>}</section>
+        <section className="athlete-panel"><h2>État actuel</h2><div className="athlete-state-grid"><div><span>Progression</span><b>{profile.skills.length?`${skillProgress}%`:"—"}</b><i>{profile.skills.length} compétences</i></div><div><span>Assiduité</span><b>{profile.attendance.total?`${Math.max(0,100-profile.attendance.rate)}%`:"—"}</b><i>présence saison</i></div></div></section>
+      </div>
+      <section className="athlete-panel"><h2>Charge d’entraînement par famille de plongeon</h2><div className="athlete-family-bars">{profile.progress.skillData.slice(0,6).map((item)=>{const max=Math.max(1,...profile.progress.skillData.map(skill=>skill.volume));return <div className="athlete-family-row" key={item.name}><span>{item.name}</span><i><b style={{width:`${Math.max(2,item.volume/max*100)}%`,background:diveFamilyColors[item.name]??"#94a3b8"}}/></i><strong>{item.volume}</strong></div>})}{profile.progress.skillData.length===0&&<p className="athlete-empty">Aucune donnée de volume par famille.</p>}</div></section>
+      <section className="athlete-panel"><h2>Évolution du volume</h2><div className="athlete-volume-chart"><div className="athlete-volume-y"><span>{volumeMax}</span><span>{Math.round(volumeMax/2)}</span><span>0</span></div><svg viewBox="0 0 100 44" preserveAspectRatio="none" role="img" aria-label="Évolution du volume de plongeons"><polyline points={volumeLine} fill="none" stroke="#0eb9cb" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>{volumePoints.map((point,index)=><circle key={`${point.name}-${index}`} cx={volumePoints.length<2?50:index/(volumePoints.length-1)*100} cy={38-(point.volume-volumeMin)/(volumeMax-volumeMin)*30} r="1.4" fill="#0eb9cb" vectorEffect="non-scaling-stroke"/>)}</svg><div className="athlete-volume-x"><span>{volumePoints[0]?.name??"Début"}</span><span>{volumePoints[Math.floor(volumePoints.length/2)]?.name??""}</span><span>{volumePoints.at(-1)?.name??"Récent"}</span></div></div></section>
+    </main>
+    <aside className="athlete-dashboard-side">
+      <section className="athlete-panel"><div className="athlete-panel-title"><h2>Prochaine compétition</h2>{nextCompetition&&<ChevronRight className="h-4 w-4"/>}</div>{nextCompetition?<div className="athlete-event-card"><div className="athlete-event-art"><Trophy className="h-7 w-7"/></div><div><b>{nextCompetition.title}</b><small>{formatMontrealDate(nextCompetition.startsAt,{day:"numeric",month:"short",year:"numeric"})}</small>{nextCompetition.endsAt&&<small>Au {formatMontrealDate(nextCompetition.endsAt)}</small>}</div><span className="athlete-countdown"><small>Dans</small><b>{formatMontrealCountdown(nextCompetition.startsAt)}</b></span></div>:<p className="athlete-empty">Aucune compétition prévue.</p>}</section>
+      <section className="athlete-panel"><h2>Tendances bien-être</h2><div className="athlete-wellbeing"><strong>{wellnessValues.length?`${(wellnessValues.reduce((sum,value)=>sum+value,0)/wellnessValues.length).toFixed(1)}`:"—"}</strong><span>/ 10 · confiance en compétition</span></div><div className="athlete-wellbeing-chart"><svg viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true"><polyline points={wellnessLine} fill="none" stroke="#ff526e" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>{wellnessPoints.map((point,index)=><circle key={`${point.competitionDiveId}-${point.evaluatedAt}`} cx={wellnessPoints.length<2?50:index/(wellnessPoints.length-1)*100} cy={38-(point.rating*2-wellnessMin)/(wellnessMax-wellnessMin)*30} r="1.4" fill="#ff526e" vectorEffect="non-scaling-stroke"/>)}</svg><div className="athlete-wellbeing-labels"><span>{wellnessPoints[0]?formatMontrealDate(new Date(wellnessPoints[0].evaluatedAt),{day:"numeric",month:"short"}):"—"}</span><span>{wellnessPoints[Math.floor(wellnessPoints.length/2)]?formatMontrealDate(new Date(wellnessPoints[Math.floor(wellnessPoints.length/2)].evaluatedAt),{day:"numeric",month:"short"}):""}</span><span>{wellnessPoints.at(-1)?formatMontrealDate(new Date(wellnessPoints.at(-1)!.evaluatedAt),{day:"numeric",month:"short"}):"—"}</span></div></div></section>
+      <section className="athlete-panel" id="athlete-notes"><div className="athlete-panel-title"><h2>Derniers commentaires de l’athlète</h2></div>{profile.diveNotes.slice(0,3).map(note=><div className="athlete-note-row" key={note.id}><span className="athlete-icon-box"><FileText className="h-4 w-4"/></span><div><b>{formatMontrealDate(note.sessionDate,{day:"numeric",month:"short"})} · {note.code} · {note.height === "ONE_METER" ? "1 m" : note.height === "THREE_METER" ? "3 m" : note.height === "PLATFORM" ? "Plateforme" : note.height.replaceAll("_", " ")}</b><p>{note.note}</p></div><ChevronRight className="h-4 w-4 shrink-0"/></div>)}{profile.diveNotes.length===0&&<p className="athlete-empty">Aucun commentaire pour le moment.</p>}</section>
+      <section className="athlete-panel"><div className="athlete-panel-title"><h2>Séances récentes</h2></div><div className="athlete-session-list">{profile.recentSessions.slice(0,6).map(session=><Link key={session.id} href={demo?"/coach/sessions/demo":`/coach/sessions/${session.id}`}><span>{formatMontrealDate(session.date,{day:"numeric",month:"short"})}</span><b>{session.title}</b><em>{session.poolActual} reps</em><ChevronRight className="h-3.5 w-3.5"/></Link>)}{profile.recentSessions.length===0&&<p className="athlete-empty">Aucune séance terminée.</p>}</div></section>
+      <section className="athlete-panel"><h2>Compétences</h2>{profile.skills.slice(0,5).map(skill=><div className="athlete-skill-row" key={`${skill.code}-${skill.name}`}><div><b>{skill.code} · {skill.name}</b><span>{skill.progress}%</span></div><i><b style={{width:`${Math.min(100,skill.progress)}%`}}/></i></div>)}{profile.skills.length===0&&<p className="athlete-empty">Aucune compétence suivie.</p>}</section>
+    </aside>
+  </div>;
+  const evaluationsTab = <div className="athlete-evaluations-page">
+    <div className="athlete-evaluation-stats">
+      <div><small>Évaluations enregistrées</small><b>{evaluationDates.size}</b><span>depuis le début du suivi</span></div>
+      <div><small>Ressenti moyen de l’athlète</small><b>{athleteAverage===null?"—":`${athleteAverage.toFixed(1)} / 5`}</b><span>{athleteRatings.length} notes de confiance</span></div>
+      <div><small>Dernière évaluation</small><b>{latestEvaluation?formatMontrealDate(new Date(latestEvaluation.evaluatedAt),{day:"numeric",month:"short",year:"numeric"}):"Aucune"}</b><span>{latestEvaluation?`${latestEvaluation.evaluator==="COACH"?"Coach":"Athlète"} · ${latestEvaluation.code}`:"Aucune évaluation enregistrée"}</span></div>
+    </div>
+    <CompetitionConfidenceChart data={evaluations}/>
+    {profile.confidenceSchemaUnavailable?<p className="athlete-warning">Les évaluations sont temporairement indisponibles. Une migration de la base de données est requise pour les consulter ou en saisir.</p>:<CoachCompetitionEvaluationForm athleteId={profile.id} dives={activeListDives.map(({id,code,height,platformHeight})=>({id,code,height,platformHeight}))}/>}
+  </div>;
+  const competitionTab = <CompetitionListPreview name={activeList?.name??"Liste de compétition"} dives={activeListDives}/>;
+  const historyTab = <section className="athlete-panel athlete-history-full" id="all-sessions"><h2>Historique des séances</h2>{profile.recentSessions.map(session=><div className="athlete-history-row" key={`${session.id}-${session.date.toISOString()}`}><div><b>{session.title}</b><small>{formatMontrealDate(session.date,{weekday:"short",day:"2-digit",month:"short"})} · {session.poolActual}/{session.poolPlanned} reps</small>{(session.rating||session.note)&&<p>{session.rating??""}{session.note?` · ${session.note}`:""}</p>}</div><StatusPill status={session.status}/><Button asChild size="sm" variant="outline"><Link href={demo?"/coach/sessions/demo":`/coach/sessions/${session.id}`}>Ouvrir</Link></Button></div>)}</section>;
 
   return <CoachShell active="Athletes">
     <div className="athlete-dashboard">
       <header className="athlete-profile-head">
         <div className="athlete-identity"><Avatar className="h-14 w-14 border-0 bg-cyan-100 text-cyan-700"><AvatarImage src={profile.avatar ?? undefined}/><AvatarFallback>{profile.firstName[0]}{profile.lastName[0]}</AvatarFallback></Avatar><div><h1>{fullName}</h1><p>Plongeon de compétition · {profile.groupName}{profile.birthDate ? ` · ${formatMontrealDate(profile.birthDate,{year:"numeric"})}` : ""}</p><div className="athlete-tags"><Badge variant="success">{profile.level}</Badge><Badge variant="outline">{profile.groupName}</Badge><Badge variant="outline">{profile.active ? "Actif" : "Inactif"}</Badge></div></div></div>
         <div className="athlete-head-actions">{profile.nextSession&&<Button asChild size="sm" variant="outline"><Link href={demo?"/coach/sessions/demo":`/coach/sessions/${profile.nextSession.id}`}><CalendarDays className="h-4 w-4"/> Prochaine séance</Link></Button>}<AthleteActionsMenu athlete={{id:profile.id,firstName:profile.firstName,lastName:profile.lastName,level:profile.level,groupId:profile.groupId??null,birthDate:profile.birthDate?formatMontrealDate(profile.birthDate,{year:"numeric",month:"2-digit",day:"2-digit"}).replace(/\//g,"-"):null,active:profile.active}} groups={groups} demo={demo} directEdit/></div>
-        <nav className="athlete-tabs"><a href="#overview">Aperçu</a><a href="#evaluations">Évaluations</a><a href="#competition-list">Liste de compétitions</a><a href="#history">Historique des séances</a></nav>
       </header>
-      <div className="athlete-dashboard-grid" id="overview">
-        <main className="athlete-dashboard-main">
-          <div className="athlete-stats">
-            <div className="athlete-stat-card"><span className="athlete-icon-box"><Dumbbell className="h-4 w-4"/></span><div><small>Séances complétées</small><b>{profile.attendance.total-profile.attendance.absent} <i>/ {profile.attendance.total}</i></b><em>{profile.attendance.total ? `${Math.max(0,100-profile.attendance.rate)}% présence` : "cette saison"}</em></div><span className="athlete-stat-accent">{profile.attendance.total?`${Math.max(0,100-profile.attendance.rate)}%`:"—"}</span></div>
-            <div className="athlete-stat-card"><span className="athlete-icon-box"><Activity className="h-4 w-4"/></span><div><small>Volume d’entraînement</small><b>{profile.volume}</b><em>plongeons enregistrés</em></div><span className="athlete-stat-accent">↗</span></div>
-            <div className="athlete-stat-card"><span className="athlete-icon-box athlete-trophy"><Trophy className="h-4 w-4"/></span><div><small>Prochaine compétition</small><b>{nextCompetition ? formatMontrealCountdown(nextCompetition.startsAt) : "À planifier"}</b><em>{nextCompetition?.title ?? "Aucune compétition"}</em></div><ChevronRight className="ml-auto h-4 w-4"/></div>
-          </div>
-          <div className="athlete-top-panels">
-            <section className="athlete-panel"><h2>Prochaine séance</h2>{profile.nextSession?<Link className="athlete-feature-link" href={demo?"/coach/sessions/demo":`/coach/sessions/${profile.nextSession.id}`}><CalendarDays className="h-5 w-5"/><span><b>{formatMontrealDate(profile.nextSession.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</b><small>{profile.nextSession.title}</small></span><ChevronRight className="ml-auto h-4 w-4"/></Link>:<p className="athlete-empty">Aucune séance planifiée.</p>}</section>
-            <section className="athlete-panel"><h2>État actuel</h2><div className="athlete-state-grid"><div><span>Progression</span><b>{profile.skills.length?`${skillProgress}%`:"—"}</b><i>{profile.skills.length} compétences</i></div><div><span>Assiduité</span><b>{profile.attendance.total?`${Math.max(0,100-profile.attendance.rate)}%`:"—"}</b><i>présence saison</i></div></div></section>
-          </div>
-          <section className="athlete-panel"><h2>Charge d’entraînement par famille de plongeon</h2><div className="athlete-family-bars">{profile.progress.skillData.slice(0,6).map((item)=>{const max=Math.max(1,...profile.progress.skillData.map(skill=>skill.volume));return <div className="athlete-family-row" key={item.name}><span>{item.name}</span><i><b style={{width:`${Math.max(2,item.volume/max*100)}%`,background:diveFamilyColors[item.name]??"#94a3b8"}}/></i><strong>{item.volume}</strong></div>})}{profile.progress.skillData.length===0&&<p className="athlete-empty">Aucune donnée de volume par famille.</p>}</div></section>
-          <div id="competition-list"><CompetitionListPreview name={activeList?.name??"Liste de compétition"} dives={activeListDives}/></div>
-          <section id="evaluations"><CompetitionConfidenceChart data={profile.competitionConfidence}/>{profile.confidenceSchemaUnavailable?<p className="athlete-warning">Les évaluations sont temporairement indisponibles. Une migration de la base de données est requise pour les consulter ou en saisir.</p>:<CoachCompetitionEvaluationForm athleteId={profile.id} dives={profile.competitionDives.map(({id,code,height,platformHeight})=>({id,code,height,platformHeight}))}/>}</section>
-          <section className="athlete-panel"><h2>Évolution du volume</h2><div className="athlete-volume-chart"><div className="athlete-volume-y"><span>{volumeMax}</span><span>{Math.round(volumeMax/2)}</span><span>0</span></div><svg viewBox="0 0 100 44" preserveAspectRatio="none" role="img" aria-label="Évolution du volume de plongeons"><polyline points={volumeLine} fill="none" stroke="#0eb9cb" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>{volumePoints.map((point,index)=><circle key={`${point.name}-${index}`} cx={volumePoints.length<2?50:index/(volumePoints.length-1)*100} cy={38-(point.volume-volumeMin)/(volumeMax-volumeMin)*30} r="1.4" fill="#0eb9cb" vectorEffect="non-scaling-stroke"/>)}</svg><div className="athlete-volume-x"><span>{volumePoints[0]?.name??"Début"}</span><span>{volumePoints[Math.floor(volumePoints.length/2)]?.name??""}</span><span>{volumePoints.at(-1)?.name??"Récent"}</span></div></div></section>
-        </main>
-        <aside className="athlete-dashboard-side">
-          <section className="athlete-panel"><div className="athlete-panel-title"><h2>Prochaine compétition</h2>{nextCompetition&&<ChevronRight className="h-4 w-4"/>}</div>{nextCompetition?<div className="athlete-event-card"><div className="athlete-event-art"><Trophy className="h-7 w-7"/></div><div><b>{nextCompetition.title}</b><small>{formatMontrealDate(nextCompetition.startsAt,{day:"numeric",month:"short",year:"numeric"})}</small>{nextCompetition.endsAt&&<small>Au {formatMontrealDate(nextCompetition.endsAt)}</small>}</div><span className="athlete-countdown"><small>Dans</small><b>{formatMontrealCountdown(nextCompetition.startsAt)}</b></span></div>:<p className="athlete-empty">Aucune compétition prévue.</p>}</section>
-          <section className="athlete-panel"><h2>Tendances bien-être</h2><div className="athlete-wellbeing"><strong>{wellnessValues.length?`${(wellnessValues.reduce((sum,value)=>sum+value,0)/wellnessValues.length).toFixed(1)}`:"—"}</strong><span>/ 10 · confiance en compétition</span></div><div className="athlete-wellbeing-chart"><svg viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true"><polyline points={wellnessLine} fill="none" stroke="#ff526e" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>{wellnessPoints.map((point,index)=><circle key={`${point.competitionDiveId}-${point.evaluatedAt}`} cx={wellnessPoints.length<2?50:index/(wellnessPoints.length-1)*100} cy={38-(point.rating*2-wellnessMin)/(wellnessMax-wellnessMin)*30} r="1.4" fill="#ff526e" vectorEffect="non-scaling-stroke"/>)}</svg><div className="athlete-wellbeing-labels"><span>{wellnessPoints[0]?formatMontrealDate(new Date(wellnessPoints[0].evaluatedAt),{day:"numeric",month:"short"}):"—"}</span><span>{wellnessPoints[Math.floor(wellnessPoints.length/2)]?formatMontrealDate(new Date(wellnessPoints[Math.floor(wellnessPoints.length/2)].evaluatedAt),{day:"numeric",month:"short"}):""}</span><span>{wellnessPoints.at(-1)?formatMontrealDate(new Date(wellnessPoints.at(-1)!.evaluatedAt),{day:"numeric",month:"short"}):"—"}</span></div></div></section>
-          <section className="athlete-panel" id="athlete-notes"><div className="athlete-panel-title"><h2>Dernières notes de l’entraîneur</h2><a href="#all-notes">Voir tout</a></div>{profile.diveNotes.slice(0,3).map(note=><div className="athlete-note-row" key={note.id}><span className="athlete-icon-box"><FileText className="h-4 w-4"/></span><div><b>{formatMontrealDate(note.sessionDate,{day:"numeric",month:"short"})} · {note.code}</b><p>{note.note}</p></div><ChevronRight className="h-4 w-4 shrink-0"/></div>)}{profile.diveNotes.length===0&&<p className="athlete-empty">Aucune note pour le moment.</p>}</section>
-          <section className="athlete-panel" id="history"><div className="athlete-panel-title"><h2>Séances récentes</h2><a href="#all-sessions">Voir tout</a></div><div className="athlete-session-list">{profile.recentSessions.slice(0,6).map(session=><Link key={session.id} href={demo?"/coach/sessions/demo":`/coach/sessions/${session.id}`}><span>{formatMontrealDate(session.date,{day:"numeric",month:"short"})}</span><b>{session.title}</b><em>{session.poolActual} reps</em><ChevronRight className="h-3.5 w-3.5"/></Link>)}{profile.recentSessions.length===0&&<p className="athlete-empty">Aucune séance terminée.</p>}</div></section>
-          <section className="athlete-panel"><h2>Compétences</h2>{profile.skills.slice(0,5).map(skill=><div className="athlete-skill-row" key={`${skill.code}-${skill.name}`}><div><b>{skill.code} · {skill.name}</b><span>{skill.progress}%</span></div><i><b style={{width:`${Math.min(100,skill.progress)}%`}}/></i></div>)}{profile.skills.length===0&&<p className="athlete-empty">Aucune compétence suivie.</p>}</section>
-        </aside>
-      </div>
-      <div className="athlete-detail-sections" id="all-notes"><DiveNotesCard notes={profile.diveNotes}/><section className="athlete-panel" id="all-sessions"><h2>Historique des séances</h2>{profile.recentSessions.map(session=><div className="athlete-history-row" key={`${session.id}-${session.date.toISOString()}`}><div><b>{session.title}</b><small>{formatMontrealDate(session.date,{weekday:"short",day:"2-digit",month:"short"})} · {session.poolActual}/{session.poolPlanned} reps</small>{(session.rating||session.note)&&<p>{session.rating??""}{session.note?` · ${session.note}`:""}</p>}</div><StatusPill status={session.status}/><Button asChild size="sm" variant="outline"><Link href={demo?"/coach/sessions/demo":`/coach/sessions/${session.id}`}>Ouvrir</Link></Button></div>)}</section></div>
+      <AthleteProfileTabs overview={overview} evaluations={evaluationsTab} competition={competitionTab} history={historyTab}/>
     </div>
   </CoachShell>;
-}
-
-function DiveNotesCard({ notes }: { notes: AthleteProfile["diveNotes"] }) {
-  return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle>Commentaires sur les plongeons</CardTitle>
-        <p className="text-sm leading-6 text-[var(--color-ink-muted)]">Les notes personnelles laissées par l’athlète, regroupées par plongeon.</p>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {notes.map((item) => (
-          <div key={item.id} className="rounded-[var(--radius-ui)] border border-[var(--color-border)] p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="font-black">{item.code} <span className="font-semibold text-[var(--color-ink-muted)]">· {item.name}</span></div>
-                <div className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{item.height.replace("_", " ")} · {item.sessionTitle} · {formatMontrealDate(item.sessionDate, { weekday: "short", day: "2-digit", month: "short" })}</div>
-              </div>
-              <div className="text-xs font-bold text-[var(--color-ink-muted)]">Modifiée le {formatMontrealDate(item.updatedAt)}</div>
-            </div>
-            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[var(--color-ink)]">{item.note}</p>
-          </div>
-        ))}
-        {notes.length === 0 && <p className="text-sm font-semibold text-[var(--color-ink-muted)]">Aucun commentaire de plongeon pour l’instant.</p>}
-      </CardContent>
-    </Card>
-  );
 }
 
 function matchesCompetitionDiveHeight(
