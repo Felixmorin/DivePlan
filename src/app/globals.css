@@ -423,6 +423,28 @@ a {
 @media (max-width: 600px) { .athlete-dashboard { zoom: 1.02; } }
 /* Let the profile fill the coach content area instead of stopping at a fixed cap. */
 .athlete-dashboard { width:100%; max-width:none; margin-inline:0; }
+.athlete-list-preview { overflow:hidden; padding:0; }
+.athlete-list-preview-head { display:grid; grid-template-columns:1fr; gap:.5rem; }
+.athlete-list-preview-head > h2 { margin:0; padding:.72rem .85rem 0; font-size:.8rem; }
+.athlete-list-preview-head > .athlete-empty { padding:0 .85rem .75rem; }
+.athlete-list-preview-head [data-radix-collection-item] { transition:background .15s ease,color .15s ease; }
+.athlete-list-preview-head [role="tablist"] { display:flex; min-height:auto; justify-content:flex-start; gap:.35rem; border-bottom:1px solid #e4edf3; border-radius:0; padding:0 .75rem; }
+.athlete-list-preview-head [role="tab"] { min-height:2rem; margin:0; border-radius:.45rem .45rem 0 0; padding:.35rem .75rem; color:#5d728b; font-size:.64rem; font-weight:700; }
+.athlete-list-preview-head [role="tab"][data-state="active"] { border-bottom:2px solid #11bacb; background:#edfafe; color:#0787a1; box-shadow:none; }
+.athlete-list-preview-table-wrap { margin:0; overflow-x:auto; }
+.athlete-list-preview-table { width:100%; border-collapse:collapse; color:#152a47; font-size:.65rem; text-align:left; }
+.athlete-list-preview-table th { background:#f0f7fa; color:#58708b; font-size:.6rem; font-weight:750; }
+.athlete-list-preview-table th,.athlete-list-preview-table td { height:1.55rem; padding:.25rem .7rem; }
+.athlete-list-preview-table th:first-child,.athlete-list-preview-table td:first-child { width:3rem; text-align:center; }
+.athlete-list-preview-table th:nth-child(3),.athlete-list-preview-table td:nth-child(3) { width:5.2rem; }
+.athlete-list-preview-table th:last-child,.athlete-list-preview-table td:last-child { width:38%; }
+.athlete-list-preview-table tbody tr { border-bottom:1px solid #e8eff4; }
+.athlete-list-preview-table tbody tr:last-child { border-bottom:0; }
+.athlete-list-preview-note { color:#71839a; }
+.athlete-competition-panel > div { border:0; box-shadow:none; }
+.athlete-competition-panel [class*="CardHeader"] { display:none; }
+.athlete-competition-panel [class*="CardContent"] { padding:0; }
+.athlete-detail-sections { grid-template-columns:repeat(2,minmax(0,1fr)); }
 
 /* Coach athlete directory */
 .athlete-directory-page { display: grid; gap: .7rem; color: #10243b; }
