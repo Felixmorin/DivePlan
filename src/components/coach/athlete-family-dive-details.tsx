@@ -52,8 +52,8 @@ export function AthleteFamilyDiveDetails({ dives, totals }: { dives: FamilyDive[
             if (!heightDives.length) return null;
             return <section key={key} className="min-w-0 rounded-lg border border-slate-100 bg-slate-50 p-2">
               <h3 className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-600">{label}</h3>
-              <ul className="space-y-1">
-                {heightDives.map((dive) => <li key={`${dive.height}-${dive.code}-${dive.heightLabel ?? ""}`} className="flex min-w-0 items-center justify-start gap-2 rounded-md bg-white px-2 py-1.5 text-[10px] leading-tight">
+              <ul className="divide-y divide-slate-100 rounded-md bg-white px-2">
+                {heightDives.map((dive) => <li key={`${dive.height}-${dive.code}-${dive.heightLabel ?? ""}`} className="flex min-w-0 items-center justify-start gap-2 py-1.5 text-[10px] leading-tight">
                   <span className="min-w-0 truncate"><strong>{dive.code}</strong>{dive.name && dive.name !== dive.code && <span className="ml-1 text-slate-600">{dive.name}</span>}{(heightGroup(dive) === "PLATFORM" || heightGroup(dive) === "CUSTOM") && dive.heightLabel && <small className="ml-1 text-slate-500">({dive.heightLabel})</small>}</span>
                   <b className="shrink-0 whitespace-nowrap text-slate-700">{dive.volume} rép.</b>
                 </li>)}
