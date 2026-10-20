@@ -11,9 +11,10 @@ type ProgressChartProps = {
   dailyFamilyData?: Array<{ name: string; volume: number; familyVolumes: Record<string, number> }>;
   initialPeriod?: "day" | "week" | "month" | "session-rating";
   lightTheme?: boolean;
+  barColor?: string;
 };
 
-export function ProgressChart({ data, sessionData = [], weeklyData = [], monthlyData = [], dailyFamilyData = [], initialPeriod = "day", lightTheme = false }: ProgressChartProps) {
+export function ProgressChart({ data, sessionData = [], weeklyData = [], monthlyData = [], dailyFamilyData = [], initialPeriod = "day", lightTheme = false, barColor }: ProgressChartProps) {
   const [period, setPeriod] = useState<"day" | "week" | "month" | "session-rating">(initialPeriod);
   const isSessionRating = period === "session-rating";
   const chartData = period === "week" ? weeklyData : period === "month" ? monthlyData : isSessionRating ? sessionData : period === "day" && lightTheme && dailyFamilyData.length ? dailyFamilyData : data;
@@ -50,7 +51,7 @@ export function ProgressChart({ data, sessionData = [], weeklyData = [], monthly
             <Bar dataKey={() => 0.1} name="Total" stackId="family-volume" fill="transparent" isAnimationActive={false} legendType="none" tooltipType="none">
               <LabelList dataKey="volume" position="top" offset={8} fill="#102451" fontSize={12} fontWeight={800} />
             </Bar>
-          </> : <Bar dataKey="volume" fill={lightTheme ? "#50a8f8" : "#ed163d"} radius={[7, 7, 2, 2]}>
+          </> : <Bar dataKey="volume" fill={barColor ?? (lightTheme ? "#50a8f8" : "#ed163d")} radius={[7, 7, 2, 2]}>
             {isSessionRating ? (
               <LabelList dataKey="finalRating" position="center" fill="#ffffff" fontSize={11} fontWeight={700} />
             ) : (

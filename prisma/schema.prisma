@@ -47,6 +47,13 @@ enum CompetitionEvaluationAuthor {
   COACH
 }
 
+enum CompetitionDiveStatus {
+  READY
+  TO_WORK_ON
+  DIFFICULT
+  NOT_READY
+}
+
 enum SkillStatus {
   NOT_STARTED
   LEARNING
@@ -206,6 +213,7 @@ model CompetitionDiveList {
   athleteId  String
   name       String
   position   Int               @default(0)
+  heights    PoolHeight[]      @default([])
   createdAt  DateTime          @default(now())
   athlete    Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   dives      CompetitionDive[]
@@ -223,6 +231,7 @@ model CompetitionDive {
   diveCode   String
   diveName   String
   difficulty Float?
+  status     CompetitionDiveStatus @default(NOT_READY)
   position   Int        @default(0)
   createdAt  DateTime   @default(now())
   athlete    Athlete    @relation(fields: [athleteId], references: [id], onDelete: Cascade)
