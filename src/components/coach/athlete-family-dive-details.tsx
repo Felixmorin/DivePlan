@@ -50,12 +50,12 @@ export function AthleteFamilyDiveDetails({ dives, totals }: { dives: FamilyDive[
           {heightGroups.map(({ key, label }) => {
             const heightDives = familyDives.filter((dive) => heightGroup(dive) === key);
             if (!heightDives.length) return null;
-            return <section key={key} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-              <h3 className="mb-2 text-xs font-black uppercase tracking-wide text-slate-600">{label}</h3>
-              <ul className="space-y-1.5">
-                {heightDives.map((dive) => <li key={`${dive.height}-${dive.code}-${dive.heightLabel ?? ""}`} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-xs">
-                  <span className="min-w-0"><strong>{dive.code}</strong>{dive.name && dive.name !== dive.code && <span className="ml-2 text-slate-600">{dive.name}</span>}{heightGroup(dive) === "PLATFORM" && dive.heightLabel && <small className="ml-2 text-slate-500">{dive.heightLabel}</small>}</span>
-                  <b className="ml-3 shrink-0 text-slate-700">{dive.volume} rép.</b>
+            return <section key={key} className="min-w-0 rounded-lg border border-slate-100 bg-slate-50 p-2">
+              <h3 className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-600">{label}</h3>
+              <ul className="space-y-1">
+                {heightDives.map((dive) => <li key={`${dive.height}-${dive.code}-${dive.heightLabel ?? ""}`} className="flex min-w-0 items-center justify-between gap-1 rounded-md bg-white px-2 py-1.5 text-[10px] leading-tight">
+                  <span className="min-w-0 truncate"><strong>{dive.code}</strong>{dive.name && dive.name !== dive.code && <span className="ml-1 text-slate-600">{dive.name}</span>}{heightGroup(dive) === "PLATFORM" && dive.heightLabel && <small className="ml-1 text-slate-500">{dive.heightLabel}</small>}</span>
+                  <b className="shrink-0 whitespace-nowrap text-slate-700">{dive.volume} rép.</b>
                 </li>)}
               </ul>
             </section>;
