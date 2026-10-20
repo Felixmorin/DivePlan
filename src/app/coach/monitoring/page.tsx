@@ -33,25 +33,25 @@ export default async function MonitoringPage() {
   const [eventsResult, failedResult, completedResult, previewResult] = await Promise.all([
     query<{ id: string; type: string; message: string; email: string | null; createdAt: Date }>(
       `SELECT e.id, e.type, e.message, u.email, e."createdAt" FROM "AppEvent" e
-       LEFT JOIN "User" u ON u.id = e."userId" WHERE e."clubId" = $1 OR e."clubId" IS NULL
-       ORDER BY e."createdAt" DESC LIMIT 80`, [clubId]
+       LEFT JOIN "User" u ON u.id = e."userId"
+       ORDER BY e."createdAt" DESC LIMIT 80`
     ),
-    query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE "clubId" = $1 AND type = 'auth.failed' AND "createdAt" >= $2`, [clubId, since]),
+    query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE type = 'auth.failed' AND "createdAt" >= $1`, [since]),
     query<{ count: string }>(
       `SELECT count(*)::text AS count FROM "AthleteSessionCompletion" c
        JOIN "TrainingSession" s ON s.id = c."sessionId" JOIN "TrainingWeek" w ON w.id = s."weekId"
-       WHERE c.status = 'COMPLETED' AND c."completedAt" >= $1 AND w."clubId" = $2`, [since, clubId]
+       WHERE c.status = 'COMPLETED' AND c."completedAt" >= $1`, [since]
     ),
     query<{ count: string }>(
       `SELECT count(*)::text AS count FROM "AppEvent" e
-       WHERE e."clubId" = $1 AND e.type = $2 AND e."createdAt" >= $3
+       WHERE e.type = $1 AND e."createdAt" >= $2
          AND NOT EXISTS (
            SELECT 1 FROM "AthleteSessionCompletion" c
            JOIN "Athlete" a ON a.id = c."athleteId"
            WHERE a."userId" = e."userId"
              AND c."sessionId" = e.metadata ->> 'sessionId'
              AND c."startedAt" IS NOT NULL
-         )`, [clubId, ATHLETE_SESSION_PREVIEW_EVENT, since]
+         )`, [ATHLETE_SESSION_PREVIEW_EVENT, since]
     )
   ]);
   const events = eventsResult.rows;
