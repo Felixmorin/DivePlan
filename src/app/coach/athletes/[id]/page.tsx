@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Dumbbell, Trophy, ChevronRight, CalendarDays, Activity, FileText } from "lucide-react";
+import { Dumbbell, Trophy, ChevronRight, CalendarDays, Activity, FileText, TrendingUp } from "lucide-react";
 import { AthleteActionsMenu } from "@/app/coach/athletes/athlete-actions-menu";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { CompetitionListPreview } from "@/components/coach/competition-list-preview";
@@ -229,6 +229,24 @@ function AthleteDetail({ profile, groups = [], demo = false }: { profile: Athlet
   const wellnessAverage = wellnessPoints.length ? wellnessPoints.reduce((sum, point) => sum + point.score, 0) / wellnessPoints.length : null;
   const wellnessCoordinates = wellnessPoints.map((point, index) => `${wellnessPoints.length < 2 ? 54 : 12 + index / (wellnessPoints.length - 1) * 86},${47 - (point.score - 1) * 10}`);
   const wellnessLine = wellnessCoordinates.join(" ");
+  const trendToday = startOfMontrealDay();
+  const volumeTrend = Array.from({ length: 5 }, (_, index) => {
+    const weekStart = addMontrealDays(trendToday, -28 + index * 7);
+    const weekEnd = index === 4 ? addMontrealDays(trendToday, 1) : addMontrealDays(weekStart, 7);
+    const sessions = profile.recentSessions.filter((session) => {
+      const date = new Date(session.date);
+      return date >= weekStart && date < weekEnd;
+    });
+    return {
+      date: weekStart,
+      planned: sessions.reduce((sum, session) => sum + session.poolPlanned, 0),
+      actual: sessions.reduce((sum, session) => sum + session.poolActual, 0)
+    };
+  });
+  const trendMax = Math.max(20, Math.ceil(Math.max(...volumeTrend.map((point) => point.planned), ...volumeTrend.map((point) => point.actual)) / 20) * 20);
+  const trendY = (value: number) => 43 - (value / trendMax) * 34;
+  const plannedTrendPoints = volumeTrend.map((point, index) => `${12 + index * 19},${trendY(point.planned)}`).join(" ");
+  const actualTrendPoints = volumeTrend.map((point, index) => `${12 + index * 19},${trendY(point.actual)}`).join(" ");
   const evaluations = profile.competitionConfidence;
   const evaluationDates = new Set(evaluations.map((item)=>item.evaluatedAt));
   const athleteRatings = evaluations.filter((item)=>item.evaluator==="ATHLETE").map((item)=>item.rating);
@@ -265,6 +283,14 @@ function AthleteDetail({ profile, groups = [], demo = false }: { profile: Athlet
       </svg><div className="athlete-session-rating-dates"><span>{formatMontrealDate(new Date(wellnessPoints[0].date),{day:"numeric",month:"short"})}</span><span>{formatMontrealDate(new Date(wellnessPoints[Math.floor((wellnessPoints.length-1)/2)].date),{day:"numeric",month:"short"})}</span><span>{formatMontrealDate(new Date(wellnessPoints.at(-1)!.date),{day:"numeric",month:"short"})}</span></div><div className="athlete-session-rating-legend"><span><i/>Pas bien</span><span><i/>Difficile</span><span><i/>Moyen</span><span><i/>Bien</span><span><i/>Très bien</span></div></div> : <p className="athlete-empty athlete-session-rating-empty">Aucune évaluation de fin de séance pour le moment.</p>}</section>
       <section className="athlete-panel" id="athlete-notes"><div className="athlete-panel-title"><h2>Derniers commentaires de l’athlète</h2></div>{profile.diveNotes.slice(0,3).map(note=><div className="athlete-note-row" key={note.id}><span className="athlete-icon-box"><FileText className="h-4 w-4"/></span><div><b>{formatMontrealDate(note.sessionDate,{day:"numeric",month:"short"})} · {note.code} · {note.height === "ONE_METER" ? "1 m" : note.height === "THREE_METER" ? "3 m" : note.height === "PLATFORM" ? "Plateforme" : note.height.replaceAll("_", " ")}</b><p>{note.note}</p></div><ChevronRight className="h-4 w-4 shrink-0"/></div>)}{profile.diveNotes.length===0&&<p className="athlete-empty">Aucun commentaire pour le moment.</p>}</section>
       <section className="athlete-panel"><div className="athlete-panel-title"><h2>Séances récentes</h2></div><div className="athlete-session-list">{profile.recentSessions.slice(0,6).map(session=><Link key={session.id} href={demo?"/coach/sessions/demo":`/coach/sessions/${session.id}`}><span>{formatMontrealDate(session.date,{day:"numeric",month:"short"})}</span><b>{session.title}</b><em>{session.poolActual} reps</em><ChevronRight className="h-3.5 w-3.5"/></Link>)}{profile.recentSessions.length===0&&<p className="athlete-empty">Aucune séance terminée.</p>}</div></section>
+      <section className="athlete-panel athlete-volume-weekly-panel"><header className="athlete-volume-weekly-heading"><h2><TrendingUp className="h-4 w-4"/> Tendances <span>(4 dernières semaines)</span></h2><span>Volume total <ChevronRight className="h-3 w-3"/></span></header>
+        <div className="athlete-volume-weekly-chart"><svg viewBox="0 0 100 57" preserveAspectRatio="none" role="img" aria-label="Tendances du volume prévu et réalisé sur les quatre dernières semaines">
+          {[0,1,2,3].map((step) => { const value = Math.round((trendMax / 3) * (3 - step)); const y = 43 - (value / trendMax) * 34; return <g key={step}><line x1="10" x2="96" y1={y} y2={y} stroke="#e7edf3" strokeWidth=".45" vectorEffect="non-scaling-stroke"/><text x="1" y={y + 1.4} fill="#71839a" fontSize="3.8">{value}</text></g>; })}
+          <polyline points={plannedTrendPoints} fill="none" stroke="#aabbd1" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
+          <polyline points={actualTrendPoints} fill="none" stroke="#09b7eb" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
+          {volumeTrend.map((point,index)=><g key={point.date.toISOString()}><circle cx={12+index*19} cy={trendY(point.planned)} r="1.7" fill="#aabbd1" stroke="white" strokeWidth=".7" vectorEffect="non-scaling-stroke"><title>{`Prévu : ${point.planned}`}</title></circle><circle cx={12+index*19} cy={trendY(point.actual)} r="1.7" fill="#09b7eb" stroke="white" strokeWidth=".7" vectorEffect="non-scaling-stroke"><title>{`Réalisé : ${point.actual}`}</title></circle><text x={12+index*19} y="52" textAnchor="middle" fill="#536a83" fontSize="3.6">{formatMontrealDate(point.date,{day:"numeric",month:"short"})}</text></g>)}
+        </svg></div><div className="athlete-volume-weekly-legend"><span><i className="is-planned"/>Prévu</span><span><i className="is-actual"/>Réalisé</span></div>
+      </section>
     </aside>
   </div>;
   const evaluationsTab = <div className="athlete-evaluations-page">
