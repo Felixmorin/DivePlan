@@ -7,10 +7,11 @@ import { deleteAthlete, updateAthleteProfile } from "@/app/coach/athletes/action
 
 type GroupOption = { id: string; name: string };
 
-export function AthleteActionsMenu({ athlete, groups, demo = false }: {
+export function AthleteActionsMenu({ athlete, groups, demo = false, directEdit = false }: {
   athlete: { id: string; firstName: string; lastName: string; level: string; groupId?: string | null; birthDate?: string | null; active: boolean };
   groups: GroupOption[];
   demo?: boolean;
+  directEdit?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -55,7 +56,8 @@ export function AthleteActionsMenu({ athlete, groups, demo = false }: {
   }
 
   return (
-    <div className="relative inline-flex justify-end">
+    <div className="relative inline-flex items-center justify-end gap-1">
+      {directEdit && <button type="button" disabled={demo} onClick={() => setEditing(true)} className="flex h-9 items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 text-xs font-bold text-[var(--color-ink)] hover:bg-[var(--color-surface-raised)] disabled:opacity-40"><Pencil className="h-3.5 w-3.5"/> Modifier le profil</button>}
       <button ref={triggerRef} type="button" aria-label={`Actions pour ${athlete.firstName} ${athlete.lastName}`} aria-expanded={open} onClick={toggleMenu} disabled={demo} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-ink)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] disabled:opacity-40"><MoreVertical className="h-5 w-5" /></button>
       {open && createPortal(<div ref={menuRef} style={{ position: "fixed", top: menuPosition.top, bottom: menuPosition.bottom, right: menuPosition.right }} className="z-[110] min-w-48 rounded-xl border border-[var(--color-border)] bg-white p-1.5 shadow-xl">
         <button type="button" onClick={() => { setEditing(true); setOpen(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-[var(--color-ink)] hover:bg-[var(--color-surface-raised)]"><Pencil className="h-4 w-4" />Modifier le profil</button>
