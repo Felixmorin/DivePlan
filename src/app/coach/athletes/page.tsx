@@ -79,7 +79,7 @@ export default async function AthletesPage() {
   const seasonLabel = `${seasonStartYear}-${seasonStartYear + 1}`;
   const seasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00");
   const seasonEnd = parseMontrealSessionDate(`${seasonStartYear + 1}-09-01`, "00:00");
-  const [sessions, seasonStatsResult] = await Promise.all([athleteIds.length ? query<{ athleteId: string; id: string; title: string; date: Date; status: string }>(
+  const [sessions, seasonStatsResult, allTimeSessionStatsResult] = await Promise.all([athleteIds.length ? query<{ athleteId: string; id: string; title: string; date: Date; status: string }>(
     `SELECT DISTINCT ON (assignment."athleteId") assignment."athleteId", s.id, s.title, s.date, s.status
      FROM "TrainingSession" s
      JOIN "TrainingWeek" w ON w.id = s."weekId"
@@ -93,8 +93,17 @@ export default async function AthletesPage() {
   query<{ volume: number; completedSessions: number }>(
     `SELECT
        (SELECT COALESCE(SUM(l."repetitionsCompleted"),0)::int FROM "AthleteDiveLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3) AS volume,
-       (SELECT COUNT(*)::int FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 AND c.status='COMPLETED') AS "completedSessions"`,
+       (SELECT COUNT(DISTINCT s.id)::int FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId"
+        WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3
+          AND EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id AND l."repetitionsCompleted" >= 1)) AS "completedSessions"`,
     [clubId, seasonStart, seasonEnd]
+  ),
+  query<{ completedSessions: number }>(
+    `SELECT COUNT(DISTINCT s.id)::int AS "completedSessions"
+     FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId"
+     WHERE w."clubId"=$1
+       AND EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id AND l."repetitionsCompleted" >= 1)`,
+    [clubId]
   )]);
 
   const nextByAthlete = new Map<string, AthleteRow["nextSession"]>();
@@ -128,7 +137,7 @@ export default async function AthletesPage() {
     <CoachShell active="Athletes">
       <div className="athlete-directory-page">
       <DirectoryHeader title="Athlètes" description="Suivez votre groupe et accédez aux profils" season={seasonLabel} groups={groupStats} volume={Number(seasonStatsResult.rows[0]?.volume ?? 0)} completedSessions={Number(seasonStatsResult.rows[0]?.completedSessions ?? 0)} />
-      <DirectoryStats rows={rows} />
+      <DirectoryStats rows={rows} completedSessions={Number(allTimeSessionStatsResult.rows[0]?.completedSessions ?? 0)} />
       <AthleteAccountCard groups={groups} />
       <AthleteDirectory rows={rows} groups={groups} />
       </div>
@@ -156,7 +165,7 @@ function DemoAthletesPage() {
     <CoachShell active="Athletes">
       <div className="athlete-directory-page">
       <DirectoryHeader title="Athlètes" description="Suivez votre groupe et accédez aux profils" season={currentSeasonLabel()} groups={[{ name: "Provincial", athletes: rows.length }]} volume={rows.reduce((sum, row) => sum + row.volume, 0)} completedSessions={rows.reduce((sum, row) => sum + row.completedSessions, 0)} />
-      <DirectoryStats rows={rows} />
+      <DirectoryStats rows={rows} completedSessions={0} />
       <AthleteAccountCard groups={[{ id: "provincial", name: "Provincial" }]} demo />
       <AthleteDirectory rows={rows} groups={[{ id: "provincial", name: "Provincial" }]} demo />
       </div>
@@ -177,12 +186,11 @@ function DirectoryHeader({ title, description, season, groups, volume, completed
   );
 }
 
-function DirectoryStats({ rows }: { rows: AthleteRow[] }) {
-  const sessions = rows.reduce((total, row) => total + row.completedSessions, 0);
+function DirectoryStats({ rows, completedSessions }: { rows: AthleteRow[]; completedSessions: number }) {
   const volume = rows.reduce((total, row) => total + row.volume, 0);
   return <section className="athlete-directory-stats" aria-label="Statistiques du groupe">
     <Stat icon={<UserRound />} value={rows.filter((row) => row.active).length} label="athlètes actifs" />
-    <Stat icon={<CalendarDays />} value={sessions} label="séances complétées" />
+    <Stat icon={<CalendarDays />} value={completedSessions} label="séances complétées" />
     <Stat icon={<Activity />} value={volume.toLocaleString("fr-CA")} label="répétitions" />
   </section>;
 }

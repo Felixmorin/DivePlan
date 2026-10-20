@@ -8,6 +8,8 @@ type Dive = {
   platformHeight: number | null;
   code: string;
   difficulty: number | null;
+  repetitions: number;
+  athleteEvaluation: number | null;
   note?: string | null;
 };
 
@@ -34,11 +36,13 @@ export function CompetitionListPreview({ name, dives }: { name: string; dives: D
             const rows = dives.filter((dive) => dive.height === value);
             return <TabsContent key={value} value={value} className="athlete-list-preview-table-wrap">
               <table className="athlete-list-preview-table">
-                <thead><tr><th>#</th><th>Code</th><th>DD</th><th>Notes</th></tr></thead>
+                <thead><tr><th>#</th><th>Code</th><th>DD</th><th>Répétitions</th><th>Évaluation athlète</th><th>Note athlète</th></tr></thead>
                 <tbody>{rows.map((dive, index) => <tr key={dive.id}>
                   <td>{index + 1}</td>
-                  <td>{dive.code}{dive.height === "PLATFORM" && dive.platformHeight !== null ? <small className="ml-1 text-slate-500">{dive.platformHeight} m</small> : null}</td>
+                  <td className="athlete-list-preview-code">{dive.code}{dive.height === "PLATFORM" && dive.platformHeight !== null ? <small className="ml-1 text-slate-500">{dive.platformHeight} m</small> : null}</td>
                   <td>{dive.difficulty?.toFixed(1) ?? "—"}</td>
+                  <td>{dive.repetitions}</td>
+                  <td>{dive.athleteEvaluation === null ? "—" : `${dive.athleteEvaluation} / 5`}</td>
                   <td className="athlete-list-preview-note">{dive.note?.trim() || "—"}</td>
                 </tr>)}</tbody>
               </table>

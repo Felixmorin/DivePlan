@@ -4,10 +4,11 @@ import { Dumbbell, Trophy, ChevronRight, CalendarDays, Activity, FileText } from
 import { AthleteActionsMenu } from "@/app/coach/athletes/athlete-actions-menu";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { CompetitionListPreview } from "@/components/coach/competition-list-preview";
+import { CoachCompetitionListsTab } from "@/components/coach/coach-competition-lists-tab";
 import { AthleteProfileTabs } from "@/components/coach/athlete-profile-tabs";
 import { CoachCompetitionEvaluationForm } from "@/components/coach/coach-competition-evaluation-form";
 import { CompetitionConfidenceChart, type CompetitionConfidencePoint } from "@/components/athlete/competition-confidence-chart";
-import { StatusPill } from "@/components/training/status-pill";
+import { CoachAthleteSessionHistory, type AthleteHistorySession } from "@/components/coach/coach-athlete-session-history";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,10 +45,11 @@ type AthleteProfile = {
   volume: number;
   nextSession?: { id: string; title: string; date: Date; status: string };
   recentSessions: Array<{ id: string; title: string; date: Date; status: string; rating?: string | null; note?: string | null; poolPlanned: number; poolActual: number; blocks: Array<{ id: string; title: string; planned: number; actual: number }> }>;
+  sessionHistory: AthleteHistorySession[];
   skills: Array<{ code: string; name: string; status: string; progress: number; trainings: number; repetitions: number }>;
   nextCompetition?: { title: string; startsAt: Date; endsAt: Date | null };
   competitionLists: Array<{ id: string; name: string }>;
-  competitionDives: Array<{ id: string; listId: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; platformHeight: number | null; code: string; difficulty: number | null; volume: number }>;
+  competitionDives: Array<{ id: string; listId: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; platformHeight: number | null; code: string; name?: string; difficulty: number | null; volume: number }>;
   competitionConfidence: CompetitionConfidencePoint[];
   confidenceSchemaUnavailable: boolean;
   diveNotes: Array<{ id: string; code: string; name: string; height: string; note: string; updatedAt: Date; sessionId: string; sessionTitle: string; sessionDate: Date }>;
@@ -65,6 +67,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
   const athlete=(await query<{id:string;userId:string;firstName:string;lastName:string;avatar:string|null;level:string;active:boolean;groupId:string|null;groupName:string|null;birthDate:Date|null}>(`SELECT a.id,a."userId",u."firstName",u."lastName",u.avatar,a.level,a.active,a."groupId",g.name AS "groupName",a."birthDate" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a.id=$1 AND a."clubId"=$2`,[id,clubId])).rows[0];
   if(!athlete) notFound();
   const groupOptions=(await query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`,[clubId])).rows;
+  const sessionHistoryRows=(await query<AthleteHistorySession>(`SELECT s.id,s.title,s.date,s.focus AS type,COALESCE(pe.duration,s.duration)::int AS duration,c.status,c.rating,COALESCE(SUM(l."repetitionsCompleted"),0)::int AS volume,can.note AS "coachNote" FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" LEFT JOIN "AthleteDiveLog" l ON l."sessionId"=s.id AND l."athleteId"=c."athleteId" LEFT JOIN "CoachAthleteSessionNote" can ON can."sessionId"=s.id AND can."athleteId"=c."athleteId" WHERE c."athleteId"=$1 AND w."clubId"=$2 GROUP BY s.id,pe.duration,c.status,c.rating,can.note ORDER BY s.date DESC`,[athlete.id,clubId])).rows;
   const [athleteAvatarUrl] = await resolveAvatarUrls([athlete.avatar]);
   const today=startOfMontrealDay();
   const seasonStartYear=today.getMonth()>=8?today.getFullYear():today.getFullYear()-1;
@@ -74,7 +77,7 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
     query<{volume:number}>(`SELECT COALESCE(SUM(l."repetitionsCompleted"),0)::int AS volume FROM "AthleteDiveLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE l."athleteId"=$1 AND w."clubId"=$2`,[athlete.id,clubId]),
     query<{code:string;name:string;status:string;progress:number;trainings:number;repetitions:number}>(`SELECT s.code,s.name,a.status,a.progress,a.trainings,a.repetitions FROM "AthleteSkill" a JOIN "Skill" s ON s.id=a."skillId" WHERE a."athleteId"=$1 ORDER BY a.progress DESC`,[athlete.id]),
     query<{id:string;name:string}>(`SELECT id,name FROM "CompetitionDiveList" WHERE "athleteId"=$1 ORDER BY position,"createdAt"`,[athlete.id]),
-    query<{id:string;listId:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";platformHeight:number|null;diveCode:string;difficulty:number|null}>(`SELECT id,"listId",height,"platformHeight","diveCode",difficulty FROM "CompetitionDive" WHERE "athleteId"=$1 ORDER BY height,position,"createdAt"`,[athlete.id]),
+    query<{id:string;listId:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";platformHeight:number|null;diveCode:string;diveName:string;difficulty:number|null}>(`SELECT id,"listId",height,"platformHeight","diveCode","diveName",difficulty FROM "CompetitionDive" WHERE "athleteId"=$1 ORDER BY height,position,"createdAt"`,[athlete.id]),
     query<{height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";heightLabel:string|null;diveCode:string;volume:number}>(`SELECT s.height,s.label AS "heightLabel",d."diveCode",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 GROUP BY s.height,s.label,d."diveCode"`,[athlete.id]),
     query<{id:string;date:Date}>(`SELECT s.id,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.status<>'NOT_DONE' AND s.date >= $2 AND s.date < $3 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$4)`,[clubId,seasonStart,addMontrealDays(today,1),athlete.id]),
     query<{poolDiveId:string;note:string;updatedAt:Date;diveCode:string;diveName:string;height:string;sessionId:string;sessionTitle:string;sessionDate:Date}>(`SELECT n."poolDiveId",n.note,n."updatedAt",d."diveCode",d."diveName",s.height,t.id AS "sessionId",t.title AS "sessionTitle",t.date AS "sessionDate" FROM "AthleteDiveNote" n JOIN "PoolDive" d ON d.id=n."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" JOIN "PoolTraining" p ON p."blockId"=s."poolTrainingId" JOIN "SessionBlock" b ON b.id=p."blockId" JOIN "TrainingSession" t ON t.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=t."weekId" WHERE n."athleteId"=$1 AND w."clubId"=$2 ORDER BY n."updatedAt" DESC LIMIT 50`,[athlete.id,clubId]),
@@ -120,12 +123,12 @@ export default async function AthleteDetailPage({ params }: { params: Promise<{ 
   });
   const profile: AthleteProfile = {
     id:athlete.id,firstName:athlete.firstName,lastName:athlete.lastName,avatar:athleteAvatarUrl ?? avatarUrlForPage(athlete.avatar),level:athlete.level,active:athlete.active,groupId:athlete.groupId,groupName:athlete.groupName??"Sans groupe",birthDate:athlete.birthDate,
-    volume:diveTotalResult.rows[0]?.volume??0,
+    volume:diveTotalResult.rows[0]?.volume??0,sessionHistory:sessionHistoryRows,
     nextSession:nextSessionRows.rows[0],recentSessions,
     skills:skillsRows.rows.map(row=>({code:row.code,name:row.name,status:row.status,progress:row.progress,trainings:row.trainings,repetitions:row.repetitions})),
     nextCompetition:nextCompetitionRows.rows[0],
     competitionLists:competitionListRows.rows,
-    competitionDives:competitionDiveRows.rows.map(row=>({id:row.id,listId:row.listId,height:row.height,platformHeight:row.platformHeight,code:row.diveCode,difficulty:row.difficulty,volume:competitionDiveVolumeRows.rows.filter(volume=>volume.diveCode===row.diveCode&&matchesCompetitionDiveHeight(volume.height,volume.heightLabel,row.height,row.platformHeight)).reduce((sum,volume)=>sum+volume.volume,0)})),
+    competitionDives:competitionDiveRows.rows.map(row=>({id:row.id,listId:row.listId,height:row.height,platformHeight:row.platformHeight,code:row.diveCode,name:row.diveName,difficulty:row.difficulty,volume:competitionDiveVolumeRows.rows.filter(volume=>volume.diveCode===row.diveCode&&matchesCompetitionDiveHeight(volume.height,volume.heightLabel,row.height,row.platformHeight)).reduce((sum,volume)=>sum+volume.volume,0)})),
     competitionConfidence:confidenceRows.map(row=>({competitionDiveId:row.competitionDiveId,code:row.diveCode,height:row.height,rating:row.rating,evaluator:row.evaluator,evaluatedAt:row.evaluatedAt.toISOString()})),confidenceSchemaUnavailable,
     diveNotes:diveNoteRows.rows.map(row=>({id:row.poolDiveId,code:row.diveCode,name:row.diveName,height:row.height,note:row.note,updatedAt:row.updatedAt,sessionId:row.sessionId,sessionTitle:row.sessionTitle,sessionDate:row.sessionDate})),progress,
     attendance:{absent:absenceRows.rows.length,total:attendanceRows.rows.length,rate:attendanceRows.rows.length?Math.round(absenceRows.rows.length/attendanceRows.rows.length*100):0}
@@ -155,6 +158,10 @@ function DemoAthleteDetailPage({ id }: { id: string }) {
         recentSessions: [
           { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), status: "COMPLETED", rating: "Stable", note: "Placeholder demo.", poolPlanned: 12, poolActual: athlete.recentVolume, blocks: [{ id: "demo-block", title: "Bassin · technique", planned: 12, actual: athlete.recentVolume }] },
           { id: "demo-2", title: "Dryland power", date: parseMontrealSessionDate("2026-08-22"), status: "COMPLETED", rating: "Bon effort", note: null, poolPlanned: 0, poolActual: 0, blocks: [{ id: "demo-block-2", title: "Préparation physique", planned: 72, actual: 60 }] }
+        ],
+        sessionHistory: [
+          { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), type: "Technique", duration: 90, status: "COMPLETED", volume: athlete.recentVolume, coachNote: "Très bonne qualité sur les plongeons. Continuer à travailler la stabilité.", rating: "Très bien" },
+          { id: "demo-2", title: "Dryland power", date: parseMontrealSessionDate("2026-08-22"), type: "Physique", duration: 75, status: "COMPLETED", volume: 0, coachNote: "Bon engagement et bonne régularité.", rating: "Bien" }
         ],
         skills: [
           { code: "201B", name: "Arriere carpe", status: "DEVELOPING", progress: 68, trainings: 8, repetitions: 31 },
@@ -210,22 +217,31 @@ function AthleteDetail({ profile, groups = [], demo = false }: { profile: Athlet
   const fullName = `${profile.firstName} ${profile.lastName}`;
   const nextCompetition = profile.nextCompetition;
   const activeList = profile.competitionLists[0];
-  const activeListDives = activeList ? profile.competitionDives.filter((dive)=>dive.listId===activeList.id).map((dive)=>({...dive,note:profile.diveNotes.find((note)=>note.code===dive.code)?.note??null})) : [];
-  const skillProgress = profile.skills.length ? Math.round(profile.skills.reduce((sum,skill)=>sum+skill.progress,0)/profile.skills.length) : 0;
+  const activeListDives = activeList ? profile.competitionDives.filter((dive)=>dive.listId===activeList.id).map((dive)=>({...dive,repetitions:dive.volume,athleteEvaluation:profile.competitionConfidence.filter((item)=>item.competitionDiveId===dive.id&&item.evaluator==="ATHLETE").sort((a,b)=>b.evaluatedAt.localeCompare(a.evaluatedAt))[0]?.rating??null,note:profile.diveNotes.find((note)=>note.code===dive.code)?.note??null})) : [];
+  const divesWithTenReps = activeListDives.filter((dive) => dive.volume >= 10).length;
   const volumePoints = profile.progress.chartData.slice(-7);
   const volumeValues = volumePoints.map((point) => point.volume);
   const volumeMin = Math.min(0, ...volumeValues);
   const volumeMax = Math.max(1, ...volumeValues);
   const volumeLine = volumePoints.map((point,index) => `${volumePoints.length < 2 ? 50 : index/(volumePoints.length-1)*100},${38-(point.volume-volumeMin)/(volumeMax-volumeMin)*30}`).join(" ");
-  const wellnessPoints = profile.competitionConfidence.slice(-7);
-  const wellnessValues = wellnessPoints.map(point=>point.rating*2);
-  const wellnessMin = Math.min(0,...wellnessValues);
-  const wellnessMax = Math.max(10,...wellnessValues);
-  const wellnessLine = wellnessPoints.map((point,index)=>`${wellnessPoints.length<2?50:index/(wellnessPoints.length-1)*100},${38-(point.rating*2-wellnessMin)/(wellnessMax-wellnessMin)*30}`).join(" ");
+  const sessionRatingScale = ["pas bien", "difficile", "moyen", "bien", "très bien"];
+  const wellnessPoints = profile.sessionHistory
+    .filter((session) => session.rating && sessionRatingScale.includes(session.rating.trim().toLocaleLowerCase("fr")))
+    .map((session) => ({ ...session, score: sessionRatingScale.indexOf(session.rating!.trim().toLocaleLowerCase("fr")) + 1 }))
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .slice(-7);
+  const wellnessAverage = wellnessPoints.length ? wellnessPoints.reduce((sum, point) => sum + point.score, 0) / wellnessPoints.length : null;
+  const wellnessCoordinates = wellnessPoints.map((point, index) => `${wellnessPoints.length < 2 ? 54 : 12 + index / (wellnessPoints.length - 1) * 86},${47 - (point.score - 1) * 10}`);
+  const wellnessLine = wellnessCoordinates.join(" ");
   const evaluations = profile.competitionConfidence;
   const evaluationDates = new Set(evaluations.map((item)=>item.evaluatedAt));
   const athleteRatings = evaluations.filter((item)=>item.evaluator==="ATHLETE").map((item)=>item.rating);
   const athleteAverage = athleteRatings.length ? athleteRatings.reduce((sum,rating)=>sum+rating,0)/athleteRatings.length : null;
+  const evaluationHeightLabels = { ONE_METER: "1 m", THREE_METER: "3 m", PLATFORM: "Plateforme", CUSTOM: "Autre" } as const;
+  const athleteRatingsByHeight = (["ONE_METER", "THREE_METER", "PLATFORM", "CUSTOM"] as const).map((height) => {
+    const ratings = evaluations.filter((item) => item.evaluator === "ATHLETE" && item.height === height).map((item) => item.rating);
+    return { height, label: evaluationHeightLabels[height], ratings, average: ratings.length ? ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length : null };
+  }).filter((item) => item.ratings.length > 0);
   const latestEvaluation = evaluations.length ? [...evaluations].sort((a,b)=>b.evaluatedAt.localeCompare(a.evaluatedAt))[0] : null;
   const overview = <div className="athlete-dashboard-grid" id="overview">
     <main className="athlete-dashboard-main">
@@ -236,30 +252,51 @@ function AthleteDetail({ profile, groups = [], demo = false }: { profile: Athlet
       </div>
       <div className="athlete-top-panels">
         <section className="athlete-panel"><h2>Prochaine séance</h2>{profile.nextSession?<Link className="athlete-feature-link" href={demo?"/coach/sessions/demo":`/coach/sessions/${profile.nextSession.id}`}><CalendarDays className="h-5 w-5"/><span><b>{formatMontrealDate(profile.nextSession.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</b><small>{profile.nextSession.title}</small></span><ChevronRight className="ml-auto h-4 w-4"/></Link>:<p className="athlete-empty">Aucune séance planifiée.</p>}</section>
-        <section className="athlete-panel"><h2>État actuel</h2><div className="athlete-state-grid"><div><span>Progression</span><b>{profile.skills.length?`${skillProgress}%`:"—"}</b><i>{profile.skills.length} compétences</i></div><div><span>Assiduité</span><b>{profile.attendance.total?`${Math.max(0,100-profile.attendance.rate)}%`:"—"}</b><i>présence saison</i></div></div></section>
+        <section className="athlete-panel"><h2>État actuel</h2><div className="athlete-state-grid"><div><span>Plongeons à 10 reps ou +</span><b>{divesWithTenReps} / {activeListDives.length}</b><i>{activeList?.name ?? "Aucune liste active"}</i></div><div><span>Assiduité</span><b>{profile.attendance.total?`${Math.max(0,100-profile.attendance.rate)}%`:"—"}</b><i>présence saison</i></div></div></section>
       </div>
       <section className="athlete-panel"><h2>Charge d’entraînement par famille de plongeon</h2><div className="athlete-family-bars">{profile.progress.skillData.slice(0,6).map((item)=>{const max=Math.max(1,...profile.progress.skillData.map(skill=>skill.volume));return <div className="athlete-family-row" key={item.name}><span>{item.name}</span><i><b style={{width:`${Math.max(2,item.volume/max*100)}%`,background:diveFamilyColors[item.name]??"#94a3b8"}}/></i><strong>{item.volume}</strong></div>})}{profile.progress.skillData.length===0&&<p className="athlete-empty">Aucune donnée de volume par famille.</p>}</div></section>
-      <section className="athlete-panel"><h2>Évolution du volume</h2><div className="athlete-volume-chart"><div className="athlete-volume-y"><span>{volumeMax}</span><span>{Math.round(volumeMax/2)}</span><span>0</span></div><svg viewBox="0 0 100 44" preserveAspectRatio="none" role="img" aria-label="Évolution du volume de plongeons"><polyline points={volumeLine} fill="none" stroke="#0eb9cb" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>{volumePoints.map((point,index)=><circle key={`${point.name}-${index}`} cx={volumePoints.length<2?50:index/(volumePoints.length-1)*100} cy={38-(point.volume-volumeMin)/(volumeMax-volumeMin)*30} r="1.4" fill="#0eb9cb" vectorEffect="non-scaling-stroke"/>)}</svg><div className="athlete-volume-x"><span>{volumePoints[0]?.name??"Début"}</span><span>{volumePoints[Math.floor(volumePoints.length/2)]?.name??""}</span><span>{volumePoints.at(-1)?.name??"Récent"}</span></div></div></section>
+      <div id="competition-list"><CompetitionListPreview name={activeList?.name??"Liste de compétition"} dives={activeListDives}/></div>
+      <section className="athlete-panel athlete-volume-trend-panel"><h2>Évolution du volume</h2><div className="athlete-wellbeing"><strong>{profile.volume}</strong><span> répétitions cumulées</span></div><div className="athlete-wellbeing-chart athlete-volume-trend-chart"><svg viewBox="0 0 100 44" preserveAspectRatio="none" role="img" aria-label="Évolution récente du volume d’entraînement"><polyline points={volumeLine} fill="none" stroke="#ff526e" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>{volumePoints.map((point,index)=><circle key={`${point.name}-${index}`} cx={volumePoints.length<2?50:index/(volumePoints.length-1)*100} cy={38-(point.volume-volumeMin)/(volumeMax-volumeMin)*30} r="1.5" fill="#ff526e" vectorEffect="non-scaling-stroke"/>)}</svg><div className="athlete-wellbeing-labels"><span>{volumePoints[0]?.name??"Début"}</span><span>{volumePoints[Math.floor(volumePoints.length/2)]?.name??""}</span><span>{volumePoints.at(-1)?.name??"Récent"}</span></div></div></section>
     </main>
     <aside className="athlete-dashboard-side">
       <section className="athlete-panel"><div className="athlete-panel-title"><h2>Prochaine compétition</h2>{nextCompetition&&<ChevronRight className="h-4 w-4"/>}</div>{nextCompetition?<div className="athlete-event-card"><div className="athlete-event-art"><Trophy className="h-7 w-7"/></div><div><b>{nextCompetition.title}</b><small>{formatMontrealDate(nextCompetition.startsAt,{day:"numeric",month:"short",year:"numeric"})}</small>{nextCompetition.endsAt&&<small>Au {formatMontrealDate(nextCompetition.endsAt)}</small>}</div><span className="athlete-countdown"><small>Dans</small><b>{formatMontrealCountdown(nextCompetition.startsAt)}</b></span></div>:<p className="athlete-empty">Aucune compétition prévue.</p>}</section>
-      <section className="athlete-panel"><h2>Tendances bien-être</h2><div className="athlete-wellbeing"><strong>{wellnessValues.length?`${(wellnessValues.reduce((sum,value)=>sum+value,0)/wellnessValues.length).toFixed(1)}`:"—"}</strong><span>/ 10 · confiance en compétition</span></div><div className="athlete-wellbeing-chart"><svg viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true"><polyline points={wellnessLine} fill="none" stroke="#ff526e" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>{wellnessPoints.map((point,index)=><circle key={`${point.competitionDiveId}-${point.evaluatedAt}`} cx={wellnessPoints.length<2?50:index/(wellnessPoints.length-1)*100} cy={38-(point.rating*2-wellnessMin)/(wellnessMax-wellnessMin)*30} r="1.4" fill="#ff526e" vectorEffect="non-scaling-stroke"/>)}</svg><div className="athlete-wellbeing-labels"><span>{wellnessPoints[0]?formatMontrealDate(new Date(wellnessPoints[0].evaluatedAt),{day:"numeric",month:"short"}):"—"}</span><span>{wellnessPoints[Math.floor(wellnessPoints.length/2)]?formatMontrealDate(new Date(wellnessPoints[Math.floor(wellnessPoints.length/2)].evaluatedAt),{day:"numeric",month:"short"}):""}</span><span>{wellnessPoints.at(-1)?formatMontrealDate(new Date(wellnessPoints.at(-1)!.evaluatedAt),{day:"numeric",month:"short"}):"—"}</span></div></div></section>
+      <section className="athlete-panel athlete-session-rating-panel"><h2>Tendances bien-être</h2><div className="athlete-wellbeing"><strong>{wellnessAverage === null ? "—" : wellnessAverage.toFixed(1)}</strong><span>/ 5 · ressenti moyen après séance</span></div>{wellnessPoints.length ? <div className="athlete-session-rating-chart"><svg viewBox="0 0 100 56" preserveAspectRatio="none" role="img" aria-label={`Évaluations de fin de séance, moyenne ${wellnessAverage?.toFixed(1)} sur 5`}>
+        {[1,2,3,4,5].map((score) => { const y = 47 - (score - 1) * 10; return <g key={score}><line x1="10" x2="99" y1={y} y2={y} stroke="#e7edf3" strokeWidth=".5" vectorEffect="non-scaling-stroke"/><text x="1" y={y + 1.5} fill="#71839a" fontSize="4">{score}</text></g>; })}
+        {wellnessPoints.length > 1 && <polygon points={`10,49 ${wellnessLine} 99,49`} fill="url(#session-rating-fill)"/>}
+        <defs><linearGradient id="session-rating-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#17b8c9" stopOpacity=".2"/><stop offset="100%" stopColor="#17b8c9" stopOpacity="0"/></linearGradient></defs>
+        <polyline points={wellnessLine} fill="none" stroke="#0aa9ba" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
+        {wellnessPoints.map((point,index) => <circle key={point.id} cx={wellnessPoints.length < 2 ? 54 : 12 + index / (wellnessPoints.length - 1) * 86} cy={47 - (point.score - 1) * 10} r="2" fill="#fff" stroke="#0aa9ba" strokeWidth="1.5" vectorEffect="non-scaling-stroke"><title>{`${formatMontrealDate(new Date(point.date),{day:"numeric",month:"short"})} · ${point.rating}`}</title></circle>)}
+      </svg><div className="athlete-session-rating-dates"><span>{formatMontrealDate(new Date(wellnessPoints[0].date),{day:"numeric",month:"short"})}</span><span>{formatMontrealDate(new Date(wellnessPoints[Math.floor((wellnessPoints.length-1)/2)].date),{day:"numeric",month:"short"})}</span><span>{formatMontrealDate(new Date(wellnessPoints.at(-1)!.date),{day:"numeric",month:"short"})}</span></div><div className="athlete-session-rating-legend"><span><i/>Pas bien</span><span><i/>Difficile</span><span><i/>Moyen</span><span><i/>Bien</span><span><i/>Très bien</span></div></div> : <p className="athlete-empty athlete-session-rating-empty">Aucune évaluation de fin de séance pour le moment.</p>}</section>
       <section className="athlete-panel" id="athlete-notes"><div className="athlete-panel-title"><h2>Derniers commentaires de l’athlète</h2></div>{profile.diveNotes.slice(0,3).map(note=><div className="athlete-note-row" key={note.id}><span className="athlete-icon-box"><FileText className="h-4 w-4"/></span><div><b>{formatMontrealDate(note.sessionDate,{day:"numeric",month:"short"})} · {note.code} · {note.height === "ONE_METER" ? "1 m" : note.height === "THREE_METER" ? "3 m" : note.height === "PLATFORM" ? "Plateforme" : note.height.replaceAll("_", " ")}</b><p>{note.note}</p></div><ChevronRight className="h-4 w-4 shrink-0"/></div>)}{profile.diveNotes.length===0&&<p className="athlete-empty">Aucun commentaire pour le moment.</p>}</section>
       <section className="athlete-panel"><div className="athlete-panel-title"><h2>Séances récentes</h2></div><div className="athlete-session-list">{profile.recentSessions.slice(0,6).map(session=><Link key={session.id} href={demo?"/coach/sessions/demo":`/coach/sessions/${session.id}`}><span>{formatMontrealDate(session.date,{day:"numeric",month:"short"})}</span><b>{session.title}</b><em>{session.poolActual} reps</em><ChevronRight className="h-3.5 w-3.5"/></Link>)}{profile.recentSessions.length===0&&<p className="athlete-empty">Aucune séance terminée.</p>}</div></section>
-      <section className="athlete-panel"><h2>Compétences</h2>{profile.skills.slice(0,5).map(skill=><div className="athlete-skill-row" key={`${skill.code}-${skill.name}`}><div><b>{skill.code} · {skill.name}</b><span>{skill.progress}%</span></div><i><b style={{width:`${Math.min(100,skill.progress)}%`}}/></i></div>)}{profile.skills.length===0&&<p className="athlete-empty">Aucune compétence suivie.</p>}</section>
     </aside>
   </div>;
   const evaluationsTab = <div className="athlete-evaluations-page">
-    <div className="athlete-evaluation-stats">
+    <section className="athlete-panel">
+      <h2>Overall</h2>
+      <div className="athlete-evaluation-stats">
+        <div><small>Ressenti moyen global</small><b>{athleteAverage===null?"—":`${athleteAverage.toFixed(1)} / 5`}</b><span>{athleteRatings.length} notes de confiance, toutes épreuves confondues</span></div>
+      </div>
+    </section>
+    <section className="athlete-panel">
+      <h2>Moyenne par épreuve</h2>
+      <div className="athlete-evaluation-stats">
+        {athleteRatingsByHeight.map((item) => <div key={item.height}><small>{item.label}</small><b>{item.average!.toFixed(1)} / 5</b><span>{item.ratings.length} {item.ratings.length === 1 ? "note" : "notes"} de confiance</span></div>)}
+        {athleteRatingsByHeight.length === 0 && <div><small>Aucune épreuve évaluée</small><b>—</b><span>Les moyennes apparaîtront après les évaluations.</span></div>}
+      </div>
+    </section>
+    <section className="athlete-panel">
+      <h2>Suivi des évaluations</h2>
+      <div className="athlete-evaluation-stats">
       <div><small>Évaluations enregistrées</small><b>{evaluationDates.size}</b><span>depuis le début du suivi</span></div>
-      <div><small>Ressenti moyen de l’athlète</small><b>{athleteAverage===null?"—":`${athleteAverage.toFixed(1)} / 5`}</b><span>{athleteRatings.length} notes de confiance</span></div>
       <div><small>Dernière évaluation</small><b>{latestEvaluation?formatMontrealDate(new Date(latestEvaluation.evaluatedAt),{day:"numeric",month:"short",year:"numeric"}):"Aucune"}</b><span>{latestEvaluation?`${latestEvaluation.evaluator==="COACH"?"Coach":"Athlète"} · ${latestEvaluation.code}`:"Aucune évaluation enregistrée"}</span></div>
-    </div>
+      </div>
+    </section>
     <CompetitionConfidenceChart data={evaluations}/>
     {profile.confidenceSchemaUnavailable?<p className="athlete-warning">Les évaluations sont temporairement indisponibles. Une migration de la base de données est requise pour les consulter ou en saisir.</p>:<CoachCompetitionEvaluationForm athleteId={profile.id} dives={activeListDives.map(({id,code,height,platformHeight})=>({id,code,height,platformHeight}))}/>}
   </div>;
-  const competitionTab = <CompetitionListPreview name={activeList?.name??"Liste de compétition"} dives={activeListDives}/>;
-  const historyTab = <section className="athlete-panel athlete-history-full" id="all-sessions"><h2>Historique des séances</h2>{profile.recentSessions.map(session=><div className="athlete-history-row" key={`${session.id}-${session.date.toISOString()}`}><div><b>{session.title}</b><small>{formatMontrealDate(session.date,{weekday:"short",day:"2-digit",month:"short"})} · {session.poolActual}/{session.poolPlanned} reps</small>{(session.rating||session.note)&&<p>{session.rating??""}{session.note?` · ${session.note}`:""}</p>}</div><StatusPill status={session.status}/><Button asChild size="sm" variant="outline"><Link href={demo?"/coach/sessions/demo":`/coach/sessions/${session.id}`}>Ouvrir</Link></Button></div>)}</section>;
+  const historyTab = <CoachAthleteSessionHistory sessions={profile.sessionHistory} attendance={profile.attendance} totalVolume={profile.volume} demo={demo}/>;
+  const competitionTab = <CoachCompetitionListsTab athleteId={profile.id} lists={profile.competitionLists} dives={profile.competitionDives.map((dive)=>({...dive,athleteEvaluation:profile.competitionConfidence.filter((item)=>item.competitionDiveId===dive.id&&item.evaluator==="ATHLETE").sort((a,b)=>b.evaluatedAt.localeCompare(a.evaluatedAt))[0]?.rating??null}))} demo={demo}/>;
 
   return <CoachShell active="Athletes">
     <div className="athlete-dashboard">
