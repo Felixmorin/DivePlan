@@ -324,6 +324,7 @@ function AthleteDetail({ profile, demo = false }: { profile: AthleteProfile; dem
           </Card>
         </div>
       </div>
+      </div>
     </CoachShell>
   );
 }
