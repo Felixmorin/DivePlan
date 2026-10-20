@@ -3,7 +3,8 @@
 import { Fragment, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ChevronDown, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
-import { copyCompetitionDiveList, createCompetitionDiveList, removeCompetitionDive, renameCompetitionDiveList, reorderCompetitionDives, setActiveCompetitionDiveList, updateCompetitionDiveDetails, updateCompetitionDiveStatus } from "@/app/coach/athletes/actions";
+import { copyCompetitionDiveList, createCompetitionDiveList, deleteCompetitionDiveList, removeCompetitionDive, renameCompetitionDiveList, reorderCompetitionDives, setActiveCompetitionDiveList, updateCompetitionDiveDetails, updateCompetitionDiveStatus } from "@/app/coach/athletes/actions";
+import { worldAquaticsDifficulty } from "@/lib/world-aquatics-dd";
 
 type Dive = {
   id: string;
@@ -106,6 +107,27 @@ export function CoachCompetitionListsTab({ athleteId, lists, dives, demo }: {
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Impossible d’activer cette liste.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function deleteSelectedList() {
+    if (!selectedList || demo || pending) return;
+    const diveCount = listDives.length;
+    const diveLabel = diveCount === 1 ? "plongeon" : "plongeons";
+    if (!window.confirm(`Supprimer la liste « ${selectedList.name} » et ses ${diveCount} ${diveLabel} ?`)) return;
+    setPending(true);
+    setError("");
+    try {
+      await deleteCompetitionDiveList(selectedList.id);
+      const nextList = lists.find((list) => list.id !== selectedList.id);
+      setSelectedListId(nextList?.id ?? "");
+      setActiveHeight("ONE_METER");
+      setEditingDiveId(null);
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Impossible de supprimer cette liste.");
     } finally {
       setPending(false);
     }
@@ -225,14 +247,14 @@ export function CoachCompetitionListsTab({ athleteId, lists, dives, demo }: {
                   <td>{dive.volume}</td>
                   <td><button type="button" className="coach-dive-edit-trigger" onClick={()=>setEditingDiveId(isEditing?null:dive.id)} disabled={demo||pending} aria-label={`${isEditing?"Fermer":"Modifier"} le plongeon ${dive.code}`} title="Modifier le plongeon"><Pencil className="h-4 w-4"/></button></td>
                 </tr>
-                {isEditing&&<tr key={`${dive.id}-editor`} className="coach-dive-editor-row"><td colSpan={7}><form onSubmit={saveDiveEdit} className="coach-dive-editor-form"><input type="hidden" name="diveId" value={dive.id}/><label>Code<input name="diveCode" maxLength={12} required defaultValue={dive.code}/></label><label>DD<input name="difficulty" inputMode="decimal" defaultValue={dive.difficulty?.toFixed(1)??""} placeholder="—"/></label>{dive.height==="PLATFORM"&&<label>Hauteur<select name="platformHeight" required defaultValue={dive.platformHeight?.toString()??""}><option value="" disabled>Choisir</option><option value="5">5 m</option><option value="7.5">7,5 m</option><option value="10">10 m</option></select></label>}<div className="coach-dive-editor-actions"><button type="submit" disabled={pending}><Save className="h-3.5 w-3.5"/>{pending?"Enregistrement…":"Enregistrer"}</button><button type="button" onClick={()=>void moveDive(index,-1)} disabled={pending||index===0} aria-label="Monter le plongeon"><ArrowUp className="h-4 w-4"/></button><button type="button" onClick={()=>void moveDive(index,1)} disabled={pending||index===visibleDives.length-1} aria-label="Descendre le plongeon"><ArrowDown className="h-4 w-4"/></button><button type="button" className="is-danger" onClick={()=>void deleteDive(dive)} disabled={pending}><Trash2 className="h-4 w-4"/>Supprimer</button></div></form></td></tr>}
+                {isEditing&&<tr key={`${dive.id}-editor`} className="coach-dive-editor-row"><td colSpan={7}><form onSubmit={saveDiveEdit} className="coach-dive-editor-form"><input type="hidden" name="diveId" value={dive.id}/><label>Code<input name="diveCode" maxLength={12} required defaultValue={dive.code} onChange={(event)=>{const difficultyInput=event.currentTarget.form?.elements.namedItem("difficulty");if(difficultyInput instanceof HTMLInputElement){const difficulty=dive.height==="CUSTOM"?null:worldAquaticsDifficulty(event.currentTarget.value,dive.height);difficultyInput.value=difficulty===null?"":difficulty.toFixed(1);}}}/></label><label>DD<input name="difficulty" inputMode="decimal" defaultValue={dive.difficulty?.toFixed(1)??""} placeholder="—"/></label>{dive.height==="PLATFORM"&&<label>Hauteur<select name="platformHeight" required defaultValue={dive.platformHeight?.toString()??""}><option value="" disabled>Choisir</option><option value="5">5 m</option><option value="7.5">7,5 m</option><option value="10">10 m</option></select></label>}<div className="coach-dive-editor-actions"><button type="submit" disabled={pending}><Save className="h-3.5 w-3.5"/>{pending?"Enregistrement…":"Enregistrer"}</button><button type="button" onClick={()=>void moveDive(index,-1)} disabled={pending||index===0} aria-label="Monter le plongeon"><ArrowUp className="h-4 w-4"/></button><button type="button" onClick={()=>void moveDive(index,1)} disabled={pending||index===visibleDives.length-1} aria-label="Descendre le plongeon"><ArrowDown className="h-4 w-4"/></button><button type="button" className="is-danger" onClick={()=>void deleteDive(dive)} disabled={pending}><Trash2 className="h-4 w-4"/>Supprimer</button></div></form></td></tr>}
               </Fragment>;
             })}</tbody>
           </table>
         </div>
       ) : <p className="athlete-empty coach-competition-empty">Aucun plongeon n’est enregistré dans cette liste.</p>}
       {!lists.length&&<p className="athlete-empty coach-competition-empty">Aucune liste de compétition n’a encore été créée.</p>}
-      {selectedList&&<footer className="coach-competition-list-footer"><span>{isActive?"Cette liste est visible par l’athlète.":"Cette liste est réservée au coach tant qu’elle n’est pas activée."}</span><button type="button" onClick={activateSelectedList} disabled={demo||isActive||pending} aria-pressed={isActive}>{isActive?"Liste active":"Définir comme liste active"}</button></footer>}
+      {selectedList&&<footer className="coach-competition-list-footer"><span>{isActive?"Cette liste est visible par l’athlète.":"Cette liste est réservée au coach tant qu’elle n’est pas activée."}</span><div className="coach-competition-list-footer-actions"><button type="button" onClick={activateSelectedList} disabled={demo||isActive||pending} aria-pressed={isActive}>{isActive?"Liste active":"Définir comme liste active"}</button><button type="button" className="coach-competition-delete-list-button" onClick={()=>void deleteSelectedList()} disabled={demo||pending}><Trash2 className="h-4 w-4"/>Supprimer la liste</button></div></footer>}
       {error&&<p className="coach-competition-error" role="alert">{error}</p>}
     </section>
     <div className="coach-competition-insights">

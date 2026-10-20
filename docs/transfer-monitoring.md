@@ -11,6 +11,12 @@ The collector records same-origin browser resource timing by hourly bucket, rout
 3. For local collection in PowerShell, run `$env:NEXT_PUBLIC_ENABLE_LOCAL_TELEMETRY="true"` before `npm run dev`. Production collection is enabled automatically.
 4. After signed-in users visit the app, open **Coach → Observabilité** to see the collected report.
 
+## External production monitoring (Sentry)
+
+The app also reports uncaught server and browser errors and sampled request/navigation performance to Sentry. Create a Sentry project for Next.js, then set `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` in the Vercel project environment variables (Production; add Preview only if desired). The public DSN is an ingest endpoint, not an authentication secret. If it is omitted, external reporting stays disabled. The SDK samples 10% of performance transactions and does not enable session replay.
+
+Events are scrubbed before they leave the app: user and request objects, headers, cookies, breadcrumbs, and extra payloads are discarded; email-like strings, query strings, likely secrets, and dynamic path IDs are redacted. Source maps are not uploaded during builds. Keep application logs free of credentials because logs are outside this event filter. Review your Sentry retention and data location settings for your organization before enabling production collection.
+
 Apply the required migrations before deploying the code: the collector and report use these tables.
 
 ## Measurement limits

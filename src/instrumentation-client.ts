@@ -1,4 +1,5 @@
 import { isExternalWebVitalsError } from "@/lib/client-errors";
+import { metrics } from "@sentry/core";
 
 type TransferBucket = {
   route: string;
@@ -79,6 +80,15 @@ function flush(includeVitals = false) {
     .filter(() => includeVitals)
     .filter(([name]) => !vitalsReported.has(name))
     .map(([name, value]) => ({ route: documentRoute, name, value }));
+  for (const vital of vitals) {
+    const route = vital.route
+      .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, ":id")
+      .replace(/\/(?:[0-9]+|[0-9a-f]{8}-[0-9a-f-]{27,}|[a-z0-9_-]{20,})(?=\/|\b)/gi, "/:id");
+    metrics.distribution(`web_vital.${vital.name.toLowerCase()}`, vital.value, {
+      unit: vital.name === "CLS" ? "none" : "millisecond",
+      attributes: { route },
+    });
+  }
   if (batch.length === 0 && vitals.length === 0) return;
   const body = JSON.stringify({ entries: batch, vitals });
   try {

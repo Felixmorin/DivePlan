@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {};
 nextConfig.outputFileTracingIncludes = {
@@ -14,4 +15,7 @@ nextConfig.turbopack = {
   root: process.cwd()
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  sourcemaps: { disable: true },
+});

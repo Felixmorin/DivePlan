@@ -583,8 +583,11 @@ a {
 .coach-competition-empty { padding:1rem 1.25rem 1.4rem; }
 .coach-competition-list-footer { display:flex; align-items:center; justify-content:space-between; gap:1rem; border-top:1px solid #e5edf3; padding:.8rem 1rem; }
 .coach-competition-list-footer span { color:#64788f; font-size:.78rem; }
+.coach-competition-list-footer-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
 .coach-competition-list-footer button { min-height:2.4rem; border:1px solid #11aabd; border-radius:.6rem; background:#11b8c9; padding:.45rem .85rem; color:white; font-size:.8rem; font-weight:850; cursor:pointer; }
 .coach-competition-list-footer button:disabled { border-color:#bfeedd; background:#dcf8eb; color:#008c5e; cursor:default; }
+.coach-competition-list-footer .coach-competition-delete-list-button { display:flex; align-items:center; gap:.35rem; border-color:#f0cfd2; background:white; color:#b42336; }
+.coach-competition-list-footer .coach-competition-delete-list-button:hover:not(:disabled) { background:#fff5f5; }
 .coach-competition-insights { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(15rem,.8fr); gap:.8rem; }
 .coach-competition-insight-card { min-width:0; padding:1rem 1.1rem; }
 .coach-competition-insight-card h3 { margin:0; color:#17304f; font-size:.92rem; font-weight:850; }
@@ -632,7 +635,7 @@ a {
 .coach-competition-management > summary { display:flex; width:max-content; align-items:center; gap:.5rem; border:1px solid #dce7ef; border-radius:.7rem; background:#fff; padding:.65rem .9rem; color:#087f9b; font-size:.8rem; font-weight:800; cursor:pointer; list-style:none; }
 .coach-competition-management > summary::-webkit-details-marker { display:none; }
 .coach-competition-management[open] > div { margin-top:1rem; }
-@media (max-width:600px) { .coach-competition-heading { align-items:stretch; flex-direction:column; } .coach-competition-heading select { min-width:0; width:100%; } .coach-competition-list-controls { min-width:0; } .coach-competition-table { min-width:650px; } .coach-competition-list-footer { align-items:stretch; flex-direction:column; } .coach-competition-list-footer button { width:100%; } .coach-competition-modal fieldset { grid-template-columns:1fr; } }
+@media (max-width:600px) { .coach-competition-heading { align-items:stretch; flex-direction:column; } .coach-competition-heading select { min-width:0; width:100%; } .coach-competition-list-controls { min-width:0; } .coach-competition-table { min-width:700px; } .coach-competition-list-footer { align-items:stretch; flex-direction:column; } .coach-competition-list-footer-actions { flex-direction:column; } .coach-competition-list-footer button { width:100%; } .coach-competition-modal fieldset { grid-template-columns:1fr; } }
 @media (max-width:700px) { .coach-competition-insights { grid-template-columns:1fr; } .coach-competition-status-summary { grid-template-columns:7rem minmax(0,1fr); } .coach-competition-donut { width:6.3rem; } }
 .athlete-evaluations-page { display:grid; gap:.7rem; }
 .athlete-evaluation-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; }
