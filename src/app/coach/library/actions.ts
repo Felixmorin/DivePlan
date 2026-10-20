@@ -73,7 +73,7 @@ export async function saveLibraryExercise(input: LibraryExerciseInput) {
 }
 
 export async function toggleLibraryExerciseFavorite(id: string) {
-  await requireCoach();
+  await requireFullAccessCoach();
   const result = await query<{ favorite: boolean }>(`UPDATE "DrylandExercise" SET favorite = NOT favorite, "updatedAt" = now() WHERE id = $1 AND "archivedAt" IS NULL RETURNING favorite`, [id]);
   const exercise = result.rows[0];
   if (!exercise) throw new Error("Exercice introuvable.");
@@ -82,7 +82,7 @@ export async function toggleLibraryExerciseFavorite(id: string) {
 }
 
 export async function archiveLibraryExercise(id: string) {
-  await requireCoach();
+  await requireFullAccessCoach();
   const result = await query(`UPDATE "DrylandExercise" SET "archivedAt" = $1, "updatedAt" = $1 WHERE id = $2 AND "archivedAt" IS NULL`, [new Date(), id]);
   if (!result.rowCount) throw new Error("Exercice introuvable.");
   revalidatePath("/coach/library");
