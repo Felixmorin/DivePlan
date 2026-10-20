@@ -9,13 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 
 type PlanningTarget = { id: string; label: string; kind: "group" | "athlete" };
 
-export function PlanningEventForm({ targets, demo }: { targets: PlanningTarget[]; demo: boolean }) {
+export function PlanningEventForm({ targets, demo, triggerLabel, defaultStartsAt }: { targets: PlanningTarget[]; demo: boolean; triggerLabel?: string; defaultStartsAt?: string }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState("TRAINING_SCHEDULE");
 
   return (
     <>
-      <Button type="button" variant="action" onClick={() => setOpen(true)}><CalendarPlus className="h-4 w-4" /> Nouvel événement</Button>
+      <Button type="button" variant={triggerLabel ? "ghost" : "action"} onClick={() => setOpen(true)}>{!triggerLabel && <CalendarPlus className="h-4 w-4" />} {triggerLabel ?? "Nouvel événement"}</Button>
       {open && (
         <div className="fixed inset-0 z-50 flex justify-end bg-[var(--color-navy)]/25" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
           <aside className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-[var(--color-border)] bg-white p-5 shadow-2xl sm:p-7" role="dialog" aria-modal="true" aria-labelledby="new-planning-event-title">
@@ -30,7 +30,7 @@ export function PlanningEventForm({ targets, demo }: { targets: PlanningTarget[]
               </div>
               <input type="hidden" name="type" value={type} />
               <Field label="Titre" required><Input name="title" placeholder="Ex : Camp technique" required disabled={demo} /></Field>
-              <Field label="Date et heure" required><Input name="startsAt" type="datetime-local" required disabled={demo} /></Field>
+              <Field label="Date et heure" required><Input name="startsAt" type="datetime-local" defaultValue={defaultStartsAt} required disabled={demo} /></Field>
               {type === "COMPETITION" && <Field label="Fin de la compétition" required><Input name="endsAt" type="datetime-local" required disabled={demo} /></Field>}
               <Field label="Durée (minutes)" required><Input name="duration" type="number" min="1" placeholder="120" required disabled={demo} /></Field>
               {type === "TRAINING_SCHEDULE" && <Field label="Répétition"><select name="recurrence" disabled={demo} defaultValue="NONE" className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm"><option value="NONE">Une seule fois</option><option value="WEEKLY">Chaque semaine</option></select></Field>}

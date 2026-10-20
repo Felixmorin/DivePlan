@@ -268,7 +268,7 @@ function DayColumn({ day, sessions, events, activeSessionIds, targets, demo }: {
           {sessions.length === 0 && events.length === 0 && (
             <div className="flex min-h-28 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--color-border-strong)] p-3 text-center">
               <div className="text-xs font-black text-[var(--color-ink-muted)]">Jour libre</div>
-              <Link href="/coach/sessions/new" className="mt-2 inline-flex min-h-9 items-center text-xs font-bold text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">Ajouter une séance</Link>
+              <PlanningEventForm targets={targets} demo={demo} triggerLabel="Ajouter un événement" defaultStartsAt={`${toMontrealDateInputValue(day.date)}T09:00`} />
             </div>
           )}
         </div>
