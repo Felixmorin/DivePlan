@@ -319,7 +319,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
 }
 
 export async function updateDraftSessionFromBuilder(sessionId: string, input: CreateSessionInput) {
-  const { user, coach, clubId } = await requireCoach();
+  const { user, clubId } = await requireCoach();
   const data = sessionInputSchema.parse(input);
   const existing = await getSessionSnapshot(sessionId, clubId);
   if (!existing || existing.status !== SessionStatus.DRAFT) throw new Error("Brouillon introuvable pour ce club.");
@@ -679,6 +679,21 @@ export async function publishTrainingSession(formData: FormData) {
   revalidatePath(`/coach/sessions/${session.id}`);
   revalidatePath("/athlete");
   revalidatePath("/athlete/calendar");
+}
+
+export async function updateCompletedSessionSummary(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const summary = String(formData.get("summary") ?? "").trim().slice(0, 5000);
+  const updated = await query<{ id: string; title: string }>(
+    `UPDATE "TrainingSession" s SET notes=$1 FROM "TrainingWeek" w WHERE s.id=$2 AND s."weekId"=w.id AND w."clubId"=$3 AND s.status='COMPLETED' RETURNING s.id,s.title`,
+    [summary || null, sessionId, clubId]
+  );
+  const session = updated.rows[0];
+  if (!session) throw new Error("Séance terminée introuvable pour ce club.");
+  await trackEvent({ type: "session.summary_updated", message: `Résumé de séance mis à jour: ${session.title}`, clubId, userId: user.id, metadata: { sessionId: session.id } });
+  revalidatePath(`/coach/sessions/${session.id}`);
+  revalidatePath(`/coach/sessions/${session.id}/edit`);
 }
 
 export async function markAthleteSessionCompleted(formData: FormData) {

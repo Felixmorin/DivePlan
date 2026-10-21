@@ -3,6 +3,7 @@ import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3,
 import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
 import { PoolSectionEditor } from "./pool-section-editor";
 import { DraftSessionBlocks } from "./draft-session-blocks";
+import { CompletedSessionOverview } from "./completed-session-overview";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
 import { CoachShell } from "@/components/coach/coach-shell";
@@ -30,6 +31,13 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     ]);
     const coach = coachRows.rows[0];
     return <DraftSessionOverview session={session} published={session.status === "READY"} location={planningEventRows.rows[0]?.location ?? null} coachName={coach ? `${coach.firstName} ${coach.lastName}` : "À confirmer"} groupAthleteCount={Number(athleteCountRows.rows[0]?.count ?? 0)} />;
+  }
+  if (session.status === "COMPLETED") {
+    const [coachNoteRows, timingRows] = await Promise.all([
+      query<{ athleteId: string; note: string }>(`SELECT "athleteId",note FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [session.id]),
+      query<{ athleteId: string; blockId: string; closedAt: Date | null }>(`SELECT "athleteId","blockId","closedAt" FROM "AthleteBlockTiming" WHERE "blockId"=ANY($1::text[])`, [session.blocks.map((block) => block.id)])
+    ]);
+    return <CoachShell active="Seances"><CompletedSessionOverview session={session} coachNotes={coachNoteRows.rows} timings={timingRows.rows} /></CoachShell>;
   }
   const coachNotes = (await query<{athleteId:string;note:string}>(`SELECT "athleteId",note FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [session.id])).rows;
   const rawAthletes = session.blocks.flatMap((block) =>
