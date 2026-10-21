@@ -1,13 +1,9 @@
-import type * as React from "react";
-import { Activity, AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Shield } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
+import { Card, CardContent } from "@/components/ui/card";
 import { requireFullAccessCoach } from "@/lib/current-user";
-import { ATHLETE_SESSION_PREVIEW_EVENT } from "@/lib/monitoring";
-import { formatMontrealDate } from "@/lib/timezone";
 import { query } from "@/lib/db";
+import { MonitoringJournal } from "./monitoring-journal";
 
 export const dynamic = "force-dynamic";
 
@@ -15,154 +11,49 @@ export default async function MonitoringPage() {
   const { clubId } = await requireFullAccessCoach();
   if (clubId === "dev-club") {
     const events = [
-      { id: "demo-auth", type: "auth.login", message: "Connexion demo locale", source: "system demo" },
-      { id: "demo-session", type: "session.viewed", message: "Seance demo ouverte", source: "system demo" },
-      { id: "demo-db", type: "system.notice", message: "PostgreSQL non configure pour cette session", source: "system demo" }
+      { id: "demo-auth", type: "auth.login", message: "Connexion démo locale", source: "system demo", date: new Date().toISOString() },
+      { id: "demo-session", type: "session.viewed", message: "Séance démo ouverte", source: "system demo", date: new Date(Date.now() - 60 * 60 * 1000).toISOString() },
+      { id: "demo-db", type: "system.notice", message: "PostgreSQL non configuré pour cette session", source: "system demo", date: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString() }
     ];
-
-    return (
-      <CoachShell active="Monitoring">
-        <PageHeader description="Mode demo local sans PostgreSQL." />
-        <MonitoringStats events={events.length} previewViews={1} failedLogins={0} completedSessions={0} />
-        <EventJournal events={events} />
-      </CoachShell>
-    );
+    return <MonitoringContent events={events} failedLogins={0} completedSessions={0} />;
   }
 
   const since = sinceHours(24);
-  const [eventsResult, failedResult, completedResult, previewResult] = await Promise.all([
+  const [eventsResult, failedResult, completedResult] = await Promise.all([
     query<{ id: string; type: string; message: string; email: string | null; createdAt: Date }>(
       `SELECT e.id, e.type, e.message, u.email, e."createdAt" FROM "AppEvent" e
-       LEFT JOIN "User" u ON u.id = e."userId"
-       ORDER BY e."createdAt" DESC LIMIT 80`
-    ),
+       LEFT JOIN "User" u ON u.id = e."userId" ORDER BY e."createdAt" DESC LIMIT 80`),
     query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE type = 'auth.failed' AND "createdAt" >= $1`, [since]),
     query<{ count: string }>(
       `SELECT count(*)::text AS count FROM "AthleteSessionCompletion" c
        JOIN "TrainingSession" s ON s.id = c."sessionId" JOIN "TrainingWeek" w ON w.id = s."weekId"
-       WHERE c.status = 'COMPLETED' AND c."completedAt" >= $1`, [since]
-    ),
-    query<{ count: string }>(
-      `SELECT count(*)::text AS count FROM "AppEvent" e
-       WHERE e.type = $1 AND e."createdAt" >= $2
-         AND NOT EXISTS (
-           SELECT 1 FROM "AthleteSessionCompletion" c
-           JOIN "Athlete" a ON a.id = c."athleteId"
-           WHERE a."userId" = e."userId"
-             AND c."sessionId" = e.metadata ->> 'sessionId'
-             AND c."startedAt" IS NOT NULL
-         )`, [ATHLETE_SESSION_PREVIEW_EVENT, since]
-    )
+       WHERE c.status = 'COMPLETED' AND c."completedAt" >= $1`, [since])
   ]);
-  const events = eventsResult.rows;
-  const failedLogins = Number(failedResult.rows[0]?.count ?? 0);
-  const completedSessions = Number(completedResult.rows[0]?.count ?? 0);
-  const previewViews = Number(previewResult.rows[0]?.count ?? 0);
-
-  return (
-    <CoachShell active="Monitoring">
-      <PageHeader description="Evenements produit et signaux de support visibles pour le role connecte." />
-      <MonitoringStats events={events.length} previewViews={previewViews} failedLogins={failedLogins} completedSessions={completedSessions} />
-      <EventJournal
-        events={events.map((event) => ({
-          id: event.id,
-          type: event.type,
-          message: event.message,
-          source: event.email ?? "system",
-          date: formatMonitoringDate(event.createdAt)
-        }))}
-      />
-    </CoachShell>
-  );
+  return <MonitoringContent
+    events={eventsResult.rows.map((e) => ({ id: e.id, type: e.type, message: e.message, source: e.email ?? "Système", date: e.createdAt.toISOString() }))}
+    failedLogins={Number(failedResult.rows[0]?.count ?? 0)}
+    completedSessions={Number(completedResult.rows[0]?.count ?? 0)}
+  />;
 }
 
-function PageHeader({ description }: { description: string }) {
-  return (
-    <div className="mb-6">
-      <p className="text-sm font-black uppercase text-[var(--color-brand-strong)]">Administration</p>
-      <h1 className="mt-2 text-3xl font-black text-[var(--color-ink)]">Monitoring</h1>
-      <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{description}</p>
-    </div>
-  );
+function MonitoringContent({ events, failedLogins, completedSessions }: { events: Array<{ id: string; type: string; message: string; source: string; date: string }>; failedLogins: number; completedSessions: number }) {
+  return <CoachShell active="Monitoring">
+    <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div><h1 className="text-3xl font-black tracking-tight">Monitoring</h1><p className="mt-1 max-w-lg text-sm text-[var(--color-ink-muted)]">Suivez l’activité de l’application et les événements système en temps réel.</p></div>
+    </header>
+    <section aria-label="Statistiques de monitoring" className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <MetricCard icon={FileText} color="blue" value={events.length} label="Événements" />
+      <MetricCard icon={AlertTriangle} color="amber" value={failedLogins} label="Alertes actives" />
+      <MetricCard icon={Shield} color="red" value={0} label="Connexions suspectes" />
+      <MetricCard icon={CheckCircle2} color="green" value={completedSessions} label="Séances complétées" />
+    </section>
+    <MonitoringJournal events={events} />
+  </CoachShell>;
 }
 
-function MonitoringStats({ events, previewViews, failedLogins, completedSessions }: { events: number; previewViews: number; failedLogins: number; completedSessions: number }) {
-  return (
-    <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <MetricCard icon={<Activity className="h-5 w-5" />} label="Evenements" value={events} detail="recents" />
-      <MetricCard icon={<Activity className="h-5 w-5" />} label="Aperçus athlètes" value={previewViews} detail="24 dernières heures" />
-      <MetricCard icon={<AlertTriangle className="h-5 w-5" />} label="Connexions refusees" value={failedLogins} detail="24 dernieres heures" tone="warning" />
-      <MetricCard icon={<CheckCircle2 className="h-5 w-5" />} label="Seances completees" value={completedSessions} detail="24 dernieres heures" tone="success" />
-    </div>
-  );
+function MetricCard({ icon: Icon, color, value, label }: { icon: typeof FileText; color: string; value: number; label: string }) {
+  const colors: Record<string, string> = { blue: "bg-sky-100 text-sky-600", amber: "bg-amber-100 text-amber-700", red: "bg-red-100 text-red-600", green: "bg-emerald-100 text-emerald-600" };
+  return <Card><CardContent className="flex items-center gap-4 p-4"><span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl ${colors[color]}`}><Icon className="h-6 w-6" /></span><div><p className="text-3xl font-black leading-none">{value.toLocaleString("fr-CA")}</p><p className="mt-1 text-sm text-[var(--color-ink-muted)]">{label}</p></div></CardContent></Card>;
 }
 
-function MetricCard({ icon, label, value, detail, tone = "pool" }: { icon: React.ReactNode; label: string; value: number; detail: string; tone?: "pool" | "warning" | "success" }) {
-  const toneClass =
-    tone === "warning"
-      ? "bg-[var(--block-dryland-bg)] text-[var(--block-dryland-fg)]"
-      : tone === "success"
-        ? "bg-[var(--color-success-soft)] text-[var(--color-success)]"
-        : "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)]";
-
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-4 p-5">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${toneClass}`}>{icon}</div>
-        <div>
-          <div className="text-3xl font-black text-[var(--color-ink)]">{value}</div>
-          <div className="text-xs font-black uppercase text-[var(--color-ink-muted)]">{label}</div>
-          <div className="text-xs font-bold text-[var(--color-ink-soft)]">{detail}</div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function EventJournal({ events }: { events: Array<{ id: string; type: string; message: string; source: string; date?: string }> }) {
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-        <CardTitle>Journal</CardTitle>
-        <CardDescription>Lecture chronologique, sans donnees hors club.</CardDescription>
-      </CardHeader>
-      <CardContent className="p-0">
-        {events.length > 0 ? (
-          <div className="divide-y divide-[var(--color-border)]">
-            {events.map((event) => (
-              <div key={event.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <div className="font-black text-[var(--color-ink)]">{event.message}</div>
-                  <div className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">{event.source}{event.date ? ` · ${event.date}` : ""}</div>
-                </div>
-                <Badge variant={event.type.includes("failed") ? "warning" : "outline"}>{event.type}</Badge>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-5">
-            <EmptyState title="Aucun evenement" description="Le journal se remplira lorsque l'application enregistrera une activite." icon={ShieldCheck} />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function sinceHours(hours: number) {
-  const date = new Date();
-  date.setHours(date.getHours() - hours);
-  return date;
-}
-
-function formatMonitoringDate(date: Date) {
-  return formatMontrealDate(date, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23"
-  });
-}
+function sinceHours(hours: number) { const date = new Date(); date.setHours(date.getHours() - hours); return date; }
