@@ -9,7 +9,7 @@ import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with
 const nav = [
   { href: "/coach", label: "Dashboard", icon: LayoutDashboard },
   { href: "/coach/planning", label: "Calendrier", icon: CalendarDays },
-  { href: "/coach/planification", label: "Planification", icon: CalendarDays },
+  { href: "/coach/planification", label: "Planification", icon: CalendarDays, underConstruction: true },
   { href: "/coach/sessions", label: "Séances", match: "Seances", icon: Activity },
   { href: "/coach/athletes", label: "Athlètes", match: "Athletes", icon: Users },
   { href: "/coach/milestones", label: "Milestones", icon: Award },
@@ -51,6 +51,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
                 <Link key={item.href} href={item.href} style={isActive ? { color: "#ffffff" } : undefined} className={cn("flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-bold transition duration-[var(--duration-fast)] hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive ? "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand)]" : "text-white/62")}>
                   <Icon className={cn("h-4 w-4", isActive && "text-white")} />
                   <span className={cn(isActive && "text-white")}>{item.label}</span>
+                  {item.underConstruction && <span className="ml-auto rounded-full bg-amber-300/15 px-2 py-1 text-[9px] font-black leading-none text-amber-200">En construction</span>}
                 </Link>
               );
             })}
@@ -100,6 +101,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
               <Link key={item.href} href={item.href} style={isActive ? { color: "#ffffff" } : undefined} className={cn("flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-xs font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive ? "bg-[var(--color-navy)] text-white hover:text-white" : "text-[var(--color-ink-muted)]")}>
                 <Icon className={cn("h-4 w-4", isActive && "text-white")} />
                 <span className={cn(isActive && "text-white")}>{item.label}</span>
+                {item.underConstruction && <span className="rounded-full bg-amber-100 px-2 py-1 text-[9px] font-black leading-none text-amber-800">En construction</span>}
               </Link>
             );
           })}
