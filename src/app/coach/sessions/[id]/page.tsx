@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, Edit, FileText, Layers3, MapPin, MoreVertical, NotebookText, Printer, Save, Send, Trash2, Users, Waves, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, Edit, FileText, Layers3, MapPin, MoreVertical, NotebookText, Play, Printer, Save, Send, Trash2, Users, Waves, XCircle } from "lucide-react";
 import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
 import { PoolSectionEditor } from "./pool-section-editor";
 import { DraftSessionBlocks } from "./draft-session-blocks";
@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAthleteAverageGoldenRepsByTraining, getAthleteAverageRepsByTraining, getCoachSession } from "@/lib/coach-session";
-import { formatMontrealDate } from "@/lib/timezone";
+import { formatMontrealDate, formatMontrealTime } from "@/lib/timezone";
 import { countPoolContexts } from "@/lib/pool-list";
 import { query } from "@/lib/db";
 
@@ -22,7 +22,15 @@ export const dynamic = "force-dynamic";
 export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getCoachSession(id);
-  if (session.status === "DRAFT") return <DraftSessionOverview session={session} />;
+  if (session.status === "DRAFT" || session.status === "READY") {
+    const [planningEventRows, coachRows, athleteCountRows] = await Promise.all([
+      query<{ location: string | null }>(`SELECT location FROM "PlanningEvent" WHERE id=$1`, [session.planningEventId]),
+      query<{ firstName: string; lastName: string }>(`SELECT u."firstName",u."lastName" FROM "Coach" c JOIN "User" u ON u.id=c."userId" WHERE c.id=$1`, [session.coachId]),
+      query<{ count: number | string }>(`SELECT count(*) AS count FROM "Athlete" WHERE "groupId"=$1 AND active=true`, [session.week.group.id])
+    ]);
+    const coach = coachRows.rows[0];
+    return <DraftSessionOverview session={session} published={session.status === "READY"} location={planningEventRows.rows[0]?.location ?? null} coachName={coach ? `${coach.firstName} ${coach.lastName}` : "À confirmer"} groupAthleteCount={Number(athleteCountRows.rows[0]?.count ?? 0)} />;
+  }
   const coachNotes = (await query<{athleteId:string;note:string}>(`SELECT "athleteId",note FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [session.id])).rows;
   const rawAthletes = session.blocks.flatMap((block) =>
     block.assignments.map((assignment) => ({
@@ -292,7 +300,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
 type DraftOverviewSession = Awaited<ReturnType<typeof getCoachSession>>;
 
-function DraftSessionOverview({ session }: { session: DraftOverviewSession }) {
+function DraftSessionOverview({ session, published, location, coachName, groupAthleteCount }: { session: DraftOverviewSession; published: boolean; location: string | null; coachName: string; groupAthleteCount: number }) {
   const blocks = [...session.blocks].sort((a, b) => a.position - b.position);
   const athletes = new Set(blocks.flatMap((block) => block.assignments.map((assignment) => assignment.athleteId)));
   const plannedDiveReps = blocks.reduce((total, block) => total + (block.poolTraining?.sections.reduce((sectionTotal, section) => sectionTotal + Math.max(1, countPoolContexts(section.label ?? section.height)) * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0), 0) ?? 0), 0);
@@ -303,12 +311,12 @@ function DraftSessionOverview({ session }: { session: DraftOverviewSession }) {
     <div className="draft-overview">
       <div className="draft-crumb"><Link href="/coach/sessions">Séances</Link><ChevronRight />{session.title}</div>
       <header className="draft-head">
-        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1>{session.title}</h1><span className="draft-status"><span /> Brouillon</span></div>
-          <div className="draft-meta"><span><CalendarDays />{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span><span><Clock3 />{session.duration} min</span><span><Users />{session.week.group.name}</span></div>
+        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1>{session.title}</h1><span className={`draft-status ${published ? "draft-status-published" : ""}`}><span /> {published ? "Publiée" : "Brouillon"}</span></div>
+          <div className="draft-meta"><span><CalendarDays />{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span><span><Clock3 />{formatMontrealTime(session.date)} – {formatMontrealTime(new Date(session.date.getTime() + session.duration * 60_000))} ({session.duration >= 60 ? `${Math.floor(session.duration / 60)} h ${String(session.duration % 60).padStart(2, "0")}` : `${session.duration} min`})</span><span><Users />{session.week.group.name}</span>{location && <span><MapPin />{location}</span>}</div>
         </div>
         <div className="draft-actions"><details className="draft-more"><summary aria-label="Autres actions"><MoreVertical /></summary><div><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Imprimer</Link><form action={duplicateTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><button><Copy /> Dupliquer</button></form><form action={deleteTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><button className="text-red-600"><Trash2 /> Supprimer la séance</button></form></div></details>
           <Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}/edit`}><Edit /> Modifier</Link></Button>
-          <form action={publishTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Send /> Publier la séance</Button></form>
+          {published ? <Button asChild variant="action"><Link href="#draft-plan"><Play /> Démarrer la séance</Link></Button> : <form action={publishTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Send /> Publier la séance</Button></form>}
         </div>
       </header>
       <div className="draft-layout">
@@ -323,8 +331,8 @@ function DraftSessionOverview({ session }: { session: DraftOverviewSession }) {
           <DraftSessionBlocks blocks={blocks} />
         </main>
         <aside className="draft-sidebar">
-          <section className="draft-side-card"><h2>Détails de la séance <span className="draft-status"><span /> Brouillon</span></h2><DraftDetail icon={<CalendarDays />} label="Date" value={formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} /><DraftDetail icon={<Clock3 />} label="Durée" value={`${session.duration} min`} /><DraftDetail icon={<Users />} label="Groupe" value={session.week.group.name} sub={`${athletes.size} athlètes`} /><DraftDetail icon={<MapPin />} label="Lieu" value="À confirmer" /><DraftDetail icon={<Waves />} label="Entraîneur" value="Entraîneur assigné" /></section>
-          <section className="draft-side-card"><h2><FileText /> Liste de vérification avant publication</h2><DraftCheck label="Groupe assigné" value={`${athletes.size} athlètes`} ok={athletes.size > 0} /><DraftCheck label="Blocs configurés" value={`${blocks.length} blocs`} ok={blocks.length > 0} /><DraftCheck label="Listes de plongeons prêtes" value={`${plannedDiveReps} plongeons`} ok={plannedDiveReps > 0} /><DraftCheck label="Date définie" value={formatMontrealDate(session.date)} ok /><div className={`draft-ready ${isReadyToPublish ? "" : "draft-incomplete"}`}><CheckCircle2 /><span><strong>{isReadyToPublish ? "Prête à publier" : "À compléter"}</strong><small>{isReadyToPublish ? "Vous pouvez publier la séance pour la rendre disponible à l’équipe." : "Ajoutez un groupe, des blocs et des plongeons avant de publier."}</small></span></div></section>
+          <section className="draft-side-card"><h2>Détails de la séance <span className={`draft-status ${published ? "draft-status-published" : ""}`}><span /> {published ? "Publiée" : "Brouillon"}</span></h2><DraftDetail icon={<CalendarDays />} label="Date" value={formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} /><DraftDetail icon={<Clock3 />} label="Heure" value={`${formatMontrealTime(session.date)} – ${formatMontrealTime(new Date(session.date.getTime() + session.duration * 60_000))}`} sub={`Durée : ${session.duration} min`} /><DraftDetail icon={<Users />} label="Groupe" value={session.week.group.name} sub={`${athletes.size} athlètes`} /><DraftDetail icon={<MapPin />} label="Lieu" value={location || "À confirmer"} /><DraftDetail icon={<Waves />} label="Entraîneur" value={coachName} /></section>
+          <section className="draft-side-card"><h2><FileText /> {published ? "Préparation" : "Liste de vérification avant publication"}</h2>{published && <div className="draft-ready-summary"><div className="draft-progress-ring"><span>100%</span></div><span><strong>Séance prête</strong><small>Tous les éléments sont configurés pour démarrer la séance.</small></span></div>}<DraftCheck label="Groupe assigné" value={`${athletes.size}/${groupAthleteCount || athletes.size} athlètes`} ok={athletes.size > 0 && athletes.size >= groupAthleteCount} /><DraftCheck label="Blocs configurés" value={`${blocks.length} blocs`} ok={blocks.length > 0} /><DraftCheck label="Listes de plongeons prêtes" value={`${plannedDiveReps} plongeons`} ok={plannedDiveReps > 0} />{published ? <><DraftCheck label="Lieu et heure définis" value={location ? "Définis" : "Lieu à confirmer"} ok={Boolean(location)} /><DraftCheck label="Séance publiée" value="" ok /></> : <><DraftCheck label="Date définie" value={formatMontrealDate(session.date)} ok /><div className={`draft-ready ${isReadyToPublish ? "" : "draft-incomplete"}`}><CheckCircle2 /><span><strong>{isReadyToPublish ? "Prête à publier" : "À compléter"}</strong><small>{isReadyToPublish ? "Vous pouvez publier la séance pour la rendre disponible à l’équipe." : "Ajoutez un groupe, des blocs et des plongeons avant de publier."}</small></span></div></>}</section>
           <section className="draft-side-card"><h2><NotebookText /> Notes</h2><p className="draft-note-text">{session.notes || "Aucune note pour cette séance."}</p><Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}/edit`}>Ajouter une note</Link></Button></section>
           <section className="draft-side-card draft-links"><h2><Layers3 /> Liens rapides</h2><Link href="/coach/planning"><CalendarDays /> Voir dans le calendrier</Link><Link href={`/coach/sessions/${session.id}/edit`}><Copy /> Dupliquer la séance</Link><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Exporter / imprimer</Link></section>
         </aside>
