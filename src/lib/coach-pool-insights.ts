@@ -24,7 +24,9 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
       query<{ athleteId: string; id: string; position: number; height: PoolInsightHeight; platformHeight: number | null; code: string; volume: number | string; averageRating: number | string | null; ratingCount: number | string | null }>(
       `WITH dives AS (
          SELECT a.id AS "athleteId", cd.id, cd.position, cd.height, cd."platformHeight", cd."diveCode" AS code
-         FROM "Athlete" a JOIN "CompetitionDive" cd ON cd."athleteId"=a.id
+         FROM "Athlete" a
+         JOIN "CompetitionDiveList" active_list ON active_list."athleteId"=a.id AND active_list.position=0
+         JOIN "CompetitionDive" cd ON cd."athleteId"=a.id AND cd."listId"=active_list.id
          WHERE a.id=ANY($1::text[])
        ), volume AS (
          SELECT l."athleteId", d."diveCode" AS code, ps.height, ps.label AS "heightLabel",
