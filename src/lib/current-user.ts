@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { query } from "@/lib/db";
+import { query, setDatabaseEgressClub } from "@/lib/db";
 
 export const getCurrentUser = cache(async () => {
   const session = await auth();
@@ -73,6 +73,7 @@ export const getCurrentUser = cache(async () => {
     athlete: row.athleteId === null ? null : { id: row.athleteId, userId: row.id, clubId: row.clubId!, groupId: row.athleteGroupId, birthDate: row.birthDate!, level: row.level!, active: row.active! }
   } : null;
 
+  setDatabaseEgressClub(user?.clubId ?? null);
   return user;
 });
 

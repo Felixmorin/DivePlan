@@ -3,6 +3,7 @@ import "server-only";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 const globalForPool = globalThis as typeof globalThis & { divePlanPool?: Pool };
 
@@ -50,19 +51,74 @@ function createPool() {
 export const pool = globalForPool.divePlanPool ?? createPool();
 if (process.env.NODE_ENV !== "production") globalForPool.divePlanPool = pool;
 
+type EgressScope = { clubId: string | null; requests: number; resultBytes: number; timer?: ReturnType<typeof setTimeout> };
+const egressScope = new AsyncLocalStorage<EgressScope>();
+
+function getEgressScope() {
+  let scope = egressScope.getStore();
+  if (!scope) {
+    scope = { clubId: null, requests: 0, resultBytes: 0 };
+    egressScope.enterWith(scope);
+  }
+  return scope;
+}
+
+export function setDatabaseEgressClub(clubId: string | null) {
+  if (clubId) getEgressScope().clubId = clubId;
+}
+
+function recordDatabaseResult(result: QueryResult<QueryResultRow>) {
+  if (["BEGIN", "COMMIT", "ROLLBACK"].includes(result.command)) return;
+  const scope = getEgressScope();
+  scope.requests += 1;
+  scope.resultBytes += Buffer.byteLength(JSON.stringify(result.rows));
+  if (scope.timer) clearTimeout(scope.timer);
+  scope.timer = setTimeout(() => {
+    if (!scope.clubId || scope.requests === 0) return;
+    const requests = scope.requests;
+    const resultBytes = scope.resultBytes;
+    scope.requests = 0;
+    scope.resultBytes = 0;
+    void pool.query(
+      `INSERT INTO "DatabaseEgressTelemetryHour" ("clubId", hour, route, requests, "resultBytes", "updatedAt")
+       VALUES ($1, date_trunc('hour', NOW()), 'Application entière', $2, $3, NOW())
+       ON CONFLICT ("clubId", hour, route) DO UPDATE SET
+         requests = "DatabaseEgressTelemetryHour".requests + EXCLUDED.requests,
+         "resultBytes" = "DatabaseEgressTelemetryHour"."resultBytes" + EXCLUDED."resultBytes",
+         "updatedAt" = NOW()`,
+      [scope.clubId, requests, resultBytes]
+    ).catch((error: unknown) => console.error("Database egress telemetry write failed", error));
+  }, 500);
+}
+
 export async function query<Row extends QueryResultRow = QueryResultRow>(
   text: string,
   values: readonly unknown[] = []
 ): Promise<QueryResult<Row>> {
-  return pool.query<Row>(text, [...values]);
+  getEgressScope();
+  const result = await pool.query<Row>(text, [...values]);
+  recordDatabaseResult(result);
+  return result;
 }
 
 export async function withTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+  getEgressScope();
   const client = await pool.connect();
+  const instrumentedClient = new Proxy(client, {
+    get(target, property, receiver) {
+      if (property === "query") return async (...args: Parameters<PoolClient["query"]>) => {
+        const result = await target.query(...args);
+        recordDatabaseResult(result as QueryResult<QueryResultRow>);
+        return result;
+      };
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    }
+  });
   try {
-    await client.query("BEGIN");
-    const result = await work(client);
-    await client.query("COMMIT");
+    await instrumentedClient.query("BEGIN");
+    const result = await work(instrumentedClient);
+    await instrumentedClient.query("COMMIT");
     return result;
   } catch (error) {
     await client.query("ROLLBACK");

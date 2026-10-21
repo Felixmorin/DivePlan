@@ -6,7 +6,7 @@ The collector records same-origin browser resource timing by hourly bucket, rout
 
 ## Enable it
 
-1. If they have not already been applied, review and apply `db/migrations/0002_transfer_telemetry.sql`, `db/migrations/0003_performance_telemetry.sql`, then `db/migrations/0004_performance_ratings.sql` to the intended PostgreSQL database. Migration files are applied explicitly; the application build does not run them.
+1. If they have not already been applied, review and apply `db/migrations/0002_transfer_telemetry.sql`, `db/migrations/0003_performance_telemetry.sql`, `db/migrations/0004_performance_ratings.sql`, then `db/migrations/0005_database_egress_telemetry.sql` to the intended PostgreSQL database. Migration files are applied explicitly; the application build does not run them.
 2. Deploy the application code, or run it locally with a real club account and database.
 3. For local collection in PowerShell, run `$env:NEXT_PUBLIC_ENABLE_LOCAL_TELEMETRY="true"` before `npm run dev`. Production collection is enabled automatically.
 4. After signed-in users visit the app, open **Coach → Observabilité** to see the collected report.
@@ -29,3 +29,4 @@ Apply the required migrations before deploying the code: the collector and repor
 - Web Vitals are reported once per page when it becomes hidden or closes. The INP value comes from Next.js Web Vitals. A browser that is closed abruptly may not send its final sample.
 - Performance ratings use the standard good boundaries (LCP 2.5 s, INP 200 ms, CLS 0.1, FCP 1.8 s, TTFB 800 ms); poor begins above 4 s, 500 ms, 0.25, 3 s, and 1.8 s respectively. Observabilité shows the share of rated visits in each band. At least 10 rated visits are required before it creates a performance recommendation; 75% good visits is the reference target.
 - Reports aggregate by club, hour, route, and resource type. No per-user history is retained.
+- PostgreSQL result monitoring covers database queries made through the shared `query` helper and `withTransaction` across authenticated app requests. It sums the JSON-serialized size of rows returned to the app server and groups by club and hour. This is a useful query-result-size estimate, not exact PostgreSQL wire/TLS traffic or provider-billed egress; protocol framing, compression, direct `PoolClient` use outside `withTransaction`, and other database traffic are not included. Small query bursts are aggregated before the telemetry write, which is excluded from the measured total. Unauthenticated queries are not assigned to a club and are omitted.

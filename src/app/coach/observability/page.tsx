@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 type TransferRow = { route: string; resourceType: string; requests: number; transferBytes: number; cacheHits: number };
 type PerformanceRow = { route: string; metric: string; average: number; maximum: number; ratedSamples: number; goodSamples: number; needsImprovementSamples: number };
+type DatabaseEgressRow = { route: string; requests: number; resultBytes: number };
 type Recommendation = { title: string; evidence: string; action: string; priority: "Élevée" | "À surveiller" };
 
 export default async function ObservabilityPage() {
@@ -27,7 +28,7 @@ export default async function ObservabilityPage() {
     );
   }
 
-  const [transferResult, performanceResult] = await Promise.all([
+  const [transferResult, performanceResult, databaseEgressResult] = await Promise.all([
     query<{ route: string; resourceType: string; requests: string; transferBytes: string; cacheHits: string; totalBytes: string }>(
       `SELECT route, "resourceType", SUM(requests)::text AS requests,
          SUM("transferBytes")::text AS "transferBytes", SUM("cacheHits")::text AS "cacheHits",
@@ -49,6 +50,12 @@ export default async function ObservabilityPage() {
        GROUP BY route, metric
        ORDER BY MAX("ratedMaxValue") DESC
        LIMIT 30`, [clubId]
+    ),
+    query<{ route: string; requests: string; resultBytes: string }>(
+      `SELECT route, SUM(requests)::text AS requests, SUM("resultBytes")::text AS "resultBytes"
+       FROM "DatabaseEgressTelemetryHour"
+       WHERE "clubId" = $1 AND hour >= NOW() - INTERVAL '24 hours'
+       GROUP BY route ORDER BY SUM("resultBytes") DESC LIMIT 20`, [clubId]
     )
   ]);
 
@@ -69,6 +76,10 @@ export default async function ObservabilityPage() {
     needsImprovementSamples: Number(row.needsImprovementSamples)
   }));
   const totalBytes = Number(transferResult.rows[0]?.totalBytes ?? 0);
+  const databaseEgressRows: DatabaseEgressRow[] = databaseEgressResult.rows.map((row) => ({
+    route: row.route, requests: Number(row.requests), resultBytes: Number(row.resultBytes)
+  }));
+  const databaseResultBytes = databaseEgressRows.reduce((sum, row) => sum + row.resultBytes, 0);
 
   return (
     <CoachShell active="Observabilité">
@@ -76,12 +87,20 @@ export default async function ObservabilityPage() {
       <div className="mb-6 grid gap-4 md:grid-cols-2">
         <MetricCard label="Transfert observé" value={formatBytes(totalBytes)} detail="réponses même origine · 24 h" />
         <MetricCard label="Mesures de performance" value={performanceRows.reduce((sum, row) => sum + row.ratedSamples, 0).toLocaleString("fr-CA")} detail="visites classées · 24 h" />
+        <MetricCard label="Résultats PostgreSQL estimés" value={formatBytes(databaseResultBytes)} detail="résultats reçus par l’app · 24 h" />
       </div>
       <Recommendations rows={transferRows} performanceRows={performanceRows} />
       <TransferReport totalBytes={totalBytes} rows={transferRows} />
+      <DatabaseEgressReport rows={databaseEgressRows} totalBytes={databaseResultBytes} />
       <PerformanceReport rows={performanceRows} />
     </CoachShell>
   );
+}
+
+function DatabaseEgressReport({ rows, totalBytes }: { rows: DatabaseEgressRow[]; totalBytes: number }) {
+  return <Card className="mb-6"><CardHeader><CardTitle>Résultats PostgreSQL estimés · 24 h</CardTitle><CardDescription>{formatBytes(totalBytes)} de résultats retournés par les requêtes suivies. Estimation basée sur la taille JSON des lignes reçues par le serveur; ce n’est pas une mesure exacte des octets réseau PostgreSQL/TLS.</CardDescription></CardHeader><CardContent>
+    {rows.length === 0 ? <p className="text-sm text-[var(--color-ink-muted)]">Aucune mesure PostgreSQL. La collecte démarre après l’application de la migration 0005 et des visites sur les routes instrumentées.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[30rem] text-left text-sm"><thead className="text-xs uppercase text-[var(--color-ink-muted)]"><tr><th className="pb-2 pr-4">Route</th><th className="pb-2 pr-4">Requêtes</th><th className="pb-2 pr-4">Résultats estimés</th><th className="pb-2">Par requête</th></tr></thead><tbody>{rows.map((row) => <tr key={row.route} className="border-t border-[var(--color-border)]"><td className="py-2 pr-4 font-semibold">{row.route}</td><td className="py-2 pr-4">{row.requests.toLocaleString("fr-CA")}</td><td className="py-2 pr-4">{formatBytes(row.resultBytes)}</td><td className="py-2">{formatBytes(row.requests ? row.resultBytes / row.requests : 0)}</td></tr>)}</tbody></table></div>}
+  </CardContent></Card>;
 }
 
 function PageHeader({ description }: { description: string }) {
