@@ -81,10 +81,6 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           <p className="text-[var(--color-ink-muted)]">{[formatMontrealDate(session.date), `${session.duration} min`, session.focus].filter(Boolean).join(" · ")}</p>
         </div>
         <div className="flex gap-2">
-          {session.status === "DRAFT" && <form action={publishTrainingSession}>
-            <input type="hidden" name="sessionId" value={session.id} />
-            <Button type="submit" variant="action">Publier pour les athlètes</Button>
-          </form>}
           <form action={duplicateTrainingSession}>
             <input type="hidden" name="sessionId" value={session.id} />
             <Button type="submit" variant="outline"><Copy className="h-4 w-4" /> Dupliquer</Button>
