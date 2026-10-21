@@ -22,7 +22,7 @@ export default async function MonitoringPage() {
   const [eventsResult, failedResult, completedResult] = await Promise.all([
     query<{ id: string; type: string; message: string; email: string | null; createdAt: Date }>(
       `SELECT e.id, e.type, e.message, u.email, e."createdAt" FROM "AppEvent" e
-       LEFT JOIN "User" u ON u.id = e."userId" ORDER BY e."createdAt" DESC LIMIT 80`),
+       LEFT JOIN "User" u ON u.id = e."userId" ORDER BY e."createdAt" DESC LIMIT 500`),
     query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE type = 'auth.failed' AND "createdAt" >= $1`, [since]),
     query<{ count: string }>(
       `SELECT count(*)::text AS count FROM "AthleteSessionCompletion" c

@@ -7,7 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 
 type EventRow = { id: string; type: string; message: string; source: string; date: string };
 type Category = "Séances" | "Aperçus" | "Authentification" | "Athlètes" | "Système";
+type Range = "24h" | "7d" | "30d" | "all";
 const categories: Category[] = ["Séances", "Aperçus", "Authentification", "Athlètes", "Système"];
+const ranges: Array<{ id: Range; label: string }> = [{ id: "24h", label: "24 dernières heures" }, { id: "7d", label: "7 derniers jours" }, { id: "30d", label: "30 derniers jours" }, { id: "all", label: "Toute la période" }];
 const categoryStyle: Record<Category, { bg: string; fg: string }> = {
   "Séances": { bg: "bg-emerald-100", fg: "text-emerald-700" },
   "Aperçus": { bg: "bg-amber-100", fg: "text-amber-800" },
@@ -20,8 +22,15 @@ export function MonitoringJournal({ events }: { events: EventRow[] }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [enabled, setEnabled] = useState<Category[]>(categories);
+  const [range, setRange] = useState<Range>("24h");
   const [shown, setShown] = useState(10);
-  const filtered = useMemo(() => events.filter((event) => enabled.includes(categoryFor(event.type)) && `${event.message} ${event.source} ${event.type}`.toLocaleLowerCase("fr-CA").includes(search.toLocaleLowerCase("fr-CA"))), [events, enabled, search]);
+  const filtered = useMemo(() => {
+    const cutoff = range === "all" ? 0 : Date.now() - (range === "24h" ? 24 : range === "7d" ? 24 * 7 : 24 * 30) * 60 * 60 * 1000;
+    return events.filter((event) => {
+      const timestamp = new Date(event.date).getTime();
+      return enabled.includes(categoryFor(event.type)) && (range === "all" || (Number.isFinite(timestamp) && timestamp >= cutoff)) && `${event.message} ${event.source} ${event.type}`.toLocaleLowerCase("fr-CA").includes(search.toLocaleLowerCase("fr-CA"));
+    });
+  }, [events, enabled, range, search]);
   const visible = filtered.slice(0, shown);
   const groups = groupEvents(visible);
 
@@ -29,8 +38,8 @@ export function MonitoringJournal({ events }: { events: EventRow[] }) {
     <Card className="overflow-hidden"><CardContent className="p-4 sm:p-5">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <label className="flex h-10 min-w-56 flex-1 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 text-[var(--color-ink-muted)]"><Search className="h-4 w-4 shrink-0" /><input aria-label="Rechercher un événement" placeholder="Rechercher un événement..." value={search} onChange={(e) => setSearch(e.target.value)} className="min-w-0 flex-1 bg-transparent text-sm text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-muted)]" /></label>
-        <button type="button" onClick={() => setEnabled(enabled.length === categories.length ? [] : categories)} className="flex h-10 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm font-semibold">{enabled.length === categories.length ? "Tous les événements" : `${enabled.length} catégories`} <ChevronDown className="h-4 w-4" /></button>
-        <span className="flex h-10 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm font-semibold"><CalendarDays className="h-4 w-4" /> 24 dernières heures <ChevronDown className="h-4 w-4" /></span>
+        <details className="relative"><summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm font-semibold">{enabled.length === categories.length ? "Tous les événements" : `${enabled.length} catégories`} <ChevronDown className="h-4 w-4" /></summary><div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-[var(--color-border)] bg-white p-2 shadow-lg">{categories.map((category) => { const checked = enabled.includes(category); return <button key={category} type="button" aria-pressed={checked} onClick={() => setEnabled((current) => checked ? current.filter((item) => item !== category) : [...current, category])} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-slate-50"><span className={`flex h-4 w-4 items-center justify-center rounded border ${checked ? "border-sky-700 bg-sky-700 text-white" : "border-slate-300"}`}>{checked && <Check className="h-3 w-3" />}</span>{category}</button>; })}<button type="button" onClick={() => setEnabled(categories)} className="mt-1 w-full border-t border-slate-100 px-2 pt-2 text-left text-xs font-bold text-sky-700">Tout sélectionner</button></div></details>
+        <details className="relative"><summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm font-semibold"><CalendarDays className="h-4 w-4" /> {ranges.find((item) => item.id === range)?.label} <ChevronDown className="h-4 w-4" /></summary><div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-[var(--color-border)] bg-white p-2 shadow-lg">{ranges.map((item) => <button key={item.id} type="button" aria-pressed={range === item.id} onClick={(event) => { setRange(item.id); event.currentTarget.closest("details")?.removeAttribute("open"); setShown(10); }} className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">{item.label}{range === item.id && <Check className="h-4 w-4 text-sky-700" />}</button>)}</div></details>
         <button type="button" onClick={() => router.refresh()} aria-label="Actualiser les événements" title="Actualiser" className="flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--color-border)] bg-white hover:bg-slate-50"><RefreshCw className="h-4 w-4" /></button>
       </div>
       <div className="divide-y divide-[var(--color-border)]">
