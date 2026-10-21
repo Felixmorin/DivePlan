@@ -47,6 +47,7 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
     });
   }
   const athletes = [...athleteMap.values()];
+  const activeAthletes = athletes.filter((athlete) => athlete.status !== "SKIPPED");
   for (const block of blocks) {
     const poolPlanned = plannedPool(block);
     const drylandPlanned = plannedDryland(block);
@@ -72,10 +73,10 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
   }
   const assigned = athletes.length;
   const present = athletes.filter((athlete) => athlete.status === "COMPLETED" || athlete.status === "IN_PROGRESS").length;
-  const plannedDry = athletes.reduce((sum, athlete) => sum + athlete.plannedDryland, 0);
-  const actualDry = athletes.reduce((sum, athlete) => sum + athlete.actualDryland, 0);
-  const plannedPoolReps = athletes.reduce((sum, athlete) => sum + athlete.plannedPool, 0);
-  const actualPoolReps = athletes.reduce((sum, athlete) => sum + athlete.actualPool, 0);
+  const plannedDry = activeAthletes.reduce((sum, athlete) => sum + athlete.plannedDryland, 0);
+  const actualDry = activeAthletes.reduce((sum, athlete) => sum + athlete.actualDryland, 0);
+  const plannedPoolReps = activeAthletes.reduce((sum, athlete) => sum + athlete.plannedPool, 0);
+  const actualPoolReps = activeAthletes.reduce((sum, athlete) => sum + athlete.actualPool, 0);
   const plannedReps = plannedDry + plannedPoolReps;
   const actualReps = actualDry + actualPoolReps;
   const athleteCompletedBlock = (block: Session["blocks"][number], athleteId: string) => {
@@ -88,25 +89,33 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
     if (block.type === "DRYLAND") return block.drylandExercises.length > 0 && block.drylandExercises.every((item) => session.exerciseLogs.some((log) => log.athleteId === athleteId && log.exerciseId === item.exerciseId && log.completed));
     return false;
   };
-  const completedBlockIds = new Set(blocks.filter((block) => block.assignments.length > 0 && block.assignments.every(({ athleteId }) => athleteCompletedBlock(block, athleteId))).map((block) => block.id));
+  const completedBlockIds = new Set(blocks.filter((block) => {
+    const participating = block.assignments.filter(({ athleteId }) => athleteMap.get(athleteId)?.status !== "SKIPPED");
+    return participating.length > 0 && participating.every(({ athleteId }) => athleteCompletedBlock(block, athleteId));
+  }).map((block) => block.id));
   const completedBlocks = completedBlockIds.size;
-  const attention = athletes.filter((athlete) => athlete.status !== "COMPLETED" || athlete.percent < 80);
+  const eligibleBlocks = blocks.filter((block) => block.assignments.some(({ athleteId }) => athleteMap.get(athleteId)?.status !== "SKIPPED")).length;
+  const attention = activeAthletes.filter((athlete) => athlete.status !== "COMPLETED" || athlete.percent < 80);
   const categories = kindOrder.map((type) => {
     const categoryBlocks = blocks.filter((block) => block.type === type);
     if (!categoryBlocks.length) return null;
-    const planned = categoryBlocks.reduce((sum, block) => sum + (block.type === "POOL" ? plannedPool(block) * block.assignments.length : block.type === "DRYLAND" ? plannedDryland(block) * block.assignments.length : 0), 0);
+    const planned = categoryBlocks.reduce((sum, block) => {
+      const participants = block.assignments.filter(({ athleteId }) => athleteMap.get(athleteId)?.status !== "SKIPPED").length;
+      return sum + (block.type === "POOL" ? plannedPool(block) * participants : block.type === "DRYLAND" ? plannedDryland(block) * participants : 0);
+    }, 0);
     const actual = categoryBlocks.reduce((sum, block) => {
       if (block.type === "POOL") {
         const ids = new Set(block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.id)) ?? []);
-        return sum + session.diveLogs.filter((log) => ids.has(log.poolDiveId) && block.assignments.some((assignment) => assignment.athleteId === log.athleteId)).reduce((total, log) => total + log.repetitionsCompleted, 0);
+        return sum + session.diveLogs.filter((log) => ids.has(log.poolDiveId) && block.assignments.some((assignment) => assignment.athleteId === log.athleteId && athleteMap.get(assignment.athleteId)?.status !== "SKIPPED")).reduce((total, log) => total + log.repetitionsCompleted, 0);
       }
       if (block.type === "DRYLAND") {
         const repsByExercise = new Map(block.drylandExercises.map((item) => [item.exerciseId, (item.sets ?? 1) * (item.reps ?? 0)]));
-        return sum + session.exerciseLogs.filter((log) => log.completed && repsByExercise.has(log.exerciseId) && block.assignments.some((assignment) => assignment.athleteId === log.athleteId)).reduce((total, log) => total + (repsByExercise.get(log.exerciseId) ?? 0), 0);
+        return sum + session.exerciseLogs.filter((log) => log.completed && repsByExercise.has(log.exerciseId) && block.assignments.some((assignment) => assignment.athleteId === log.athleteId && athleteMap.get(assignment.athleteId)?.status !== "SKIPPED")).reduce((total, log) => total + (repsByExercise.get(log.exerciseId) ?? 0), 0);
       }
       return sum;
     }, 0);
-    return { type, label: kindNames[type], blocks: categoryBlocks, planned, actual, doneCount: categoryBlocks.filter((block) => completedBlockIds.has(block.id)).length };
+    const eligibleCount = categoryBlocks.filter((block) => block.assignments.some(({ athleteId }) => athleteMap.get(athleteId)?.status !== "SKIPPED")).length;
+    return { type, label: kindNames[type], blocks: categoryBlocks, planned, actual, doneCount: categoryBlocks.filter((block) => completedBlockIds.has(block.id)).length, eligibleCount };
   }).filter((item): item is NonNullable<typeof item> => item !== null);
   return <>
     <div className="completed-overview">
@@ -115,37 +124,42 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
         <CompletedStat icon={<Users />} label="Présence" value={`${present}/${assigned}`} detail="athlètes présents" />
         <CompletedStat icon={<Target />} label="Répétitions complétées" value={`${actualReps}/${plannedReps}`} detail={`${pct(actualReps, plannedReps)}% du volume prévu`} />
         <CompletedStat icon={<Waves />} label="Plongeons réalisés" value={`${actualPoolReps}/${plannedPoolReps}`} detail={`${pct(actualPoolReps, plannedPoolReps)}% du nombre prévu`} />
-        <CompletedStat icon={<ClipboardList />} label="Blocs complétés" value={`${completedBlocks}/${blocks.length}`} detail={`${pct(completedBlocks, blocks.length)}% des blocs`} />
+        <CompletedStat icon={<ClipboardList />} label="Blocs complétés" value={`${completedBlocks}/${eligibleBlocks}`} detail={`${pct(completedBlocks, eligibleBlocks)}% des blocs`} />
         <CompletedStat icon={<Flag />} label="Points à suivre" value={attention.length} detail="à reprendre à la prochaine séance" warning />
       </section>
       <section className="completed-panel" id="group-summary"><h2><Activity /> Bilan du groupe</h2><div className="completed-insights">
         <article className="positive"><Trophy /><div><strong>Point positif</strong><p>{pct(actualReps, plannedReps)}% du volume prévu a été réalisé par le groupe.</p></div></article>
         <article className="improve"><Target /><div><strong>Point à travailler</strong><p>{attention.length ? `${attention.length} athlète${attention.length > 1 ? "s" : ""} à accompagner à la prochaine séance selon les répétitions réalisées.` : "Le groupe a atteint les objectifs de répétition prévus."}</p></div></article>
-        <article className="engagement"><BarChart3 /><div><strong>Présence / engagement</strong><p>{present} athlète${present > 1 ? "s" : ""} présent${present > 1 ? "s" : ""} sur ${assigned}. {completedBlocks} bloc${completedBlocks > 1 ? "s" : ""} terminé${completedBlocks > 1 ? "s" : ""} sur ${blocks.length}.</p></div></article>
+        <article className="engagement"><BarChart3 /><div><strong>Présence / engagement</strong><p>{present} athlète{present > 1 ? "s" : ""} présent{present > 1 ? "s" : ""} sur {assigned}. {completedBlocks} bloc{completedBlocks > 1 ? "s" : ""} terminé{completedBlocks > 1 ? "s" : ""} sur {eligibleBlocks}.</p></div></article>
       </div></section>
       <section className="completed-panel"><header className="completed-panel-head"><h2><Users /> Athlètes à suivre</h2><Link href="/coach/athletes">Voir tous les athlètes <ArrowRight /></Link></header>
         <div className="completed-table-scroll"><table className="completed-athlete-table"><thead><tr><th>Athlète</th><th>Données de la séance</th><th>Observation de l’entraîneur</th><th>À reprendre</th><th /></tr></thead><tbody>{attention.map((athlete) => <tr key={athlete.id}><td><b className="completed-avatar">{athlete.firstName[0]}{athlete.lastName[0]}</b><strong>{athlete.firstName} {athlete.lastName}</strong></td><td><strong>{athlete.actualDryland + athlete.actualPool}/{athlete.plannedDryland + athlete.plannedPool} répétitions</strong><small>{athlete.actualPool} plongeons</small></td><td>{athlete.trainerNote || athleteStatusText(athlete.status, athlete.percent)}</td><td>{athlete.nextStep}</td><td><Link aria-label={`Voir ${athlete.firstName} ${athlete.lastName}`} href={`/coach/athletes/${athlete.id}`}>•••</Link></td></tr>)}{attention.length === 0 && <tr><td colSpan={5} className="completed-empty">Tous les athlètes ont terminé la séance et atteint 80 % du volume prévu.</td></tr>}</tbody></table></div>
       </section>
       <section className="completed-panel completed-content"><header className="completed-panel-head"><h2><ClipboardList /> Contenu de la séance</h2><button type="button" onClick={() => setAllOpen((open) => open === true ? false : true)}>{allOpen ? "Tout replier" : "Tout déplier"}</button></header>
-        {categories.map((category) => <details className="completed-category" key={category.type} open={allOpen ?? category.type === "POOL"}><summary><span className={`completed-dot ${category.type.toLowerCase()}`} /><strong>{category.label}</strong><span>{category.blocks.length} bloc{category.blocks.length > 1 ? "s" : ""}</span><span className="completed-category-status"><CircleCheck /> {category.doneCount}/{category.blocks.length} complétés</span><b>{category.actual}/{category.planned}</b> répétitions <ChevronDown /></summary>
+        {categories.map((category) => <details className="completed-category" key={category.type} open={allOpen ?? category.type === "POOL"}><summary><span className={`completed-dot ${category.type.toLowerCase()}`} /><strong>{category.label}</strong><span>{category.blocks.length} bloc{category.blocks.length > 1 ? "s" : ""}</span><span className="completed-category-status"><CircleCheck /> {category.doneCount}/{category.eligibleCount} complétés</span><b>{category.actual}/{category.planned}</b> répétitions <ChevronDown /></summary>
           <div className="completed-block-list">{category.blocks.map((block, index) => {
             const blockPoolPlan = plannedPool(block);
             const blockDryPlan = plannedDryland(block);
-            const planned = (blockPoolPlan + blockDryPlan) * block.assignments.length;
+            const participatingAssignments = block.assignments.filter(({ athleteId }) => athleteMap.get(athleteId)?.status !== "SKIPPED");
+            const planned = (blockPoolPlan + blockDryPlan) * participatingAssignments.length;
             const poolIds = new Set(block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.id)) ?? []);
             const actual = block.type === "POOL"
-              ? session.diveLogs.filter((log) => poolIds.has(log.poolDiveId) && block.assignments.some((assignment) => assignment.athleteId === log.athleteId)).reduce((sum, log) => sum + log.repetitionsCompleted, 0)
+              ? session.diveLogs.filter((log) => poolIds.has(log.poolDiveId) && participatingAssignments.some((assignment) => assignment.athleteId === log.athleteId)).reduce((sum, log) => sum + log.repetitionsCompleted, 0)
               : block.type === "DRYLAND"
-                ? session.exerciseLogs.filter((log) => log.completed && block.drylandExercises.some((item) => item.exerciseId === log.exerciseId) && block.assignments.some((assignment) => assignment.athleteId === log.athleteId)).reduce((sum, log) => { const item = block.drylandExercises.find((exercise) => exercise.exerciseId === log.exerciseId); return sum + (item?.sets ?? 1) * (item?.reps ?? 0); }, 0)
+                ? session.exerciseLogs.filter((log) => log.completed && block.drylandExercises.some((item) => item.exerciseId === log.exerciseId) && participatingAssignments.some((assignment) => assignment.athleteId === log.athleteId)).reduce((sum, log) => { const item = block.drylandExercises.find((exercise) => exercise.exerciseId === log.exerciseId); return sum + (item?.sets ?? 1) * (item?.reps ?? 0); }, 0)
                 : 0;
             const complete = completedBlockIds.has(block.id);
-            return <details className="completed-block" key={block.id} open={allOpen ?? (category.type === "POOL" && index === 0)}><summary><span className="completed-block-marker">▸</span><strong>{block.title}</strong><span className={complete ? "completed-mini-status" : "incomplete-mini-status"}>{complete ? "Terminé" : "Non complété"}</span><b>{actual}/{planned}</b> répétitions <ChevronDown /></summary>
+            const allAbsent = participatingAssignments.length === 0 && block.assignments.length > 0;
+            return <details className="completed-block" key={block.id} open={allOpen ?? (category.type === "POOL" && index === 0)}><summary><span className="completed-block-marker">▸</span><strong>{block.title}</strong><span className={allAbsent ? "absent-mini-status" : complete ? "completed-mini-status" : "incomplete-mini-status"}>{allAbsent ? "Absent" : complete ? "Terminé" : "Non complété"}</span><b>{actual}/{planned}</b> répétitions <ChevronDown /></summary>
               <div className="completed-block-body"><div className="completed-table-scroll"><table><thead><tr><th>Athlète</th><th>Plongeons travaillés</th><th>Répétitions (prévu / fait)</th><th>Note rapide</th></tr></thead><tbody>{block.assignments.map(({ athlete }) => {
                 const athleteDiveLogs = session.diveLogs.filter((log) => log.athleteId === athlete.id && poolIds.has(log.poolDiveId));
                 const athleteExercises = session.exerciseLogs.filter((log) => log.athleteId === athlete.id && block.drylandExercises.some((item) => item.exerciseId === log.exerciseId));
                 const athleteActual = block.type === "POOL" ? athleteDiveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0) : block.type === "DRYLAND" ? athleteExercises.filter((log) => log.completed).reduce((sum, log) => { const item = block.drylandExercises.find((exercise) => exercise.exerciseId === log.exerciseId); return sum + (item?.sets ?? 1) * (item?.reps ?? 0); }, 0) : 0;
                 const assignedAthlete = athleteMap.get(athlete.id);
-                return <tr key={athlete.id}><td><strong>{athlete.user.firstName} {athlete.user.lastName}</strong></td><td>{athleteDiveLogs.map((log) => String(log.poolDive.diveCode ?? "")).filter(Boolean).join(", ") || (block.type === "DRYLAND" ? block.drylandExercises.map((item) => item.exercise.name).join(", ") : "—")}</td><td>{(blockPoolPlan + blockDryPlan)} / {athleteActual}</td><td>{assignedAthlete?.trainerNote || "—"}</td></tr>;
+                const absent = assignedAthlete?.status === "SKIPPED";
+                const completedDiveIds = new Set(athleteDiveLogs.filter((log) => log.repetitionsCompleted > 0).map((log) => log.poolDiveId));
+                const plannedDives = block.poolTraining?.sections.flatMap((section) => section.dives) ?? [];
+                return <tr key={athlete.id}><td><strong>{athlete.user.firstName} {athlete.user.lastName}</strong></td><td>{block.type === "POOL" ? <span className="completed-dive-chips">{plannedDives.slice(0, 3).map((dive) => <span className={completedDiveIds.has(dive.id) ? "is-complete" : ""} key={dive.id}>{completedDiveIds.has(dive.id) && <CircleCheck />}{dive.diveCode}</span>)}{plannedDives.length > 3 && <span className="more">+{plannedDives.length - 3}</span>}</span> : block.type === "DRYLAND" ? block.drylandExercises.map((item) => item.exercise.name).join(", ") : "—"}</td><td>{absent ? "Absent" : `${blockPoolPlan + blockDryPlan} / ${athleteActual}`}</td><td>{assignedAthlete?.trainerNote || "—"}</td></tr>;
               })}</tbody></table></div></div>
             </details>;
           })}</div>
