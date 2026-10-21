@@ -26,7 +26,7 @@ async function main() {
     findOrCreateExercise({name:"Jump squat pilote",category:"Power",description:"Impulsion explosive avec reception controlee.",defaultSets:3,defaultReps:8,equipment:"Aucun",tags:["pilote","jambes"]})
   ]);
   const week = await findOrCreate(`SELECT id FROM "TrainingWeek" WHERE "clubId"=$1 AND "groupId"=$2 AND "startDate"=$3 AND title=$4 LIMIT 1`,[club.id,group.id,nextMonday,"Semaine pilote"],`INSERT INTO "TrainingWeek" (id,"clubId","groupId","startDate",title,status) VALUES ($1,$2,$3,$4,$5,'PUBLISHED') RETURNING id`,[id(),club.id,group.id,nextMonday,"Semaine pilote"]);
-  const session = await findOrCreate(`SELECT id,focus FROM "TrainingSession" WHERE title=$1 AND "weekId"=$2 LIMIT 1`,["Pilote lundi - dryland + bassin",week.id],`INSERT INTO "TrainingSession" (id,title,date,duration,focus,notes,"weekId","coachId",status) VALUES ($1,$2,$3,75,$4,$5,$6,$7,'READY') RETURNING id,focus`,[id(),"Pilote lundi - dryland + bassin",withTime(nextMonday,16,30),"Verifier si le prevu vs realise aide le coach apres la seance","Chemin pilote: les athletes se connectent, suivent les blocs, puis le coach lit les resultats.",week.id,coach.id]);
+  const session = await findOrCreate(`SELECT id FROM "TrainingSession" WHERE title=$1 AND "weekId"=$2 LIMIT 1`,["Pilote lundi - dryland + bassin",week.id],`INSERT INTO "TrainingSession" (id,title,date,duration,notes,"weekId","coachId",status) VALUES ($1,$2,$3,75,$4,$5,$6,'READY') RETURNING id`,[id(),"Pilote lundi - dryland + bassin",withTime(nextMonday,16,30),"Chemin pilote: les athletes se connectent, suivent les blocs, puis le coach lit les resultats.",week.id,coach.id]);
   const dryland = await findOrCreateBlock(session.id,"DRYLAND","Dryland pilote",20,1,51);
   await assignBlock(dryland.id,athletes.map(a=>a.id));
   const drylandItems=[[exercises[0].id,3,null,30,1],[exercises[1].id,3,6,null,2],[exercises[2].id,3,8,null,3]] as const;
@@ -37,16 +37,16 @@ async function main() {
   await pool.query(`INSERT INTO "PoolTraining" ("blockId") VALUES ($1) ON CONFLICT ("blockId") DO NOTHING`,[poolBlock.id]);
   const oneMeter=await findOrCreateSection(poolBlock.id,"ONE_METER","1 metre",0),threeMeter=await findOrCreateSection(poolBlock.id,"THREE_METER","3 metres",1);
   for(const [section,dives] of [[oneMeter,[["101C","Avant groupe","C",3],["201C","Arriere groupe","C",4],["201B","Arriere carpe","B",4]]],[threeMeter,[["203C","Un et demi arriere","C",4],["301C","Retour groupe","C",4],["401B","Renverse carpe","B",3]]]] as const) for(const [order,[code,name,position,repetitions]] of dives.entries()) await createDive(section.id,code,name,position,repetitions,order+1);
-  await pool.query(`INSERT INTO "SessionTemplate" (id,name,category,"clubId","sessionId",favorite,payload) VALUES ($1,$2,'Pilote',$3,$4,true,$5::jsonb) ON CONFLICT (id) DO UPDATE SET favorite=true,payload=EXCLUDED.payload`,[`${session.id}-pilot-template`,"Pilote lundi - pret a reutiliser",club.id,session.id,JSON.stringify({source:"seed-pilot",focus:session.focus})]);
+  await pool.query(`INSERT INTO "SessionTemplate" (id,name,category,"clubId","sessionId",favorite,payload) VALUES ($1,$2,'Pilote',$3,$4,true,$5::jsonb) ON CONFLICT (id) DO UPDATE SET favorite=true,payload=EXCLUDED.payload`,[`${session.id}-pilot-template`,"Pilote lundi - pret a reutiliser",club.id,session.id,JSON.stringify({source:"seed-pilot"})]);
   console.log(`Seed pilote pret pour ${nextMonday.toISOString().slice(0,10)}.`);
   console.log(`Coach: coach.pilote@diveplan.local / ${pilotPassword}`);
   console.log(`Athletes: emma.pilote@diveplan.local, leo.pilote@diveplan.local, mia.pilote@diveplan.local / ${pilotPassword}`);
 }
 
 async function findOrCreate(selectSql:string, selectValues:unknown[], insertSql:string, insertValues:unknown[]) {
-  const found=await pool.query<{id:string;focus?:string}>(selectSql,selectValues);
+  const found=await pool.query<{id:string}>(selectSql,selectValues);
   if(found.rows[0])return found.rows[0];
-  return (await pool.query<{id:string;focus?:string}>(insertSql,insertValues)).rows[0];
+  return (await pool.query<{id:string}>(insertSql,insertValues)).rows[0];
 }
 async function upsertAthlete(firstName:string,lastName:string,email:string,level:string,clubId:string,groupId:string,passwordHash:string){
   const user=(await pool.query<{id:string}>(`INSERT INTO "User" (id,"firstName","lastName",email,role,"clubId","passwordHash","passwordSetAt") VALUES ($1,$2,$3,$4,'ATHLETE',$5,$6,NOW()) ON CONFLICT (email) DO UPDATE SET "firstName"=EXCLUDED."firstName","lastName"=EXCLUDED."lastName",role='ATHLETE',"clubId"=EXCLUDED."clubId","passwordHash"=EXCLUDED."passwordHash","passwordSetAt"=NOW() RETURNING id`,[id(),firstName,lastName,email,clubId,passwordHash])).rows[0];

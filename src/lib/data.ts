@@ -59,7 +59,6 @@ export const demoSession = {
   time: "16:30",
   group: "Provincial",
   duration: 90,
-  focus: "203C, 201B, entrees propres",
   status: "Pret",
   coachMessage: "Rester patient sur les ouvertures. Priorite a la ligne et a l'entree propre.",
   blocks: [
@@ -159,13 +158,13 @@ export const demoSession = {
 };
 
 export const weekSessions = [
-  { day: "Lundi", title: "Retour technique", focus: "301C", duration: 90, volume: 128, athletes: 8, status: "Complete" },
-  { day: "Mardi", title: demoSession.title, focus: demoSession.focus, duration: 90, volume: 139, athletes: 5, status: "Pret" },
-  { day: "Mercredi", title: "Dryland power", focus: "Impulsion", duration: 75, volume: 96, athletes: 8, status: "Brouillon" },
-  { day: "Jeudi", title: "Entrees propres", focus: "Ligne", duration: 90, volume: 121, athletes: 6, status: "Pret" },
-  { day: "Vendredi", title: "Simulation competition", focus: "Routine", duration: 105, volume: 160, athletes: 8, status: "Pret" },
-  { day: "Samedi", title: "Pre-competition", focus: "Qualite", duration: 60, volume: 72, athletes: 5, status: "Brouillon" },
-  { day: "Dimanche", title: "", focus: "", duration: 0, volume: 0, athletes: 0, status: "Repos" }
+  { day: "Lundi", title: "Retour technique", duration: 90, volume: 128, athletes: 8, status: "Complete" },
+  { day: "Mardi", title: demoSession.title, duration: 90, volume: 139, athletes: 5, status: "Pret" },
+  { day: "Mercredi", title: "Dryland power", duration: 75, volume: 96, athletes: 8, status: "Brouillon" },
+  { day: "Jeudi", title: "Entrees propres", duration: 90, volume: 121, athletes: 6, status: "Pret" },
+  { day: "Vendredi", title: "Simulation competition", duration: 105, volume: 160, athletes: 8, status: "Pret" },
+  { day: "Samedi", title: "Pre-competition", duration: 60, volume: 72, athletes: 5, status: "Brouillon" },
+  { day: "Dimanche", title: "", duration: 0, volume: 0, athletes: 0, status: "Repos" }
 ];
 
 export const templates = ["Arriere - ouverture", "Retour technique", "Simulation competition", "Pre-competition", "Dryland power"];

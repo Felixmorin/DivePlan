@@ -118,7 +118,6 @@ type SessionBuilderProps = {
   initialGroupId?: string;
   initialDate?: string;
   initialTime?: string;
-  initialFocus?: string;
   initialCoachAthleteNotes?: Record<string, string>;
   editingSession?: boolean;
   initialExerciseId?: string;
@@ -128,7 +127,7 @@ type SessionBuilderProps = {
 
 const steps = ["Démarrer", "Contenu", "Dryland", "Piscine", "Publier"];
 
-export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAverageById, athletePoolInsightsById = {}, planningEvents, poolBlocks, initialTemplate, templates, recentSessions, initialPlanningEventId, initialGroupId: providedGroupId, initialDate, initialTime, initialFocus, initialCoachAthleteNotes, editingSession = false, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
+export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAverageById, athletePoolInsightsById = {}, planningEvents, poolBlocks, initialTemplate, templates, recentSessions, initialPlanningEventId, initialGroupId: providedGroupId, initialDate, initialTime, initialCoachAthleteNotes, editingSession = false, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [assignmentOpenBlockId, setAssignmentOpenBlockId] = useState<string | null>(null);

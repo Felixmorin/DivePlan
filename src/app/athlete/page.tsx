@@ -92,7 +92,7 @@ export default async function AthleteTodayPage() {
       <SectionHeading title="Dernière séance" href="/athlete/week" linkLabel="Voir l’historique" />
       <section className="latest-card">
         {latestCompletion ? (
-          <ScheduleRow date={latestCompletion.completedAt ? formatMontrealDate(new Date(latestCompletion.completedAt), { weekday: "short", day: "numeric", month: "short" }) : "Récente"} title={latestCompletion.title} details={[`${latestCompletion.duration} min`, latestCompletion.focus].filter(Boolean).join(" · ")} meta={latestCompletion.status === "COMPLETED" ? "Séance complétée" : "Séance en cours"} href="/athlete/week" status={latestCompletion.status === "COMPLETED"} />
+          <ScheduleRow date={latestCompletion.completedAt ? formatMontrealDate(new Date(latestCompletion.completedAt), { weekday: "short", day: "numeric", month: "short" }) : "Récente"} title={latestCompletion.title} details={`${latestCompletion.duration} min`} meta={latestCompletion.status === "COMPLETED" ? "Séance complétée" : "Séance en cours"} href="/athlete/week" status={latestCompletion.status === "COMPLETED"} />
         ) : <EmptyState className="border-0 bg-transparent p-4" title="Aucun historique" description="Tes séances terminées apparaîtront ici." />}
       </section>
 

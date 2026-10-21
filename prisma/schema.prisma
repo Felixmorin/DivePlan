@@ -391,7 +391,6 @@ model TrainingSession {
   date            DateTime
   title           String
   duration        Int
-  focus           String
   notes           String?
   weekId          String
   coachId         String

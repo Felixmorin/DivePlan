@@ -21,7 +21,7 @@ export default function SessionDetailPage() {
         <div className="min-w-0">
           <StatusPill status={demoSession.status} />
           <h1 className="mt-2 text-3xl font-black text-[var(--color-ink)]">{demoSession.title}</h1>
-          <p className="mt-1 text-sm leading-6 text-[var(--color-ink-muted)]">{demoSession.date} · {demoSession.duration} min · {demoSession.focus}</p>
+          <p className="mt-1 text-sm leading-6 text-[var(--color-ink-muted)]">{demoSession.date} · {demoSession.duration} min</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           <Button asChild variant="outline"><Link href="/coach/sessions/demo/edit"><Edit className="h-4 w-4" /> Modifier</Link></Button>
