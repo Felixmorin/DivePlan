@@ -106,9 +106,9 @@ export async function withTransaction<T>(work: (client: PoolClient) => Promise<T
   const client = await pool.connect();
   const instrumentedClient = new Proxy(client, {
     get(target, property, receiver) {
-      if (property === "query") return async (...args: Parameters<PoolClient["query"]>) => {
-        const result = await target.query(...args);
-        recordDatabaseResult(result as QueryResult<QueryResultRow>);
+      if (property === "query") return async (...args: unknown[]) => {
+        const result = await Reflect.apply(target.query, target, args) as unknown as QueryResult<QueryResultRow>;
+        recordDatabaseResult(result);
         return result;
       };
       const value = Reflect.get(target, property, target) as unknown;

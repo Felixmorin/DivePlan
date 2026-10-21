@@ -472,6 +472,29 @@ a {
 .athlete-volume-weekly-legend span { display:flex; align-items:center; gap:.25rem; }
 .athlete-volume-weekly-legend i { width:.55rem; height:.55rem; border-radius:50%; background:#aabbd1; }
 .athlete-volume-weekly-legend i.is-actual { background:#09b7eb; }
+.athlete-session-rating-panel .athlete-wellbeing { display:flex; align-items:center; gap:.22rem; margin:.3rem 0 .2rem; }
+.athlete-session-rating-panel .athlete-wellbeing strong { font-size:2rem; line-height:1; letter-spacing:-.05em; }
+.athlete-session-rating-panel .athlete-wellbeing > span { align-self:flex-end; margin:0 0 .15rem .05rem; font-size:1rem; }
+.athlete-session-rating-panel .athlete-wellbeing i { display:grid; width:1.55rem; height:1.55rem; place-items:center; margin-left:.4rem; border-radius:.5rem; background:#fff0e4; color:#f28a19; font-size:1.1rem; font-style:normal; font-weight:900; }
+.athlete-session-rating-panel .athlete-wellbeing p { margin:0 0 0 .45rem; color:#536a83; font-size:.72rem; }
+.athlete-session-rating-chart { height:10rem; margin:.55rem 0 1.8rem; }
+.athlete-session-rating-chart svg { inset:0 0 1.35rem; height:calc(100% - 1.35rem); }
+.athlete-session-rating-legend { bottom:-.95rem; justify-content:space-between; gap:.3rem; font-size:.58rem; }
+.athlete-session-rating-legend i { width:.48rem; height:.48rem; }
+.athlete-volume-weekly-heading { align-items:center; }
+.athlete-volume-weekly-heading > div { display:grid; gap:.05rem; }
+.athlete-volume-weekly-heading h2 { font-size:.92rem; }
+.athlete-volume-weekly-heading h2 svg { width:1.05rem; height:1.05rem; }
+.athlete-volume-weekly-heading p { margin:0 0 0 1.4rem; color:#71839a; font-size:.68rem; }
+.athlete-volume-weekly-heading > span { min-height:2rem; align-items:center; border-radius:.55rem; padding:.35rem .55rem; font-size:.66rem; }
+.athlete-volume-weekly-heading > span svg { transform:rotate(90deg); }
+.athlete-volume-weekly-chart { height:8rem; margin-top:.65rem; }
+.athlete-volume-weekly-legend { gap:1rem; padding:.15rem 0 .05rem; font-size:.68rem; }
+.athlete-volume-weekly-legend i { width:.7rem; height:.7rem; }
+@media (max-width:700px) {
+  .athlete-session-rating-legend { justify-content:flex-start; gap:.35rem .65rem; }
+  .athlete-session-rating-panel .athlete-wellbeing p { font-size:.65rem; }
+}
 .athlete-skill-row { margin-top:.52rem; }
 .athlete-skill-row > div { display:flex; justify-content:space-between; gap:.3rem; color:#60748c; font-size:.57rem; }
 .athlete-skill-row i { display:block; height:.32rem; margin-top:.25rem; overflow:hidden; border-radius:1rem; background:#edf2f5; }
