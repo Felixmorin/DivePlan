@@ -46,8 +46,12 @@ export function DraftSessionBlocks({ blocks }: { blocks: DraftBlock[] }) {
       })}
     </nav>
     <div className="draft-blocks">
-      {visibleBlocks.map((block) => <details key={block.id} className="draft-block">
-        <summary><span className="draft-block-number">{blocks.indexOf(block) + 1}</span><span className={`draft-kind ${kindStyle(block.type)}`}>{kindLabel(block.type)}</span><span className="draft-block-info"><strong>{block.title}</strong><span className="draft-block-meta"><span><Clock3 />{block.duration} min</span><span><Users />{block.assignments.length} athlètes</span>{block.estimatedVolume > 0 && <span><Waves />{block.estimatedVolume} répétitions</span>}</span></span><ChevronDown className="draft-chevron" /></summary>
+      {visibleBlocks.map((block) => {
+        const repetitions = block.type === "DRYLAND"
+          ? block.drylandExercises.reduce((sum, item) => sum + (item.sets ?? 1) * (item.reps ?? 0), 0)
+          : block.type === "POOL" ? block.estimatedVolume : 0;
+        return <details key={block.id} className="draft-block">
+        <summary><span className="draft-block-number">{blocks.indexOf(block) + 1}</span><span className={`draft-kind ${kindStyle(block.type)}`}>{kindLabel(block.type)}</span><span className="draft-block-info"><strong>{block.title}</strong><span className="draft-block-meta"><span><Clock3 />{block.duration} min</span><span><Users />{block.assignments.length} athlètes</span>{repetitions > 0 && <span><Waves />{repetitions} répétitions</span>}</span></span><ChevronDown className="draft-chevron" /></summary>
         <div className="draft-block-content">
           {block.description && <p>{block.description}</p>}
           {block.drylandExercises.length > 0 && <div className="draft-exercises">{block.drylandExercises.map((item) => <div key={`${item.exerciseId}-${item.order}`}><strong>{item.exercise.name}</strong><span>{item.sets ?? 1} séries · {item.reps ?? `${item.duration ?? 30} sec`}</span>{item.notes && <small>{item.notes}</small>}</div>)}</div>}
@@ -56,7 +60,8 @@ export function DraftSessionBlocks({ blocks }: { blocks: DraftBlock[] }) {
           </div>)}
           {block.competitionEvaluation && <p className="draft-eval"><CheckCircle2 /> Évaluation de la liste de compétition prévue dans ce bloc.</p>}
         </div>
-      </details>)}
+      </details>;
+      })}
       {visibleBlocks.length === 0 && <p className="draft-empty">Aucun bloc dans cette séance pour le moment.</p>}
     </div>
   </>;
