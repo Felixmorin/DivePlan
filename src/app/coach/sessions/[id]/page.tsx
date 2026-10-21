@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Copy, Edit, NotebookText, Printer, Save, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronRight, Clock3, Copy, Dumbbell, Edit, FileText, Layers3, MapPin, MoreVertical, NotebookText, Printer, Save, Send, Timer, Trash2, Users, Waves, XCircle } from "lucide-react";
 import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
 import { PoolSectionEditor } from "./pool-section-editor";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
@@ -21,6 +21,7 @@ export const dynamic = "force-dynamic";
 export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getCoachSession(id);
+  if (session.status === "DRAFT") return <DraftSessionOverview session={session} />;
   const coachNotes = (await query<{athleteId:string;note:string}>(`SELECT "athleteId",note FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [session.id])).rows;
   const rawAthletes = session.blocks.flatMap((block) =>
     block.assignments.map((assignment) => ({
@@ -291,6 +292,75 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       </div>
     </CoachShell>
   );
+}
+
+type DraftOverviewSession = Awaited<ReturnType<typeof getCoachSession>>;
+
+function DraftSessionOverview({ session }: { session: DraftOverviewSession }) {
+  const blocks = [...session.blocks].sort((a, b) => a.position - b.position);
+  const athletes = new Set(blocks.flatMap((block) => block.assignments.map((assignment) => assignment.athleteId)));
+  const plannedDiveReps = blocks.reduce((total, block) => total + (block.poolTraining?.sections.reduce((sectionTotal, section) => sectionTotal + Math.max(1, countPoolContexts(section.label ?? section.height)) * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0), 0) ?? 0), 0);
+  const isReadyToPublish = athletes.size > 0 && blocks.length > 0 && plannedDiveReps > 0;
+  const poolReps = blocks.filter((block) => block.type === "POOL").reduce((total, block) => total + (block.estimatedVolume ?? 0), 0);
+  const kinds = ["WARMUP", "DRYLAND", "POOL"] as const;
+  const kindLabel = (kind: string) => kind === "WARMUP" ? "Échauffement" : kind === "DRYLAND" ? "Dryland" : kind === "POOL" ? "Piscine" : "Retour au calme";
+  const kindStyle = (kind: string) => kind === "WARMUP" ? "bg-amber-100 text-amber-800" : kind === "DRYLAND" ? "bg-violet-100 text-violet-800" : kind === "POOL" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800";
+
+  return <CoachShell active="Seances">
+    <div className="draft-overview">
+      <div className="draft-crumb"><Link href="/coach/sessions">Séances</Link><ChevronRight />{session.title}</div>
+      <header className="draft-head">
+        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1>{session.title}</h1><span className="draft-status"><span /> Brouillon</span></div>
+          <div className="draft-meta"><span><CalendarDays />{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span><span><Clock3 />{session.duration} min</span><span><Users />{session.week.group.name}</span></div>
+        </div>
+        <div className="draft-actions"><details className="draft-more"><summary aria-label="Autres actions"><MoreVertical /></summary><div><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Imprimer</Link><form action={duplicateTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><button><Copy /> Dupliquer</button></form><form action={deleteTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><button className="text-red-600"><Trash2 /> Supprimer la séance</button></form></div></details>
+          <Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}/edit`}><Edit /> Modifier</Link></Button>
+          <form action={publishTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Send /> Publier la séance</Button></form>
+        </div>
+      </header>
+      <div className="draft-layout">
+        <main className="draft-main">
+          <section className="draft-stats" aria-label="Résumé de la séance">
+            <DraftStat icon={<Users />} value={athletes.size} label="athlètes" />
+            <DraftStat icon={<Waves />} value={poolReps} label="plongeons planifiés" />
+            <DraftStat icon={<Clock3 />} value={`${Math.floor(session.duration / 60)} h ${String(session.duration % 60).padStart(2, "0")}`} label="Durée estimée" />
+            <DraftStat icon={<Layers3 />} value={blocks.length} label="blocs" detail={`${blocks.filter((block) => block.type === "WARMUP").length} échauffement, ${blocks.filter((block) => block.type === "DRYLAND").length} dryland, ${blocks.filter((block) => block.type === "POOL").length} piscine`} />
+          </section>
+          <nav className="draft-tabs" aria-label="Sections de la séance"><a className="active" href="#draft-plan"><Layers3 /> Aperçu</a>{kinds.map((kind) => { const firstIndex = blocks.findIndex((block) => block.type === kind); return <a key={kind} href={firstIndex < 0 ? "#draft-plan" : `#draft-block-${firstIndex}`}><span className="draft-tab-icon">{kind === "WARMUP" ? <Timer /> : kind === "DRYLAND" ? <Dumbbell /> : <Waves />}</span>{kindLabel(kind)} ({blocks.filter((block) => block.type === kind).length})</a>; })}</nav>
+          <h2 className="draft-plan-title" id="draft-plan">Plan de la séance</h2>
+          <div className="draft-blocks">{blocks.map((block, index) => <details key={block.id} id={`draft-block-${index}`} className="draft-block" open={block.type === "POOL" && !blocks.slice(0, index).some((item) => item.type === "POOL")}>
+            <summary><span className="draft-block-number">{index + 1}</span><span className={`draft-kind ${kindStyle(block.type)}`}>{kindLabel(block.type)}</span><span className="draft-block-info"><strong>{block.title}</strong><span className="draft-block-meta"><span><Clock3 />{block.duration} min</span><span><Users />{block.assignments.length} athlètes</span>{block.estimatedVolume > 0 && <span><Waves />{block.estimatedVolume} répétitions</span>}</span></span><ChevronDown className="draft-chevron" /></summary>
+            <div className="draft-block-content">
+              {block.description && <p>{block.description}</p>}
+              {block.drylandExercises.length > 0 && <div className="draft-exercises">{block.drylandExercises.map((item) => <div key={`${item.exerciseId}-${item.order}`}><strong>{item.exercise.name}</strong><span>{item.sets ?? 1} séries · {item.reps ?? `${item.duration ?? 30} sec`}</span>{item.notes && <small>{item.notes}</small>}</div>)}</div>}
+              {block.poolTraining?.sections.map((section) => <div className="draft-section" key={section.id}><div className="draft-section-head"><strong>{section.label ?? poolHeightContext(section.height)}</strong><span>{section.dives.length} plongeons · {section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)} reps</span></div>
+                <div className="draft-table-scroll"><table><thead><tr><th>Athlète</th><th>Hauteur</th><th>Plongeons planifiés</th><th>Aperçu des plongeons</th></tr></thead><tbody>{block.assignments.map(({ athlete }) => <tr key={athlete.id}><td><span className="draft-avatar">{athlete.user.firstName[0]}{athlete.user.lastName[0]}</span>{athlete.user.firstName} {athlete.user.lastName}</td><td>{poolHeightContext(section.height)}</td><td>{section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)}</td><td>{section.dives.slice(0, 4).map((dive) => dive.diveCode).join(", ")}{section.dives.length > 4 ? "…" : ""}</td></tr>)}{block.assignments.length === 0 && <tr><td colSpan={4}>Aucun athlète assigné à ce bloc.</td></tr>}</tbody></table></div>
+              </div>)}
+              {block.competitionEvaluation && <p className="draft-eval"><CheckCircle2 /> Évaluation de la liste de compétition prévue dans ce bloc.</p>}
+            </div>
+          </details>)}{blocks.length === 0 && <p className="draft-empty">Aucun bloc dans cette séance pour le moment.</p>}</div>
+        </main>
+        <aside className="draft-sidebar">
+          <section className="draft-side-card"><h2>Détails de la séance <span className="draft-status"><span /> Brouillon</span></h2><DraftDetail icon={<CalendarDays />} label="Date" value={formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} /><DraftDetail icon={<Clock3 />} label="Durée" value={`${session.duration} min`} /><DraftDetail icon={<Users />} label="Groupe" value={session.week.group.name} sub={`${athletes.size} athlètes`} /><DraftDetail icon={<MapPin />} label="Lieu" value="À confirmer" /><DraftDetail icon={<Waves />} label="Entraîneur" value="Entraîneur assigné" /></section>
+          <section className="draft-side-card"><h2><FileText /> Liste de vérification avant publication</h2><DraftCheck label="Groupe assigné" value={`${athletes.size} athlètes`} ok={athletes.size > 0} /><DraftCheck label="Blocs configurés" value={`${blocks.length} blocs`} ok={blocks.length > 0} /><DraftCheck label="Listes de plongeons prêtes" value={`${plannedDiveReps} plongeons`} ok={plannedDiveReps > 0} /><DraftCheck label="Date définie" value={formatMontrealDate(session.date)} ok /><div className={`draft-ready ${isReadyToPublish ? "" : "draft-incomplete"}`}><CheckCircle2 /><span><strong>{isReadyToPublish ? "Prête à publier" : "À compléter"}</strong><small>{isReadyToPublish ? "Vous pouvez publier la séance pour la rendre disponible à l’équipe." : "Ajoutez un groupe, des blocs et des plongeons avant de publier."}</small></span></div></section>
+          <section className="draft-side-card"><h2><NotebookText /> Notes</h2><p className="draft-note-text">{session.notes || "Aucune note pour cette séance."}</p><Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}/edit`}>Ajouter une note</Link></Button></section>
+          <section className="draft-side-card draft-links"><h2><Layers3 /> Liens rapides</h2><Link href="/coach/planning"><CalendarDays /> Voir dans le calendrier</Link><Link href={`/coach/sessions/${session.id}/edit`}><Copy /> Dupliquer la séance</Link><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Exporter / imprimer</Link></section>
+        </aside>
+      </div>
+    </div>
+  </CoachShell>;
+}
+
+function DraftStat({ icon, value, label, detail }: { icon: React.ReactNode; value: string | number; label: string; detail?: string }) {
+  return <div className="draft-stat"><span className="draft-stat-icon">{icon}</span><span><strong>{value}</strong><small>{label}{detail && <em>{detail}</em>}</small></span></div>;
+}
+
+function DraftDetail({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
+  return <div className="draft-detail"><span>{icon}{label}</span><strong>{value}{sub && <small>{sub}</small>}</strong></div>;
+}
+
+function DraftCheck({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+  return <div className="draft-check"><span className={ok ? "ok" : "todo"}>{ok ? <Check /> : <AlertTriangle />}</span><strong>{label}</strong><small>{value}</small></div>;
 }
 
 function ComparisonMetric({ label, value }: { label: string; value: string | number }) {
