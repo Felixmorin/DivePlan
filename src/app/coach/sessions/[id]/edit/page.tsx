@@ -237,8 +237,6 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
             })}
           </div>
 
-        </div>
-
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border)] bg-white/95 p-3 shadow-[0_-16px_34px_rgba(7,20,35,0.12)] backdrop-blur xl:hidden">
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
             <Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}`}>Apercu</Link></Button>
