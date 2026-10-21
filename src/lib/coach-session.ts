@@ -4,7 +4,7 @@ import { requireCoach } from "@/lib/current-user";
 import { getSessionSnapshot, type SessionSnapshot } from "@/lib/session-template";
 
 type RelationalRow = Record<string, unknown>;
-type CoachUser = { id:string;firstName:string;lastName:string;email:string;avatar:string|null };
+type CoachUser = { id:string;firstName:string;lastName:string;email?:string;avatar:string|null };
 type CoachAthlete = { id:string;user:CoachUser };
 type SnapshotBlock = SessionSnapshot["blocks"][number];
 type CoachSession = Omit<SessionSnapshot,"week"|"blocks"> & {
@@ -25,17 +25,17 @@ export async function getCoachSession(sessionId: string): Promise<CoachSession> 
   if (!session) notFound();
 
   const [groupResult, completionRows, absenceRows, diveLogRows, exerciseLogRows] = await Promise.all([
-    query<{group:RelationalRow}>(`SELECT to_jsonb(g) AS "group" FROM "TrainingWeek" w JOIN "TrainingGroup" g ON g.id=w."groupId" WHERE w.id=$1`,[session.weekId]),
-    query<{completion:RelationalRow;athlete:RelationalRow;user:RelationalRow}>(`SELECT to_jsonb(c) AS completion,to_jsonb(a) AS athlete,to_jsonb(u) AS "user" FROM "AthleteSessionCompletion" c JOIN "Athlete" a ON a.id=c."athleteId" JOIN "User" u ON u.id=a."userId" WHERE c."sessionId"=$1`,[session.id]),
+    query<{group:RelationalRow}>(`SELECT jsonb_build_object('id',g.id,'name',g.name,'clubId',g."clubId",'coachId',g."coachId") AS "group" FROM "TrainingWeek" w JOIN "TrainingGroup" g ON g.id=w."groupId" WHERE w.id=$1`,[session.weekId]),
+    query<{completion:RelationalRow;athlete:RelationalRow;user:RelationalRow}>(`SELECT jsonb_build_object('athleteId',c."athleteId",'sessionId',c."sessionId",'status',c.status,'startedAt',c."startedAt",'completedAt',c."completedAt",'rating',c.rating,'note',c.note) AS completion,jsonb_build_object('id',a.id) AS athlete,jsonb_build_object('id',u.id,'firstName',u."firstName",'lastName',u."lastName",'avatar',u.avatar) AS "user" FROM "AthleteSessionCompletion" c JOIN "Athlete" a ON a.id=c."athleteId" JOIN "User" u ON u.id=a."userId" WHERE c."sessionId"=$1`,[session.id]),
     query<{athleteId:string}>(`SELECT "athleteId" FROM "AthleteSessionAbsence" WHERE "sessionId"=$1`,[session.id]),
-    query<{log:RelationalRow;athlete:RelationalRow;user:RelationalRow;poolDive:RelationalRow}>(`SELECT to_jsonb(l) AS log,to_jsonb(a) AS athlete,to_jsonb(u) AS "user",to_jsonb(d) AS "poolDive" FROM "AthleteDiveLog" l JOIN "Athlete" a ON a.id=l."athleteId" JOIN "User" u ON u.id=a."userId" JOIN "PoolDive" d ON d.id=l."poolDiveId" WHERE l."sessionId"=$1`,[session.id]),
-    query<{log:RelationalRow;athlete:RelationalRow;user:RelationalRow;exercise:RelationalRow}>(`SELECT to_jsonb(l) AS log,to_jsonb(a) AS athlete,to_jsonb(u) AS "user",to_jsonb(e) AS exercise FROM "AthleteExerciseLog" l JOIN "Athlete" a ON a.id=l."athleteId" JOIN "User" u ON u.id=a."userId" JOIN "DrylandExercise" e ON e.id=l."exerciseId" WHERE l."sessionId"=$1`,[session.id])
+    query<{log:RelationalRow;athlete:RelationalRow;user:RelationalRow;poolDive:RelationalRow}>(`SELECT jsonb_build_object('id',l.id,'athleteId',l."athleteId",'sessionId',l."sessionId",'poolDiveId',l."poolDiveId",'familyOverride',l."familyOverride",'actualDiveCode',l."actualDiveCode",'repetitionsCompleted',l."repetitionsCompleted",'goldenRepetitions',l."goldenRepetitions",'rating',l.rating,'note',l.note,'timestamp',l.timestamp) AS log,jsonb_build_object('id',a.id) AS athlete,jsonb_build_object('id',u.id,'firstName',u."firstName",'lastName',u."lastName",'avatar',u.avatar) AS "user",jsonb_build_object('id',d.id,'diveCode',d."diveCode",'diveName',d."diveName") AS "poolDive" FROM "AthleteDiveLog" l JOIN "Athlete" a ON a.id=l."athleteId" JOIN "User" u ON u.id=a."userId" JOIN "PoolDive" d ON d.id=l."poolDiveId" WHERE l."sessionId"=$1`,[session.id]),
+    query<{log:RelationalRow;athlete:RelationalRow;user:RelationalRow;exercise:RelationalRow}>(`SELECT jsonb_build_object('id',l.id,'athleteId',l."athleteId",'sessionId',l."sessionId",'exerciseId',l."exerciseId",'completed',l.completed,'rating',l.rating,'note',l.note) AS log,jsonb_build_object('id',a.id) AS athlete,jsonb_build_object('id',u.id,'firstName',u."firstName",'lastName',u."lastName",'avatar',u.avatar) AS "user",jsonb_build_object('name',e.name) AS exercise FROM "AthleteExerciseLog" l JOIN "Athlete" a ON a.id=l."athleteId" JOIN "User" u ON u.id=a."userId" JOIN "DrylandExercise" e ON e.id=l."exerciseId" WHERE l."sessionId"=$1`,[session.id])
   ]);
 
   const blocks = await Promise.all(session.blocks.map(async block => {
     const [assignmentRows, exerciseRows] = await Promise.all([
-      query<{assignment:RelationalRow;athlete:RelationalRow;user:RelationalRow}>(`SELECT to_jsonb(a) AS assignment,to_jsonb(at) AS athlete,to_jsonb(u) AS "user" FROM "SessionBlockAssignment" a JOIN "Athlete" at ON at.id=a."athleteId" JOIN "User" u ON u.id=at."userId" WHERE a."sessionBlockId"=$1`,[block.id]),
-      query<{item:RelationalRow;exercise:RelationalRow}>(`SELECT to_jsonb(d) AS item,to_jsonb(e) AS exercise FROM "DrylandBlockExercise" d JOIN "DrylandExercise" e ON e.id=d."exerciseId" WHERE d."blockId"=$1 ORDER BY d."order"`,[block.id])
+      query<{assignment:RelationalRow;athlete:RelationalRow;user:RelationalRow}>(`SELECT jsonb_build_object('id',a.id,'sessionBlockId',a."sessionBlockId",'athleteId',a."athleteId") AS assignment,jsonb_build_object('id',at.id) AS athlete,jsonb_build_object('id',u.id,'firstName',u."firstName",'lastName',u."lastName",'avatar',u.avatar) AS "user" FROM "SessionBlockAssignment" a JOIN "Athlete" at ON at.id=a."athleteId" JOIN "User" u ON u.id=at."userId" WHERE a."sessionBlockId"=$1`,[block.id]),
+      query<{item:RelationalRow;exercise:RelationalRow}>(`SELECT jsonb_build_object('blockId',d."blockId",'exerciseId',d."exerciseId",'sets',d.sets,'reps',d.reps,'duration',d.duration,'notes',d.notes,'order',d."order") AS item,jsonb_build_object('id',e.id,'name',e.name,'category',e.category,'description',e.description,'equipment',e.equipment,'defaultSets',e."defaultSets",'defaultReps',e."defaultReps",'defaultDuration',e."defaultDuration",'roundTrip',e."roundTrip",'tags',e.tags) AS exercise FROM "DrylandBlockExercise" d JOIN "DrylandExercise" e ON e.id=d."exerciseId" WHERE d."blockId"=$1 ORDER BY d."order"`,[block.id])
     ]);
     return {
       ...block,
