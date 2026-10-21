@@ -19,7 +19,6 @@ export const dynamic = "force-dynamic";
 type PlanningSession = {
   id: string;
   title: string;
-  focus: string;
   date: Date;
   duration: number;
   status: string;
@@ -78,7 +77,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
   await completeExpiredTrainingSessions();
 
   const [sessionRows,eventRows,groupsResult,athleteRows]=await Promise.all([
-    query<{id:string;title:string;focus:string;date:Date;duration:number;status:string;planningEventId:string|null}>(`SELECT s.id,s.title,s.focus,s.date,s.duration,s.status,s."planningEventId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s."calendarHiddenAt" IS NULL AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,period.rangeStart,period.rangeEnd]),
+    query<{id:string;title:string;date:Date;duration:number;status:string;planningEventId:string|null}>(`SELECT s.id,s.title,s.date,s.duration,s.status,s."planningEventId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s."calendarHiddenAt" IS NULL AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,period.rangeStart,period.rangeEnd]),
     query<{id:string;type:string;title:string;startsAt:Date;endsAt:Date|null;duration:number|null;location:string|null;notes:string|null;cancelledAt:Date|null;groupId:string|null;athleteId:string|null;groupName:string|null;firstName:string|null;lastName:string|null}>(`SELECT e.id,e.type,e.title,e."startsAt",e."endsAt",e.duration,e.location,e.notes,e."cancelledAt",e."groupId",e."athleteId",g.name AS "groupName",u."firstName",u."lastName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "User" u ON u.id=a."userId" WHERE e."clubId"=$1 AND e."coachCalendarHiddenAt" IS NULL AND e."startsAt"<$3 AND ((e."endsAt" IS NOT NULL AND e."endsAt">=$2) OR (e."endsAt" IS NULL AND e."startsAt">=$2)) ORDER BY e."startsAt"`,[clubId,period.rangeStart,period.rangeEnd]),
     query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`,[clubId]),
     query<{id:string;firstName:string;lastName:string}>(`SELECT a.id,u."firstName",u."lastName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId])
@@ -93,7 +92,6 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
   const sessions: PlanningSession[] = sessionRows.rows.map((session) => ({
     id: session.id,
     title: session.title,
-    focus: session.focus,
     date: session.date,
     duration: session.duration,
     status: session.status,
@@ -130,7 +128,6 @@ function DemoPlanningPage({ period, weekStartsOn }: { period: PlanningPeriod; we
   const sessions = weekSessions.filter((session) => session.title).map((session, index) => ({
     id: index === 1 ? "demo" : `demo-${index}`,
     title: session.title,
-    focus: session.focus,
     date: addMontrealDays(period.weekStart, index),
     duration: session.duration,
     status: session.status === "Brouillon" ? "DRAFT" : session.status === "Complete" ? "COMPLETED" : "READY",
@@ -327,7 +324,6 @@ function PlanningSessionCard({ session, active, demo }: { session: PlanningSessi
         <span className="text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealTime(session.date)}</span>
       </div>
       <Link href={href} className="mt-3 block font-black leading-tight hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{session.title}</Link>
-      {session.focus && <p className="mt-1 text-sm leading-5 text-[var(--color-ink-muted)]">{session.focus}</p>}
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs font-bold text-[var(--color-ink-muted)]">
         <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {session.duration}</span>
         <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {athleteCount}</span>

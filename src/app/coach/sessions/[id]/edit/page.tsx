@@ -118,7 +118,6 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
           initialDate={toMontrealDateInputValue(session.date)}
           initialTime={toMontrealDateTimeInputValue(session.date).slice(11, 16)}
           initialPlanningEventId={session.planningEventId ?? undefined}
-          initialFocus={session.focus}
           initialCoachAthleteNotes={Object.fromEntries(coachNotesR.rows.map((row) => [row.athleteId, row.note]))}
           editingSession
           onCreate={updateDraftSessionFromBuilder.bind(null, session.id)}
@@ -152,7 +151,6 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
                 <Field label="Nom"><Input name="title" defaultValue={session.title} required /></Field>
                 <Field label="Date et heure"><Input name="date" type="datetime-local" defaultValue={toMontrealDateTimeInputValue(session.date)} required />{session.planningEventId && <span className="text-xs font-semibold text-[var(--color-ink-muted)]">La date et l’heure de cette occurrence au planning seront mises à jour.</span>}</Field>
                 <Field label="Duree"><Input name="duration" type="number" defaultValue={session.duration} required />{session.planningEventId && <span className="text-xs font-semibold text-[var(--color-ink-muted)]">La durée de l’occurrence au planning sera mise à jour.</span>}</Field>
-                <Field label="Focus / objectifs"><Input name="focus" defaultValue={session.focus} maxLength={200} /></Field>
                 <Field label="Statut">
                   <select name="status" defaultValue={session.status} className="h-11 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-semibold focus:outline-none focus:shadow-[var(--focus-ring)]">
                     <option value="DRAFT">Brouillon</option>

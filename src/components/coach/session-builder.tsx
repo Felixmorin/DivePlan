@@ -31,8 +31,7 @@ const schema = z.object({
   duration: z.number().int().min(15, "La durée minimale est de 15 minutes.").max(600, "La durée maximale est de 10 heures."),
   groupId: z.string().min(1, "Groupe requis"),
   notes: z.string().optional(),
-  focus: z.string().optional()
-  ,planningEventId: z.string().optional()
+  planningEventId: z.string().optional()
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -204,8 +203,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       duration: Math.min(600, Math.max(15, selectedInitialEvent?.duration ?? initialTemplate?.payload.duration ?? 90)),
       groupId: initialGroupId,
       notes: initialTemplate?.payload.notes ?? "",
-      focus: initialFocus ?? initialTemplate?.payload.focus ?? ""
-      ,planningEventId: initialPlanningEventId ?? ""
+      planningEventId: initialPlanningEventId ?? ""
     }
   });
   const watched = useWatch({ control: form.control });
@@ -536,7 +534,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
             ...values,
             title: values.title?.trim() || `${groups.find((group) => group.id === values.groupId)?.name ?? "Séance"} · ${formatSessionDate(values.date)}`,
             status,
-            focus: values.focus?.trim() ?? "",
             duration: totalDuration,
             warmup: { ...warmup, competitionEvaluation: false },
             cooldown: { ...cooldown, competitionEvaluation: false },
@@ -646,7 +643,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       competitionEvaluationAtStart: evaluationPlacement === "start",
       title: watched.title?.trim() || "Nouvelle séance",
       duration: totalDuration,
-      focus: watched.focus?.trim() ?? "",
       notes: watched.notes?.trim() || null,
       blocks
     };

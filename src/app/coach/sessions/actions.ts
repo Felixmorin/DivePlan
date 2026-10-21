@@ -24,7 +24,6 @@ const sessionInputSchema = z.object({
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   groupId: z.string().min(1),
   duration: z.number().int().min(15).max(600),
-  focus: z.string().trim().max(200).default(""),
   notes: z.string().optional(),
   coachAthleteNotes: z.record(z.string(), z.string().max(2000)).default({}),
   evaluationPlacement: z.string().default("none"),
@@ -169,7 +168,6 @@ export async function createTrainingSession(input: CreateSessionInput) {
         date: sessionDate,
         title: data.title.trim(),
         duration: data.duration,
-        focus: data.focus.trim(),
         notes: data.notes?.trim() || null,
         payload,
         status: data.status
@@ -243,7 +241,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
     const found=(await tx.query<{id:string}>(`SELECT id FROM "TrainingWeek" WHERE "clubId"=$1 AND "groupId"=$2 AND "startDate"=$3 LIMIT 1`,[clubId,data.groupId,weekStart])).rows[0];
     const weekId=found?.id??randomUUID();
     if(!found) await tx.query(`INSERT INTO "TrainingWeek" (id,"clubId","groupId","startDate",title,status) VALUES ($1,$2,$3,$4,$5,$6)`,[weekId,clubId,data.groupId,weekStart,`Semaine du ${formatMontrealDate(weekStart)}`,WeekStatus.PUBLISHED]);
-    const createdSession=(await tx.query<{id:string;title:string}>(`INSERT INTO "TrainingSession" (id,date,title,duration,focus,notes,"weekId","coachId",status,"competitionEvaluationAtStart","planningEventId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,title`,[randomUUID(),sessionDate,data.title.trim(),data.duration,data.focus.trim(),data.notes?.trim()||null,weekId,coach.id,data.status,data.evaluationPlacement === "start",planningEvent?.id??null])).rows[0];
+    const createdSession=(await tx.query<{id:string;title:string}>(`INSERT INTO "TrainingSession" (id,date,title,duration,notes,"weekId","coachId",status,"competitionEvaluationAtStart","planningEventId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,title`,[randomUUID(),sessionDate,data.title.trim(),data.duration,data.notes?.trim()||null,weekId,coach.id,data.status,data.evaluationPlacement === "start",planningEvent?.id??null])).rows[0];
 
     if (data.warmup.enabled) {
       await createBlock(tx, {
@@ -352,7 +350,7 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
     const found = (await tx.query<{ id: string }>(`SELECT id FROM "TrainingWeek" WHERE "clubId"=$1 AND "groupId"=$2 AND "startDate"=$3 LIMIT 1`, [clubId, data.groupId, weekStart])).rows[0];
     const weekId = found?.id ?? randomUUID();
     if (!found) await tx.query(`INSERT INTO "TrainingWeek" (id,"clubId","groupId","startDate",title,status) VALUES ($1,$2,$3,$4,$5,$6)`, [weekId, clubId, data.groupId, weekStart, `Semaine du ${formatMontrealDate(weekStart)}`, WeekStatus.PUBLISHED]);
-    await tx.query(`UPDATE "TrainingSession" SET date=$1,title=$2,duration=$3,focus=$4,notes=$5,"weekId"=$6,status=$7,"competitionEvaluationAtStart"=$8,"planningEventId"=$9 WHERE id=$10`, [sessionDate, data.title.trim(), data.duration, data.focus.trim(), data.notes?.trim() || null, weekId, data.status, data.evaluationPlacement === "start", planningEvent?.id ?? null, sessionId]);
+    await tx.query(`UPDATE "TrainingSession" SET date=$1,title=$2,duration=$3,notes=$4,"weekId"=$5,status=$6,"competitionEvaluationAtStart"=$7,"planningEventId"=$8 WHERE id=$9`, [sessionDate, data.title.trim(), data.duration, data.notes?.trim() || null, weekId, data.status, data.evaluationPlacement === "start", planningEvent?.id ?? null, sessionId]);
     await tx.query(`DELETE FROM "SessionBlock" WHERE "sessionId"=$1`, [sessionId]);
     if (data.warmup.enabled) await createBlock(tx, { sessionId, type: BlockType.WARMUP, title: data.warmup.title, description: data.warmup.description, duration: data.warmup.duration, position: 1, estimatedVolume: 0, athleteIds: allAthleteIds });
     for (const [index, block] of data.drylandBlocks.entries()) {
@@ -404,7 +402,6 @@ export async function duplicateTrainingSession(formData: FormData) {
       date: copyDate,
       title: `Copie de ${source.title}`,
       duration: source.duration,
-      focus: source.focus,
       notes: source.notes,
       payload,
       status: SessionStatus.DRAFT
@@ -521,7 +518,6 @@ export async function saveDrylandBlockAsTemplate(formData: FormData) {
         competitionEvaluationAtStart: false,
         title: name,
         duration: block.duration,
-        focus: "",
         notes: null,
         blocks: [{
           type: "DRYLAND",
@@ -571,7 +567,6 @@ export async function savePoolBlockAsTemplate(formData: FormData) {
     competitionEvaluationAtStart: false,
     title: name,
     duration: block.duration,
-    focus: "",
     notes: null,
     blocks: [{
       type: "POOL",
@@ -959,7 +954,6 @@ export async function updateTrainingSession(formData: FormData) {
   }
 
   const title = String(formData.get("title") ?? "").trim();
-  const focus = String(formData.get("focus") ?? existing.focus).trim();
   const duration = Number(formData.get("duration") ?? existing.duration);
   const date = String(formData.get("date") ?? "").trim();
   const status = String(formData.get("status") ?? existing.status) as SessionStatus;
@@ -982,7 +976,7 @@ export async function updateTrainingSession(formData: FormData) {
 
   const wasPublished = existing.status === SessionStatus.DRAFT && status === SessionStatus.READY;
   await withTransaction(async (tx) => {
-    const updated=await tx.query(`UPDATE "TrainingSession" s SET title=$1,focus=$2,duration=$3,date=$4,notes=$5,status=$6 FROM "TrainingWeek" w WHERE s.id=$7 AND s."weekId"=w.id AND w."clubId"=$8 AND (NOT $9 OR s.status='DRAFT') AND NOT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND (c."startedAt" IS NOT NULL OR c.status<>'NOT_STARTED')) AND NOT EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id) AND NOT EXISTS (SELECT 1 FROM "AthleteExerciseLog" l WHERE l."sessionId"=s.id)`,[title,focus,Number.isFinite(duration)?duration:existing.duration,parseMontrealDateTimeInput(date),String(formData.get("notes")??"").trim()||null,status,sessionId,clubId,wasPublished]);
+    const updated=await tx.query(`UPDATE "TrainingSession" s SET title=$1,duration=$2,date=$3,notes=$4,status=$5 FROM "TrainingWeek" w WHERE s.id=$6 AND s."weekId"=w.id AND w."clubId"=$7 AND (NOT $8 OR s.status='DRAFT') AND NOT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND (c."startedAt" IS NOT NULL OR c.status<>'NOT_STARTED')) AND NOT EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id) AND NOT EXISTS (SELECT 1 FROM "AthleteExerciseLog" l WHERE l."sessionId"=s.id)`,[title,Number.isFinite(duration)?duration:existing.duration,parseMontrealDateTimeInput(date),String(formData.get("notes")??"").trim()||null,status,sessionId,clubId,wasPublished]);
     if(!updated.rowCount) throw new Error("Cette seance a deja ete commencee ou est introuvable.");
     if (existing.planningEventId) {
       await tx.query(`UPDATE "PlanningEvent" SET "startsAt"=$1,duration=$2 WHERE id=$3 AND "clubId"=$4 AND type='TRAINING_SCHEDULE' AND "cancelledAt" IS NULL`, [parseMontrealDateTimeInput(date), Number.isFinite(duration) ? duration : existing.duration, existing.planningEventId, clubId]);

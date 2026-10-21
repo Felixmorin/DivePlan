@@ -18,7 +18,6 @@ export const dynamic = "force-dynamic";
 type DashboardSession = {
   id: string;
   title: string;
-  focus: string;
   date: Date;
   duration: number;
   status: string;
@@ -28,7 +27,7 @@ type DashboardSession = {
   planningEventId: string | null;
 };
 type DashboardSchedule = { id: string; title: string; startsAt: Date; duration: number | null; location: string | null; groupName: string | null; sessionId: string | null };
-type SessionRow = {id:string;title:string;focus:string;date:Date;duration:number;status:string;planningEventId:string|null;groupName:string};
+type SessionRow = {id:string;title:string;date:Date;duration:number;status:string;planningEventId:string|null;groupName:string};
 type PlanningEventRow = { title: string; startsAt: Date; type: string; targetGroupId: string | null; targetGroupName: string | null };
 type GroupEvent = { groupName: string; title: string; startsAt: Date; type: string };
 
@@ -49,12 +48,11 @@ export default async function CoachDashboard() {
 
   const [athleteRows, weekSessionRows, scheduleRows, eventRows, completionRows, nextRows, latestRows, planningEventRows] = await Promise.all([
     query<{id:string;firstName:string;lastName:string;avatar:string|null;groupId:string|null;groupName:string|null}>(`SELECT a.id,u."firstName",u."lastName",u.avatar,g.id AS "groupId",g.name AS "groupName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
-    query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,weekStart,weekEnd]),
+    query<SessionRow>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,weekStart,weekEnd]),
     query<{id:string;title:string;startsAt:Date;duration:number|null;location:string|null;groupName:string|null;sessionId:string|null}>(`SELECT e.id,e.title,e."startsAt",e.duration,e.location,g.name AS "groupName",s.id AS "sessionId" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "TrainingSession" s ON s."planningEventId"=e.id WHERE e."clubId"=$1 AND e.type='TRAINING_SCHEDULE' AND e."startsAt">=$2 AND e."startsAt"<$3 ORDER BY e."startsAt"`,[clubId,weekStart,weekEnd]),
     query<{id:string;message:string;type:string;createdAt:Date;email:string|null}>(`SELECT e.id,e.message,e.type,e."createdAt",u.email FROM "AppEvent" e LEFT JOIN "User" u ON u.id=e."userId" WHERE e."clubId"=$1 OR e."clubId" IS NULL ORDER BY e."createdAt" DESC LIMIT 5`,[clubId]),
     query<{athleteId:string;sessionId:string;status:string;completedAt:Date|null;startedAt:Date|null;firstName:string;lastName:string;title:string}>(`SELECT c."athleteId",c."sessionId",c.status,c."completedAt",c."startedAt",u."firstName",u."lastName",s.title FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "Athlete" a ON a.id=c."athleteId" JOIN "User" u ON u.id=a."userId" WHERE w."clubId"=$1 ORDER BY c."completedAt" DESC,c."startedAt" DESC LIMIT 5`,[clubId]),
-    query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s.date>$2 ORDER BY s.date ASC LIMIT 1`,[clubId,today]),
-    query<SessionRow>(`SELECT s.id,s.title,s.focus,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s.date<=$2 ORDER BY s.date DESC LIMIT 1`,[clubId,today]),
+    query<SessionRow>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s.date>$2 ORDER BY s.date ASC LIMIT 1`,[clubId,today]),
     query<PlanningEventRow>(`SELECT e.title,e."startsAt",e.type,COALESCE(g.id,a."groupId") AS "targetGroupId",COALESCE(g.name,ag.name) AS "targetGroupName" FROM "PlanningEvent" e LEFT JOIN "TrainingGroup" g ON g.id=e."groupId" LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "TrainingGroup" ag ON ag.id=a."groupId" WHERE e."clubId"=$1 AND e.type IN ('CAMP','COMPETITION') AND e."startsAt">=$2 ORDER BY e."startsAt" ASC`,[clubId,today])
   ]);
   const athleteAvatarUrls = await resolveAvatarUrls(athleteRows.rows.map((athlete) => athlete.avatar));
@@ -176,7 +174,6 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
   const sessions = weekSessions.filter((session) => session.title).map((session, index) => ({
     id: index === 1 ? "demo" : `demo-${index}`,
     title: session.title,
-    focus: session.focus,
     date: addMontrealDays(weekStart, index),
     duration: session.duration,
     status: session.status === "Brouillon" ? "DRAFT" : session.status === "Complete" ? "COMPLETED" : "READY",
@@ -270,7 +267,6 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false }: { sess
           <div className="flex items-center gap-2"><StatusPill status={String(effectiveStatus)} /><span className="text-xs font-bold text-white/65">{formatMontrealDate(session.date,{weekday:"short",day:"numeric",month:"short"})} · {formatMontrealTime(session.date)}</span></div>
         </div>
         <h2 className="mt-2 max-w-2xl text-3xl font-black leading-tight text-white sm:text-4xl">{session.title}</h2>
-        <p className="mt-1 text-sm text-white/75">{[session.groupName, session.focus].filter(Boolean).join(" · ")}</p>
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <DarkMetric icon={Clock3} label="Durée" value={`${session.duration} min`} />
           <DarkMetric icon={Users} label="Athlètes" value={assignedIds.length} />
@@ -303,7 +299,6 @@ function WeekDayCard({ day, sessions, schedules, activeSessionIds, demo = false 
               <div key={session.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-2">
                 <div className="text-[10px] font-black text-[var(--color-brand-strong)]">{formatMontrealTime(session.date)}</div>
                 <Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`} className="mt-0.5 block text-[11px] font-black leading-tight hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{session.title}</Link>
-                {session.focus && <p className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-[var(--color-ink-muted)]">{session.focus}</p>}
                 <div className="mt-1.5 flex flex-wrap gap-1">{uniqueBlockTypes(session.blocks).map((type) => <BlockTypeBadge key={String(type)} type={String(type)} className="px-1.5 py-0.5 text-[9px]" />)}</div>
               </div>
             );
@@ -373,7 +368,6 @@ function pickPrimarySession(todaySessions: DashboardSession[], nextSession?: Das
 function toDashboardSession(session: {
   id: string;
   title: string;
-  focus: string;
   date: Date;
   duration: number;
   status: string;
@@ -385,7 +379,6 @@ function toDashboardSession(session: {
   return {
     id: session.id,
     title: session.title,
-    focus: session.focus,
     date: session.date,
     duration: session.duration,
     status: session.status,

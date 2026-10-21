@@ -7,7 +7,6 @@ import { StatusPill } from "./status-pill";
 
 type SessionCardProps = {
   title: string;
-  focus?: string;
   href: string;
   printHref?: string;
   status: string;
@@ -19,7 +18,7 @@ type SessionCardProps = {
   actions?: ReactNode;
 };
 
-export function SessionCard({ title, focus, href, printHref, status, group, duration, volume, athleteCount, className, actions }: SessionCardProps) {
+export function SessionCard({ title, href, printHref, status, group, duration, volume, athleteCount, className, actions }: SessionCardProps) {
   return (
     <article className={cn("rounded-[var(--radius-ui)] border border-[var(--color-border)] bg-white p-4 shadow-[var(--shadow-card)] transition duration-[var(--duration-fast)] hover:-translate-y-0.5 hover:border-[var(--color-brand)]", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -28,7 +27,7 @@ export function SessionCard({ title, focus, href, printHref, status, group, dura
           <Link href={href} className="mt-3 block text-lg font-black leading-tight text-[var(--color-ink)] hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
             {title}
           </Link>
-          {(group || focus) && <p className="mt-1 text-sm leading-6 text-[var(--color-ink-muted)]">{[group, focus].filter(Boolean).join(" - ")}</p>}
+          {group && <p className="mt-1 text-sm leading-6 text-[var(--color-ink-muted)]">{group}</p>}
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline" size="sm"><Link href={href}>Ouvrir</Link></Button>
