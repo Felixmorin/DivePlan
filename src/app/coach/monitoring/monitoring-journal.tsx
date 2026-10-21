@@ -6,10 +6,11 @@ import { Activity, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, FileT
 import { Card, CardContent } from "@/components/ui/card";
 
 type EventRow = { id: string; type: string; message: string; source: string; date: string };
-type Category = "Séances" | "Authentification" | "Athlètes" | "Système";
-const categories: Category[] = ["Séances", "Authentification", "Athlètes", "Système"];
+type Category = "Séances" | "Aperçus" | "Authentification" | "Athlètes" | "Système";
+const categories: Category[] = ["Séances", "Aperçus", "Authentification", "Athlètes", "Système"];
 const categoryStyle: Record<Category, { bg: string; fg: string }> = {
   "Séances": { bg: "bg-emerald-100", fg: "text-emerald-700" },
+  "Aperçus": { bg: "bg-amber-100", fg: "text-amber-800" },
   "Authentification": { bg: "bg-sky-100", fg: "text-sky-700" },
   "Athlètes": { bg: "bg-violet-100", fg: "text-violet-700" },
   "Système": { bg: "bg-slate-200", fg: "text-slate-700" }
@@ -53,12 +54,13 @@ function EventItem({ event }: { event: EventRow }) {
 }
 
 function categoryFor(type: string): Category {
+  if (type === "session.previewed" || type.includes("preview")) return "Aperçus";
   if (type.startsWith("auth.")) return "Authentification";
   if (type.startsWith("session.") || type.includes("training")) return "Séances";
   if (type.startsWith("athlete.")) return "Athlètes";
   return "Système";
 }
-function categoryIcon(category: Category) { return category === "Séances" ? CheckCircle2 : category === "Authentification" ? UserRound : category === "Athlètes" ? Users : Settings; }
+function categoryIcon(category: Category) { return category === "Séances" ? CheckCircle2 : category === "Aperçus" ? FileText : category === "Authentification" ? UserRound : category === "Athlètes" ? Users : Settings; }
 function eventIcon(type: string) { if (type.includes("failed") || type.includes("security")) return Shield; if (type.includes("session") && (type.includes("complete") || type.includes("finished"))) return CheckCircle2; if (type.includes("session") && (type.includes("update") || type.includes("edit"))) return Pencil; return categoryIcon(categoryFor(type)); }
 function groupEvents(events: EventRow[]): Array<[string, EventRow[]]> {
   const result = new Map<string, EventRow[]>(); const now = new Date();
