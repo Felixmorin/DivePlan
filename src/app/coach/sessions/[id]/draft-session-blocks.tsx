@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, Clock3, Dumbbell, Layers3, Timer, Users, Waves, ChevronDown } from "lucide-react";
 import type { getCoachSession } from "@/lib/coach-session";
 import { PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
+import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 
 type DraftBlock = Awaited<ReturnType<typeof getCoachSession>>["blocks"][number];
 type BlockFilter = "ALL" | DraftBlock["type"];
@@ -52,7 +53,7 @@ export function DraftSessionBlocks({ blocks }: { blocks: DraftBlock[] }) {
           ? block.drylandExercises.reduce((sum, item) => sum + (item.sets ?? 1) * (item.reps ?? 0), 0)
           : block.type === "POOL" ? block.estimatedVolume : 0;
         return <details key={block.id} className="draft-block">
-        <summary><span className="draft-block-number">{blocks.indexOf(block) + 1}</span><span className={`draft-kind ${kindStyle(block.type)}`}>{kindLabel(block.type)}</span><span className="draft-block-info"><strong>{block.title}</strong><span className="draft-block-meta"><span><Clock3 />{block.duration} min</span><span><Users />{block.assignments.length} athlètes</span>{repetitions > 0 && <span><Waves />{repetitions} répétitions</span>}</span></span><ChevronDown className="draft-chevron" /></summary>
+        <summary><span className="draft-block-number">{blocks.indexOf(block) + 1}</span><span className={`draft-kind ${kindStyle(block.type)}`}>{kindLabel(block.type)}</span><span className="draft-block-info"><strong>{block.title}</strong><span className="draft-block-meta"><span><Clock3 />{block.duration} min</span><span><Users />{block.assignments.length} athlètes</span>{repetitions > 0 && <span><Waves />{repetitions} répétitions</span>}</span></span><AthleteAvatarGroup ids={block.assignments.map(({ athleteId }) => athleteId)} athletes={block.assignments.map(({ athlete }) => ({ id: athlete.id, firstName: athlete.user.firstName, lastName: athlete.user.lastName, avatar: athlete.user.avatar }))} /><ChevronDown className="draft-chevron" /></summary>
         <div className="draft-block-content">
           {block.description && <p>{block.description}</p>}
           {block.drylandExercises.length > 0 && <div className="draft-exercises">{block.drylandExercises.map((item) => <div key={`${item.exerciseId}-${item.order}`}><strong>{item.exercise.name}</strong><span>{item.sets ?? 1}x{item.reps ?? `${item.duration ?? 30} sec`}</span>{item.notes && <small>{item.notes}</small>}</div>)}</div>}
