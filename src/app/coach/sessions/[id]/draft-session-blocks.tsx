@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, Clock3, Dumbbell, Layers3, Timer, Users, Waves, ChevronDown } from "lucide-react";
 import type { getCoachSession } from "@/lib/coach-session";
+import { PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
 
 type DraftBlock = Awaited<ReturnType<typeof getCoachSession>>["blocks"][number];
 type BlockFilter = "ALL" | DraftBlock["type"];
@@ -54,10 +55,14 @@ export function DraftSessionBlocks({ blocks }: { blocks: DraftBlock[] }) {
         <summary><span className="draft-block-number">{blocks.indexOf(block) + 1}</span><span className={`draft-kind ${kindStyle(block.type)}`}>{kindLabel(block.type)}</span><span className="draft-block-info"><strong>{block.title}</strong><span className="draft-block-meta"><span><Clock3 />{block.duration} min</span><span><Users />{block.assignments.length} athlètes</span>{repetitions > 0 && <span><Waves />{repetitions} répétitions</span>}</span></span><ChevronDown className="draft-chevron" /></summary>
         <div className="draft-block-content">
           {block.description && <p>{block.description}</p>}
-          {block.drylandExercises.length > 0 && <div className="draft-exercises">{block.drylandExercises.map((item) => <div key={`${item.exerciseId}-${item.order}`}><strong>{item.exercise.name}</strong><span>{item.sets ?? 1} séries · {item.reps ?? `${item.duration ?? 30} sec`}</span>{item.notes && <small>{item.notes}</small>}</div>)}</div>}
-          {block.poolTraining?.sections.map((section) => <div className="draft-section" key={section.id}><div className="draft-section-head"><strong>{section.label ?? poolHeightContext(section.height)}</strong><span>{section.dives.length} plongeons · {section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)} reps</span></div>
-            <div className="draft-table-scroll"><table><thead><tr><th>Athlète</th><th>Hauteur</th><th>Plongeons planifiés</th></tr></thead><tbody>{block.assignments.map(({ athlete }) => <tr key={athlete.id}><td><div className="draft-athlete-dives"><div><span className="draft-avatar">{athlete.user.firstName[0]}{athlete.user.lastName[0]}</span>{athlete.user.firstName} {athlete.user.lastName}</div><div className="draft-dive-pills" aria-label={`Plongeons de ${athlete.user.firstName} ${athlete.user.lastName}`}>{section.dives.map((dive) => <span key={dive.id}>{dive.diveCode}</span>)}</div></div></td><td>{poolHeightContext(section.height)}</td><td>{section.dives.reduce((sum, dive) => sum + dive.repetitions, 0)}</td></tr>)}{block.assignments.length === 0 && <tr><td colSpan={3}>Aucun athlète assigné à ce bloc.</td></tr>}</tbody></table></div>
-          </div>)}
+          {block.drylandExercises.length > 0 && <div className="draft-exercises">{block.drylandExercises.map((item) => <div key={`${item.exerciseId}-${item.order}`}><strong>{item.exercise.name}</strong><span>{item.sets ?? 1}x{item.reps ?? `${item.duration ?? 30} sec`}</span>{item.notes && <small>{item.notes}</small>}</div>)}</div>}
+          {block.poolTraining && <>
+            <details className="mb-3">
+              <summary className="cursor-pointer rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-ink-muted)]">Liste de plongeons ({block.poolTraining.sections.reduce((sum, section) => sum + section.dives.length, 0)} plongeons · {block.estimatedVolume} répétitions)</summary>
+              <div className="mt-2 space-y-2">{block.poolTraining.sections.map((section) => <div key={section.id} className="rounded-xl border border-[var(--color-border)] p-3"><strong>{section.label ?? poolHeightContext(section.height)}</strong><div className="mt-2 flex flex-wrap gap-2">{section.dives.map((dive) => <span key={dive.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2 py-1 text-xs font-bold">{dive.diveCode} · {dive.repetitions} reps</span>)}</div></div>)}</div>
+            </details>
+            {block.poolTraining.sections.map((section, index) => <PoolProgressTracker key={section.id} sectionLabel={section.label ?? poolHeightContext(section.height)} showLegend={index === 0} activeDiveIds={{}} athletes={block.assignments.map(({ athlete }) => ({ id: athlete.id, firstName: athlete.user.firstName, lastName: athlete.user.lastName }))} dives={section.dives.map(({ id, diveCode, repetitions }) => ({ id, diveCode, repetitions }))} logs={[]} />)}
+          </>}
           {block.competitionEvaluation && <p className="draft-eval"><CheckCircle2 /> Évaluation de la liste de compétition prévue dans ce bloc.</p>}
         </div>
       </details>;
