@@ -919,6 +919,30 @@ export async function setAthleteSessionAbsence(formData: FormData) {
   revalidatePath("/athlete/profile");
 }
 
+export async function saveSessionAttendance(formData: FormData) {
+  const { clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const absentAthleteIds = [...new Set(formData.getAll("absentAthleteIds").map(String).filter(Boolean))];
+  const assignedAthletes = (await query<{ athleteId: string }>(`SELECT DISTINCT a."athleteId" FROM "SessionBlockAssignment" a JOIN "SessionBlock" b ON b.id=a."sessionBlockId" JOIN "TrainingSession" s ON s.id=b."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE s.id=$1 AND w."clubId"=$2`, [sessionId, clubId])).rows;
+  const assignedIds = assignedAthletes.map(({ athleteId }) => athleteId);
+  if (!assignedIds.length || absentAthleteIds.some((athleteId) => !assignedIds.includes(athleteId))) throw new Error("Séance ou athlète introuvable.");
+
+  await withTransaction(async (tx) => {
+    await tx.query(`DELETE FROM "AthleteSessionAbsence" WHERE "sessionId"=$1 AND "athleteId"=ANY($2::text[])`, [sessionId, assignedIds]);
+    if (absentAthleteIds.length) {
+      await tx.query(`INSERT INTO "AthleteSessionAbsence" ("athleteId","sessionId","createdAt") SELECT absent_ids."athleteId",$1,NOW() FROM unnest($2::text[]) AS absent_ids("athleteId") ON CONFLICT ("athleteId","sessionId") DO NOTHING`, [sessionId, absentAthleteIds]);
+      await completeSessionIfAllAthletesAreDone(tx, sessionId);
+    }
+  });
+
+  revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath("/coach/athletes");
+  revalidatePath("/coach/athletes/[id]", "page");
+  revalidatePath(`/athlete/session/${sessionId}`);
+  revalidatePath("/athlete/progress");
+  revalidatePath("/athlete/profile");
+}
+
 export async function deleteTrainingSession(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");

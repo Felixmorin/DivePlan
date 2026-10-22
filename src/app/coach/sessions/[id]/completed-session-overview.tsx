@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Activity, ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, CircleCheck, ClipboardList, Download, Flag, MessageSquareText, NotebookText, Printer, Target, Trophy, Users, Waves } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, CircleCheck, ClipboardList, Download, Flag, MessageSquareText, NotebookText, Printer, Target, Trophy, UserCheck, Users, Waves, X } from "lucide-react";
 import type { getCoachSession } from "@/lib/coach-session";
-import { updateCompletedSessionSummary } from "@/app/coach/sessions/actions";
+import { saveSessionAttendance, updateCompletedSessionSummary } from "@/app/coach/sessions/actions";
 import { formatMontrealDate } from "@/lib/timezone";
 import { countPoolContexts } from "@/lib/pool-list";
 
@@ -35,12 +35,14 @@ function pct(actual: number, planned: number) {
 export function CompletedSessionOverview({ session, coachNotes, timings }: { session: Session; coachNotes: CoachNote[]; timings: Timing[] }) {
   const [allOpen, setAllOpen] = useState<boolean | null>(null);
   const [editingSummary, setEditingSummary] = useState(false);
+  const [presenceOpen, setPresenceOpen] = useState(false);
+  const [absentAthleteIds, setAbsentAthleteIds] = useState<Set<string>>(() => new Set(session.absences.map(({ athleteId }) => athleteId)));
   const blocks = [...session.blocks].sort((a, b) => a.position - b.position);
   const athleteMap = new Map<string, AthleteRow>();
   for (const block of blocks) for (const { athlete } of block.assignments) {
     if (!athleteMap.has(athlete.id)) athleteMap.set(athlete.id, {
       id: athlete.id, firstName: athlete.user.firstName, lastName: athlete.user.lastName,
-      status: session.completions.find((completion) => completion.athleteId === athlete.id)?.status ?? "NOT_STARTED",
+      status: absentAthleteIds.has(athlete.id) ? "SKIPPED" : session.completions.find((completion) => completion.athleteId === athlete.id)?.status ?? "NOT_STARTED",
       plannedDryland: 0, actualDryland: 0, plannedPool: 0, actualPool: 0,
       trainerNote: coachNotes.find((item) => item.athleteId === athlete.id)?.note ?? "",
       nextStep: "", percent: 0
@@ -123,7 +125,7 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
   }).filter((item): item is NonNullable<typeof item> => item !== null);
   return <>
     <div className="completed-overview">
-      <header className="completed-head"><div><h1>Séance terminée</h1><p>{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}<span>·</span>{session.week.group.name}</p></div><span className="completed-status"><CircleCheck /> Terminée</span><div className="completed-actions"><button type="button" onClick={() => { setEditingSummary(true); setTimeout(() => document.getElementById("completed-summary-editor")?.scrollIntoView({ behavior: "smooth" }), 0); }}><NotebookText /> Modifier le résumé</button><details><summary><Download /> Exporter <ChevronDown /></summary><div><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Exporter en PDF</Link></div></details></div></header>
+      <header className="completed-head"><div><h1>Séance terminée</h1><p>{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}<span>·</span>{session.week.group.name}</p></div><span className="completed-status"><CircleCheck /> Terminée</span><div className="completed-actions"><button type="button" onClick={() => setPresenceOpen(true)}><UserCheck /> Présence</button><button type="button" onClick={() => { setEditingSummary(true); setTimeout(() => document.getElementById("completed-summary-editor")?.scrollIntoView({ behavior: "smooth" }), 0); }}><NotebookText /> Modifier le résumé</button><details><summary><Download /> Exporter <ChevronDown /></summary><div><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Exporter en PDF</Link></div></details></div></header>
       <section className="completed-stats">
         <CompletedStat icon={<Users />} label="Présence" value={`${present}/${assigned}`} detail="athlètes présents" />
         <CompletedStat icon={<Target />} label="Répétitions complétées" value={`${actualReps}/${plannedReps}`} detail={`${pct(actualReps, plannedReps)}% du volume prévu`} />
@@ -155,14 +157,13 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
                 : 0;
             const complete = completedBlockIds.has(block.id);
             return <details className="completed-block" key={block.id} open={allOpen ?? false}><summary><span className="completed-block-marker">▸</span><strong>{block.title}</strong><span className={complete ? "completed-mini-status" : "incomplete-mini-status"}>{complete ? "Terminé" : "Non complété"}</span><b>{actual}/{planned}</b> répétitions <ChevronDown /></summary>
-              <div className="completed-block-body"><div className="completed-table-scroll"><table><thead><tr><th>Athlète</th><th>Plongeons travaillés</th><th>Répétitions (fait / prévu)</th><th>Note rapide</th></tr></thead><tbody>{block.assignments.filter(({ athleteId }) => athleteMap.get(athleteId)?.status !== "SKIPPED").map(({ athlete }) => {
+              <div className="completed-block-body"><div className="completed-table-scroll"><table><thead><tr><th>Athlète</th><th>Plongeons travaillés</th><th>Répétitions (fait / prévu)</th></tr></thead><tbody>{block.assignments.filter(({ athleteId }) => athleteMap.get(athleteId)?.status !== "SKIPPED").map(({ athlete }) => {
                 const athleteDiveLogs = session.diveLogs.filter((log) => log.athleteId === athlete.id && poolIds.has(log.poolDiveId));
                 const athleteExercises = session.exerciseLogs.filter((log) => log.athleteId === athlete.id && block.drylandExercises.some((item) => item.exerciseId === log.exerciseId));
                 const athleteActual = block.type === "POOL" ? athleteDiveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0) : block.type === "DRYLAND" ? athleteExercises.filter((log) => log.completed).reduce((sum, log) => { const item = block.drylandExercises.find((exercise) => exercise.exerciseId === log.exerciseId); return sum + (item?.sets ?? 1) * (item?.reps ?? 0); }, 0) : 0;
-                const assignedAthlete = athleteMap.get(athlete.id);
                 const completedDiveIds = new Set(athleteDiveLogs.filter((log) => log.repetitionsCompleted > 0).map((log) => log.poolDiveId));
                 const plannedDives = block.poolTraining?.sections.flatMap((section) => section.dives) ?? [];
-                return <tr key={athlete.id}><td><strong>{athlete.user.firstName} {athlete.user.lastName}</strong></td><td>{block.type === "POOL" ? <span className="completed-dive-chips">{plannedDives.map((dive) => <span className={completedDiveIds.has(dive.id) ? "is-complete" : ""} key={dive.id}>{completedDiveIds.has(dive.id) && <CircleCheck />}{dive.diveCode}</span>)}</span> : block.type === "DRYLAND" ? block.drylandExercises.map((item) => item.exercise.name).join(", ") : "—"}</td><td>{athleteActual} / {blockPoolPlan + blockDryPlan}</td><td>{assignedAthlete?.trainerNote || "—"}</td></tr>;
+                return <tr key={athlete.id}><td><strong>{athlete.user.firstName} {athlete.user.lastName}</strong></td><td>{block.type === "POOL" ? <span className="completed-dive-chips">{plannedDives.map((dive) => <span className={completedDiveIds.has(dive.id) ? "is-complete" : ""} key={dive.id}>{completedDiveIds.has(dive.id) && <CircleCheck />}{dive.diveCode}</span>)}</span> : block.type === "DRYLAND" ? block.drylandExercises.map((item) => item.exercise.name).join(", ") : "—"}</td><td>{athleteActual} / {blockPoolPlan + blockDryPlan}</td></tr>;
               })}</tbody></table></div></div>
             </details>;
           })}</div>
@@ -172,6 +173,21 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
       <section className="completed-panel completed-summary-editor" id="completed-summary-editor" hidden={!editingSummary}><h2><NotebookText /> Résumé et points à reprendre</h2><form id="completed-summary-form" action={updateCompletedSessionSummary}><input type="hidden" name="sessionId" value={session.id} /><textarea name="summary" defaultValue={session.notes ?? ""} maxLength={5000} placeholder="Ajoutez le bilan du groupe et les points à reprendre à la prochaine séance." /></form></section>
       <footer className="completed-footer"><Link href="/coach/sessions"><ArrowLeft /> Retour aux séances</Link><button className="completed-save" type="submit" form="completed-summary-form"><Check /> Enregistrer le résumé</button></footer>
     </div>
+    {presenceOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPresenceOpen(false); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="presence-dialog-title" className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+        <header className="flex items-start justify-between border-b border-slate-100 pb-3"><div><h2 id="presence-dialog-title" className="text-lg font-black text-slate-950">Gérer les présences</h2><p className="mt-1 text-xs font-semibold text-slate-500">{session.week.group.name} · Séance terminée</p></div><button type="button" aria-label="Fermer" onClick={() => setPresenceOpen(false)} className="rounded-lg p-1 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button></header>
+        <form action={async (formData) => { await saveSessionAttendance(formData); setPresenceOpen(false); }} className="pt-3">
+          <input type="hidden" name="sessionId" value={session.id} />
+          {athletes.map((athlete) => {
+            const absent = absentAthleteIds.has(athlete.id);
+            return <label key={athlete.id} className="flex items-center gap-3 border-b border-slate-100 py-2.5 last:border-0"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-black text-blue-700">{athlete.firstName.slice(0, 1)}{athlete.lastName.slice(0, 1)}</span><strong className="min-w-0 flex-1 text-sm text-slate-900">{athlete.firstName} {athlete.lastName}</strong><select aria-label={`Présence de ${athlete.firstName} ${athlete.lastName}`} value={absent ? "absent" : "present"} onChange={(event) => setAbsentAthleteIds((current) => { const next = new Set(current); if (event.target.value === "absent") next.add(athlete.id); else next.delete(athlete.id); return next; })} className={`h-9 rounded-lg px-3 text-sm font-semibold ${absent ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}><option value="present">●　Présent</option><option value="absent">●　Absent</option></select>{absent && <input type="hidden" name="absentAthleteIds" value={athlete.id} />}</label>;
+          })}
+          <div className="mt-3 rounded-lg bg-blue-50 p-3 text-sm"><strong>{athletes.length - absentAthleteIds.size} présents · {absentAthleteIds.size} absent{absentAthleteIds.size === 1 ? "" : "s"}</strong><p className="mt-1 text-xs leading-5 text-blue-800">Les répétitions prévues des athlètes absents sont exclues des totaux.</p></div>
+          <button type="button" onClick={() => setAbsentAthleteIds(new Set())} className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 text-sm font-bold text-blue-700 hover:bg-blue-50"><Users className="h-4 w-4" /> Tout le monde présent</button>
+          <footer className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setPresenceOpen(false)} className="h-10 rounded-lg border border-slate-200 px-5 text-sm font-bold text-slate-700">Annuler</button><button type="submit" className="h-10 rounded-lg bg-blue-700 px-5 text-sm font-bold text-white hover:bg-blue-800">Enregistrer</button></footer>
+        </form>
+      </section>
+    </div>}
   </>;
 }
 
