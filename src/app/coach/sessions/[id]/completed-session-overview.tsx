@@ -77,8 +77,10 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
     athlete.percent = pct(actual, planned);
     athlete.nextStep = planned > actual ? `Reprendre ${planned - actual} répétitions au prochain entraînement` : "Maintenir la qualité d’exécution";
   }
-  const assigned = activeAthletes.length;
-  const present = activeAthletes.filter((athlete) => athlete.status === "COMPLETED" || athlete.status === "IN_PROGRESS").length;
+  const assigned = athletes.length;
+  const absentCount = athletes.filter((athlete) => absentAthleteIds.has(athlete.id)).length;
+  const present = assigned - absentCount;
+  const attendanceLabel = absentCount ? `${present}/${assigned} (${absentCount} absent${absentCount === 1 ? "" : "s"})` : `${present}/${assigned}`;
   const plannedDry = activeAthletes.reduce((sum, athlete) => sum + athlete.plannedDryland, 0);
   const actualDry = activeAthletes.reduce((sum, athlete) => sum + athlete.actualDryland, 0);
   const plannedPoolReps = activeAthletes.reduce((sum, athlete) => sum + athlete.plannedPool, 0);
@@ -127,7 +129,7 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
     <div className="completed-overview">
       <header className="completed-head"><div><h1>Séance terminée</h1><p>{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}<span>·</span>{session.week.group.name}</p></div><span className="completed-status"><CircleCheck /> Terminée</span><div className="completed-actions"><button type="button" onClick={() => setPresenceOpen(true)}><UserCheck /> Présence</button><button type="button" onClick={() => { setEditingSummary(true); setTimeout(() => document.getElementById("completed-summary-editor")?.scrollIntoView({ behavior: "smooth" }), 0); }}><NotebookText /> Modifier le résumé</button><details><summary><Download /> Exporter <ChevronDown /></summary><div><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Exporter en PDF</Link></div></details></div></header>
       <section className="completed-stats">
-        <CompletedStat icon={<Users />} label="Présence" value={`${present}/${assigned}`} detail="athlètes présents" />
+        <CompletedStat icon={<Users />} label="Présence" value={attendanceLabel} detail="athlètes présents" />
         <CompletedStat icon={<Target />} label="Répétitions complétées" value={`${actualReps}/${plannedReps}`} detail={`${pct(actualReps, plannedReps)}% du volume prévu`} />
         <CompletedStat icon={<Waves />} label="Plongeons réalisés" value={`${actualPoolReps}/${plannedPoolReps}`} detail={`${pct(actualPoolReps, plannedPoolReps)}% du nombre prévu`} />
         <CompletedStat icon={<ClipboardList />} label="Blocs complétés" value={`${completedBlocks}/${eligibleBlocks}`} detail={`${pct(completedBlocks, eligibleBlocks)}% des blocs`} />
@@ -136,7 +138,7 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
       <section className="completed-panel" id="group-summary"><h2><Activity /> Bilan du groupe</h2><div className="completed-insights">
         <article className="positive"><Trophy /><div><strong>Point positif</strong><p>{pct(actualReps, plannedReps)}% du volume prévu a été réalisé par le groupe.</p></div></article>
         <article className="improve"><Target /><div><strong>Point à travailler</strong><p>{attention.length ? `${attention.length} athlète${attention.length > 1 ? "s" : ""} à accompagner à la prochaine séance selon les répétitions réalisées.` : "Le groupe a atteint les objectifs de répétition prévus."}</p></div></article>
-        <article className="engagement"><BarChart3 /><div><strong>Présence / engagement</strong><p>{present} athlète{present > 1 ? "s" : ""} présent{present > 1 ? "s" : ""} sur {assigned}. {completedBlocks} bloc{completedBlocks > 1 ? "s" : ""} terminé{completedBlocks > 1 ? "s" : ""} sur {eligibleBlocks}.</p></div></article>
+        <article className="engagement"><BarChart3 /><div><strong>Présence / engagement</strong><p>{present} athlète{present > 1 ? "s" : ""} présent{present > 1 ? "s" : ""} sur {assigned}{absentCount ? ` (${absentCount} absent${absentCount === 1 ? "" : "s"})` : ""}. {completedBlocks} bloc{completedBlocks > 1 ? "s" : ""} terminé{completedBlocks > 1 ? "s" : ""} sur {eligibleBlocks}.</p></div></article>
       </div></section>
       <section className="completed-panel"><header className="completed-panel-head"><h2><MessageSquareText /> Messages des athlètes</h2></header>{athleteMessages.length ? <div className="grid gap-2 sm:grid-cols-2">{athleteMessages.map(({ athlete, message }) => <article className="rounded-lg border border-slate-200 bg-slate-50 p-3" key={athlete.id}><strong className="text-sm">{athlete.firstName} {athlete.lastName}</strong><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{message}</p></article>)}</div> : <p className="completed-empty">Aucun message laissé par les athlètes pour cette séance.</p>}</section>
       <section className="completed-panel"><header className="completed-panel-head"><h2><Users /> Athlètes à suivre</h2><Link href="/coach/athletes">Voir tous les athlètes <ArrowRight /></Link></header>
