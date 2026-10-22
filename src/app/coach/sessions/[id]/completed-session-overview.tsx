@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Activity, ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, CircleCheck, ClipboardList, Download, Flag, NotebookText, Printer, Target, Trophy, Users, Waves } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, CircleCheck, ClipboardList, Download, Flag, MessageSquareText, NotebookText, Printer, Target, Trophy, Users, Waves } from "lucide-react";
 import type { getCoachSession } from "@/lib/coach-session";
 import { updateCompletedSessionSummary } from "@/app/coach/sessions/actions";
 import { formatMontrealDate } from "@/lib/timezone";
@@ -47,6 +47,10 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
     });
   }
   const athletes = [...athleteMap.values()];
+  const athleteMessages = athletes.flatMap((athlete) => {
+    const message = session.completions.find((completion) => completion.athleteId === athlete.id)?.note?.trim();
+    return message ? [{ athlete, message }] : [];
+  });
   const activeAthletes = athletes.filter((athlete) => athlete.status !== "SKIPPED");
   for (const block of blocks) {
     const poolPlanned = plannedPool(block);
@@ -132,6 +136,7 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
         <article className="improve"><Target /><div><strong>Point à travailler</strong><p>{attention.length ? `${attention.length} athlète${attention.length > 1 ? "s" : ""} à accompagner à la prochaine séance selon les répétitions réalisées.` : "Le groupe a atteint les objectifs de répétition prévus."}</p></div></article>
         <article className="engagement"><BarChart3 /><div><strong>Présence / engagement</strong><p>{present} athlète{present > 1 ? "s" : ""} présent{present > 1 ? "s" : ""} sur {assigned}. {completedBlocks} bloc{completedBlocks > 1 ? "s" : ""} terminé{completedBlocks > 1 ? "s" : ""} sur {eligibleBlocks}.</p></div></article>
       </div></section>
+      <section className="completed-panel"><header className="completed-panel-head"><h2><MessageSquareText /> Messages des athlètes</h2></header>{athleteMessages.length ? <div className="grid gap-2 sm:grid-cols-2">{athleteMessages.map(({ athlete, message }) => <article className="rounded-lg border border-slate-200 bg-slate-50 p-3" key={athlete.id}><strong className="text-sm">{athlete.firstName} {athlete.lastName}</strong><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{message}</p></article>)}</div> : <p className="completed-empty">Aucun message laissé par les athlètes pour cette séance.</p>}</section>
       <section className="completed-panel"><header className="completed-panel-head"><h2><Users /> Athlètes à suivre</h2><Link href="/coach/athletes">Voir tous les athlètes <ArrowRight /></Link></header>
         <div className="completed-table-scroll"><table className="completed-athlete-table"><thead><tr><th>Athlète</th><th>Données de la séance</th><th>Observation de l’entraîneur</th><th>À reprendre</th><th /></tr></thead><tbody>{attention.map((athlete) => <tr key={athlete.id}><td><b className="completed-avatar">{athlete.firstName[0]}{athlete.lastName[0]}</b><strong>{athlete.firstName} {athlete.lastName}</strong></td><td><strong>{athlete.actualDryland + athlete.actualPool}/{athlete.plannedDryland + athlete.plannedPool} répétitions</strong><small>{athlete.actualPool} plongeons</small></td><td>{athlete.trainerNote || athleteStatusText(athlete.status, athlete.percent)}</td><td>{athlete.nextStep}</td><td><Link aria-label={`Voir ${athlete.firstName} ${athlete.lastName}`} href={`/coach/athletes/${athlete.id}`}>•••</Link></td></tr>)}{attention.length === 0 && <tr><td colSpan={5} className="completed-empty">Tous les athlètes ont terminé la séance et atteint 80 % du volume prévu.</td></tr>}</tbody></table></div>
       </section>
