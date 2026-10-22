@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { liveSessionForClient } from "@/lib/live-session";
+import { getLiveSessionProgress } from "@/lib/live-session-progress";
 import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, Edit, FileText, Layers3, MapPin, MoreVertical, NotebookText, Play, Printer, Save, Send, Trash2, Users, Waves, XCircle } from "lucide-react";
 import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence, startTrainingSession } from "@/app/coach/sessions/actions";
 import { PoolSectionEditor } from "./pool-section-editor";
@@ -37,6 +40,14 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     const timingRows = await query<{ athleteId: string; blockId: string; closedAt: Date | null }>(`SELECT "athleteId","blockId","closedAt" FROM "AthleteBlockTiming" WHERE "blockId"=ANY($1::text[])`, [session.blocks.map((block) => block.id)]);
     return <CoachShell active="Seances"><CompletedSessionOverview session={session} timings={timingRows.rows} /></CoachShell>;
   }
+  if (session.status === "IN_PROGRESS") {
+    const progress = await getLiveSessionProgress(session.id, session.week.clubId);
+    if (!progress) notFound();
+    const athletes = Array.from(new Map(session.blocks.flatMap((block) => block.assignments.map(({ athlete }) => [athlete.id, {
+      id: athlete.id, firstName: athlete.user.firstName, lastName: athlete.user.lastName
+    }] as const))).values());
+    return <CoachShell active="Seances"><ActiveSessionOverview key={`${session.id}:${progress.planVersion}`} session={liveSessionForClient(session)} initialProgress={progress} athletes={athletes} /></CoachShell>;
+  }
   const coachNotes = (await query<{athleteId:string;note:string}>(`SELECT "athleteId",note FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [session.id])).rows;
   const rawAthletes = session.blocks.flatMap((block) =>
     block.assignments.map((assignment) => ({
@@ -49,9 +60,6 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   const distinctAthletes = Array.from(new Map(rawAthletes.map((athlete) => [athlete.id, athlete])).values());
   const athleteAvatarUrls = await resolveAvatarUrls(distinctAthletes.map((athlete) => athlete.avatar));
   const uniqueAthletes = distinctAthletes.map((athlete, index) => ({ ...athlete, avatar: athleteAvatarUrls[index] }));
-  if (session.status === "IN_PROGRESS") {
-    return <CoachShell active="Seances"><ActiveSessionOverview session={session} athletes={uniqueAthletes.map(({ id, firstName, lastName }) => ({ id, firstName, lastName }))} /></CoachShell>;
-  }
   const athleteAverageReps = await getAthleteAverageRepsByTraining(uniqueAthletes.map((athlete) => athlete.id), session.id);
   const athleteAverageGoldenReps = await getAthleteAverageGoldenRepsByTraining(uniqueAthletes.map((athlete) => athlete.id), session.id);
   const hasStarted =

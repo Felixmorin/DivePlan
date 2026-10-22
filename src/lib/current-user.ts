@@ -49,7 +49,7 @@ export const getCurrentUser = cache(async () => {
     athleteId: string | null; athleteGroupId: string | null; birthDate: Date | null; level: string | null; active: boolean | null;
   };
   const result = await query<UserRow>(
-    `SELECT u.id, u."firstName", u."lastName", u.email, u.username, u.role, u."passwordHash", u."passwordSetAt", u.avatar, u."clubId", u."createdAt",
+    `SELECT u.id, u."firstName", u."lastName", u.email, u.username, u.role, u."passwordHash", u."passwordSetAt", CASE WHEN u.avatar LIKE 'data:image/%' THEN NULL ELSE u.avatar END AS avatar, u."clubId", u."createdAt",
        cl.name AS "clubName", cl.logo AS "clubLogo", cl."createdAt" AS "clubCreatedAt",
        co.id AS "coachId", co."planningDefaultView", co."weekStartsOn", co."printShowCoachNotes", co."printShowAthleteNames", co."printRepetitionChecks",
        a.id AS "athleteId", a."groupId" AS "athleteGroupId", a."birthDate", a.level, a.active
