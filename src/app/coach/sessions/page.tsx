@@ -45,7 +45,7 @@ function DemoSessionsPage() {
     status: index ? "COMPLETED" : "READY", date: new Date(Date.now() + (index ? -index * 7 : 2) * 86400000).toISOString(), duration: session.duration,
     volume: "volume" in session ? session.volume : session.blocks.reduce((sum, block) => sum + block.volume, 0),
     athleteCount: "athletes" in session ? session.athletes : new Set(session.blocks.flatMap((block) => block.assignedTo)).size,
-    blockCount: session.blocks.length,
+    blockCount: "blocks" in session ? session.blocks.length : 0,
     location: null,
   }));
   return <CoachShell active="Seances"><SessionsPageContent sessions={sessions} /></CoachShell>;

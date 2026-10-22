@@ -67,8 +67,10 @@ const athleteDiveFamilySchema = z.object({
   athleteId: z.string().min(1),
   diveCode: z.string().trim().min(1).max(12),
   height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM, PoolHeight.CUSTOM]),
+  heightLabel: z.string().max(80).nullable(),
   family: z.enum(["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"]),
-  diveName: z.string().trim().min(1).max(80).nullish()
+  diveName: z.string().trim().min(1).max(80).nullish(),
+  repetitions: z.coerce.number().int().min(0).max(100000)
 });
 
 type CsvAthlete = {
@@ -593,8 +595,10 @@ export async function updateAthleteDiveFamily(formData: FormData) {
     athleteId: formData.get("athleteId"),
     diveCode: formData.get("diveCode"),
     height: formData.get("height"),
+    heightLabel: formData.get("heightLabel") || null,
     family: formData.get("family"),
-    diveName: formData.get("diveName")
+    diveName: formData.get("diveName"),
+    repetitions: formData.get("repetitions")
   });
 
   if (!parsed.success) {
@@ -607,11 +611,30 @@ export async function updateAthleteDiveFamily(formData: FormData) {
     throw new Error("Athlète introuvable.");
   }
 
-  await query(
-    `UPDATE "AthleteDiveLog" l SET "familyOverride" = $1, "actualDiveName" = COALESCE($2, l."actualDiveName") FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId"
-     WHERE l."poolDiveId" = d.id AND l."athleteId" = $3 AND d."diveCode" = $4 AND s.height = $5`,
-    [parsed.data.family, parsed.data.diveName, athlete.id, parsed.data.diveCode, parsed.data.height]
-  );
+  await withTransaction(async (tx) => {
+    const logs = await tx.query<{ id: string; repetitionsCompleted: number }>(
+      `SELECT l.id,l."repetitionsCompleted" FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId"
+       WHERE l."athleteId"=$1 AND d."diveCode"=$2 AND s.height=$3 AND s.label IS NOT DISTINCT FROM $4 ORDER BY l.timestamp,l.id FOR UPDATE OF l`,
+      [athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel]
+    );
+    await tx.query(
+      `UPDATE "AthleteDiveLog" l SET "familyOverride"=$1,"actualDiveName"=$2 FROM "PoolDive" d JOIN "PoolSection" s ON s.id=d."poolSectionId"
+       WHERE l."poolDiveId"=d.id AND l."athleteId"=$3 AND d."diveCode"=$4 AND s.height=$5 AND s.label IS NOT DISTINCT FROM $6`,
+      [parsed.data.family, parsed.data.diveName, athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel]
+    );
+    const oldTotal = logs.rows.reduce((sum, row) => sum + row.repetitionsCompleted, 0);
+    let remaining = parsed.data.repetitions;
+    for (const log of logs.rows) {
+      const next = oldTotal === 0 ? 0 : Math.floor(parsed.data.repetitions * log.repetitionsCompleted / oldTotal);
+      await tx.query(`UPDATE "AthleteDiveLog" SET "repetitionsCompleted"=$1 WHERE id=$2`, [next, log.id]);
+      remaining -= next;
+    }
+    for (const log of logs.rows) {
+      if (remaining <= 0) break;
+      await tx.query(`UPDATE "AthleteDiveLog" SET "repetitionsCompleted"="repetitionsCompleted"+1 WHERE id=$1`, [log.id]);
+      remaining -= 1;
+    }
+  });
 
   revalidatePath(`/coach/athletes/${athlete.id}`);
   revalidatePath("/athlete/progress");

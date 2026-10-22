@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
 import type { AthleteProgressTotals } from "@/lib/athlete-session";
 
 type FamilyDive = AthleteProgressTotals["skillDives"][number];
@@ -29,7 +30,7 @@ function heightGroup(dive: FamilyDive) {
   return dive.height;
 }
 
-export function AthleteFamilyDiveDetails({ dives, totals }: { dives: FamilyDive[]; totals: FamilyTotal[] }) {
+export function AthleteFamilyDiveDetails({ dives, totals, athleteId }: { dives: FamilyDive[]; totals: FamilyTotal[]; athleteId: string }) {
   const [expanded, setExpanded] = useState(false);
   const max = Math.max(1, ...totals.map((family) => family.volume));
 
@@ -53,9 +54,19 @@ export function AthleteFamilyDiveDetails({ dives, totals }: { dives: FamilyDive[
             return <section key={key} className="min-w-0 rounded-lg border border-slate-100 bg-slate-50 p-2">
               <h3 className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-600">{label}</h3>
               <ul className="divide-y divide-slate-100 rounded-md bg-white px-2">
-                {heightDives.map((dive) => <li key={`${dive.height}-${dive.code}-${dive.heightLabel ?? ""}`} className="flex min-w-0 items-center justify-start gap-2 py-1.5 text-[10px] leading-tight">
+                {heightDives.map((dive) => <li key={`${dive.height}-${dive.code}-${dive.heightLabel ?? ""}`} className="group relative flex min-w-0 items-center justify-start gap-2 py-1.5 pr-6 text-[10px] leading-tight">
                   <span className="min-w-0 truncate"><strong>{dive.code}</strong>{dive.name && dive.name !== dive.code && <span className="ml-1 text-slate-600">{dive.name}</span>}{(heightGroup(dive) === "PLATFORM" || heightGroup(dive) === "CUSTOM") && dive.heightLabel && <small className="ml-1 text-slate-500">({dive.heightLabel})</small>}</span>
                   <b className="shrink-0 whitespace-nowrap text-slate-700">{dive.volume} rép.</b>
+                  <details className="absolute right-0 top-0.5 z-10">
+                    <summary aria-label={`Modifier ${dive.code}`} title="Modifier ce plongeon" className="flex h-5 w-5 cursor-pointer list-none items-center justify-center rounded text-sm font-black text-slate-400 opacity-0 hover:bg-slate-100 hover:text-slate-800 focus:opacity-100 group-hover:opacity-100">···</summary>
+                    <form action={updateAthleteDiveFamily} className="absolute right-0 top-6 w-56 space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-xl" onClick={(event) => event.stopPropagation()}>
+                      <input type="hidden" name="athleteId" value={athleteId} /><input type="hidden" name="diveCode" value={dive.code} /><input type="hidden" name="height" value={dive.height} /><input type="hidden" name="heightLabel" value={dive.heightLabel ?? ""} />
+                      <label className="block font-bold">Nom<input name="diveName" required maxLength={80} defaultValue={dive.name} className="mt-1 h-8 w-full rounded border px-2 font-normal" /></label>
+                      <label className="block font-bold">Famille<select name="family" defaultValue={dive.category} className="mt-1 h-8 w-full rounded border bg-white px-2 font-normal">{[["Avant","Avant"],["Arriere","Arrière"],["Renverse","Renversé"],["Retourne","Retourné"],["Vrille","Vrille"],["Equilibre","Équilibre"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                      <label className="block font-bold">Répétitions totales<input name="repetitions" type="number" min="0" max="100000" required defaultValue={dive.volume} className="mt-1 h-8 w-full rounded border px-2 font-normal" /></label>
+                      <button type="submit" className="w-full rounded bg-slate-900 px-3 py-2 font-bold text-white">Enregistrer</button>
+                    </form>
+                  </details>
                 </li>)}
               </ul>
             </section>;
