@@ -10,10 +10,10 @@ export type SessionListItem = {
   date: Date | string; duration: number; volume: number; athleteCount: number;
 };
 
-type Tab = "upcoming" | "completed" | "drafts";
+type Tab = "all" | "completed" | "drafts";
 
 export function SessionsList({ sessions }: { sessions: SessionListItem[] }) {
-  const [tab, setTab] = useState<Tab>("upcoming");
+  const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
   const [period, setPeriod] = useState("all");
@@ -21,7 +21,7 @@ export function SessionsList({ sessions }: { sessions: SessionListItem[] }) {
   const now = new Date();
   const groups = [...new Set(sessions.map((session) => session.groupName))].sort();
   const counts = {
-    upcoming: sessions.filter((s) => s.status === "READY" || s.status === "IN_PROGRESS").length,
+    all: sessions.length,
     completed: sessions.filter((s) => s.status === "COMPLETED" || s.status === "NOT_DONE" || s.status === "CANCELLED").length,
     drafts: sessions.filter((s) => s.status === "DRAFT").length,
   };
@@ -34,14 +34,16 @@ export function SessionsList({ sessions }: { sessions: SessionListItem[] }) {
   const upcoming = filtered.filter((s) => s.status === "READY" || s.status === "IN_PROGRESS").sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const completed = filtered.filter((s) => s.status === "COMPLETED" || s.status === "NOT_DONE" || s.status === "CANCELLED").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const drafts = filtered.filter((s) => s.status === "DRAFT").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const next = tab === "upcoming" ? upcoming[0] : undefined;
-  const historySource = tab === "upcoming" || tab === "completed" ? completed : drafts;
+  const next = tab === "all" ? upcoming[0] : undefined;
+  const historySource = tab === "all"
+    ? filtered.filter((s) => s.id !== next?.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    : tab === "completed" ? completed : drafts;
   const history = !expanded ? historySource.slice(0, 7) : historySource;
 
   return <>
     <div className="mb-7 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
       <div className="flex flex-1 flex-wrap gap-1" role="tablist" aria-label="Filtrer les séances">
-        {([["upcoming", `À venir (${counts.upcoming})`], ["completed", `Terminées (${counts.completed})`], ["drafts", `Brouillons (${counts.drafts})`]] as [Tab, string][]).map(([value, label]) => <button key={value} role="tab" aria-selected={tab === value} onClick={() => { setTab(value); setExpanded(false); }} className={`min-h-11 border-b-2 px-4 text-sm font-bold transition ${tab === value ? "border-cyan-500 text-sky-700" : "border-transparent text-slate-600 hover:bg-slate-50"}`}>{label}</button>)}
+        {([["all", `Toutes (${counts.all})`], ["completed", `Terminées (${counts.completed})`], ["drafts", `Brouillons (${counts.drafts})`]] as [Tab, string][]).map(([value, label]) => <button key={value} role="tab" aria-selected={tab === value} onClick={() => { setTab(value); setExpanded(false); }} className={`min-h-11 border-b-2 px-4 text-sm font-bold transition ${tab === value ? "border-cyan-500 text-sky-700" : "border-transparent text-slate-600 hover:bg-slate-50"}`}>{label}</button>)}
       </div>
       <label className="flex min-h-10 min-w-52 flex-1 items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-500"><Search className="h-4 w-4 shrink-0" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher une séance…" className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none" /></label>
       <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Filtrer par groupe" className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"><option value="all">Tous les groupes</option>{groups.map((g) => <option key={g}>{g}</option>)}</select>
@@ -52,7 +54,7 @@ export function SessionsList({ sessions }: { sessions: SessionListItem[] }) {
     <section><h2 className="mb-3 text-xl font-extrabold">{tab === "drafts" ? "Brouillons" : "Historique"}</h2>
       {history.length ? <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">{history.map((s, i) => <SessionRow key={s.id} session={s} showMonth={i === 0 || monthKey(history[i - 1].date) !== monthKey(s.date)} />)}
         {historySource.length > 7 && <button onClick={() => setExpanded(!expanded)} className="m-2 w-[calc(100%-1rem)] rounded-lg bg-slate-100 py-3 text-sm font-bold text-sky-800 hover:bg-slate-200">⌄　{expanded ? "Réduire l’historique" : "Afficher les séances précédentes"}</button>}
-      </div> : !(tab === "upcoming" && next) && <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 px-5 py-12 text-center"><p className="font-bold">{tab === "upcoming" ? "Aucun historique pour le moment" : "Aucune séance trouvée"}</p><p className="mt-1 text-sm text-slate-500">Modifiez les filtres ou créez une nouvelle séance.</p></div>}
+      </div> : !(tab === "all" && next) && <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 px-5 py-12 text-center"><p className="font-bold">Aucune séance trouvée</p><p className="mt-1 text-sm text-slate-500">Modifiez les filtres ou créez une nouvelle séance.</p></div>}
     </section>
   </>;
 }
