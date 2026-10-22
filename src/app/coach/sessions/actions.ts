@@ -17,6 +17,7 @@ import {
 } from "@/lib/session-template";
 import { formatMontrealDate, parseMontrealDateTimeInput, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { dispatchSessionCancellation, dispatchSessionPublication, isAutomaticSessionPushEnabled, saveSessionCancellationTargets, saveSessionPublicationTargets } from "@/lib/web-push";
+import { completeSessionIfAllAthletesAreDone } from "@/lib/session-status";
 
 const sessionInputSchema = z.object({
   title: z.string(),
@@ -681,6 +682,24 @@ export async function publishTrainingSession(formData: FormData) {
   revalidatePath("/athlete/calendar");
 }
 
+export async function startTrainingSession(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const result = await query<{ id: string; title: string }>(
+    `UPDATE "TrainingSession" s SET status='IN_PROGRESS' FROM "TrainingWeek" w
+     WHERE s.id=$1 AND s."weekId"=w.id AND w."clubId"=$2 AND s.status='READY'
+     RETURNING s.id,s.title`, [sessionId, clubId]
+  );
+  const session = result.rows[0];
+  if (!session) throw new Error("Séance publiée introuvable ou déjà démarrée.");
+  await trackEvent({ type: "session.started", message: `Séance démarrée: ${session.title}`, clubId, userId: user.id, metadata: { sessionId } });
+  revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/coach/sessions");
+  revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath("/athlete");
+}
+
 export async function updateCompletedSessionSummary(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
@@ -704,7 +723,10 @@ export async function markAthleteSessionCompleted(formData: FormData) {
   if (!session) throw new Error("Séance ou athlète introuvable.");
 
   const completedAt = new Date();
-  await query(`INSERT INTO "AthleteSessionCompletion" ("athleteId","sessionId","startedAt","completedAt",status) VALUES ($1,$2,$3,$3,'COMPLETED') ON CONFLICT ("athleteId","sessionId") DO UPDATE SET "completedAt"=EXCLUDED."completedAt",status='COMPLETED'`,[athleteId,sessionId,completedAt]);
+  await withTransaction(async (tx) => {
+    await tx.query(`INSERT INTO "AthleteSessionCompletion" ("athleteId","sessionId","startedAt","completedAt",status) VALUES ($1,$2,$3,$3,'COMPLETED') ON CONFLICT ("athleteId","sessionId") DO UPDATE SET "completedAt"=EXCLUDED."completedAt",status='COMPLETED'`,[athleteId,sessionId,completedAt]);
+    await completeSessionIfAllAthletesAreDone(tx, sessionId);
+  });
 
   await trackEvent({
     type: "session.completed",
@@ -888,6 +910,7 @@ export async function setAthleteSessionAbsence(formData: FormData) {
   } else {
     await query(`DELETE FROM "AthleteSessionAbsence" WHERE "athleteId"=$1 AND "sessionId"=$2`,[athleteId,sessionId]);
   }
+  if (absent) await withTransaction(async (tx) => completeSessionIfAllAthletesAreDone(tx, sessionId));
 
   revalidatePath(`/coach/sessions/${sessionId}`);
   revalidatePath(`/coach/athletes/${athleteId}`);

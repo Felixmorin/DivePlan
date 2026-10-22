@@ -29,12 +29,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const sessionResult = await query<{ date: Date; status: string }>(
-    `SELECT date, status FROM "TrainingSession" WHERE id = $1 LIMIT 1`, [payload.sessionId]
+  const sessionResult = await query<{ date: Date; status: string; athleteStatus: string | null }>(
+    `SELECT s.date, s.status, c.status AS "athleteStatus" FROM "TrainingSession" s
+     LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$2 WHERE s.id=$1 LIMIT 1`, [payload.sessionId, athlete.id]
   );
   const session = sessionResult.rows[0];
 
-  if (!session || session.status !== "READY" || !isSessionStartAvailable(session.date)) {
+  const activeSessionWasClosedBySchedule = session?.status === "COMPLETED" && (session.athleteStatus === "IN_PROGRESS" || session.athleteStatus === "COMPLETED");
+  if (!session || (!activeSessionWasClosedBySchedule && (! ["READY", "IN_PROGRESS"].includes(session.status) || !isSessionStartAvailable(session.date)))) {
     return NextResponse.json({ error: SESSION_NOT_STARTED_MESSAGE }, { status: 409 });
   }
 

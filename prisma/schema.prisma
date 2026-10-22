@@ -22,6 +22,7 @@ enum WeekStatus {
 enum SessionStatus {
   DRAFT
   READY
+  IN_PROGRESS
   COMPLETED
   NOT_DONE
   CANCELLED

@@ -1,4 +1,4 @@
-import { completeExpiredTrainingSessions } from "@/lib/session-status";
+import { completeExpiredTrainingSessions, startDueTrainingSessions } from "@/lib/session-status";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const startedCount = await startDueTrainingSessions();
   const completedCount = await completeExpiredTrainingSessions();
-  return Response.json({ completedCount });
+  return Response.json({ startedCount, completedCount });
 }

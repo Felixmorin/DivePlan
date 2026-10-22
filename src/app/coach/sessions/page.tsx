@@ -21,7 +21,7 @@ export default async function SessionsPage() {
 
   await completeExpiredTrainingSessions();
 
-  const result = await query<{ id: string; title: string; groupName: string; status: "DRAFT" | "READY" | "COMPLETED" | "NOT_DONE" | "CANCELLED"; duration: number; volume: number; athleteCount: number }>(
+  const result = await query<{ id: string; title: string; groupName: string; status: "DRAFT" | "READY" | "IN_PROGRESS" | "COMPLETED" | "NOT_DONE" | "CANCELLED"; duration: number; volume: number; athleteCount: number }>(
     `SELECT s.id, s.title, g.name AS "groupName", s.status, s.duration,
        COALESCE((SELECT sum(b."estimatedVolume")::int FROM "SessionBlock" b WHERE b."sessionId" = s.id), 0) AS volume,
        (SELECT count(DISTINCT a."athleteId")::int FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id) AS "athleteCount"

@@ -10,6 +10,7 @@ import { isSessionStartAvailable, SESSION_NOT_STARTED_MESSAGE } from "@/lib/sess
 import { z } from "zod";
 import { MILESTONES, type MilestoneKey } from "@/lib/milestones";
 import { getClubMilestones } from "@/lib/milestone-data";
+import { completeSessionIfAllAthletesAreDone } from "@/lib/session-status";
 
 export type CompleteSessionPayload = AthleteProgressPayload;
 
@@ -30,7 +31,7 @@ export async function saveCompetitionDiveEvaluation(input: z.infer<typeof compet
   if (!athlete) throw new Error("Aucun athlete actif trouve.");
   const data = competitionEvaluationSchema.parse(input);
   const sessionResult = await query<{ id: string }>(
-    `SELECT s.id FROM "TrainingSession" s WHERE s.id = $1 AND s.status = 'READY'
+    `SELECT s.id FROM "TrainingSession" s WHERE s.id = $1 AND s.status IN ('READY','IN_PROGRESS')
      AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id AND a."athleteId" = $2)
      AND (s."competitionEvaluationAtStart" = true OR EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id AND b."competitionEvaluation" = true AND a."athleteId" = $2))
      AND EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId" = s.id AND c."athleteId" = $2 AND c.status = 'IN_PROGRESS') LIMIT 1`, [data.sessionId, athlete.id]
@@ -98,7 +99,7 @@ export async function startAthleteSession(sessionId: string) {
   }
 
   const sessionResult = await query<{ date: Date; status: string }>(
-    `SELECT s.date, s.status FROM "TrainingSession" s WHERE s.id = $1 AND s.status = 'READY' AND EXISTS (
+    `SELECT s.date, s.status FROM "TrainingSession" s WHERE s.id = $1 AND s.status IN ('READY','IN_PROGRESS') AND EXISTS (
        SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id AND a."athleteId" = $2
      ) LIMIT 1`, [sessionId, athlete.id]
   );
@@ -108,10 +109,11 @@ export async function startAthleteSession(sessionId: string) {
     throw new Error("Cette seance n'est pas assignee a l'athlete courant.");
   }
 
-  if (session.status !== "READY" || !isSessionStartAvailable(session.date)) {
+  if (! ["READY", "IN_PROGRESS"].includes(session.status) || !isSessionStartAvailable(session.date)) {
     throw new Error(SESSION_NOT_STARTED_MESSAGE);
   }
 
+  await query(`UPDATE "TrainingSession" SET status='IN_PROGRESS' WHERE id=$1 AND status='READY'`, [sessionId]);
   await query(`INSERT INTO "AthleteSessionCompletion" ("athleteId", "sessionId", "startedAt", status) VALUES ($1,$2,$3,'IN_PROGRESS')
     ON CONFLICT ("athleteId", "sessionId") DO UPDATE SET "startedAt" = EXCLUDED."startedAt", status = 'IN_PROGRESS'`, [athlete.id, sessionId, new Date()]);
 
@@ -157,7 +159,7 @@ export async function recordAthleteSessionPreview(sessionId: string) {
   }
 
   const sessionResult = await query<{ title: string }>(
-    `SELECT s.title FROM "TrainingSession" s WHERE s.id = $1 AND s.status = 'READY' AND EXISTS (
+    `SELECT s.title FROM "TrainingSession" s WHERE s.id = $1 AND s.status IN ('READY','IN_PROGRESS') AND EXISTS (
        SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id AND a."athleteId" = $2
      ) LIMIT 1`, [sessionId, athlete.id]
   );
@@ -247,6 +249,7 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
        WHERE "athleteId" = $4 AND "sessionId" = $5`,
       [completedAt, payload.sessionFeedback?.rating?.trim() || null, payload.sessionFeedback?.note?.trim() || null, athlete.id, payload.sessionId]
     );
+    await completeSessionIfAllAthletesAreDone(tx, payload.sessionId);
     const totalResult = await tx.query<{ total: string }>(`SELECT COALESCE(sum("repetitionsCompleted"), 0)::text AS total FROM "AthleteDiveLog" WHERE "athleteId" = $1`, [athlete.id]);
     const earned: MilestoneKey[] = [];
     if (Number(totalResult.rows[0]?.total ?? 0) >= 500) {
@@ -306,16 +309,27 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   revalidatePath("/athlete");
   revalidatePath("/athlete/progress");
   revalidatePath(`/athlete/session/${payload.sessionId}`);
+  revalidatePath("/coach");
+  revalidatePath("/coach/planning");
+  revalidatePath("/coach/sessions");
+  revalidatePath(`/coach/sessions/${payload.sessionId}`);
   revalidatePath("/athlete/profile");
   const milestoneText = await getClubMilestones(athlete.clubId);
   return (earnedMilestones ?? []).map((key) => milestoneText.find((milestone) => milestone.key === key)!);
 }
 
 async function assertSessionStartAvailable(sessionId: string) {
-  const sessionResult = await query<{ date: Date; status: string }>(`SELECT date, status FROM "TrainingSession" WHERE id = $1 LIMIT 1`, [sessionId]);
+  const athlete = await getCurrentAthlete();
+  if (!athlete) throw new Error("Aucun athlete actif trouve.");
+  const sessionResult = await query<{ date: Date; status: string; athleteStatus: string | null }>(
+    `SELECT s.date, s.status, c.status AS "athleteStatus" FROM "TrainingSession" s
+     LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$2 WHERE s.id=$1 LIMIT 1`,
+    [sessionId, athlete.id]
+  );
   const session = sessionResult.rows[0];
 
-  if (!session || session.status !== "READY" || !isSessionStartAvailable(session.date)) {
+  const activeSessionWasClosedBySchedule = session?.status === "COMPLETED" && (session.athleteStatus === "IN_PROGRESS" || session.athleteStatus === "COMPLETED");
+  if (!session || (!activeSessionWasClosedBySchedule && (! ["READY", "IN_PROGRESS"].includes(session.status) || !isSessionStartAvailable(session.date)))) {
     throw new Error(SESSION_NOT_STARTED_MESSAGE);
   }
 }

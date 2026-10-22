@@ -6,7 +6,7 @@ import { formatMontrealDate, startOfMontrealWeek } from "@/lib/timezone";
 
 export const BlockType = { WARMUP: "WARMUP", DRYLAND: "DRYLAND", POOL: "POOL", COOLDOWN: "COOLDOWN" } as const;
 export const PoolHeight = { ONE_METER: "ONE_METER", THREE_METER: "THREE_METER", PLATFORM: "PLATFORM", CUSTOM: "CUSTOM" } as const;
-export const SessionStatus = { DRAFT: "DRAFT", READY: "READY", COMPLETED: "COMPLETED", NOT_DONE: "NOT_DONE", CANCELLED: "CANCELLED" } as const;
+export const SessionStatus = { DRAFT: "DRAFT", READY: "READY", IN_PROGRESS: "IN_PROGRESS", COMPLETED: "COMPLETED", NOT_DONE: "NOT_DONE", CANCELLED: "CANCELLED" } as const;
 export const WeekStatus = { DRAFT: "DRAFT", PUBLISHED: "PUBLISHED" } as const;
 export type SessionStatus = typeof SessionStatus[keyof typeof SessionStatus];
 export type SessionBlockType = typeof BlockType[keyof typeof BlockType];

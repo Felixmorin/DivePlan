@@ -72,7 +72,7 @@ export default async function CoachDashboard() {
     nextScheduledSession ? toDashboardSession(nextScheduledSession) : undefined,
     latestScheduledSession ? toDashboardSession(latestScheduledSession) : undefined
   );
-  const activeSessionIds = new Set(sessions.filter((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
+  const activeSessionIds = new Set(sessions.filter((session) => session.status === "READY" && session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
   const groups = summarizeGroups(activeAthletes);
   const groupEvents: GroupEvent[] = groups.flatMap((group) => planningEventRows.rows
     .filter((item) => !item.targetGroupId || item.targetGroupId === group.id)
@@ -255,7 +255,7 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false }: { sess
     );
   }
 
-  const effectiveStatus = activeSessionIds.has(session.id) ? "IN_PROGRESS" : session.status;
+  const effectiveStatus = session.status === "COMPLETED" ? "COMPLETED" : activeSessionIds.has(session.id) ? "IN_PROGRESS" : session.status;
   const action = getPrimaryAction(session, effectiveStatus, demo);
   const assignedIds = uniqueAssignedIds(session.blocks);
   const volume = session.blocks.reduce((sum, block) => sum + block.estimatedVolume, 0);

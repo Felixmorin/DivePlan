@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, Edit, FileText, Layers3, MapPin, MoreVertical, NotebookText, Play, Printer, Save, Send, Trash2, Users, Waves, XCircle } from "lucide-react";
-import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence } from "@/app/coach/sessions/actions";
+import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence, startTrainingSession } from "@/app/coach/sessions/actions";
 import { PoolSectionEditor } from "./pool-section-editor";
 import { DraftSessionBlocks } from "./draft-session-blocks";
 import { CompletedSessionOverview } from "./completed-session-overview";
@@ -324,7 +324,7 @@ function DraftSessionOverview({ session, published, location, coachName, groupAt
         </div>
         <div className="draft-actions"><details className="draft-more"><summary aria-label="Autres actions"><MoreVertical /></summary><div><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Imprimer</Link><form action={duplicateTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><button><Copy /> Dupliquer</button></form><form action={deleteTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><button className="text-red-600"><Trash2 /> Supprimer la séance</button></form></div></details>
           <Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}/edit`}><Edit /> Modifier</Link></Button>
-          {published ? <Button asChild variant="action"><Link href="#draft-plan"><Play /> Démarrer la séance</Link></Button> : <form action={publishTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Send /> Publier la séance</Button></form>}
+          {published ? <form action={startTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Play /> Démarrer la séance</Button></form> : <form action={publishTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Send /> Publier la séance</Button></form>}
         </div>
       </header>
       <div className="draft-layout">

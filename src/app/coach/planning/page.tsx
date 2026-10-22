@@ -176,7 +176,7 @@ function DemoPlanningPage({ period, weekStartsOn }: { period: PlanningPeriod; we
 }
 
 function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = false }: { period: PlanningPeriod; sessions: PlanningSession[]; events: PlanningEvent[]; targets: PlanningTarget[]; weekStartsOn: 0 | 1; demo?: boolean }) {
-  const activeSessionIds = new Set(sessions.filter((session) => session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
+  const activeSessionIds = new Set(sessions.filter((session) => session.status === "READY" && session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
 
   return (
     <CoachShell active="Calendrier">
@@ -310,7 +310,7 @@ function MonthCalendar({ period, sessions, events, activeSessionIds, targets, we
 }
 
 function PlanningSessionCard({ session, active, demo }: { session: PlanningSession; active: boolean; demo: boolean }) {
-  const status = active ? "IN_PROGRESS" : session.status;
+  const status = session.status === "COMPLETED" ? "COMPLETED" : active ? "IN_PROGRESS" : session.status;
   const href = demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`;
   const editHref = demo ? "/coach/sessions/demo/edit" : `/coach/sessions/${session.id}/edit`;
   const printHref = demo ? "/coach/sessions/demo/print" : `/coach/sessions/${session.id}/print`;

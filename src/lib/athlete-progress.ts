@@ -19,7 +19,15 @@ type AssignedSessionBlock = {
 };
 
 export async function getAssignedSessionBlocks(sessionId: string, athleteId: string): Promise<AssignedSessionBlock[]> {
-  const session = await query(`SELECT id FROM "TrainingSession" WHERE id = $1 AND status = 'READY' LIMIT 1`, [sessionId]);
+  // The cron job closes a session after its scheduled end, but athletes who
+  // already started it still need to be able to save and submit their work.
+  const session = await query(
+    `SELECT s.id FROM "TrainingSession" s WHERE s.id = $1 AND (
+       s.status IN ('READY','IN_PROGRESS') OR (s.status = 'COMPLETED' AND EXISTS (
+         SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c."athleteId"=$2 AND c.status IN ('IN_PROGRESS', 'COMPLETED')
+       ))
+     ) LIMIT 1`, [sessionId, athleteId]
+  );
   if (!session.rowCount) return [];
 
   const [blocksResult, exercisesResult, sectionsResult, divesResult] = await Promise.all([
