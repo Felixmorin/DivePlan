@@ -265,7 +265,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     });
   }
 
-  function toggleDiveRep(diveId: string, repIndex: number) {
+  function toggleDiveRep(diveId: string, repIndex: number, segmentStart = 0, segmentEnd = Number.POSITIVE_INFINITY) {
     const version = markDirty();
     pulse(`${diveId}-${repIndex}`);
     setDiveChecks((previous) => {
@@ -274,6 +274,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       const next = {
         ...previous,
         [diveId]: currentChecks.map((checked, index) => {
+          if (index < segmentStart || index >= segmentEnd) return checked;
           if (currentState === 0) return index <= repIndex && checked === 0 ? 1 : checked;
           if (index === repIndex) return currentState === 1 ? 2 : 0;
           return currentState === 2 && index > repIndex ? 0 : checked;
@@ -289,12 +290,31 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     });
   }
 
-  function addDiveRep(diveId: string) {
+  function addDiveRepAt(diveId: string, index: number) {
     const version = markDirty();
     setDiveChecks((previous) => {
       const currentChecks = previous[diveId] ?? [];
-      const next = { ...previous, [diveId]: [...currentChecks, 1 as DiveRepState] };
-      pulse(`${diveId}-${currentChecks.length}`);
+      const nextChecks = [...currentChecks];
+      nextChecks.splice(index, 0, 1);
+      const next = { ...previous, [diveId]: nextChecks };
+      diveChecksRef.current = next;
+      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, version).catch(() => {
+        setDirty(true);
+        if (version === saveVersion.current) setSaveStatus("error");
+        setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
+      });
+      return next;
+    });
+  }
+
+  function removeDiveRepAt(diveId: string, index: number, plannedRepetitions: number) {
+    const version = markDirty();
+    setDiveChecks((previous) => {
+      const currentChecks = previous[diveId] ?? [];
+      if (currentChecks.length <= plannedRepetitions) return previous;
+      const nextChecks = [...currentChecks];
+      nextChecks.splice(index, 1);
+      const next = { ...previous, [diveId]: nextChecks };
       diveChecksRef.current = next;
       void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, version).catch(() => {
         setDirty(true);
@@ -332,23 +352,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       setDirty(true);
       if (version === saveVersion.current) setSaveStatus("error");
       setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
-    });
-  }
-
-  function removeDiveRep(diveId: string, plannedRepetitions: number) {
-    const version = markDirty();
-    setDiveChecks((previous) => {
-      const currentChecks = previous[diveId] ?? [];
-      if (currentChecks.length <= plannedRepetitions) return previous;
-
-      const next = { ...previous, [diveId]: currentChecks.slice(0, -1) };
-      diveChecksRef.current = next;
-      void saveProgressForBlock(block, stepIndex, exerciseChecksRef.current, next, version).catch(() => {
-        setDirty(true);
-        if (version === saveVersion.current) setSaveStatus("error");
-        setError("Sauvegarde temporaire impossible. Garde la page ouverte et reessaie.");
-      });
-      return next;
     });
   }
 
@@ -722,44 +725,37 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                 const checks = diveChecks[dive.id] ?? [];
                 const golden = checks.filter((state) => state === 2).length;
                 const displayedDiveCode = dive.postSessionModified ? dive.code : dive.actualCode ?? dive.code;
+                const contexts = splitPoolContextLabels(activeStep.section.label);
+                const contextRepetitions = contexts.map((_, index) => Math.floor(dive.repetitions / contexts.length) + (index < dive.repetitions % contexts.length ? 1 : 0));
+                let repetitionOffset = 0;
                 return (
-                  <div key={dive.id} className="rounded-[1.5rem] border border-[#dce8f3] bg-white p-3.5 shadow-[0_3px_12px_rgba(19,54,92,.035)]">
-                    <div className="flex items-start gap-2">
-                      <div className="flex min-w-0 flex-1 flex-col gap-1">
-                        {splitPoolContextLabels(activeStep.section.label).map((label) => (
-                          <div key={label} className="flex items-center gap-2">
-                            <span className="inline-flex shrink-0 items-center rounded-full bg-[#eaf5ff] px-3 py-1.5 text-sm font-black text-[#0878ff]">{label.replace(/\s*(?:mètres?|metres?)$/i, " m")}</span>
-                            <span className="text-sm font-semibold text-slate-500">{Math.ceil(dive.repetitions / splitPoolContextLabels(activeStep.section.label).length)} répétitions</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className={`min-w-0 flex-1 whitespace-normal break-words text-lg font-black leading-tight text-[#0b1640] ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "!text-red-500" : ""}`}>{displayedDiveCode}</div>
-                      <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${diveNotes[dive.id] ? "text-[var(--color-action)]" : "text-slate-500"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}><FilePenLine className="h-5 w-5" /></button>
-                    </div>
-                    {golden > 0 && <div className="mt-0.5 text-base text-slate-500">{golden} golden rep{golden > 1 ? "s" : ""}</div>}
-                    {openDiveNote === dive.id && (
-                      <div className="mt-3 rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-athlete-bg)] p-3">
-                        <div className="text-sm font-black">Note personnelle sur {dive.code}</div>
-                        <Textarea className="mt-2 min-h-24 border-white/10 bg-[var(--color-athlete-panel)] text-white placeholder:text-white/38" placeholder="Ajoute un commentaire pour te rappeler ce plongeon..." value={diveNoteDraft} onChange={(event) => setDiveNoteDraft(event.target.value)} />
-                        <div className="mt-2 flex justify-end gap-2">
-                          <Button type="button" size="sm" variant="outline" className="!border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" onClick={() => setOpenDiveNote(null)}>Annuler</Button>
-                          <Button type="button" size="sm" variant="action" disabled={isNotePending} onClick={() => saveDiveNote(dive.id)}>{isNotePending ? "Sauvegarde..." : "Enregistrer"}</Button>
+                  <div key={dive.id} className="space-y-3">
+                    {contexts.map((label, contextIndex) => {
+                      const start = repetitionOffset;
+                      const planned = contextRepetitions[contextIndex];
+                      repetitionOffset += planned;
+                      const end = contextIndex === contexts.length - 1 ? Math.max(start + planned, checks.length) : Math.min(start + planned, checks.length);
+                      const contextChecks = checks.slice(start, end);
+                      return <div key={`${dive.id}-${contextIndex}`} className="rounded-[1.5rem] border border-[#dce8f3] bg-white p-3.5 shadow-[0_3px_12px_rgba(19,54,92,.035)]">
+                        <div className="flex items-start gap-2">
+                          <span className="inline-flex shrink-0 items-center rounded-full bg-[#eaf5ff] px-3 py-1.5 text-sm font-black text-[#0878ff]">{label.replace(/\s*(?:mètres?|metres?)$/i, " m")}</span>
+                          <div className={`min-w-0 flex-1 whitespace-normal break-words text-lg font-black leading-tight text-[#0b1640] ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "!text-red-500" : ""}`}>{displayedDiveCode}</div>
+                          {contextIndex === 0 && <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${diveNotes[dive.id] ? "text-[var(--color-action)]" : "text-slate-500"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}><FilePenLine className="h-5 w-5" /></button>}
                         </div>
-                      </div>
-                    )}
-                    <div className="mt-3 flex items-center gap-2">
-                      {checks.map((state, index) => (
-                        <button key={index} type="button" onClick={() => toggleDiveRep(dive.id, index)} className={`flex h-12 w-12 items-center justify-center rounded-full border-2 text-base font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${state === 2 ? "border-amber-300 bg-amber-400 text-[#281500]" : state === 1 ? "border-[var(--color-success)] bg-[var(--color-success)] text-[#06133a]" : "border-[#d2deea] bg-white text-slate-500"} ${pulseKey === `${dive.id}-${index}` ? "builder-pulse" : ""}`} aria-label={`Répétition ${index + 1}${state === 2 ? ", étoile" : state === 1 ? ", complétée" : ""}`}>
-                          {state === 2 ? "★" : state === 1 ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
-                        </button>
-                      ))}
-                      <div className="ml-auto flex shrink-0 gap-2">
-                        <button type="button" disabled={checks.length <= dive.repetitions} onClick={() => removeDiveRep(dive.id, dive.repetitions)} className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-2xl font-bold text-slate-600 disabled:opacity-40" aria-label={`Retirer une répétition à ${dive.code}`}>−</button>
-                        <button type="button" onClick={() => addDiveRep(dive.id)} className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#0878ff] text-white shadow-sm" aria-label={`Ajouter une répétition à ${dive.code}`}>
-                          <Plus className="h-6 w-6" />
-                        </button>
-                      </div>
-                    </div>
+                        <div className="mt-0.5 text-base text-slate-500">{planned} répétition{planned === 1 ? "" : "s"}{contextIndex === 0 && golden > 0 ? ` · ${golden} golden rep${golden > 1 ? "s" : ""}` : ""}</div>
+                        {contextIndex === 0 && openDiveNote === dive.id && <div className="mt-3 rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-athlete-bg)] p-3"><div className="text-sm font-black">Note personnelle sur {dive.code}</div><Textarea className="mt-2 min-h-24 border-white/10 bg-[var(--color-athlete-panel)] text-white placeholder:text-white/38" placeholder="Ajoute un commentaire pour te rappeler ce plongeon..." value={diveNoteDraft} onChange={(event) => setDiveNoteDraft(event.target.value)} /><div className="mt-2 flex justify-end gap-2"><Button type="button" size="sm" variant="outline" className="!border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" onClick={() => setOpenDiveNote(null)}>Annuler</Button><Button type="button" size="sm" variant="action" disabled={isNotePending} onClick={() => saveDiveNote(dive.id)}>{isNotePending ? "Sauvegarde..." : "Enregistrer"}</Button></div></div>}
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {contextChecks.map((state, localIndex) => {
+                            const index = start + localIndex;
+                            return <button key={index} type="button" onClick={() => toggleDiveRep(dive.id, index, start, end)} className={`flex h-12 w-12 items-center justify-center rounded-full border-2 text-base font-black transition duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${state === 2 ? "border-amber-300 bg-amber-400 text-[#281500]" : state === 1 ? "border-[var(--color-success)] bg-[var(--color-success)] text-[#06133a]" : "border-[#d2deea] bg-white text-slate-500"} ${pulseKey === `${dive.id}-${index}` ? "builder-pulse" : ""}`} aria-label={`${label}: répétition ${localIndex + 1}${state === 2 ? ", étoile" : state === 1 ? ", complétée" : ""}`}>{state === 2 ? "★" : state === 1 ? <CheckCircle2 className="h-5 w-5" /> : localIndex + 1}</button>;
+                          })}
+                          <div className="ml-auto flex shrink-0 gap-2">
+                            <button type="button" disabled={checks.length <= dive.repetitions || end <= start} onClick={() => removeDiveRepAt(dive.id, end - 1, dive.repetitions)} className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-2xl font-bold text-slate-600 disabled:opacity-40" aria-label={`Retirer une répétition de ${label} pour ${dive.code}`}>−</button>
+                            <button type="button" onClick={() => addDiveRepAt(dive.id, end)} className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#0878ff] text-white shadow-sm" aria-label={`Ajouter une répétition à ${label} pour ${dive.code}`}><Plus className="h-6 w-6" /></button>
+                          </div>
+                        </div>
+                      </div>;
+                    })}
                   </div>
                 );
               })}
