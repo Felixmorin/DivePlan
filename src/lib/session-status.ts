@@ -74,7 +74,7 @@ export async function completeExpiredTrainingSessions(now = new Date()) {
     await tx.query(
       `INSERT INTO "AthleteSessionCompletion" ("athleteId", "sessionId", "startedAt", "completedAt", status)
        SELECT DISTINCT a."athleteId", s.id, s.date,
-         CASE WHEN absence."athleteId" IS NULL THEN $2 ELSE NULL END,
+         CASE WHEN absence."athleteId" IS NULL THEN $2::timestamp ELSE NULL::timestamp END,
          CASE WHEN absence."athleteId" IS NULL THEN 'COMPLETED'::"CompletionStatus" ELSE 'SKIPPED'::"CompletionStatus" END
        FROM "SessionBlockAssignment" a
        JOIN "SessionBlock" b ON b.id=a."sessionBlockId"
