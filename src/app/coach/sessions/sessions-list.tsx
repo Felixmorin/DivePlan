@@ -27,14 +27,16 @@ export function SessionsList({ sessions }: { sessions: SessionListItem[] }) {
   };
   const filtered = useMemo(() => sessions.filter((s) => {
     const date = new Date(s.date);
-    const matchesTab = tab === "upcoming" ? (s.status === "READY" || s.status === "IN_PROGRESS") : tab === "completed" ? (s.status === "COMPLETED" || s.status === "NOT_DONE" || s.status === "CANCELLED") : s.status === "DRAFT";
     const matchesSearch = `${s.title} ${s.groupName}`.toLocaleLowerCase("fr").includes(search.toLocaleLowerCase("fr"));
     const matchesPeriod = period === "all" || (period === "month" ? date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear() : date >= new Date(now.getTime() - Number(period) * 86400000));
-    return matchesTab && matchesSearch && (group === "all" || s.groupName === group) && matchesPeriod;
-  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), [sessions, tab, search, group, period]);
-  const visible = tab === "completed" && !expanded ? filtered.slice(0, 7) : filtered;
-  const next = visible.find((s) => s.status === "READY" || s.status === "IN_PROGRESS");
-  const history = visible.filter((s) => s.id !== next?.id);
+    return matchesSearch && (group === "all" || s.groupName === group) && matchesPeriod;
+  }), [sessions, search, group, period]);
+  const upcoming = filtered.filter((s) => s.status === "READY" || s.status === "IN_PROGRESS").sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const completed = filtered.filter((s) => s.status === "COMPLETED" || s.status === "NOT_DONE" || s.status === "CANCELLED").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const drafts = filtered.filter((s) => s.status === "DRAFT").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const next = tab === "upcoming" ? upcoming[0] : undefined;
+  const historySource = tab === "upcoming" || tab === "completed" ? completed : drafts;
+  const history = !expanded ? historySource.slice(0, 7) : historySource;
 
   return <>
     <div className="mb-7 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
@@ -47,10 +49,10 @@ export function SessionsList({ sessions }: { sessions: SessionListItem[] }) {
     </div>
 
     {next && <section className="mb-7"><h2 className="mb-3 text-xl font-extrabold">Prochaine séance</h2><SessionRow session={next} featured /></section>}
-    <section><h2 className="mb-3 text-xl font-extrabold">{tab === "completed" ? "Historique" : tab === "drafts" ? "Brouillons" : next ? "À venir" : "Séances"}</h2>
+    <section><h2 className="mb-3 text-xl font-extrabold">{tab === "drafts" ? "Brouillons" : "Historique"}</h2>
       {history.length ? <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">{history.map((s, i) => <SessionRow key={s.id} session={s} showMonth={i === 0 || monthKey(history[i - 1].date) !== monthKey(s.date)} />)}
-        {tab === "completed" && filtered.length > 7 && <button onClick={() => setExpanded(!expanded)} className="m-2 w-[calc(100%-1rem)] rounded-lg bg-slate-100 py-3 text-sm font-bold text-sky-800 hover:bg-slate-200">⌄　{expanded ? "Réduire l’historique" : "Afficher les séances précédentes"}</button>}
-      </div> : !next && <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 px-5 py-12 text-center"><p className="font-bold">Aucune séance trouvée</p><p className="mt-1 text-sm text-slate-500">Modifiez les filtres ou créez une nouvelle séance.</p></div>}
+        {historySource.length > 7 && <button onClick={() => setExpanded(!expanded)} className="m-2 w-[calc(100%-1rem)] rounded-lg bg-slate-100 py-3 text-sm font-bold text-sky-800 hover:bg-slate-200">⌄　{expanded ? "Réduire l’historique" : "Afficher les séances précédentes"}</button>}
+      </div> : !(tab === "upcoming" && next) && <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 px-5 py-12 text-center"><p className="font-bold">{tab === "upcoming" ? "Aucun historique pour le moment" : "Aucune séance trouvée"}</p><p className="mt-1 text-sm text-slate-500">Modifiez les filtres ou créez une nouvelle séance.</p></div>}
     </section>
   </>;
 }

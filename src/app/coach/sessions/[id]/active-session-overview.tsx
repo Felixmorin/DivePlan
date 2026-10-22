@@ -21,14 +21,14 @@ export function ActiveSessionOverview({ session, athletes }: Props) {
   const blocks = [...session.blocks].sort((a, b) => a.position - b.position);
   const [activeType, setActiveType] = useState(blocks.find((block) => block.type === "POOL") ? "POOL" : blocks[0]?.type ?? "POOL");
   const [presenceOpen, setPresenceOpen] = useState(false);
+  const [absentAthleteIds, setAbsentAthleteIds] = useState<Set<string>>(() => new Set(session.absences.map((absence: { athleteId: string }) => absence.athleteId)));
   const [expanded, setExpanded] = useState<string | null>(blocks[0]?.id ?? null);
-  const absentIds = new Set(session.absences.map((absence: { athleteId: string }) => absence.athleteId));
-  const presentCount = athletes.length - absentIds.size;
+  const absentIds = absentAthleteIds;
+  const presentCount = athletes.length - absentAthleteIds.size;
   const selectedBlocks = blocks.filter((block) => block.type === activeType);
   const totalPlanned = selectedBlocks.reduce((sum, block) => sum + plannedUnits(block), 0);
   const totalDone = selectedBlocks.reduce((sum, block) => sum + completedUnits(block, session), 0);
   const progress = totalPlanned ? Math.min(100, Math.round(totalDone / totalPlanned * 100)) : 0;
-  const attendanceAction = saveSessionAttendance;
 
   return <main className="live-session">
     <div className="live-breadcrumb"><a href="/coach/sessions">Séances</a><ChevronRight />Séance en cours</div>
@@ -57,7 +57,21 @@ export function ActiveSessionOverview({ session, athletes }: Props) {
         <div className="block-note"><span>i</span> Les athlètes marqués absents sont exclus des totaux.</div></div>}
       </article>;
     })}</section>
-    {presenceOpen && <div className="presence-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setPresenceOpen(false); }}><section role="dialog" aria-modal="true" aria-labelledby="attendance-title" className="presence-dialog"><header><div><h2 id="attendance-title">Gérer les présences</h2><p>{session.week.group.name} · Séance en cours</p></div><button aria-label="Fermer" onClick={() => setPresenceOpen(false)}><X /></button></header><form action={attendanceAction} onSubmit={() => setPresenceOpen(false)}><input type="hidden" name="sessionId" value={session.id} />{athletes.map((athlete) => { const absent = absentIds.has(athlete.id); return <label className="presence-row" key={athlete.id}><span className={`presence-avatar ${absent ? "absent" : ""}`}>{athlete.firstName[0]}{athlete.lastName[0]}</span><strong>{athlete.firstName} {athlete.lastName}</strong><select aria-label={`Présence de ${athlete.firstName} ${athlete.lastName}`} name="absentAthleteIds" defaultValue={absent ? athlete.id : ""}><option value="">●　Présent</option><option value={athlete.id}>●　Absent</option></select></label>; })}<div className="presence-note"><strong><UserRound /> {presentCount} présents · {absentIds.size} absent{absentIds.size !== 1 ? "s" : ""}</strong><span>Les répétitions prévues des athlètes absents sont exclues des totaux.</span></div><button type="button" className="everyone-button" onClick={(event) => { const form = event.currentTarget.form; if (!form) return; form.querySelectorAll("select").forEach((select) => { select.value = ""; }); }}>♙　Tout le monde présent</button><footer><button type="button" className="cancel-button" onClick={() => setPresenceOpen(false)}>Annuler</button><button type="submit" className="save-button">Enregistrer</button></footer></form></section></div>}
+    {presenceOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPresenceOpen(false); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="presence-dialog-title" className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
+        <header className="flex items-start justify-between border-b border-slate-100 pb-3"><div><h2 id="presence-dialog-title" className="text-lg font-black text-slate-950">Gérer les présences</h2><p className="mt-1 text-xs font-semibold text-slate-500">{session.week.group.name} · Séance en cours</p></div><button type="button" aria-label="Fermer" onClick={() => setPresenceOpen(false)} className="rounded-lg p-1 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button></header>
+        <form action={async (formData) => { await saveSessionAttendance(formData); setPresenceOpen(false); }} className="pt-3">
+          <input type="hidden" name="sessionId" value={session.id} />
+          {athletes.map((athlete) => {
+            const absent = absentAthleteIds.has(athlete.id);
+            return <label key={athlete.id} className="flex items-center gap-3 border-b border-slate-100 py-2.5 last:border-0"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black ${absent ? "bg-slate-200 text-slate-500" : "bg-blue-100 text-blue-700"}`}>{athlete.firstName.slice(0, 1)}{athlete.lastName.slice(0, 1)}</span><strong className="min-w-0 flex-1 text-sm text-slate-900">{athlete.firstName} {athlete.lastName}</strong><select aria-label={`Présence de ${athlete.firstName} ${athlete.lastName}`} value={absent ? "absent" : "present"} onChange={(event) => setAbsentAthleteIds((current) => { const next = new Set(current); if (event.target.value === "absent") next.add(athlete.id); else next.delete(athlete.id); return next; })} className={`h-9 rounded-lg px-3 text-sm font-semibold ${absent ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}><option value="present">●　Présent</option><option value="absent">●　Absent</option></select>{absent && <input type="hidden" name="absentAthleteIds" value={athlete.id} />}</label>;
+          })}
+          <div className="mt-3 rounded-lg bg-blue-50 p-3 text-sm"><strong>{athletes.length - absentAthleteIds.size} présents · {absentAthleteIds.size} absent{absentAthleteIds.size === 1 ? "" : "s"}</strong><p className="mt-1 text-xs leading-5 text-blue-800">Les répétitions prévues des athlètes absents sont exclues des totaux.</p></div>
+          <button type="button" onClick={() => setAbsentAthleteIds(new Set())} className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 text-sm font-bold text-blue-700 hover:bg-blue-50"><UserRound className="h-4 w-4" /> Tout le monde présent</button>
+          <footer className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setPresenceOpen(false)} className="h-10 rounded-lg border border-slate-200 px-5 text-sm font-bold text-slate-700">Annuler</button><button type="submit" className="h-10 rounded-lg bg-blue-700 px-5 text-sm font-bold text-white hover:bg-blue-800">Enregistrer</button></footer>
+        </form>
+      </section>
+    </div>}
     <style jsx>{styles}</style>
   </main>;
 }
