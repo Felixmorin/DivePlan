@@ -645,11 +645,13 @@ export async function removeAthleteDiveFromVolume(formData: FormData) {
   const parsed = z.object({
     athleteId: z.string().min(1),
     diveCode: z.string().trim().min(1).max(12),
-    height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM, PoolHeight.CUSTOM])
+    height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM, PoolHeight.CUSTOM]),
+    heightLabel: z.string().max(80).nullable()
   }).safeParse({
     athleteId: formData.get("athleteId"),
     diveCode: formData.get("diveCode"),
-    height: formData.get("height")
+    height: formData.get("height"),
+    heightLabel: formData.get("heightLabel") || null
   });
   if (!parsed.success) throw new Error("Les informations du plongeon sont invalides.");
 
@@ -659,8 +661,8 @@ export async function removeAthleteDiveFromVolume(formData: FormData) {
 
   await query(
     `DELETE FROM "AthleteDiveLog" l USING "PoolDive" d, "PoolSection" s
-     WHERE l."poolDiveId" = d.id AND d."poolSectionId" = s.id AND l."athleteId" = $1 AND d."diveCode" = $2 AND s.height = $3`,
-    [athlete.id, parsed.data.diveCode, parsed.data.height]
+     WHERE l."poolDiveId" = d.id AND d."poolSectionId" = s.id AND l."athleteId" = $1 AND d."diveCode" = $2 AND s.height = $3 AND s.label IS NOT DISTINCT FROM $4`,
+    [athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel]
   );
 
   revalidatePath(`/coach/athletes/${athlete.id}`);

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
+import { removeAthleteDiveFromVolume, updateAthleteDiveFamily } from "@/app/coach/athletes/actions";
 import type { AthleteProgressTotals } from "@/lib/athlete-session";
 
 type FamilyDive = AthleteProgressTotals["skillDives"][number];
@@ -59,13 +59,19 @@ export function AthleteFamilyDiveDetails({ dives, totals, athleteId }: { dives: 
                   <b className="shrink-0 whitespace-nowrap text-slate-700">{dive.volume} rép.</b>
                   <details className="absolute right-0 top-0.5 z-10">
                     <summary aria-label={`Modifier ${dive.code}`} title="Modifier ce plongeon" className="flex h-5 w-5 cursor-pointer list-none items-center justify-center rounded text-sm font-black text-slate-400 opacity-0 hover:bg-slate-100 hover:text-slate-800 focus:opacity-100 group-hover:opacity-100">···</summary>
-                    <form action={updateAthleteDiveFamily} className="absolute right-0 top-6 w-56 space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-xl" onClick={(event) => event.stopPropagation()}>
-                      <input type="hidden" name="athleteId" value={athleteId} /><input type="hidden" name="diveCode" value={dive.code} /><input type="hidden" name="height" value={dive.height} /><input type="hidden" name="heightLabel" value={dive.heightLabel ?? ""} />
-                      <label className="block font-bold">Nom<input name="diveName" required maxLength={80} defaultValue={dive.name} className="mt-1 h-8 w-full rounded border px-2 font-normal" /></label>
-                      <label className="block font-bold">Famille<select name="family" defaultValue={dive.category} className="mt-1 h-8 w-full rounded border bg-white px-2 font-normal">{[["Avant","Avant"],["Arriere","Arrière"],["Renverse","Renversé"],["Retourne","Retourné"],["Vrille","Vrille"],["Equilibre","Équilibre"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-                      <label className="block font-bold">Répétitions totales<input name="repetitions" type="number" min="0" max="100000" required defaultValue={dive.volume} className="mt-1 h-8 w-full rounded border px-2 font-normal" /></label>
-                      <button type="submit" className="w-full rounded bg-slate-900 px-3 py-2 font-bold text-white">Enregistrer</button>
-                    </form>
+                    <div className="absolute right-0 top-6 w-56 space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-xl" onClick={(event) => event.stopPropagation()}>
+                      <form action={updateAthleteDiveFamily} className="space-y-2">
+                        <input type="hidden" name="athleteId" value={athleteId} /><input type="hidden" name="diveCode" value={dive.code} /><input type="hidden" name="height" value={dive.height} /><input type="hidden" name="heightLabel" value={dive.heightLabel ?? ""} />
+                        <label className="block font-bold">Nom<input name="diveName" required maxLength={80} defaultValue={dive.name} className="mt-1 h-8 w-full rounded border px-2 font-normal" /></label>
+                        <label className="block font-bold">Famille<select name="family" defaultValue={dive.category} className="mt-1 h-8 w-full rounded border bg-white px-2 font-normal">{[["Avant","Avant"],["Arriere","Arrière"],["Renverse","Renversé"],["Retourne","Retourné"],["Vrille","Vrille"],["Equilibre","Équilibre"]].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                        <label className="block font-bold">Répétitions totales<input name="repetitions" type="number" min="0" max="100000" required defaultValue={dive.volume} className="mt-1 h-8 w-full rounded border px-2 font-normal" /></label>
+                        <button type="submit" className="w-full rounded bg-slate-900 px-3 py-2 font-bold text-white">Enregistrer</button>
+                      </form>
+                      <form action={removeAthleteDiveFromVolume} onSubmit={(event) => { if (!window.confirm(`Supprimer le plongeon ${dive.code} et son historique de répétitions pour cet athlète ?`)) event.preventDefault(); }}>
+                        <input type="hidden" name="athleteId" value={athleteId} /><input type="hidden" name="diveCode" value={dive.code} /><input type="hidden" name="height" value={dive.height} /><input type="hidden" name="heightLabel" value={dive.heightLabel ?? ""} />
+                        <button type="submit" className="w-full rounded border border-red-200 px-3 py-2 font-bold text-red-700 hover:bg-red-50">Supprimer le plongeon</button>
+                      </form>
+                    </div>
                   </details>
                 </li>)}
               </ul>

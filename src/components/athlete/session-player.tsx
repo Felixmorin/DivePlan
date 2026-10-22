@@ -724,12 +724,19 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
                 const displayedDiveCode = dive.postSessionModified ? dive.code : dive.actualCode ?? dive.code;
                 return (
                   <div key={dive.id} className="rounded-[1.5rem] border border-[#dce8f3] bg-white p-3.5 shadow-[0_3px_12px_rgba(19,54,92,.035)]">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex shrink-0 items-center rounded-full bg-[#eaf5ff] px-3 py-1.5 text-sm font-black text-[#0878ff]">{activeStep.section.label.replace(/\s*(?:mètres?|metres?)$/i, " m")}</span>
-                      <div className={`min-w-0 flex-1 truncate text-lg font-black text-[#0b1640] ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "!text-red-500" : ""}`}>{displayedDiveCode}</div>
+                    <div className="flex items-start gap-2">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        {splitPoolContextLabels(activeStep.section.label).map((label) => (
+                          <div key={label} className="flex items-center gap-2">
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-[#eaf5ff] px-3 py-1.5 text-sm font-black text-[#0878ff]">{label.replace(/\s*(?:mètres?|metres?)$/i, " m")}</span>
+                            <span className="text-sm font-semibold text-slate-500">{Math.ceil(dive.repetitions / splitPoolContextLabels(activeStep.section.label).length)} répétitions</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className={`min-w-0 flex-1 whitespace-normal break-words text-lg font-black leading-tight text-[#0b1640] ${dive.postSessionModified || (dive.actualCode && dive.actualCode !== dive.code) ? "!text-red-500" : ""}`}>{displayedDiveCode}</div>
                       <button type="button" onClick={() => openDiveNoteEditor(dive)} className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${diveNotes[dive.id] ? "text-[var(--color-action)]" : "text-slate-500"}`} aria-label={diveNotes[dive.id] ? `Voir ou modifier la note de ${dive.code}` : `Ajouter une note à ${dive.code}`}><FilePenLine className="h-5 w-5" /></button>
                     </div>
-                    <div className="mt-0.5 text-base text-slate-500">{dive.repetitions} répétition{dive.repetitions === 1 ? "" : "s"}{golden > 0 ? ` · ${golden} golden rep${golden > 1 ? "s" : ""}` : ""}</div>
+                    {golden > 0 && <div className="mt-0.5 text-base text-slate-500">{golden} golden rep{golden > 1 ? "s" : ""}</div>}
                     {openDiveNote === dive.id && (
                       <div className="mt-3 rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-athlete-bg)] p-3">
                         <div className="text-sm font-black">Note personnelle sur {dive.code}</div>
@@ -839,6 +846,10 @@ function formatExercisePrescription(exercise: AthleteSessionView["blocks"][numbe
 
 function countCompletedItems(blocks: AthleteSessionView["blocks"], exercises: ExerciseChecks, dives: DiveChecks) {
   return blocks.reduce((sum, block) => sum + block.exercises.filter((exercise) => exercises[exercise.id]).length + block.poolSections.reduce((sectionSum, section) => sectionSum + section.dives.reduce((diveSum, dive) => diveSum + (dives[dive.id] ?? []).filter((state) => state > 0).length, 0), 0), 0);
+}
+
+function splitPoolContextLabels(label: string) {
+  return label.split(/\s*(?:-|,)\s*(?=\d+\s*m\b)/i).map((item) => item.trim()).filter(Boolean);
 }
 
 function countBlockRemaining(block: AthleteSessionView["blocks"][number], exercises: ExerciseChecks, dives: DiveChecks) {
