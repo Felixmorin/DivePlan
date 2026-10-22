@@ -58,6 +58,7 @@ export type AthleteSessionBlock = {
 
 export type AthleteSessionView = {
   id: string;
+  sessionStatus: string;
   title: string;
   date: string;
   duration: number;
@@ -139,9 +140,9 @@ export async function getCurrentAthlete() {
   return {...base.athlete,user:base.user,club:base.club,group:base.group?{...base.group,coach:coach?{...coach.coach,user:coach.user}:null}:null,competitionDives} as CurrentAthlete;
 }
 
-export async function getAssignedReadySession(athleteId: string): Promise<{id:string;date:Date;title:string;duration:number;completions:{status:string}[];blocks:{estimatedVolume:number;type:string}[]}|null> {
+export async function getAssignedReadySession(athleteId: string): Promise<{id:string;date:Date;title:string;duration:number;sessionStatus:string;completions:{status:string}[];blocks:{estimatedVolume:number;type:string}[]}|null> {
   const today = startOfMontrealDay();
-  const session=(await query<{id:string;date:Date;title:string;duration:number}>(`SELECT s.id,s.date,s.title,COALESCE(pe.duration,s.duration) AS duration FROM "TrainingSession" s LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE s.status IN ('READY','IN_PROGRESS') AND s.date >= $1 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$2) ORDER BY s.date ASC LIMIT 1`,[today,athleteId])).rows[0];
+  const session=(await query<{id:string;date:Date;title:string;duration:number;sessionStatus:string}>(`SELECT s.id,s.date,s.title,COALESCE(pe.duration,s.duration) AS duration,s.status AS "sessionStatus" FROM "TrainingSession" s LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE s.status IN ('READY','IN_PROGRESS') AND (s.status='IN_PROGRESS' OR s.date >= $1) AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$2) ORDER BY CASE WHEN s.status='IN_PROGRESS' THEN 0 ELSE 1 END,s.date ASC LIMIT 1`,[today,athleteId])).rows[0];
   if(!session)return null;
   const [completions,blocks]=await Promise.all([
     query<{status:string}>(`SELECT status FROM "AthleteSessionCompletion" WHERE "sessionId"=$1 AND "athleteId"=$2`,[session.id,athleteId]),
@@ -164,7 +165,7 @@ export async function getAthleteRecentCompletions(athleteId: string): Promise<At
 
 export async function getAthleteSession(sessionId: string, athleteId: string): Promise<AthleteSessionView | null> {
   await startDueTrainingSessions();
-  const session=(await query<{id:string;title:string;date:Date;duration:number;notes:string|null;competitionEvaluationAtStart:boolean;groupName:string;completionStatus:string|null;rating:string|null;note:string|null}>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.notes,s."competitionEvaluationAtStart",g.name AS "groupName",c.status AS "completionStatus",c.rating,c.note FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$2 WHERE s.id=$1 AND (s.status IN ('READY','IN_PROGRESS') OR (s.status='COMPLETED' AND c.status IN ('IN_PROGRESS','COMPLETED'))) AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$2)`,[sessionId,athleteId])).rows[0];
+  const session=(await query<{id:string;title:string;date:Date;duration:number;notes:string|null;competitionEvaluationAtStart:boolean;groupName:string;sessionStatus:string;completionStatus:string|null;rating:string|null;note:string|null}>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.notes,s."competitionEvaluationAtStart",g.name AS "groupName",s.status AS "sessionStatus",c.status AS "completionStatus",c.rating,c.note FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$2 WHERE s.id=$1 AND (s.status IN ('READY','IN_PROGRESS') OR (s.status='COMPLETED' AND c.status IN ('IN_PROGRESS','COMPLETED'))) AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$2)`,[sessionId,athleteId])).rows[0];
   if (!session) return null;
   const blocks=(await query<{id:string;title:string;description:string|null;type:AthleteSessionBlock["type"];duration:number;estimatedVolume:number;competitionEvaluation:boolean}>(`SELECT b.id,b.title,b.description,b.type,b.duration,b."estimatedVolume",b."competitionEvaluation" FROM "SessionBlock" b WHERE b."sessionId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlockAssignment" a WHERE a."sessionBlockId"=b.id AND a."athleteId"=$2) ORDER BY b.position`,[sessionId,athleteId])).rows;
   const [competitionDives,competitionEvaluations]=await Promise.all([
@@ -174,6 +175,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
 
   return {
     id: session.id,
+    sessionStatus: session.sessionStatus,
     title: session.title,
     date: session.date.toISOString(),
     duration: session.duration,

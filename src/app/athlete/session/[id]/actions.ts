@@ -109,7 +109,7 @@ export async function startAthleteSession(sessionId: string) {
     throw new Error("Cette seance n'est pas assignee a l'athlete courant.");
   }
 
-  if (! ["READY", "IN_PROGRESS"].includes(session.status) || !isSessionStartAvailable(session.date)) {
+  if (! ["READY", "IN_PROGRESS"].includes(session.status) || (session.status !== "IN_PROGRESS" && !isSessionStartAvailable(session.date))) {
     throw new Error(SESSION_NOT_STARTED_MESSAGE);
   }
 
@@ -329,7 +329,7 @@ async function assertSessionStartAvailable(sessionId: string) {
   const session = sessionResult.rows[0];
 
   const activeSessionWasClosedBySchedule = session?.status === "COMPLETED" && (session.athleteStatus === "IN_PROGRESS" || session.athleteStatus === "COMPLETED");
-  if (!session || (!activeSessionWasClosedBySchedule && (! ["READY", "IN_PROGRESS"].includes(session.status) || !isSessionStartAvailable(session.date)))) {
+  if (!session || (!activeSessionWasClosedBySchedule && (! ["READY", "IN_PROGRESS"].includes(session.status) || (session.status !== "IN_PROGRESS" && !isSessionStartAvailable(session.date))))) {
     throw new Error(SESSION_NOT_STARTED_MESSAGE);
   }
 }

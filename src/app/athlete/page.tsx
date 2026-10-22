@@ -38,7 +38,7 @@ export default async function AthleteTodayPage() {
   const sessionDate = readySession ? new Date(readySession.date) : null;
   const sessionHref = readySession ? `/athlete/session/${readySession.id}` : null;
   const completionStatus = readySession?.completions[0]?.status ?? "NOT_STARTED";
-  const canStart = sessionDate ? isSessionStartAvailable(sessionDate) : false;
+  const canStart = readySession?.sessionStatus === "IN_PROGRESS" || (sessionDate ? isSessionStartAvailable(sessionDate) : false);
   const blocks = readySession?.blocks ?? [];
   const blockTypes = Array.from(new Set(blocks.map((block) => block.type)));
   const sessionTime = sessionDate ? formatMontrealTime(sessionDate) : "--:--";

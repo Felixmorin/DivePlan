@@ -105,7 +105,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const progress = totalPages > 0 ? Math.round(((pagesBeforeCurrentBlock + stepIndex + 1) / totalPages) * 100) : 0;
   const blockRemaining = countBlockRemaining(block, exerciseChecks, diveChecks);
   const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
-  const canStart = isSessionStartAvailable(session.date, new Date(now));
+  const canStart = session.sessionStatus === "IN_PROGRESS" || isSessionStartAvailable(session.date, new Date(now));
   const activeTiming = blockTimings[block.id];
   const evaluationComplete = session.competitionDives.length > 0 && session.competitionDives.every((dive) => evaluationRatings[dive.id] !== undefined);
   const evaluationRequired = session.competitionEvaluationAtStart || session.competitionEvaluationBlockIds.length > 0;

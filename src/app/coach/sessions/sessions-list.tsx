@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { CalendarDays, ChartNoAxesColumnIncreasing, Clock3, MoreVertical, Search, Users } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumnIncreasing, Clock3, Layers3, MapPin, MoreVertical, Search, Users } from "lucide-react";
 import { deleteTrainingSession, markTrainingSessionNotDone } from "@/app/coach/sessions/actions";
 
 export type SessionListItem = {
   id: string; title: string; groupName: string; status: "DRAFT" | "READY" | "IN_PROGRESS" | "COMPLETED" | "NOT_DONE" | "CANCELLED";
-  date: Date | string; duration: number; volume: number; athleteCount: number;
+  date: Date | string; duration: number; volume: number; athleteCount: number; blockCount: number; location: string | null;
 };
 
 type Tab = "all" | "completed" | "drafts";
@@ -70,13 +70,15 @@ function SessionRow({ session: s, featured = false, showMonth = false }: { sessi
   return <>
     {showMonth && <div className="border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-sm font-extrabold capitalize text-slate-700">{new Intl.DateTimeFormat("fr-CA", { month: "long", year: "numeric", timeZone: "America/Toronto" }).format(date)}</div>}
     <article className={`flex flex-col gap-3 border-b border-slate-100 px-4 py-3 last:border-0 md:flex-row md:items-center md:gap-4 ${featured ? "rounded-xl border border-sky-200 bg-sky-50/40 px-5 py-4" : ""}`}>
-      <span className={`inline-flex w-fit shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${completed ? "bg-emerald-100 text-emerald-800" : draft ? "bg-amber-100 text-amber-800" : "bg-violet-100 text-violet-800"}`}><span className="h-2 w-2 rounded-full bg-current" />{label}</span>
+      <span className={`inline-flex w-fit shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${completed || s.status === "IN_PROGRESS" ? "bg-emerald-100 text-emerald-800" : draft ? "bg-amber-100 text-amber-800" : "bg-violet-100 text-violet-800"}`}><span className="h-2 w-2 rounded-full bg-current" />{label}</span>
       <div className="min-w-0 flex-1"><h3 className="truncate font-extrabold">{s.title}</h3><p className="text-sm text-slate-500">{s.groupName}</p></div>
-      <div className="grid flex-1 grid-cols-2 gap-y-2 text-xs text-slate-600 sm:grid-cols-4 md:max-w-[620px]">
+      <div className="grid flex-1 grid-cols-2 gap-y-2 text-xs text-slate-600 sm:grid-cols-3 md:grid-cols-6 md:max-w-[850px]">
         <span className="flex items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><CalendarDays className="h-4 w-4 shrink-0" /><span className="capitalize">{fmtDate}</span></span>
         <span className="flex items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><Clock3 className="h-4 w-4 shrink-0" />{s.duration} min</span>
         <span className="flex items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><ChartNoAxesColumnIncreasing className="h-4 w-4 shrink-0" />{s.volume} plongeons</span>
         <span className="flex items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><Users className="h-4 w-4 shrink-0" />{s.athleteCount} athlète{s.athleteCount > 1 ? "s" : ""}</span>
+        <span className="flex items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><Layers3 className="h-4 w-4 shrink-0" />{s.blockCount} bloc{s.blockCount > 1 ? "s" : ""}</span>
+        <span className="flex min-w-0 items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><MapPin className="h-4 w-4 shrink-0" /><span className="truncate">{s.location || "Lieu à confirmer"}</span></span>
       </div>
       <div className="flex shrink-0 items-center gap-2"><Link href={s.id.startsWith("demo-") ? "/coach/sessions/demo" : `/coach/sessions/${s.id}`} className={`inline-flex min-h-10 items-center justify-center rounded-lg px-5 text-sm font-bold ${featured ? "bg-cyan-500 text-white hover:bg-cyan-600" : "border border-slate-200 bg-white text-sky-900 hover:bg-slate-50"}`}>Ouvrir</Link>
         {!s.id.startsWith("demo-") && <details className="relative"><summary aria-label="Actions de la séance" className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"><MoreVertical className="h-4 w-4" /></summary><div className="absolute right-0 top-11 z-10 w-48 rounded-lg border border-slate-200 bg-white p-2 shadow-lg"><form action={markTrainingSessionNotDone}><input type="hidden" name="sessionId" value={s.id} /><button className="w-full rounded px-3 py-2 text-left text-sm hover:bg-slate-50">Marquer non faite</button></form><form action={deleteTrainingSession}><input type="hidden" name="sessionId" value={s.id} /><button className="w-full rounded px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50">Supprimer</button></form></div></details>}

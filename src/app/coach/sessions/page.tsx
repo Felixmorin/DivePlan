@@ -17,10 +17,11 @@ export default async function SessionsPage() {
   await completeExpiredTrainingSessions();
   await startDueTrainingSessions();
   const result = await query<SessionListItem>(
-    `SELECT s.id, s.title, g.name AS "groupName", s.status, s.duration, s.date,
+    `SELECT s.id, s.title, g.name AS "groupName", s.status, s.duration, s.date, pe.location,
        COALESCE((SELECT sum(b."estimatedVolume")::int FROM "SessionBlock" b WHERE b."sessionId" = s.id), 0) AS volume,
+       (SELECT count(*)::int FROM "SessionBlock" b WHERE b."sessionId" = s.id) AS "blockCount",
        (SELECT count(DISTINCT a."athleteId")::int FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id) AS "athleteCount"
-     FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id = s."weekId" JOIN "TrainingGroup" g ON g.id = w."groupId"
+     FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id = s."weekId" JOIN "TrainingGroup" g ON g.id = w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id = s."planningEventId"
      WHERE w."clubId" = $1 ORDER BY s.date DESC`, [clubId]
   );
 
@@ -44,6 +45,8 @@ function DemoSessionsPage() {
     status: index ? "COMPLETED" : "READY", date: new Date(Date.now() + (index ? -index * 7 : 2) * 86400000).toISOString(), duration: session.duration,
     volume: "volume" in session ? session.volume : session.blocks.reduce((sum, block) => sum + block.volume, 0),
     athleteCount: "athletes" in session ? session.athletes : new Set(session.blocks.flatMap((block) => block.assignedTo)).size,
+    blockCount: session.blocks.length,
+    location: null,
   }));
   return <CoachShell active="Seances"><SessionsPageContent sessions={sessions} /></CoachShell>;
 }
