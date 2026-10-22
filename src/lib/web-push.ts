@@ -64,6 +64,29 @@ export async function saveSessionPublicationTargets(tx: PoolClient, sessionId: s
   }
 }
 
+export async function saveSessionUpdateTargets(tx: PoolClient, sessionId: string, updateId: string) {
+  await tx.query("SAVEPOINT web_push_update_targets");
+  try {
+    await tx.query(
+      `INSERT INTO "SessionUpdatePushDelivery" (id,"updateId","sessionId","userId")
+       SELECT gen_random_uuid()::text, $2, s.id, u.id
+       FROM "TrainingSession" s
+       JOIN "TrainingWeek" w ON w.id=s."weekId"
+       JOIN "SessionBlock" b ON b."sessionId"=s.id
+       JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id
+       JOIN "Athlete" athlete ON athlete.id=a."athleteId" AND athlete.active=true AND athlete."clubId"=w."clubId"
+       JOIN "User" u ON u.id=athlete."userId" AND u.role='ATHLETE'
+       WHERE s.id=$1
+       GROUP BY s.id,u.id
+       ON CONFLICT ("updateId","userId") DO NOTHING`, [sessionId, updateId]
+    );
+    await tx.query("RELEASE SAVEPOINT web_push_update_targets");
+  } catch {
+    await tx.query("ROLLBACK TO SAVEPOINT web_push_update_targets");
+    await tx.query("RELEASE SAVEPOINT web_push_update_targets");
+  }
+}
+
 export async function saveSessionCancellationTargets(tx: PoolClient, sessionId: string) {
   await tx.query("SAVEPOINT web_push_cancellation_targets");
   try {
@@ -153,6 +176,27 @@ async function dispatchSessionNotice(sessionId: string, kind: "PUBLISHED" | "CAN
 export async function dispatchSessionPublication(sessionId: string) {
   if (!isAutomaticSessionPushEnabled()) return;
   await dispatchSessionNotice(sessionId, "PUBLISHED");
+}
+
+export async function dispatchSessionUpdate(sessionId: string, updateId: string) {
+  if (!isAutomaticSessionPushEnabled()) return;
+  const deliveries = (await query<{ id: string; userId: string; title: string }>(
+    `SELECT d.id,d."userId",s.title FROM "SessionUpdatePushDelivery" d JOIN "TrainingSession" s ON s.id=d."sessionId" WHERE d."updateId"=$1 AND d.status='PENDING' ORDER BY d.id`, [updateId]
+  )).rows;
+  for (const delivery of deliveries) {
+    try {
+      const subscriptions = (await query<SubscriptionRow>(`SELECT id,endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=$1`, [delivery.userId])).rows;
+      let accepted = 0;
+      for (const subscription of subscriptions) {
+        try {
+          if (await send(subscription, { title: "Entraînement modifié", body: `La séance « ${delivery.title} » a été mise à jour.`, url: `/athlete/session/${encodeURIComponent(sessionId)}` }) === "sent") accepted++;
+        } catch { /* A push provider failure must not roll back updating the session. */ }
+      }
+      await query(`UPDATE "SessionUpdatePushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);
+    } catch {
+      await query(`UPDATE "SessionUpdatePushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+    }
+  }
 }
 
 export async function dispatchSessionCancellation(sessionId: string) {

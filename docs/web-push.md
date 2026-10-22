@@ -4,7 +4,7 @@ DivePlan uses the browser's Web Push API and a service worker. The worker handle
 
 ## Database migration
 
-Apply `prisma/migrations/20261006195500_web_push/migration.sql` to the PostgreSQL database before deploying the code. It creates `PushSubscription` and the idempotent per-athlete `PushDelivery` queue. An endpoint is unique and can be reassigned to the account currently using a shared device.
+Apply `prisma/migrations/20261006195500_web_push/migration.sql` and `prisma/migrations/20261022120000_session_update_push/migration.sql` to the PostgreSQL database before deploying the code. They create `PushSubscription` and the push delivery queues for session publication, session updates, and cancellations. An endpoint is unique and can be reassigned to the account currently using a shared device.
 
 ## VAPID configuration
 
@@ -24,6 +24,6 @@ The test notification remains available with automatic publication notifications
 - **Android:** open DivePlan in a supported browser such as Chrome, allow notifications after tapping the activation button, then test with DivePlan in the background and closed.
 - **Desktop:** use a supported browser over HTTPS or localhost, enable notifications, and send a device test.
 - A successful test response means the push service accepted the request; it does not confirm that the operating system displayed it. Observe the device to validate actual receipt.
-- With automatic publication enabled, publish a draft with assigned athletes who have opted in. The notification click opens `/athlete/session/{id}` and that page applies its usual access checks. Test with DivePlan closed to verify the browser/OS launch path.
+- With automatic publication enabled, publish or update a training session with assigned athletes who have opted in. Updates notify active athletes assigned to the session blocks. The notification click opens `/athlete/session/{id}` and that page applies its usual access checks. Test with DivePlan closed to verify the browser/OS launch path.
 
 No real device delivery or production deployment is performed as part of development verification.

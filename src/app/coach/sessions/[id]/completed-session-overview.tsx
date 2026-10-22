@@ -9,12 +9,11 @@ import { formatMontrealDate } from "@/lib/timezone";
 import { countPoolContexts } from "@/lib/pool-list";
 
 type Session = Awaited<ReturnType<typeof getCoachSession>>;
-type CoachNote = { athleteId: string; note: string };
 type Timing = { athleteId: string; blockId: string; closedAt: Date | null };
 type AthleteRow = {
   id: string; firstName: string; lastName: string; status: string;
   plannedDryland: number; actualDryland: number; plannedPool: number; actualPool: number;
-  trainerNote: string; nextStep: string; percent: number;
+  nextStep: string; percent: number;
 };
 
 const kindOrder = ["WARMUP", "DRYLAND", "POOL", "COOLDOWN", "CUSTOM"] as const;
@@ -32,7 +31,7 @@ function pct(actual: number, planned: number) {
   return planned > 0 ? Math.min(100, Math.round(actual / planned * 100)) : 0;
 }
 
-export function CompletedSessionOverview({ session, coachNotes, timings }: { session: Session; coachNotes: CoachNote[]; timings: Timing[] }) {
+export function CompletedSessionOverview({ session, timings }: { session: Session; timings: Timing[] }) {
   const [allOpen, setAllOpen] = useState<boolean | null>(null);
   const [editingSummary, setEditingSummary] = useState(false);
   const [presenceOpen, setPresenceOpen] = useState(false);
@@ -44,7 +43,6 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
       id: athlete.id, firstName: athlete.user.firstName, lastName: athlete.user.lastName,
       status: absentAthleteIds.has(athlete.id) ? "SKIPPED" : session.completions.find((completion) => completion.athleteId === athlete.id)?.status ?? "NOT_STARTED",
       plannedDryland: 0, actualDryland: 0, plannedPool: 0, actualPool: 0,
-      trainerNote: coachNotes.find((item) => item.athleteId === athlete.id)?.note ?? "",
       nextStep: "", percent: 0
     });
   }
@@ -72,10 +70,8 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
     }
   }
   for (const athlete of athletes) {
-    const planned = athlete.plannedDryland + athlete.plannedPool;
-    const actual = athlete.actualDryland + athlete.actualPool;
-    athlete.percent = pct(actual, planned);
-    athlete.nextStep = planned > actual ? `Reprendre ${planned - actual} répétitions au prochain entraînement` : "Maintenir la qualité d’exécution";
+    athlete.percent = pct(athlete.actualPool, athlete.plannedPool);
+    athlete.nextStep = athlete.plannedPool > athlete.actualPool ? `Reprendre ${athlete.plannedPool - athlete.actualPool} répétitions de plongeons au prochain entraînement` : "Maintenir la qualité d’exécution des plongeons";
   }
   const assigned = athletes.length;
   const absentCount = athletes.filter((athlete) => absentAthleteIds.has(athlete.id)).length;
@@ -103,7 +99,7 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
   }).map((block) => block.id));
   const completedBlocks = completedBlockIds.size;
   const eligibleBlocks = blocks.filter((block) => block.assignments.some(({ athleteId }) => athleteMap.get(athleteId)?.status !== "SKIPPED")).length;
-  const attention = activeAthletes.filter((athlete) => athlete.status !== "COMPLETED" || athlete.percent < 80);
+  const attention = activeAthletes.filter((athlete) => athlete.plannedPool > 0 && athlete.percent < 80);
   const categories = kindOrder.map((type) => {
     const categoryBlocks = blocks.filter((block) => block.type === type);
     if (!categoryBlocks.length) return null;
@@ -142,7 +138,7 @@ export function CompletedSessionOverview({ session, coachNotes, timings }: { ses
       </div></section>
       <section className="completed-panel"><header className="completed-panel-head"><h2><MessageSquareText /> Messages des athlètes</h2></header>{athleteMessages.length ? <div className="grid gap-2 sm:grid-cols-2">{athleteMessages.map(({ athlete, message }) => <article className="rounded-lg border border-slate-200 bg-slate-50 p-3" key={athlete.id}><strong className="text-sm">{athlete.firstName} {athlete.lastName}</strong><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{message}</p></article>)}</div> : <p className="completed-empty">Aucun message laissé par les athlètes pour cette séance.</p>}</section>
       <section className="completed-panel"><header className="completed-panel-head"><h2><Users /> Athlètes à suivre</h2><Link href="/coach/athletes">Voir tous les athlètes <ArrowRight /></Link></header>
-        <div className="completed-table-scroll"><table className="completed-athlete-table"><thead><tr><th>Athlète</th><th>Données de la séance</th><th>Observation de l’entraîneur</th><th>À reprendre</th><th /></tr></thead><tbody>{attention.map((athlete) => <tr key={athlete.id}><td><b className="completed-avatar">{athlete.firstName[0]}{athlete.lastName[0]}</b><strong>{athlete.firstName} {athlete.lastName}</strong></td><td><strong>{athlete.actualDryland + athlete.actualPool}/{athlete.plannedDryland + athlete.plannedPool} répétitions</strong><small>{athlete.actualPool} plongeons</small></td><td>{athlete.trainerNote || athleteStatusText(athlete.status, athlete.percent)}</td><td>{athlete.nextStep}</td><td><Link aria-label={`Voir ${athlete.firstName} ${athlete.lastName}`} href={`/coach/athletes/${athlete.id}`}>•••</Link></td></tr>)}{attention.length === 0 && <tr><td colSpan={5} className="completed-empty">Tous les athlètes ont terminé la séance et atteint 80 % du volume prévu.</td></tr>}</tbody></table></div>
+        <div className="completed-table-scroll"><table className="completed-athlete-table"><thead><tr><th>Athlète</th><th>Données de la séance</th><th>À reprendre</th><th /></tr></thead><tbody>{attention.map((athlete) => <tr key={athlete.id}><td><b className="completed-avatar">{athlete.firstName[0]}{athlete.lastName[0]}</b><strong>{athlete.firstName} {athlete.lastName}</strong></td><td><strong>{athlete.actualPool}/{athlete.plannedPool} répétitions</strong><small>{athlete.actualPool} plongeons</small></td><td>{athlete.nextStep}</td><td><Link aria-label={`Voir ${athlete.firstName} ${athlete.lastName}`} href={`/coach/athletes/${athlete.id}`}>•••</Link></td></tr>)}{attention.length === 0 && <tr><td colSpan={4} className="completed-empty">Tous les athlètes ont atteint 80 % des plongeons prévus.</td></tr>}</tbody></table></div>
       </section>
       <section className="completed-panel completed-content"><header className="completed-panel-head"><h2><ClipboardList /> Contenu de la séance</h2><button type="button" onClick={() => setAllOpen((open) => open === true ? false : true)}>{allOpen ? "Tout replier" : "Tout déplier"}</button></header>
         {categories.map((category) => <details className="completed-category" key={category.type} open={allOpen ?? false}><summary><span className={`completed-dot ${category.type.toLowerCase()}`} /><strong>{category.label}</strong><span>{category.blocks.length} bloc{category.blocks.length > 1 ? "s" : ""}</span><span className="completed-category-status"><CircleCheck /> {category.doneCount}/{category.eligibleCount} complétés</span><b>{category.actual}/{category.planned}</b> répétitions <ChevronDown /></summary>
@@ -199,9 +195,3 @@ function CompletedStat({ icon, label, value, detail, warning = false }: { icon: 
   return <article className={`completed-stat ${warning ? "warning" : ""}`}><span>{icon}</span><label>{label}</label><strong>{value}</strong><small>{detail}</small></article>;
 }
 
-function athleteStatusText(status: string, percent: number) {
-  if (status === "SKIPPED") return "Séance indiquée comme ignorée.";
-  if (percent < 80) return `Volume réalisé : ${percent} % du plan.`;
-  if (status !== "COMPLETED") return "Séance non marquée comme terminée.";
-  return "Objectif de séance presque atteint.";
-}

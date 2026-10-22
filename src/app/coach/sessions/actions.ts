@@ -16,7 +16,7 @@ import {
   ,BlockType, PoolHeight, SessionStatus, WeekStatus, type SessionBlockType, type SessionPoolHeight
 } from "@/lib/session-template";
 import { formatMontrealDate, parseMontrealDateTimeInput, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
-import { dispatchSessionCancellation, dispatchSessionPublication, isAutomaticSessionPushEnabled, saveSessionCancellationTargets, saveSessionPublicationTargets } from "@/lib/web-push";
+import { dispatchSessionCancellation, dispatchSessionPublication, dispatchSessionUpdate, isAutomaticSessionPushEnabled, saveSessionCancellationTargets, saveSessionPublicationTargets, saveSessionUpdateTargets } from "@/lib/web-push";
 import { completeSessionIfAllAthletesAreDone } from "@/lib/session-status";
 
 const sessionInputSchema = z.object({
@@ -348,7 +348,10 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
   );
   const weekStart = startOfMontrealWeek(sessionDate);
   const isPublishing = existing.status === SessionStatus.DRAFT && data.status === SessionStatus.READY;
+  const isPublishedUpdate = existing.status === SessionStatus.READY && data.status === SessionStatus.READY;
+  const updateId = randomUUID();
   const updated = await withTransaction(async (tx) => {
+    if (isPublishedUpdate && isAutomaticSessionPushEnabled()) await saveSessionUpdateTargets(tx, sessionId, updateId);
     const found = (await tx.query<{ id: string }>(`SELECT id FROM "TrainingWeek" WHERE "clubId"=$1 AND "groupId"=$2 AND "startDate"=$3 LIMIT 1`, [clubId, data.groupId, weekStart])).rows[0];
     const weekId = found?.id ?? randomUUID();
     if (!found) await tx.query(`INSERT INTO "TrainingWeek" (id,"clubId","groupId","startDate",title,status) VALUES ($1,$2,$3,$4,$5,$6)`, [weekId, clubId, data.groupId, weekStart, `Semaine du ${formatMontrealDate(weekStart)}`, WeekStatus.PUBLISHED]);
@@ -374,9 +377,11 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
     }
     if (data.cooldown.enabled) await createBlock(tx, { sessionId, type: BlockType.COOLDOWN, title: data.cooldown.title, description: data.cooldown.description, duration: data.cooldown.duration, position: 99, estimatedVolume: 0, athleteIds: allAthleteIds });
     if (isPublishing && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, sessionId);
+    if (isPublishedUpdate && isAutomaticSessionPushEnabled()) await saveSessionUpdateTargets(tx, sessionId, updateId);
     return { id: sessionId, title: data.title.trim() };
   });
   if (isPublishing) await dispatchSessionPublication(sessionId).catch(() => undefined);
+  if (isPublishedUpdate) await dispatchSessionUpdate(sessionId, updateId).catch(() => undefined);
   await trackEvent({ type: "session.updated", message: `Séance modifiée: ${updated.title}`, clubId, userId: user.id, metadata: { sessionId } });
   revalidatePath("/coach");
   revalidatePath("/coach/planning");
@@ -1038,7 +1043,10 @@ export async function updateTrainingSession(formData: FormData) {
   const validDrylandById = new Map(validDrylandExercises.rows.map((exercise) => [exercise.id, exercise]));
 
   const wasPublished = existing.status === SessionStatus.DRAFT && status === SessionStatus.READY;
+  const isPublishedUpdate = existing.status === SessionStatus.READY && status === SessionStatus.READY;
+  const updateId = randomUUID();
   await withTransaction(async (tx) => {
+    if (isPublishedUpdate && isAutomaticSessionPushEnabled()) await saveSessionUpdateTargets(tx, sessionId, updateId);
     const updated=await tx.query(`UPDATE "TrainingSession" s SET title=$1,duration=$2,date=$3,notes=$4,status=$5 FROM "TrainingWeek" w WHERE s.id=$6 AND s."weekId"=w.id AND w."clubId"=$7 AND (NOT $8 OR s.status='DRAFT') AND NOT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND (c."startedAt" IS NOT NULL OR c.status<>'NOT_STARTED')) AND NOT EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id) AND NOT EXISTS (SELECT 1 FROM "AthleteExerciseLog" l WHERE l."sessionId"=s.id)`,[title,Number.isFinite(duration)?duration:existing.duration,parseMontrealDateTimeInput(date),String(formData.get("notes")??"").trim()||null,status,sessionId,clubId,wasPublished]);
     if(!updated.rowCount) throw new Error("Cette seance a deja ete commencee ou est introuvable.");
     if (existing.planningEventId) {
@@ -1090,9 +1098,11 @@ export async function updateTrainingSession(formData: FormData) {
       }
     }
     if (wasPublished && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, sessionId);
+    if (isPublishedUpdate && isAutomaticSessionPushEnabled()) await saveSessionUpdateTargets(tx, sessionId, updateId);
   });
 
   if (wasPublished) await dispatchSessionPublication(sessionId).catch(() => undefined);
+  if (isPublishedUpdate) await dispatchSessionUpdate(sessionId, updateId).catch(() => undefined);
 
   await trackEvent({
     type: "session.updated",
