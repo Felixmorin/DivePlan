@@ -73,7 +73,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
     );
   }
 
-  if (session.status === "DRAFT") {
+  if (session.status === "DRAFT" || session.status === "READY") {
     const [groupsR, eventsR, averagesR, athletePoolInsightsById, coachNotesR] = await Promise.all([
       query<{ id: string; name: string }>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`, [clubId]),
       query<{ id: string; title: string; startsAt: Date; duration: number | null; groupId: string | null; location: string | null }>(`SELECT id,title,"startsAt",duration,"groupId",location FROM "PlanningEvent" WHERE "clubId"=$1 AND type='TRAINING_SCHEDULE' ORDER BY "startsAt"`, [clubId]),

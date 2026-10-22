@@ -321,9 +321,10 @@ export async function createTrainingSession(input: CreateSessionInput) {
 
 export async function updateDraftSessionFromBuilder(sessionId: string, input: CreateSessionInput) {
   const { user, clubId } = await requireCoach();
-  const data = sessionInputSchema.parse(input);
+  let data = sessionInputSchema.parse(input);
   const existing = await getSessionSnapshot(sessionId, clubId);
-  if (!existing || existing.status !== SessionStatus.DRAFT) throw new Error("Brouillon introuvable pour ce club.");
+  if (!existing || (existing.status !== SessionStatus.DRAFT && existing.status !== SessionStatus.READY)) throw new Error("Séance introuvable ou déjà démarrée pour ce club.");
+  if (existing.status === SessionStatus.READY) data = { ...data, status: SessionStatus.READY };
   const activity = await query<{ started: boolean }>(
     `SELECT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" WHERE "sessionId"=$1 AND ("startedAt" IS NOT NULL OR status<>'NOT_STARTED')) OR EXISTS (SELECT 1 FROM "AthleteDiveLog" WHERE "sessionId"=$1) OR EXISTS (SELECT 1 FROM "AthleteExerciseLog" WHERE "sessionId"=$1) AS started`,
     [sessionId]
@@ -346,7 +347,7 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
     `SELECT id,"defaultSets","defaultReps","defaultDuration","roundTrip" FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`, [drylandIds]
   );
   const weekStart = startOfMontrealWeek(sessionDate);
-  const wasPublished = data.status === SessionStatus.READY;
+  const isPublishing = existing.status === SessionStatus.DRAFT && data.status === SessionStatus.READY;
   const updated = await withTransaction(async (tx) => {
     const found = (await tx.query<{ id: string }>(`SELECT id FROM "TrainingWeek" WHERE "clubId"=$1 AND "groupId"=$2 AND "startDate"=$3 LIMIT 1`, [clubId, data.groupId, weekStart])).rows[0];
     const weekId = found?.id ?? randomUUID();
@@ -372,11 +373,11 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
       }
     }
     if (data.cooldown.enabled) await createBlock(tx, { sessionId, type: BlockType.COOLDOWN, title: data.cooldown.title, description: data.cooldown.description, duration: data.cooldown.duration, position: 99, estimatedVolume: 0, athleteIds: allAthleteIds });
-    if (wasPublished && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, sessionId);
+    if (isPublishing && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, sessionId);
     return { id: sessionId, title: data.title.trim() };
   });
-  if (wasPublished) await dispatchSessionPublication(sessionId).catch(() => undefined);
-  await trackEvent({ type: "session.updated", message: `Brouillon modifie: ${updated.title}`, clubId, userId: user.id, metadata: { sessionId } });
+  if (isPublishing) await dispatchSessionPublication(sessionId).catch(() => undefined);
+  await trackEvent({ type: "session.updated", message: `Séance modifiée: ${updated.title}`, clubId, userId: user.id, metadata: { sessionId } });
   revalidatePath("/coach");
   revalidatePath("/coach/planning");
   revalidatePath("/coach/sessions");
