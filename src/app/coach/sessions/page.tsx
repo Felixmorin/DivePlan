@@ -1,105 +1,49 @@
+import { Plus } from "lucide-react";
 import Link from "next/link";
-import { Plus, Trash2, XCircle } from "lucide-react";
-import { deleteTrainingSession, markTrainingSessionNotDone } from "@/app/coach/sessions/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { SessionCard } from "@/components/training/session-card";
 import { demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { completeExpiredTrainingSessions, startDueTrainingSessions } from "@/lib/session-status";
+import { SessionsList, type SessionListItem } from "./sessions-list";
 
 export const dynamic = "force-dynamic";
 
 export default async function SessionsPage() {
   const { clubId } = await requireCoach();
-  if (clubId === "dev-club") {
-    return <DemoSessionsPage />;
-  }
+  if (clubId === "dev-club") return <DemoSessionsPage />;
 
   await completeExpiredTrainingSessions();
   await startDueTrainingSessions();
-
-  const result = await query<{ id: string; title: string; groupName: string; status: "DRAFT" | "READY" | "IN_PROGRESS" | "COMPLETED" | "NOT_DONE" | "CANCELLED"; duration: number; volume: number; athleteCount: number }>(
-    `SELECT s.id, s.title, g.name AS "groupName", s.status, s.duration,
+  const result = await query<SessionListItem>(
+    `SELECT s.id, s.title, g.name AS "groupName", s.status, s.duration, s.date,
        COALESCE((SELECT sum(b."estimatedVolume")::int FROM "SessionBlock" b WHERE b."sessionId" = s.id), 0) AS volume,
        (SELECT count(DISTINCT a."athleteId")::int FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id) AS "athleteCount"
      FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id = s."weekId" JOIN "TrainingGroup" g ON g.id = w."groupId"
      WHERE w."clubId" = $1 ORDER BY s.date DESC`, [clubId]
   );
-  const sessions = result.rows;
 
-  return (
-    <CoachShell active="Seances">
-      <div className="mb-6 flex items-center justify-end">
-        <Button asChild><Link href="/coach/sessions/new"><Plus className="h-4 w-4" /> Nouvelle seance</Link></Button>
-      </div>
-      <Card>
-        <CardHeader><CardTitle>Cette semaine</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          {sessions.map((session) => (
-            <SessionCard
-              key={session.id}
-              title={session.title}
-              group={session.groupName}
-              href={`/coach/sessions/${session.id}`}
-              printHref={`/coach/sessions/${session.id}/print`}
-              status={session.status}
-              duration={session.duration}
-              volume={session.volume}
-              athleteCount={session.athleteCount}
-              actions={
-                <>
-                  {session.status !== "NOT_DONE" && session.status !== "CANCELLED" && (
-                    <form action={markTrainingSessionNotDone}>
-                      <input type="hidden" name="sessionId" value={session.id} />
-                      <Button type="submit" variant="outline" size="icon" className="h-9 min-h-9 w-9" aria-label="Marquer non faite"><XCircle className="h-4 w-4" /></Button>
-                    </form>
-                  )}
-                  <form action={deleteTrainingSession}>
-                    <input type="hidden" name="sessionId" value={session.id} />
-                    <Button type="submit" variant="outline" size="icon" className="h-9 min-h-9 w-9" aria-label="Supprimer"><Trash2 className="h-4 w-4" /></Button>
-                  </form>
-                </>
-              }
-            />
-          ))}
-          {sessions.length === 0 && <EmptyState title="Aucune seance publiee" description="Cree une premiere seance pour lancer un pilote." />}
-        </CardContent>
-      </Card>
-    </CoachShell>
-  );
+  return <CoachShell active="Seances"><SessionsPageContent sessions={result.rows} /></CoachShell>;
+}
+
+function SessionsPageContent({ sessions }: { sessions: SessionListItem[] }) {
+  return <>
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div><p className="mb-1 text-sm font-semibold text-slate-500">Entraîneur <span className="mx-2">/</span> Séances</p><h1 className="text-3xl font-black tracking-tight">Séances</h1><p className="mt-1 text-slate-600">Planifiez et consultez les entraînements de vos groupes.</p></div>
+      <Button asChild><Link href="/coach/sessions/new"><Plus className="h-4 w-4" /> Nouvelle séance</Link></Button>
+    </div>
+    <SessionsList sessions={sessions} />
+  </>;
 }
 
 function DemoSessionsPage() {
-  const sessions = [demoSession, ...weekSessions.filter((session) => session.title).slice(0, 4)];
-
-  return (
-    <CoachShell active="Seances">
-      <div className="mb-6 flex items-center justify-between">
-        <div><h1 className="text-3xl font-black">Seances</h1><p className="text-slate-500">Mode demo local sans PostgreSQL.</p></div>
-        <Button asChild><Link href="/coach/sessions/demo"><Plus className="h-4 w-4" /> Seance demo</Link></Button>
-      </div>
-      <Card>
-        <CardHeader><CardTitle>Cette semaine</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          {sessions.map((session, index) => (
-            <SessionCard
-              key={`${session.title}-${index}`}
-              title={session.title}
-              href="/coach/sessions/demo"
-              printHref="/coach/sessions/demo/print"
-              status={index === 0 ? "Pret" : "Planifie"}
-              duration={session.duration}
-              volume={"volume" in session ? session.volume : session.blocks.reduce((sum, block) => sum + block.volume, 0)}
-              athleteCount={"athletes" in session ? session.athletes : new Set(session.blocks.flatMap((block) => block.assignedTo)).size}
-            />
-          ))}
-        </CardContent>
-      </Card>
-    </CoachShell>
-  );
+  const samples = [demoSession, ...weekSessions.filter((session) => session.title).slice(0, 8)];
+  const sessions: SessionListItem[] = samples.map((session, index) => ({
+    id: `demo-${index}`, title: session.title, groupName: index ? "Groupe pilote" : "Compétition Mustang",
+    status: index ? "COMPLETED" : "READY", date: new Date(Date.now() + (index ? -index * 7 : 2) * 86400000).toISOString(), duration: session.duration,
+    volume: "volume" in session ? session.volume : session.blocks.reduce((sum, block) => sum + block.volume, 0),
+    athleteCount: "athletes" in session ? session.athletes : new Set(session.blocks.flatMap((block) => block.assignedTo)).size,
+  }));
+  return <CoachShell active="Seances"><SessionsPageContent sessions={sessions} /></CoachShell>;
 }
-

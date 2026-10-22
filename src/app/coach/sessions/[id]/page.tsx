@@ -6,6 +6,7 @@ import { DraftSessionBlocks } from "./draft-session-blocks";
 import { CompletedSessionOverview } from "./completed-session-overview";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolProgressTracker } from "@/components/coach/pool-progress-tracker";
+import { ActiveSessionOverview } from "./active-session-overview";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
@@ -51,6 +52,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   const distinctAthletes = Array.from(new Map(rawAthletes.map((athlete) => [athlete.id, athlete])).values());
   const athleteAvatarUrls = await resolveAvatarUrls(distinctAthletes.map((athlete) => athlete.avatar));
   const uniqueAthletes = distinctAthletes.map((athlete, index) => ({ ...athlete, avatar: athleteAvatarUrls[index] }));
+  if (session.status === "IN_PROGRESS") {
+    return <CoachShell active="Seances"><ActiveSessionOverview session={session} athletes={uniqueAthletes.map(({ id, firstName, lastName }) => ({ id, firstName, lastName }))} /></CoachShell>;
+  }
   const athleteAverageReps = await getAthleteAverageRepsByTraining(uniqueAthletes.map((athlete) => athlete.id), session.id);
   const athleteAverageGoldenReps = await getAthleteAverageGoldenRepsByTraining(uniqueAthletes.map((athlete) => athlete.id), session.id);
   const hasStarted =
