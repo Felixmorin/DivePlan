@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { athletes as demoAthletes, demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
-import { completeExpiredTrainingSessions } from "@/lib/session-status";
+import { completeExpiredTrainingSessions, startDueTrainingSessions } from "@/lib/session-status";
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, parseMontrealSessionDate, sameMontrealDay, startOfMontrealWeek, toMontrealDateInputValue, toMontrealDateTimeInputValue } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -75,6 +75,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
     return <DemoPlanningPage period={period} weekStartsOn={weekStartsOn} />;
   }
   await completeExpiredTrainingSessions();
+  await startDueTrainingSessions();
 
   const [sessionRows,eventRows,groupsResult,athleteRows]=await Promise.all([
     query<{id:string;title:string;date:Date;duration:number;status:string;planningEventId:string|null}>(`SELECT s.id,s.title,s.date,s.duration,s.status,s."planningEventId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s."calendarHiddenAt" IS NULL AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,period.rangeStart,period.rangeEnd]),

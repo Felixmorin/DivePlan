@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { countPoolContexts } from "@/lib/pool-list";
 import { addMontrealDays, startOfMontrealDay, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
+import { startDueTrainingSessions } from "@/lib/session-status";
 
 const PoolHeight = { ONE_METER: "ONE_METER", THREE_METER: "THREE_METER", PLATFORM: "PLATFORM", CUSTOM: "CUSTOM" } as const;
 type PoolHeight = typeof PoolHeight[keyof typeof PoolHeight];
@@ -162,6 +163,7 @@ export async function getAthleteRecentCompletions(athleteId: string): Promise<At
 }
 
 export async function getAthleteSession(sessionId: string, athleteId: string): Promise<AthleteSessionView | null> {
+  await startDueTrainingSessions();
   const session=(await query<{id:string;title:string;date:Date;duration:number;notes:string|null;competitionEvaluationAtStart:boolean;groupName:string;completionStatus:string|null;rating:string|null;note:string|null}>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.notes,s."competitionEvaluationAtStart",g.name AS "groupName",c.status AS "completionStatus",c.rating,c.note FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$2 WHERE s.id=$1 AND (s.status IN ('READY','IN_PROGRESS') OR (s.status='COMPLETED' AND c.status IN ('IN_PROGRESS','COMPLETED'))) AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$2)`,[sessionId,athleteId])).rows[0];
   if (!session) return null;
   const blocks=(await query<{id:string;title:string;description:string|null;type:AthleteSessionBlock["type"];duration:number;estimatedVolume:number;competitionEvaluation:boolean}>(`SELECT b.id,b.title,b.description,b.type,b.duration,b."estimatedVolume",b."competitionEvaluation" FROM "SessionBlock" b WHERE b."sessionId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlockAssignment" a WHERE a."sessionBlockId"=b.id AND a."athleteId"=$2) ORDER BY b.position`,[sessionId,athleteId])).rows;

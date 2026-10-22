@@ -9,7 +9,7 @@ import { SessionCard } from "@/components/training/session-card";
 import { demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
-import { completeExpiredTrainingSessions } from "@/lib/session-status";
+import { completeExpiredTrainingSessions, startDueTrainingSessions } from "@/lib/session-status";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,7 @@ export default async function SessionsPage() {
   }
 
   await completeExpiredTrainingSessions();
+  await startDueTrainingSessions();
 
   const result = await query<{ id: string; title: string; groupName: string; status: "DRAFT" | "READY" | "IN_PROGRESS" | "COMPLETED" | "NOT_DONE" | "CANCELLED"; duration: number; volume: number; athleteCount: number }>(
     `SELECT s.id, s.title, g.name AS "groupName", s.status, s.duration,

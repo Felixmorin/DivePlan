@@ -11,6 +11,7 @@ import { athletes, demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
+import { startDueTrainingSessions } from "@/lib/session-status";
 import { addMontrealDays, formatMontrealCountdown, formatMontrealDate, formatMontrealTime, sameMontrealDay, startOfMontrealDay, startOfMontrealWeek } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,8 @@ export default async function CoachDashboard() {
   if (clubId === "dev-club") {
     return <DemoCoachDashboard userName={`${user.firstName} ${user.lastName}`} />;
   }
+
+  await startDueTrainingSessions();
 
   const today = new Date();
   const weekStart = startOfMontrealWeek(today);

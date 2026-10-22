@@ -10,12 +10,15 @@ import { getAthletePlanningEvents, getAthleteWeekPlanningEvents } from "@/lib/at
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
 import { AthletePageHeader } from "@/components/athlete/page-header";
+import { startDueTrainingSessions } from "@/lib/session-status";
 
 export const dynamic = "force-dynamic";
 
 export default async function AthleteTodayPage() {
   const athlete = await getCurrentAthlete();
   if (!athlete) redirect("/login");
+
+  await startDueTrainingSessions();
 
   const [readySession, recentCompletions, weekEvents, weekSummary, upcomingEvents] = await Promise.all([
     getAssignedReadySession(athlete.id),
