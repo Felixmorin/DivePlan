@@ -10,7 +10,7 @@ const maxRequestBytes = 20_000;
 const maxEntries = 40;
 
 type Entry = { route: string; resourceType: string; requests: number; transferBytes: number; cacheHits: number };
-type Vital = { route: string; name: string; value: number; goodSamples: number; needsImprovementSamples: number };
+type Vital = { route: string; metric: string; value: number; goodSamples: number; needsImprovementSamples: number };
 
 function ratingThresholds(name: string, value: number) {
   const limits: Record<string, [number, number]> = {
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       || typeof name !== "string" || !vitalNames.has(name)
       || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 60_000
       || (name === "CLS" && numericValue > 10)) continue;
-    vitals.push({ route, name, value: numericValue, ...ratingThresholds(name, numericValue) });
+    vitals.push({ route, metric: name, value: numericValue, ...ratingThresholds(name, numericValue) });
   }
   if (entries.length === 0 && vitals.length === 0) return Response.json({ error: "invalid_entries" }, { status: 400 });
 

@@ -2,65 +2,132 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ChevronDown, ChevronRight, Dumbbell, RefreshCw, UserRound, Waves, X } from "lucide-react";
 import { saveSessionAttendance } from "@/app/coach/sessions/actions";
+import type { LiveProgress, LiveSession } from "@/lib/live-session";
 import { formatMontrealDate } from "@/lib/timezone";
 
 type Athlete = { id: string; firstName: string; lastName: string };
 type Props = {
-  session: any;
+  session: LiveSession;
+  initialProgress: LiveProgress;
   athletes: Athlete[];
 };
 
-export function ActiveSessionOverview({ session, athletes }: Props) {
+export function ActiveSessionOverview({ session: plan, initialProgress, athletes }: Props) {
   const router = useRouter();
+  const [progressData, setProgressData] = useState(initialProgress);
+  const [refreshRequest, setRefreshRequest] = useState(0);
+  const [syncStatus, setSyncStatus] = useState<"synced" | "loading" | "failed">("synced");
   useEffect(() => {
-    const timer = window.setInterval(() => router.refresh(), 15_000);
-    return () => window.clearInterval(timer);
-  }, [router]);
+    let disposed = false;
+    let halted = false;
+    let timer: ReturnType<typeof setTimeout>;
+    let controller: AbortController | null = null;
+    let failures = 0;
+    const schedule = () => {
+      if (!disposed && !halted && document.visibilityState === "visible") {
+        timer = setTimeout(poll, Math.min(60_000, 15_000 * 2 ** failures));
+      }
+    };
+    async function poll() {
+      if (disposed || halted || controller || document.visibilityState !== "visible") return;
+      clearTimeout(timer);
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller?.abort(), 10_000);
+      setSyncStatus("loading");
+      try {
+        const response = await fetch(`/api/coach/sessions/${encodeURIComponent(plan.id)}/progress`, {
+          cache: "no-store", credentials: "same-origin", signal: controller.signal
+        });
+        if ([401, 403, 404].includes(response.status)) {
+          halted = true;
+          router.refresh();
+          return;
+        }
+        if (!response.ok) throw new Error("Progress unavailable");
+        const next: LiveProgress = await response.json();
+        if (disposed || document.visibilityState !== "visible") return;
+        if (next.status !== "IN_PROGRESS" || next.planVersion !== initialProgress.planVersion) {
+          halted = true;
+          router.refresh();
+          return;
+        }
+        setProgressData(next);
+        setSyncStatus("synced");
+        failures = 0;
+      } catch {
+        if (!disposed && document.visibilityState === "visible") {
+          failures = Math.min(2, failures + 1);
+          setSyncStatus("failed");
+        }
+      } finally {
+        clearTimeout(timeout);
+        controller = null;
+        schedule();
+      }
+    }
+    function onVisibilityChange() {
+      clearTimeout(timer);
+      if (document.visibilityState === "visible") void poll();
+      else controller?.abort();
+    }
+    if (refreshRequest > 0) void poll();
+    else schedule();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      controller?.abort();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [router, plan.id, initialProgress.planVersion, refreshRequest]);
+  const session = { ...plan, ...progressData };
   const blocks = [...session.blocks].sort((a, b) => a.position - b.position);
-  const [activeType, setActiveType] = useState(blocks.find((block) => block.type === "POOL") ? "POOL" : blocks[0]?.type ?? "POOL");
+  const [activeType, setActiveType] = useState<string>(blocks.find((block) => block.type === "POOL") ? "POOL" : blocks[0]?.type ?? "POOL");
   const [presenceOpen, setPresenceOpen] = useState(false);
   const [absentAthleteIds, setAbsentAthleteIds] = useState<Set<string>>(() => new Set(session.absences.map((absence: { athleteId: string }) => absence.athleteId)));
   const [expanded, setExpanded] = useState<string | null>(null);
-  const absentIds = absentAthleteIds;
-  const presentCount = athletes.length - absentAthleteIds.size;
+  const absentIds = presenceOpen ? absentAthleteIds : new Set(progressData.absences.map(({ athleteId }) => athleteId));
+  const presentCount = athletes.length - absentIds.size;
   const selectedBlocks = blocks.filter((block) => block.type === activeType);
-  const totalPlanned = selectedBlocks.reduce((sum, block) => sum + plannedUnits(block), 0);
-  const totalDone = selectedBlocks.reduce((sum, block) => sum + completedUnits(block, session), 0);
+  const visibleBlocks = selectedBlocks.map((block) => ({ ...block, assignments: block.assignments.filter(({ athleteId }) => !absentIds.has(athleteId)) }));
+  const totalPlanned = visibleBlocks.reduce((sum, block) => sum + plannedUnits(block), 0);
+  const totalDone = visibleBlocks.reduce((sum, block) => sum + completedUnits(block, session), 0);
   const progress = totalPlanned ? Math.min(100, Math.round(totalDone / totalPlanned * 100)) : 0;
 
   return <main className="live-session">
-    <div className="live-breadcrumb"><a href="/coach/sessions">Séances</a><ChevronRight />Séance en cours</div>
+    <div className="live-breadcrumb"><Link href="/coach/sessions">Séances</Link><ChevronRight />Séance en cours</div>
     <header className="live-heading">
       <div><div className="live-title-line"><h1>Séance en cours</h1><span className="live-pill"><i /> LIVE</span></div><p>{session.week.group.name}<span>·</span>{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p></div>
-      <div className="live-actions"><span className="sync-pill"><i /> Synchronisé en direct</span><button className="refresh-button" onClick={() => router.refresh()} aria-label="Actualiser"><RefreshCw /></button></div>
+      <div className="live-actions"><span className="sync-pill" role="status"><i /> {syncStatus === "failed" ? "Connexion interrompue · nouvelle tentative" : syncStatus === "loading" ? "Synchronisation…" : "Synchronisé en direct"}</span><button className="refresh-button" onClick={() => setRefreshRequest((value) => value + 1)} disabled={syncStatus === "loading"} aria-label="Actualiser"><RefreshCw /></button></div>
     </header>
     <div className="live-toolbar">
       <nav className="live-tabs" aria-label="Type de bloc">
         {[ ["WARMUP", "Échauffement"], ["DRYLAND", "Dryland"], ["POOL", "Piscine"] ].filter(([type]) => blocks.some((block) => block.type === type)).map(([type, label]) => <button key={type} className={activeType === type ? "active" : ""} onClick={() => { setActiveType(type); setExpanded(blocks.find((block) => block.type === type)?.id ?? null); }}>{type === "POOL" ? <Waves /> : type === "DRYLAND" ? <Dumbbell /> : <UserRound />}{label}</button>)}
       </nav>
-      <section className="attendance-summary"><div><strong>Présences</strong><span>{presentCount} présent{presentCount !== 1 ? "s" : ""} · {absentIds.size} absent{absentIds.size !== 1 ? "s" : ""}</span></div><div className="avatar-stack">{athletes.slice(0, 6).map((athlete) => <span key={athlete.id} title={`${athlete.firstName} ${athlete.lastName}`} className={absentIds.has(athlete.id) ? "absent" : ""}>{athlete.firstName[0]}{athlete.lastName[0]}</span>)}</div><button className="manage-button" onClick={() => setPresenceOpen(true)}>Gérer</button></section>
+      <section className="attendance-summary"><div><strong>Présences</strong><span>{presentCount} présent{presentCount !== 1 ? "s" : ""} · {absentIds.size} absent{absentIds.size !== 1 ? "s" : ""}</span></div><div className="avatar-stack">{athletes.slice(0, 6).map((athlete) => <span key={athlete.id} title={`${athlete.firstName} ${athlete.lastName}`} className={absentIds.has(athlete.id) ? "absent" : ""}>{athlete.firstName[0]}{athlete.lastName[0]}</span>)}</div><button className="manage-button" onClick={() => { setAbsentAthleteIds(new Set(progressData.absences.map(({ athleteId }) => athleteId))); setPresenceOpen(true); }}>Gérer</button></section>
     </div>
     <section className="live-overview"><div className="overview-icon">{activeType === "POOL" ? <Waves /> : <Dumbbell />}</div><div className="overview-name"><small>Bloc actuel</small><h2>{selectedBlocks[0]?.title ?? "Aucun bloc"}</h2><span>{selectedBlocks.length} bloc{selectedBlocks.length !== 1 ? "s" : ""} · {selectedBlocks.reduce((sum, block) => sum + block.assignments.length, 0)} athlètes</span></div><div className="overview-progress"><small>Progression</small><div className="progress-line"><span style={{ width: `${progress}%` }} /></div></div><strong className="overview-count">{totalDone} / {totalPlanned} {activeType === "POOL" ? "répétitions" : "exercices"}</strong><span className="overview-percent">{progress}%</span><span className="status-pill"><i /> En cours</span></section>
-    <section className="live-block-list">{selectedBlocks.map((block, index) => {
+    <section className="live-block-list">{visibleBlocks.map((block, index) => {
       const planned = plannedUnits(block); const done = completedUnits(block, session); const pct = planned ? Math.min(100, Math.round(done / planned * 100)) : 0;
       const isOpen = expanded === block.id;
       return <article className="live-block" key={block.id}>
         <button className="block-toggle" onClick={() => setExpanded(isOpen ? null : block.id)}><ChevronDown className={isOpen ? "turned" : ""} /><span className="block-index">{index + 1}</span><span className="block-label"><strong>{block.title}</strong><small>{block.poolTraining?.sections.length ?? block.drylandExercises.length} {activeType === "POOL" ? "sections" : "exercices"}</small></span><span className="block-meter"><i><b style={{ width: `${pct}%` }} /></i><small>{done} / {planned} répétitions</small></span><strong className="block-percent">{pct}%</strong><ChevronRight className={isOpen ? "turned-right" : ""} /></button>
-        {isOpen && <div className="block-content">{block.poolTraining ? block.poolTraining.sections.map((section: any) => {
+        {isOpen && <div className="block-content">{block.poolTraining ? block.poolTraining.sections.map((section) => {
           const multiplier = Math.max(1, (section.label ?? section.height).match(/\d+/g)?.length ?? 1);
-          const sectionPlanned = section.dives.reduce((n: number, dive: any) => n + dive.repetitions * multiplier * block.assignments.filter((item: any) => !absentIds.has(item.athleteId)).length, 0);
-          const sectionDone = section.dives.reduce((n: number, dive: any) => n + session.diveLogs.filter((log: any) => log.poolDiveId === dive.id && !absentIds.has(log.athleteId)).reduce((subtotal: number, log: any) => subtotal + log.repetitionsCompleted, 0), 0);
-          return <div className="section-row" key={section.id}><span className="height-tag">{section.label ?? (section.height === "ONE_METER" ? "1 m" : section.height === "THREE_METER" ? "3 m" : "Plateforme")}</span><div className="dive-chips">{section.dives.map((dive: any) => { const logged = session.diveLogs.filter((log: any) => log.poolDiveId === dive.id && !absentIds.has(log.athleteId)).reduce((n: number, log: any) => n + log.repetitionsCompleted, 0); const expected = dive.repetitions * multiplier * block.assignments.filter((item: any) => !absentIds.has(item.athleteId)).length; return <span className={`dive-chip ${logged >= expected ? "done" : logged ? "partial" : ""}`} key={dive.id}><b>{dive.diveCode}</b><small>{logged} / {expected}</small><i><b style={{ width: `${expected ? Math.min(100, logged / expected * 100) : 0}%` }} /></i></span>; })}</div><span className="section-count">{sectionDone}/{sectionPlanned}</span></div>;
-        }) : <div className="exercise-list">{block.drylandExercises.map((item: any) => { const assignments = block.assignments.filter((assignment: any) => !absentIds.has(assignment.athleteId)); const done = session.exerciseLogs.filter((log: any) => log.exerciseId === item.exerciseId && log.completed && !absentIds.has(log.athleteId)).length; return <div key={item.exerciseId} className="exercise-row"><span className="exercise-icon"><Dumbbell /></span><strong>{item.exercise.name}</strong><span>{item.sets ?? 1} × {item.reps ?? `${item.duration ?? 30} s`}</span><span className="exercise-completion">{done} / {assignments.length} athlètes</span><span className={`mini-state ${done >= assignments.length && assignments.length ? "done" : ""}`}>{done >= assignments.length && assignments.length ? "Terminé" : "En cours"}</span></div>; })}</div>}
+          const sectionPlanned = section.dives.reduce((n: number, dive) => n + dive.repetitions * multiplier * block.assignments.filter((item) => !absentIds.has(item.athleteId)).length, 0);
+          const sectionDone = section.dives.reduce((n: number, dive) => n + session.diveLogs.filter((log) => log.poolDiveId === dive.id && !absentIds.has(log.athleteId)).reduce((subtotal: number, log) => subtotal + log.repetitionsCompleted, 0), 0);
+          return <div className="section-row" key={section.id}><span className="height-tag">{section.label ?? (section.height === "ONE_METER" ? "1 m" : section.height === "THREE_METER" ? "3 m" : "Plateforme")}</span><div className="dive-chips">{section.dives.map((dive) => { const logged = session.diveLogs.filter((log) => log.poolDiveId === dive.id && !absentIds.has(log.athleteId)).reduce((n: number, log) => n + log.repetitionsCompleted, 0); const expected = dive.repetitions * multiplier * block.assignments.filter((item) => !absentIds.has(item.athleteId)).length; return <span className={`dive-chip ${logged >= expected ? "done" : logged ? "partial" : ""}`} key={dive.id}><b>{dive.diveCode}</b><small>{logged} / {expected}</small><i><b style={{ width: `${expected ? Math.min(100, logged / expected * 100) : 0}%` }} /></i></span>; })}</div><span className="section-count">{sectionDone}/{sectionPlanned}</span></div>;
+        }) : <div className="exercise-list">{block.drylandExercises.map((item) => { const assignments = block.assignments.filter((assignment) => !absentIds.has(assignment.athleteId)); const done = session.exerciseLogs.filter((log) => log.exerciseId === item.exerciseId && log.completed && !absentIds.has(log.athleteId)).length; return <div key={item.exerciseId} className="exercise-row"><span className="exercise-icon"><Dumbbell /></span><strong>{item.exercise.name}</strong><span>{item.sets ?? 1} × {item.reps ?? `${item.duration ?? 30} s`}</span><span className="exercise-completion">{done} / {assignments.length} athlètes</span><span className={`mini-state ${done >= assignments.length && assignments.length ? "done" : ""}`}>{done >= assignments.length && assignments.length ? "Terminé" : "En cours"}</span></div>; })}</div>}
         <div className="block-note"><span>i</span> Les athlètes marqués absents sont exclus des totaux.</div></div>}
       </article>;
     })}</section>
     {presenceOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPresenceOpen(false); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="presence-dialog-title" className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">
         <header className="flex items-start justify-between border-b border-slate-100 pb-3"><div><h2 id="presence-dialog-title" className="text-lg font-black text-slate-950">Gérer les présences</h2><p className="mt-1 text-xs font-semibold text-slate-500">{session.week.group.name} · Séance en cours</p></div><button type="button" aria-label="Fermer" onClick={() => setPresenceOpen(false)} className="rounded-lg p-1 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button></header>
-        <form action={async (formData) => { await saveSessionAttendance(formData); setPresenceOpen(false); }} className="pt-3">
+        <form action={async (formData) => { await saveSessionAttendance(formData); setPresenceOpen(false); setRefreshRequest((value) => value + 1); }} className="pt-3">
           <input type="hidden" name="sessionId" value={session.id} />
           {athletes.map((athlete) => {
             const absent = absentAthleteIds.has(athlete.id);
@@ -76,10 +143,10 @@ export function ActiveSessionOverview({ session, athletes }: Props) {
   </main>;
 }
 
-function plannedUnits(block: any) { return block.poolTraining ? block.poolTraining.sections.reduce((sum: number, section: any) => sum + section.dives.reduce((n: number, dive: any) => n + dive.repetitions * Math.max(1, (section.label ?? section.height).match(/\d+/g)?.length ?? 1) * block.assignments.length, 0), 0) : block.drylandExercises.reduce((sum: number, item: any) => sum + (item.sets ?? 1) * (item.reps ?? 1) * block.assignments.length, 0); }
-function completedUnits(block: any, session: any) {
-  if (block.poolTraining) return session.diveLogs.filter((log: any) => block.assignments.some((assignment: any) => assignment.athleteId === log.athleteId) && block.poolTraining.sections.some((section: any) => section.dives.some((dive: any) => dive.id === log.poolDiveId))).reduce((sum: number, log: any) => sum + log.repetitionsCompleted, 0);
-  return session.exerciseLogs.filter((log: any) => log.completed && block.assignments.some((assignment: any) => assignment.athleteId === log.athleteId) && block.drylandExercises.some((item: any) => item.exerciseId === log.exerciseId)).reduce((sum: number, log: any) => { const item = block.drylandExercises.find((exercise: any) => exercise.exerciseId === log.exerciseId); return sum + (item?.sets ?? 1) * (item?.reps ?? 1); }, 0);
+function plannedUnits(block: LiveSession["blocks"][number]) { return block.poolTraining ? block.poolTraining.sections.reduce((sum: number, section) => sum + section.dives.reduce((n: number, dive) => n + dive.repetitions * Math.max(1, (section.label ?? section.height).match(/\d+/g)?.length ?? 1) * block.assignments.length, 0), 0) : block.drylandExercises.reduce((sum: number, item) => sum + (item.sets ?? 1) * (item.reps ?? 1) * block.assignments.length, 0); }
+function completedUnits(block: LiveSession["blocks"][number], session: LiveSession) {
+  if (block.poolTraining) return session.diveLogs.filter((log) => block.assignments.some((assignment) => assignment.athleteId === log.athleteId) && block.poolTraining?.sections.some((section) => section.dives.some((dive) => dive.id === log.poolDiveId))).reduce((sum: number, log) => sum + log.repetitionsCompleted, 0);
+  return session.exerciseLogs.filter((log) => log.completed && block.assignments.some((assignment) => assignment.athleteId === log.athleteId) && block.drylandExercises.some((item) => item.exerciseId === log.exerciseId)).reduce((sum: number, log) => { const item = block.drylandExercises.find((exercise) => exercise.exerciseId === log.exerciseId); return sum + (item?.sets ?? 1) * (item?.reps ?? 1); }, 0);
 }
 
 const styles = `
