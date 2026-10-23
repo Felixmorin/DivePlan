@@ -1088,6 +1088,50 @@ a {
 .athlete-app .preference-notifications > section h3 { color:#102451; font-size:.9rem; }
 .athlete-app .preference-notifications > section p { color:#607492; font-size:.75rem; }
 .athlete-app .preference-notifications > section fieldset { margin-top:.6rem; }
+.athlete-app .appearance-switch { display:flex; width:2.65rem; height:1.55rem; align-items:center; border-radius:999px; background:#cbd5e1; padding:.18rem; transition:background .18s ease; }
+.athlete-app .appearance-switch i { width:1.18rem; height:1.18rem; border-radius:50%; background:#fff; box-shadow:0 1px 3px #0003; transition:transform .18s ease; }
+.athlete-app .appearance-switch.is-on { background:#0891b2; }
+.athlete-app .appearance-switch.is-on i { transform:translateX(1.1rem); }
+.athlete-app[data-athlete-theme="dark"] .preference-group { border-color:rgba(99,174,215,.18); background:#0b1e30; }
+.athlete-app[data-athlete-theme="dark"] .preference-group > h2 { color:#f1f5f9; }
+.athlete-app[data-athlete-theme="dark"] .preference-rows,
+.athlete-app[data-athlete-theme="dark"] .preference-row,
+.athlete-app[data-athlete-theme="dark"] .preference-notifications > section { border-color:rgba(255,255,255,.08); background:#111b28; color:#f1f5f9; }
+.athlete-app[data-athlete-theme="dark"] .preference-notifications > section h3 { color:#f1f5f9; }
+.athlete-app[data-athlete-theme="dark"] .preference-notifications > section p { color:#a4b2c4; }
+.athlete-app[data-athlete-theme="dark"] .athlete-preferences-header h1 { color:#f1f5f9; }
+.athlete-app[data-athlete-theme="light"] { --color-athlete-bg:#f3f7fb; --color-athlete-panel:#fff; --color-athlete-panel-2:#eaf1f7; background:#f3f7fb; color:#102451; }
+.athlete-app[data-athlete-theme="light"] .text-white { color:#102451; }
+.athlete-app[data-athlete-theme="light"] .text-white\/65,
+.athlete-app[data-athlete-theme="light"] .text-white\/60,
+.athlete-app[data-athlete-theme="light"] .text-white\/50,
+.athlete-app[data-athlete-theme="light"] .text-white\/45,
+.athlete-app[data-athlete-theme="light"] .text-white\/42 { color:#64748b; }
+.athlete-app[data-athlete-theme="light"] [class*="bg-[#0b1e30]"],
+.athlete-app[data-athlete-theme="light"] [class*="bg-[#101927]"],
+.athlete-app[data-athlete-theme="light"] [class*="bg-[#111827]"],
+.athlete-app[data-athlete-theme="light"] [class*="bg-[#101827]"] { background:#fff; }
+.athlete-app[data-athlete-theme="light"] .today-card,
+.athlete-app[data-athlete-theme="light"] .week-card,
+.athlete-app[data-athlete-theme="light"] .schedule-card,
+.athlete-app[data-athlete-theme="light"] .latest-card { border-color:#dce8f3; background:#fff; color:#102451; box-shadow:0 8px 24px #2037540d; }
+.athlete-app[data-athlete-theme="light"] .today-card { background:linear-gradient(145deg,#e4f7fc,#f7fcff); }
+.athlete-app[data-athlete-theme="light"] .today-card h2,
+.athlete-app[data-athlete-theme="light"] .schedule-copy strong,
+.athlete-app[data-athlete-theme="light"] .week-metric strong,
+.athlete-app[data-athlete-theme="light"] .week-day > strong { color:#102451; }
+.athlete-app[data-athlete-theme="light"] .week-metric > span,
+.athlete-app[data-athlete-theme="light"] .schedule-copy span,
+.athlete-app[data-athlete-theme="light"] .schedule-copy em { color:#64748b; }
+.athlete-app[data-athlete-theme="light"] .week-day > span,
+.athlete-app[data-athlete-theme="light"] .week-day > small { color:#64748b; }
+.athlete-app[data-athlete-theme="light"] .week-days { background:#f7fafc; border-color:#e2e8f0; }
+.athlete-app[data-athlete-theme="light"] .schedule-row { border-color:#e2e8f0; }
+.athlete-app[data-athlete-theme="light"] .schedule-date { background:#eaf2f8; color:#102451; }
+.athlete-app[data-athlete-theme="light"] .athlete-header p { color:#526173; }
+.athlete-app[data-athlete-theme="light"] .athlete-preferences-header h1 { color:#102451; }
+.athlete-app[data-athlete-theme="light"] .preference-group { border-color:#dce8f3; background:#eff6fb; }
+.athlete-app[data-athlete-theme="light"] .preference-row { background:#fff; color:#102451; }
 .athlete-app .preference-notifications > section label { border-color:#dce8f3; color:#536987; }
 .athlete-app .preference-notifications > section label:has(input:checked) { border-color:#15bfc6; background:#e5f9f8; color:#0c1c4b; }
 .athlete-app .preference-notifications > section button { color:#087cff; }
