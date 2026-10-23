@@ -35,7 +35,7 @@ export function CompetitionProgressList({ dives }: { dives: CompetitionDiveItem[
         return <article className={`competition-progress-row ${done >= repetitionsTarget ? "is-complete" : ""}`} key={dive.id}>
           <div className="competition-progress-code"><strong>{dive.code}</strong><span>{dive.volume} répétition{dive.volume === 1 ? "" : "s"}</span></div>
           <div className="competition-progress-detail"><span>{done} / {repetitionsTarget}</span><div><i style={{ width: `${done / repetitionsTarget * 100}%` }} /></div></div>
-          {done >= repetitionsTarget && <span className="competition-progress-check"><Check /></span>}
+          {done >= repetitionsTarget ? <span className="competition-progress-check"><Check /></span> : <span aria-hidden="true" />}
           <span className="competition-progress-rating" aria-label={dive.latestConfidence === null || dive.latestConfidence === undefined ? "Aucune évaluation" : `Dernière évaluation : ${dive.latestConfidence} sur 5`}>{dive.latestConfidence ?? "—"}</span>
         </article>;
       })}

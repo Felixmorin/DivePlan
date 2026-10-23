@@ -1059,7 +1059,7 @@ a {
 .athlete-app .competition-progress-detail > div i { background:#459eff; }
 .athlete-app .is-complete .competition-progress-detail > div i { background:#24c9c5; }
 .athlete-app .competition-progress-check { display:grid; width:2rem; height:2rem; place-items:center; border-radius:50%; background:#dcf8f6; color:#08b8b5; }
-.athlete-app .competition-progress-rating { color:#102451; font-size:.9rem; font-weight:850; text-align:center; }
+.athlete-app .competition-progress-rating { color:#a86400; font-size:.9rem; font-weight:900; text-align:right; }
 
 .athlete-app .athlete-badges-header { display:flex; align-items:flex-start; gap:.9rem; margin:.1rem 0 1.2rem; }
 .athlete-app .athlete-badges-header > a { display:grid; width:2.7rem; height:2.7rem; flex:none; place-items:center; border-radius:50%; background:#f1f3f6; color:#102451; }
