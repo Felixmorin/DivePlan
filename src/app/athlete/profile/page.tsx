@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Award, Building2, ChevronRight, Clock3, LogOut, Medal, Pencil, Settings, Star, UserRound, Waves } from "lucide-react";
+import { Building2, ChevronRight, Clock3, ListChecks, LogOut, Medal, Pencil, Settings, Star, UserRound, Waves } from "lucide-react";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -54,28 +54,23 @@ export default async function ProfilePage() {
         <ProfileStat icon={<Clock3 className="h-5 w-5" />} label="Entraînement" value={formatTrainingHours(totals.completedMinutes)} />
       </section>
 
-      <section className="mt-5 rounded-[1.2rem] bg-amber-50 p-3">
-      <h2 className="mb-3 text-xl font-black">Mes accomplissements</h2>
-      <Link href="/athlete/profile/golden-reps" className="flex min-h-16 items-center gap-3 rounded-[1.2rem] border border-amber-300/25 bg-white px-4 transition hover:border-amber-300/50 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400 text-[#281500]"><Star className="h-5 w-5 fill-current" /></span>
-        <span className="flex-1"><span className="block text-base font-black">Golden reps</span><span className="block text-sm text-slate-600">{goldenReps.reduce((sum, dive) => sum + dive.count, 0)} répétitions remarquables</span></span>
-        <ChevronRight className="h-5 w-5 text-amber-200/70" />
-      </Link>
-      <Link href="/athlete/profile/badges" className="milestone-row"><span>Voir mes badges</span><Award className="h-5 w-5 text-red-500" /><ChevronRight className="h-5 w-5 text-slate-500" /></Link>
+      <section className="profile-achievements mt-5" aria-label="Mes accomplissements">
+        <header className="profile-achievements-header">
+          <h2>Accomplissements</h2>
+          <Link href="/athlete/profile/badges">Voir mes badges<ChevronRight aria-hidden="true" /></Link>
+        </header>
+        <Link href="/athlete/profile/golden-reps" className="profile-achievement-row">
+          <span className="profile-achievement-icon"><Star className="h-5 w-5 fill-current" /></span>
+          <span className="profile-achievement-copy"><strong>Golden reps</strong><small>{goldenReps.reduce((sum, dive) => sum + dive.count, 0)} répétitions remarquables</small></span>
+        </Link>
       </section>
 
       <section className="mt-7">
-        <Link href="/athlete/profile/competition" className="profile-competition-preview">
-          <div className="profile-competition-title"><h2>Ma liste de compétition</h2><ChevronRight size={21} /></div>
-          <div className="profile-competition-heights">
-            {(["ONE_METER", "THREE_METER"] as const).map((height) => {
-              const heightDives = athlete.competitionDives.filter((dive) => dive.height === height);
-              if (!heightDives.length) return null;
-              return <div className={`profile-competition-height ${height === "ONE_METER" ? "is-one" : "is-three"}`} key={height}>
-                <span className="profile-competition-icon"><Waves size={19} /></span><span className="profile-competition-copy"><strong>{height === "ONE_METER" ? "1 m" : "3 m"}</strong><small>{heightDives.length} plongeons</small></span><ChevronRight size={19} />
-              </div>;
-            })}
-          </div>
+        <div className="profile-competition-title"><h2>Ma liste de compétition</h2><ChevronRight size={21} /></div>
+        <Link href="/athlete/profile/competition" className="profile-competition-button">
+          <ListChecks aria-hidden="true" />
+          <span>Voir mes listes de compétition</span>
+          <ChevronRight aria-hidden="true" />
         </Link>
       </section>
 
