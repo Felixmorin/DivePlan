@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Building2, CalendarDays, Check, CircleUserRound, Filter, Mail, Search, Shield, UserRoundPlus, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, CalendarDays, Check, CircleUserRound, Filter, KeyRound, Mail, Search, Shield, UserRoundPlus, Users, X } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { requireAdmin } from "@/lib/current-user";
 import { query } from "@/lib/db";
@@ -56,12 +56,12 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
       ORDER BY u."createdAt" DESC, u."lastName", u."firstName"
       LIMIT $5 OFFSET $6`, [...filterValues, pageSize, offset]),
     query<{ count: string }>(`SELECT count(*)::text AS count FROM "User" u WHERE ${where}`, filterValues),
-    query<{ total: string; active: string; disabled: string; admins: string }>(`SELECT count(*)::text AS total, count(*) FILTER (WHERE "accessEnabled")::text AS active, count(*) FILTER (WHERE NOT "accessEnabled")::text AS disabled, count(*) FILTER (WHERE role = 'ADMIN')::text AS admins FROM "User"`),
+    query<{ total: string; active: string; disabled: string; admins: string; setup: string }>(`SELECT count(*)::text AS total, count(*) FILTER (WHERE "accessEnabled")::text AS active, count(*) FILTER (WHERE NOT "accessEnabled")::text AS disabled, count(*) FILTER (WHERE role = 'ADMIN')::text AS admins, count(*) FILTER (WHERE "accessEnabled" AND "passwordSetAt" IS NULL)::text AS setup FROM "User"`),
     query<ClubRow>(`SELECT id, name FROM "Club" ORDER BY name`)
   ]);
   const total = Number(count.rows[0]?.count ?? 0);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const selected = users.rows.find((user) => user.id === params.user) ?? users.rows[0] ?? null;
+  const selected = params.user === "none" ? null : users.rows.find((user) => user.id === params.user) ?? users.rows[0] ?? null;
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + users.rows.length, total);
 
@@ -91,14 +91,15 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
 
     {(params.error || params.updated || params.created) && <p role={params.error ? "alert" : "status"} className={`mb-4 rounded-xl border p-3 text-sm font-semibold ${params.error ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{params.error ? errors[params.error] ?? "La demande n’a pas pu être traitée." : "Les informations du compte ont été mises à jour."}</p>}
 
-    <section aria-label="Résumé des comptes" className="mb-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+    <section aria-label="Résumé des comptes" className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <SummaryCard icon={Users} label="Comptes" value={stats.rows[0]?.total ?? "0"} tone="blue" />
       <SummaryCard icon={Check} label="Actifs" value={stats.rows[0]?.active ?? "0"} tone="green" />
       <SummaryCard icon={X} label="Désactivés" value={stats.rows[0]?.disabled ?? "0"} tone="amber" />
+      <SummaryCard href="/admin/users?status=setup" icon={KeyRound} label="À configurer" value={stats.rows[0]?.setup ?? "0"} tone="amber" />
       <SummaryCard icon={Shield} label="Administrateurs" value={stats.rows[0]?.admins ?? "0"} tone="violet" />
     </section>
 
-    <div className="grid items-start gap-3 2xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)]">
+    <div className={`grid items-start gap-3 ${selected ? "2xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)]" : "grid-cols-1"}`}>
       <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Liste des utilisateurs">
         <form method="get" action="/admin/users" className="grid gap-2 border-b border-slate-100 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.5fr)_repeat(3,minmax(120px,1fr))_auto]">
           <label className="relative block"><span className="sr-only">Rechercher un utilisateur</span><Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type="search" name="q" defaultValue={search} placeholder="Nom ou courriel…" className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none placeholder:text-slate-400 focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100" /></label>
@@ -112,7 +113,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <div className="overflow-x-auto"><table className="w-full min-w-[690px] text-left text-xs"><thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-600"><tr><th className="w-10 px-3 py-3"><span className="sr-only">Sélection</span></th><th className="px-2 py-3">Utilisateur</th><th className="px-2 py-3">Rôle</th><th className="px-2 py-3">Club</th><th className="px-2 py-3">Statut</th><th className="px-2 py-3">Dernière activité</th></tr></thead><tbody>{users.rows.map((user) => {
           const isSelected = selected?.id === user.id;
           return <tr key={user.id} className={`border-t border-slate-100 transition-colors ${isSelected ? "bg-sky-50" : "hover:bg-slate-50/70"}`}>
-            <td className="px-3 py-2.5"><Link href={href({ user: user.id })} aria-label={`Afficher ${user.firstName} ${user.lastName}`} aria-current={isSelected ? "true" : undefined} className={`grid h-4 w-4 place-items-center rounded border ${isSelected ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 bg-white"}`}>{isSelected && <Check className="h-3 w-3" />}</Link></td>
+            <td className="px-3 py-2.5"><Link href={href({ user: isSelected ? "none" : user.id })} aria-label={`${isSelected ? "Désélectionner" : "Sélectionner"} ${user.firstName} ${user.lastName}`} aria-current={isSelected ? "true" : undefined} className={`grid h-4 w-4 place-items-center rounded border ${isSelected ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 bg-white"}`}>{isSelected && <Check className="h-3 w-3" />}</Link></td>
             <td className="px-2 py-2.5"><Link href={href({ user: user.id })} className="flex min-w-48 items-center gap-2.5 rounded focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><Avatar user={user} /><span className="min-w-0"><span className="block truncate font-bold text-slate-800">{user.firstName} {user.lastName}</span><span className="block max-w-48 truncate text-[10px] text-slate-500">{user.email}</span></span></Link></td>
             <td className="px-2 py-2.5"><RoleBadge role={user.role} /></td><td className="max-w-32 truncate px-2 py-2.5 text-slate-600">{user.clubName ?? "Aucun club"}</td>
             <td className="px-2 py-2.5"><StatusBadge user={user} /></td><td className="whitespace-nowrap px-2 py-2.5 text-slate-500">{user.latestActivity ? formatMontrealDate(user.latestActivity, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</td>
@@ -124,9 +125,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-500"><p>{from}–{to} sur {total.toLocaleString("fr-CA")} utilisateurs</p><nav aria-label="Pagination" className="flex items-center gap-1"><Link href={href({ page: Math.max(1, page - 1) })} aria-label="Page précédente" aria-disabled={page <= 1} tabIndex={page <= 1 ? -1 : undefined} className={`grid h-8 w-8 place-items-center rounded-lg border border-slate-200 ${page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-slate-50"}`}><ArrowLeft className="h-3.5 w-3.5" /></Link><span aria-current="page" className="grid h-8 min-w-8 place-items-center rounded-lg bg-blue-600 px-2 font-bold text-white">{page} / {pageCount}</span><Link href={href({ page: Math.min(pageCount, page + 1) })} aria-label="Page suivante" aria-disabled={page >= pageCount} tabIndex={page >= pageCount ? -1 : undefined} className={`grid h-8 w-8 place-items-center rounded-lg border border-slate-200 ${page >= pageCount ? "pointer-events-none opacity-40" : "hover:bg-slate-50"}`}><ArrowRight className="h-3.5 w-3.5" /></Link></nav></footer>
       </section>
 
-      <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Détails de l’utilisateur sélectionné">
-        {selected ? <>
-          <div className="relative border-b border-slate-100 p-5"><Link href={href({ user: null })} aria-label="Fermer les détails" className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><X className="h-4 w-4" /></Link><div className="flex items-center gap-3 pr-7"><Avatar user={selected} large /><div className="min-w-0"><h2 className="truncate font-black">{selected.firstName} {selected.lastName}</h2><p className="mt-1 truncate text-xs text-slate-500">{selected.email}</p></div></div><div className="mt-3 flex flex-wrap items-center gap-2"><StatusBadge user={selected} /><RoleBadge role={selected.role} /></div><p className="mt-2 text-[11px] text-slate-500">{selected.latestActivity ? `Dernière activité : ${formatMontrealDate(selected.latestActivity, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "Aucune activité enregistrée"}</p></div>
+      {selected && <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Détails de l’utilisateur sélectionné">
+          <div className="relative border-b border-slate-100 p-5"><Link href={href({ user: "none" })} aria-label="Fermer les détails" className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><X className="h-4 w-4" /></Link><div className="flex items-center gap-3 pr-7"><Avatar user={selected} large /><div className="min-w-0"><h2 className="truncate font-black">{selected.firstName} {selected.lastName}</h2><p className="mt-1 truncate text-xs text-slate-500">{selected.email}</p></div></div><div className="mt-3 flex flex-wrap items-center gap-2"><StatusBadge user={selected} /><RoleBadge role={selected.role} /></div><p className="mt-2 text-[11px] text-slate-500">{selected.latestActivity ? `Dernière activité : ${formatMontrealDate(selected.latestActivity, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "Aucune activité enregistrée"}</p></div>
           <div className="space-y-5 p-5">
             <section><h3 className="text-xs font-black uppercase tracking-wide text-slate-500">Informations</h3><div className="mt-2 space-y-2 rounded-xl border border-slate-100 p-3 text-xs"><p className="flex items-center gap-2 text-slate-700"><Mail className="h-4 w-4 shrink-0 text-slate-400" /><span className="break-all">{selected.email}</span></p><p className="flex items-center gap-2 text-slate-600"><CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />Compte créé le {formatMontrealDate(selected.createdAt, { day: "numeric", month: "long", year: "numeric" })}</p><p className="flex items-center gap-2 text-slate-600"><Shield className="h-4 w-4 shrink-0 text-slate-400" />{selected.passwordSetAt ? "Mot de passe configuré" : "Mot de passe à configurer"}</p></div></section>
             <section><h3 className="text-xs font-black uppercase tracking-wide text-slate-700">Club d’affiliation</h3><div className="mt-2 flex items-center gap-3 rounded-xl border border-slate-200 p-3"><span className="grid h-9 w-9 place-items-center rounded-lg bg-blue-50 text-blue-700"><Building2 className="h-4 w-4" /></span><span className="min-w-0"><span className="block truncate text-sm font-bold">{selected.clubName ?? "Aucun club"}</span><span className="block text-[11px] text-slate-500">{selected.role === "COACH" ? "Club du coach" : "Club associé au compte"}</span></span></div></section>
@@ -137,15 +137,15 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
             </div>}
             {selected.role !== "COACH" && <p className="border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500">Les changements de rôle ou de statut de {roleLabels[selected.role].toLowerCase()} ne sont pas disponibles ici.</p>}
           </div>
-        </> : <div className="p-6 text-center text-sm text-slate-500"><CircleUserRound className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 font-semibold">Sélectionnez un utilisateur</p></div>}
-      </aside>
+      </aside>}
     </div>
   </AdminShell>;
 }
 
-function SummaryCard({ icon: Icon, label, value, tone }: { icon: typeof Users; label: string; value: string; tone: "blue" | "green" | "amber" | "violet" }) {
+function SummaryCard({ href, icon: Icon, label, value, tone }: { href?: string; icon: typeof Users; label: string; value: string; tone: "blue" | "green" | "amber" | "violet" }) {
   const tones = { blue: "bg-blue-100 text-blue-700", green: "bg-emerald-100 text-emerald-700", amber: "bg-amber-100 text-amber-700", violet: "bg-violet-100 text-violet-700" };
-  return <div className="flex min-h-[84px] items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tones[tone]}`}><Icon className="h-5 w-5" /></span><div className="min-w-0"><p className="text-[11px] font-semibold text-slate-600">{label}</p><p className="text-xl font-black tabular-nums text-slate-900">{Number(value).toLocaleString("fr-CA")}</p></div></div>;
+  const content = <><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tones[tone]}`}><Icon className="h-5 w-5" /></span><span className="min-w-0"><span className="block text-[11px] font-semibold text-slate-600">{label}</span><span className="block text-xl font-black tabular-nums text-slate-900">{Number(value).toLocaleString("fr-CA")}</span></span></>;
+  return href ? <Link href={href} className="flex min-h-[84px] items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm transition hover:border-amber-300 hover:shadow-md focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{content}</Link> : <div className="flex min-h-[84px] items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm">{content}</div>;
 }
 
 function Avatar({ user, large = false }: { user: Pick<UserRow, "firstName" | "lastName" | "role">; large?: boolean }) {
