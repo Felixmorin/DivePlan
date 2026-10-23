@@ -22,6 +22,7 @@ Le produit est actuellement conçu pour des **pilotes accompagnés avec des club
 
 - Espace `/admin` pour créer des accès coach, les associer à un club et activer ou désactiver leur connexion.
 - Monitoring global des agrégats existants de transfert, Web Vitals, résultats PostgreSQL et événements d’authentification.
+- Console `/admin/agents` avec l’agent Observabilité DivePlan et des rapports construits depuis les agrégats disponibles. Voir [docs/ai-agents.md](docs/ai-agents.md) pour appliquer la migration, configurer Cron et connaître ses limites.
 - Le compteur des réponses 304 du polling coach n’est pas encore collecté; l’observabilité l’indique comme indisponible.
 
 ### Athlètes
@@ -184,6 +185,7 @@ npm run db:seed
 
 - `POST /api/athlete/session-progress` : enregistre la progression de l’athlète connecté pour une séance qui lui est assignée.
 - `GET /api/cron/complete-sessions` : clôture les séances échues; exige `Authorization: Bearer <CRON_SECRET>`.
+- `GET /api/cron/agent-runs` : traite la file d’exécutions des agents; exige `Authorization: Bearer <CRON_SECRET>`.
 - `/api/auth/[...nextauth]` : routes d’authentification Auth.js.
 
 ## Modèle des séances
@@ -211,7 +213,7 @@ Configurer les variables d’environnement requises dans Vercel, en particulier 
 
 Les migrations SQL doivent être relues et appliquées explicitement dans l’environnement cible, indépendamment du build. Les seeds utilisent `DATABASE_URL` uniquement lorsqu’ils sont lancés explicitement.
 
-`vercel.json` programme l’appel quotidien de `/api/cron/complete-sessions`. La route répond avec une erreur si `CRON_SECRET` est absent ou si l’en-tête Bearer ne correspond pas.
+`vercel.json` programme les appels quotidiens de `/api/cron/complete-sessions` et `/api/cron/agent-runs`. Ces routes répondent avec une erreur si `CRON_SECRET` est absent ou si l’en-tête Bearer ne correspond pas. Sur Vercel Hobby, un cron plus fréquent qu’une fois par jour échoue au déploiement; voir [docs/ai-agents.md](docs/ai-agents.md) pour les conséquences sur le délai des agents.
 
 ## Préparation commerciale
 

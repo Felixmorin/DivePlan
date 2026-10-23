@@ -93,6 +93,35 @@ model Club {
   performanceTelemetry PerformanceTelemetryHour[]
 }
 
+model AiAgent {
+  id        String        @id
+  name      String
+  mission   String
+  enabled   Boolean       @default(true)
+  triggers  Json           @default("{\"onDemand\":{\"enabled\":true},\"schedule\":{\"enabled\":false,\"cron\":\"0 9 * * 1\"},\"afterDeploy\":{\"enabled\":false},\"incident\":{\"enabled\":false}}")
+  createdAt DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime      @default(now()) @db.Timestamptz(6)
+  runs      AiAgentRun[]
+}
+
+model AiAgentRun {
+  id          String   @id
+  agentId     String
+  trigger     String
+  status      String   @default("pending")
+  startedAt   DateTime? @db.Timestamptz(6)
+  finishedAt  DateTime? @db.Timestamptz(6)
+  result      Json?
+  error       String?
+  createdById String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  agent       AiAgent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([agentId, createdAt(sort: Desc)])
+}
+
 model TransferTelemetryHour {
   clubId        String
   hour          DateTime @db.Timestamptz(6)
@@ -150,6 +179,7 @@ model User {
   athlete       Athlete?
   coach         Coach?
   events        AppEvent[]
+  agentRuns     AiAgentRun[]
   pushSubscriptions PushSubscription[]
   pushDeliveries PushDelivery[]
   sessionUpdateDeliveries SessionUpdatePushDelivery[]
