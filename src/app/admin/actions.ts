@@ -19,13 +19,14 @@ const coachSchema = z.object({
 
 export async function createCoachAccount(formData: FormData) {
   const admin = await requireAdmin();
-  const parsed = coachSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) redirect("/admin/coaches?error=invalid");
+  const returnTo = formData.get("returnTo") === "users" ? "users" : "coaches";
+  const parsed = coachSchema.extend({ returnTo: z.enum(["coaches", "users"]).optional() }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) redirect(adminFormErrorPath(returnTo, "invalid"));
   const { firstName, lastName, email, clubId, temporaryPassword } = parsed.data;
   const club = await query<{ id: string }>(`SELECT id FROM "Club" WHERE id = $1`, [clubId]);
-  if (!club.rows[0]) redirect("/admin/coaches?error=club");
+  if (!club.rows[0]) redirect(adminFormErrorPath(returnTo, "club"));
   const existing = await query<{ id: string }>(`SELECT id FROM "User" WHERE lower(email) = $1`, [email]);
-  if (existing.rows[0]) redirect("/admin/coaches?error=exists");
+  if (existing.rows[0]) redirect(adminFormErrorPath(returnTo, "exists"));
   const passwordHash = await hashPassword(temporaryPassword);
   const userId = randomUUID();
   const coachId = randomUUID();
@@ -39,7 +40,8 @@ export async function createCoachAccount(formData: FormData) {
   });
   await trackEvent({ type: "admin.coach.created", message: "Accès coach créé", userId: admin.id, clubId, metadata: { coachUserId: userId } });
   revalidatePath("/admin/coaches");
-  redirect("/admin/coaches?created=1");
+  revalidatePath("/admin/users");
+  redirect(adminReturnPath(returnTo, userId, "created=1"));
 }
 
 export async function setCoachAccess(formData: FormData) {
@@ -89,4 +91,8 @@ export async function reassignCoachClub(formData: FormData) {
 
 function adminReturnPath(returnTo: "coaches" | "users" | undefined, userId: string, result: string) {
   return returnTo === "users" ? `/admin/users?user=${encodeURIComponent(userId)}&${result}` : `/admin/coaches?${result}`;
+}
+
+function adminFormErrorPath(returnTo: "coaches" | "users", error: string) {
+  return `/admin/${returnTo === "users" ? "users" : "coaches"}?error=${encodeURIComponent(error)}`;
 }

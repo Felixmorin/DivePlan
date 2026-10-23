@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Building2, CalendarDays, Check, CircleUserRound, Filter, KeyRound, Mail, Search, Shield, UserRoundPlus, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, CalendarDays, Check, CircleUserRound, Filter, KeyRound, Mail, Search, Shield, Users, X } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { CoachInviteDialog } from "@/components/admin/coach-invite-dialog";
 import { requireAdmin } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { formatMontrealDate } from "@/lib/timezone";
@@ -80,16 +81,18 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
 
   const errors: Record<string, string> = {
     invalid: "La demande est invalide. Rechargez la page et réessayez.",
-    "not-found": "Ce compte ou ce club n’existe plus."
+    "not-found": "Ce compte ou ce club n’existe plus.",
+    club: "Le club choisi n’existe plus.",
+    exists: "Un compte utilise déjà ce courriel."
   };
 
   return <AdminShell active="Utilisateurs">
     <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div><h1 className="text-3xl font-black tracking-tight">Utilisateurs</h1><p className="mt-1 text-sm text-slate-500">Gérez les comptes et les accès de DivePlan.</p></div>
-      <Link href="/admin/coaches" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-700 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-cyan-800 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><UserRoundPlus className="h-4 w-4" />Créer un compte coach</Link>
+      <CoachInviteDialog clubs={clubs.rows} returnTo="users" />
     </header>
 
-    {(params.error || params.updated || params.created) && <p role={params.error ? "alert" : "status"} className={`mb-4 rounded-xl border p-3 text-sm font-semibold ${params.error ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{params.error ? errors[params.error] ?? "La demande n’a pas pu être traitée." : "Les informations du compte ont été mises à jour."}</p>}
+    {(params.error || params.updated || params.created) && <p role={params.error ? "alert" : "status"} className={`mb-4 rounded-xl border p-3 text-sm font-semibold ${params.error ? "border-red-200 bg-red-50 text-red-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{params.error ? errors[params.error] ?? "La demande n’a pas pu être traitée." : params.created ? "Compte coach créé. Il devra choisir un nouveau mot de passe à sa première connexion." : "Les informations du compte ont été mises à jour."}</p>}
 
     <section aria-label="Résumé des comptes" className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <SummaryCard icon={Users} label="Comptes" value={stats.rows[0]?.total ?? "0"} tone="blue" />
