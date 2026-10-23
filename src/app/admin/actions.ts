@@ -44,14 +44,14 @@ export async function createCoachAccount(formData: FormData) {
 
 export async function setCoachAccess(formData: FormData) {
   const admin = await requireAdmin();
-  const parsed = z.object({ userId: z.string().min(1), enabled: z.enum(["true", "false"]) }).safeParse(Object.fromEntries(formData));
+  const parsed = z.object({ userId: z.string().min(1), enabled: z.enum(["true", "false"]), returnTo: z.enum(["coaches", "users"]).optional(), returnUser: z.string().optional() }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/admin/coaches?error=invalid");
-  const { userId, enabled } = parsed.data;
+  const { userId, enabled, returnTo, returnUser } = parsed.data;
   const result = await query<{ clubId: string | null }>(
     `UPDATE "User" SET "accessEnabled" = $2 WHERE id = $1 AND role = 'COACH' RETURNING "clubId"`,
     [userId, enabled === "true"]
   );
-  if (!result.rows[0]) redirect("/admin/coaches?error=not-found");
+  if (!result.rows[0]) redirect(adminReturnPath(returnTo, returnUser ?? userId, "error=not-found"));
   await trackEvent({
     type: enabled === "true" ? "admin.coach.enabled" : "admin.coach.disabled",
     message: `Accès coach ${enabled === "true" ? "activé" : "désactivé"}`,
@@ -60,14 +60,15 @@ export async function setCoachAccess(formData: FormData) {
     metadata: { coachUserId: userId }
   });
   revalidatePath("/admin/coaches");
-  redirect("/admin/coaches?updated=1");
+  revalidatePath("/admin/users");
+  redirect(adminReturnPath(returnTo, returnUser ?? userId, "updated=1"));
 }
 
 export async function reassignCoachClub(formData: FormData) {
   const admin = await requireAdmin();
-  const parsed = z.object({ userId: z.string().min(1), clubId: z.string().min(1) }).safeParse(Object.fromEntries(formData));
+  const parsed = z.object({ userId: z.string().min(1), clubId: z.string().min(1), returnTo: z.enum(["coaches", "users"]).optional(), returnUser: z.string().optional() }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) redirect("/admin/coaches?error=invalid");
-  const { userId, clubId } = parsed.data;
+  const { userId, clubId, returnTo, returnUser } = parsed.data;
   const result = await withTransaction(async (client) => {
     const club = await client.query(`SELECT id FROM "Club" WHERE id = $1`, [clubId]);
     if (!club.rowCount) return false;
@@ -79,8 +80,13 @@ export async function reassignCoachClub(formData: FormData) {
     await client.query(`UPDATE "Coach" SET "clubId" = $2 WHERE "userId" = $1`, [userId, clubId]);
     return true;
   });
-  if (!result) redirect("/admin/coaches?error=not-found");
+  if (!result) redirect(adminReturnPath(returnTo, returnUser ?? userId, "error=not-found"));
   await trackEvent({ type: "admin.coach.club_changed", message: "Club du coach modifié", userId: admin.id, clubId, metadata: { coachUserId: userId } });
   revalidatePath("/admin/coaches");
-  redirect("/admin/coaches?updated=1");
+  revalidatePath("/admin/users");
+  redirect(adminReturnPath(returnTo, returnUser ?? userId, "updated=1"));
+}
+
+function adminReturnPath(returnTo: "coaches" | "users" | undefined, userId: string, result: string) {
+  return returnTo === "users" ? `/admin/users?user=${encodeURIComponent(userId)}&${result}` : `/admin/coaches?${result}`;
 }

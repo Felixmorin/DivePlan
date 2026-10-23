@@ -55,7 +55,6 @@ export default async function AdminHomePage() {
       </CardContent></Card>
     </section>
 
-    <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><div className="mb-4 flex items-center justify-between"><div><h2 className="text-lg font-black">Actions rapides</h2><p className="mt-1 text-sm text-slate-500">Accédez directement aux outils de gestion.</p></div><Zap className="h-5 w-5 text-slate-500" /></div><div className="grid gap-3 md:grid-cols-2"><QuickAction href="/admin/coaches" icon={Users} title="Gérer les accès coach" detail="Créer, filtrer ou rétablir un compte coach." /><QuickAction href="/admin/observability" icon={Activity} title="Ouvrir l’observabilité" detail="Explorer les transferts, événements et mesures disponibles." /></div></section>
   </AdminShell>;
 }
 
@@ -63,10 +62,6 @@ function MetricCard({ href, icon: Icon, label, value, detail, tone }: { href?: s
   const tones = { blue: "bg-blue-50 text-blue-700", violet: "bg-violet-50 text-violet-700", green: "bg-emerald-50 text-emerald-700", red: "bg-rose-50 text-rose-700" };
   const content = <><span className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl ${tones[tone]}`}><Icon className="h-6 w-6" /></span><span className="min-w-0"><span className="block text-sm font-bold text-slate-700">{label}</span><span className="mt-1 block text-[30px] font-black leading-9 tracking-tight tabular-nums text-slate-900">{value}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{detail}</span></span>{href && <ArrowRight aria-hidden="true" className="ml-auto h-4 w-4 shrink-0 text-slate-400" />}</>;
   return href ? <Link href={href} className="group flex min-h-[142px] items-start gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-md focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{content}</Link> : <div className="flex min-h-[142px] items-start gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">{content}</div>;
-}
-
-function QuickAction({ href, icon: Icon, title, detail }: { href: string; icon: typeof Users; title: string; detail: string }) {
-  return <Link href={href} className="group flex min-h-[76px] items-center gap-3 rounded-xl border border-slate-200 p-3 transition hover:border-sky-300 hover:bg-sky-50/40 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-bold">{title}</span><span className="mt-0.5 block text-xs leading-5 text-slate-500">{detail}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-hover:translate-x-1" /></Link>;
 }
 
 function formatDate(date: Date) {
