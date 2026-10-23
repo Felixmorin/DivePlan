@@ -1,13 +1,13 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Activity, LayoutDashboard, LogOut, Users, UserRound } from "lucide-react";
+import { Activity, LayoutDashboard, LogOut, Sparkles, UserRound } from "lucide-react";
 import { signOut } from "@/auth";
 import { requireAdmin } from "@/lib/current-user";
 
 const items = [
   { href: "/admin", label: "Vue d’ensemble", icon: LayoutDashboard },
   { href: "/admin/users", label: "Utilisateurs", icon: UserRound },
-  { href: "/admin/coaches", label: "Accès coach", icon: Users },
+  { href: "/admin/coaches", label: "Fonctionnalités", icon: Sparkles },
   { href: "/admin/observability", label: "Observabilité", icon: Activity }
 ];
 
