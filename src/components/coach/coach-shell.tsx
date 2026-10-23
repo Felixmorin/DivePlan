@@ -8,10 +8,18 @@ import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with
 import { query } from "@/lib/db";
 
 const navFeature: Record<string, string> = {
+  "/coach": "dashboard",
   "/coach/planning": "calendar",
   "/coach/planification": "planning",
   "/coach/sessions": "sessions",
+  "/coach/athletes": "athletes",
   "/coach/milestones": "simulations",
+  "/coach/groups": "groups",
+  "/coach/library": "library",
+  "/coach/templates": "templates",
+  "/coach/observability": "observability",
+  "/coach/monitoring": "monitoring",
+  "/coach/settings": "settings",
 };
 
 const nav = [
@@ -39,7 +47,8 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
   const hasFullAccess = user.email.trim().toLowerCase() === "felix@diveplan.com";
   const availableNav = nav.filter((item) => !navFeature[item.href] || !blockedFeatures.has(navFeature[item.href]));
   const visibleNav = hasFullAccess ? availableNav : availableNav.filter((item) => ["/coach", "/coach/planning", "/coach/sessions", "/coach/athletes", "/coach/groups"].includes(item.href));
-  const visibleUtilityNav = hasFullAccess ? utilityNav : [];
+  const availableUtilityNav = utilityNav.filter((item) => !navFeature[item.href] || !blockedFeatures.has(navFeature[item.href]));
+  const visibleUtilityNav = hasFullAccess ? availableUtilityNav : [];
   const clubName = user.club?.name ?? "Performance aquatique";
   const logo = user.club?.logo?.trim();
 

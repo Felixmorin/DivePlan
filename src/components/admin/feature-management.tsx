@@ -2,15 +2,22 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, BarChart3, CalendarDays, Check, FileText, Info, List, Megaphone, Send, Users, X } from "lucide-react";
+import { Activity, Award, BarChart3, CalendarDays, Check, Dumbbell, FileText, Info, LayoutDashboard, Library, List, Megaphone, Send, Settings, Users, X } from "lucide-react";
 import { saveCoachFeatureAudience } from "@/app/admin/actions";
 
 const initialFeatures = [
+  { id: "dashboard", name: "Dashboard", description: "Vue d’ensemble de l’espace coach.", status: "Opérationnelle", enabled: true, icon: LayoutDashboard },
   { id: "calendar", name: "Calendrier", description: "Gestion des entraînements et événements.", status: "Opérationnelle", enabled: true, icon: CalendarDays },
+  { id: "planning", name: "Planification", description: "Planification annuelle et périodisation.", status: "Dégradée", enabled: true, icon: CalendarDays },
   { id: "sessions", name: "Séances", description: "Création et suivi des séances.", status: "Opérationnelle", enabled: true, icon: List },
-  { id: "simulations", name: "Simulations de compétition", description: "Planification et analyse des simulations.", status: "Opérationnelle", enabled: true, icon: BarChart3 },
-  { id: "evaluations", name: "Évaluations", description: "Suivi des progrès et des évaluations.", status: "Désactivée", enabled: false, icon: FileText },
-  { id: "planning", name: "Planification annuelle", description: "Planification macro et périodisation.", status: "Dégradée", enabled: false, icon: CalendarDays },
+  { id: "athletes", name: "Athlètes", description: "Profils, progression et suivi des athlètes.", status: "Opérationnelle", enabled: true, icon: Users },
+  { id: "simulations", name: "Milestones", description: "Suivi des jalons et objectifs du club.", status: "Opérationnelle", enabled: true, icon: Award },
+  { id: "groups", name: "Groupes", description: "Gestion des groupes d’entraînement.", status: "Opérationnelle", enabled: true, icon: Dumbbell },
+  { id: "library", name: "Bibliothèque", description: "Ressources et exercices pour les coachs.", status: "Opérationnelle", enabled: true, icon: Library },
+  { id: "templates", name: "Templates", description: "Modèles de séances.", status: "Opérationnelle", enabled: true, icon: FileText },
+  { id: "observability", name: "Observabilité", description: "Outils de suivi technique.", status: "Opérationnelle", enabled: true, icon: Activity },
+  { id: "monitoring", name: "Monitoring", description: "Suivi des transferts et de l’activité.", status: "Opérationnelle", enabled: true, icon: BarChart3 },
+  { id: "settings", name: "Réglages", description: "Préférences et configuration du compte.", status: "Opérationnelle", enabled: true, icon: Settings },
 ];
 
 export function FeatureManagement({ coaches, excluded }: { coaches: { id: string; name: string }[]; excluded: Record<string, string[]> }) {

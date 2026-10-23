@@ -8,6 +8,6 @@ export async function FeatureAccessGate({ featureId, children }: { featureId: st
     `SELECT enabled FROM "CoachFeatureAccess" WHERE "userId" = $1 AND "featureId" = $2`,
     [user.id, featureId]
   );
-  if (access.rows[0]?.enabled === false) redirect("/coach?feature=unavailable");
+  if (access.rows[0]?.enabled === false) redirect("/coach/access-denied");
   return children;
 }

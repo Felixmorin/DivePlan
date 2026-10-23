@@ -19,7 +19,7 @@ const coachSchema = z.object({
 
 export async function saveCoachFeatureAudience(featureId: string, coachIds: string[]) {
   await requireAdmin();
-  const validFeatures = ["calendar", "sessions", "simulations", "evaluations", "planning"];
+  const validFeatures = ["dashboard", "calendar", "planning", "sessions", "athletes", "simulations", "groups", "library", "templates", "observability", "monitoring", "settings"];
   if (!validFeatures.includes(featureId) || coachIds.length > 500 || coachIds.some((id) => typeof id !== "string" || id.length > 100)) {
     throw new Error("Audience de fonctionnalité invalide.");
   }

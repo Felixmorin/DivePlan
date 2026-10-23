@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, CalendarDays, CalendarPlus, Check, ChevronRight, Clock3, ListChecks, Plus, Printer, Timer, Trophy, Users } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
@@ -36,6 +37,8 @@ type AvatarAthlete = { id: string; firstName: string; lastName: string; avatar?:
 
 export default async function CoachDashboard() {
   const { user, clubId } = await requireCoach();
+  const dashboardAccess = await query<{ enabled: boolean }>(`SELECT enabled FROM "CoachFeatureAccess" WHERE "userId" = $1 AND "featureId" = 'dashboard'`, [user.id]);
+  if (dashboardAccess.rows[0]?.enabled === false) redirect("/coach/access-denied");
 
   if (clubId === "dev-club") {
     return <DemoCoachDashboard userName={`${user.firstName} ${user.lastName}`} />;
