@@ -42,10 +42,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const lookupEmail = identifier === "coach@diveplan.local" ? "felix@diveplan.local" : identifier;
-        const fields = `id, email, "firstName", "lastName", role, "clubId", "passwordHash", "passwordSetAt"`;
+        const fields = `id, email, "firstName", "lastName", role, "clubId", "passwordHash", "passwordSetAt", "accessEnabled"`;
         const primary = await query<{
           id: string; email: string; firstName: string; lastName: string; role: UserRole;
-          clubId: string | null; passwordHash: string | null; passwordSetAt: Date | null;
+          clubId: string | null; passwordHash: string | null; passwordSetAt: Date | null; accessEnabled: boolean;
         }>(`SELECT ${fields} FROM "User" WHERE email = $1 OR username = $1 LIMIT 1`, [identifier]);
         let user = primary.rows[0] ?? null;
 
@@ -59,6 +59,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!user) {
           return null;
         }
+
+        if (!user.accessEnabled) return null;
 
         const passwordOk = await verifyPassword(password, user.passwordHash);
 

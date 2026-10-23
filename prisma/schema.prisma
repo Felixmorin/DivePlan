@@ -142,6 +142,7 @@ model User {
   role          UserRole
   passwordHash  String?
   passwordSetAt DateTime?
+  accessEnabled Boolean    @default(true)
   avatar        String?
   clubId        String?
   createdAt     DateTime   @default(now())

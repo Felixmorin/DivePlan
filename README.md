@@ -18,6 +18,12 @@ Le produit est actuellement conçu pour des **pilotes accompagnés avec des club
 - Import d’athlètes et de groupes par CSV; création de comptes d’athlètes avec identifiant et mot de passe temporaire.
 - Journal d’événements et indicateurs de suivi dans la page de monitoring.
 
+### Administration
+
+- Espace `/admin` pour créer des accès coach, les associer à un club et activer ou désactiver leur connexion.
+- Monitoring global des agrégats existants de transfert, Web Vitals, résultats PostgreSQL et événements d’authentification.
+- Le compteur des réponses 304 du polling coach n’est pas encore collecté; l’observabilité l’indique comme indisponible.
+
 ### Athlètes
 
 - Accueil avec séance du jour, calendrier et vue hebdomadaire.
@@ -35,7 +41,7 @@ Le produit est actuellement conçu pour des **pilotes accompagnés avec des club
 - L’authentification utilise des identifiants et mots de passe; le SSO n’est pas intégré.
 - La facturation, les abonnements et la gestion commerciale des clubs ne sont pas intégrés.
 - Les sauvegardes managées, le monitoring externe et les procédures de soutien et de confidentialité doivent être définis pour une exploitation commerciale plus large, notamment avec des athlètes mineurs.
-- La page Réglages permet de modifier l’identité du club, le compte du coach connecté, la vue par défaut du planning, le premier jour de la semaine et plusieurs options de la feuille imprimée. La gestion des accès des autres coachs reste à ajouter.
+- La page Réglages permet de modifier l’identité du club, le compte du coach connecté, la vue par défaut du planning, le premier jour de la semaine et plusieurs options de la feuille imprimée.
 
 ## Stack
 
@@ -78,6 +84,8 @@ Le produit est actuellement conçu pour des **pilotes accompagnés avec des club
    ```bash
    npm run db:seed:pilot
    ```
+
+Avant de déployer la gestion admin, appliquer `db/migrations/0006_admin_coach_access.sql` à la base visée. Pour créer le premier compte admin après la migration, configurer `DATABASE_URL`, puis lancer `npm run db:create-admin` avec `ADMIN_EMAIL` et `ADMIN_PASSWORD` (12 caractères minimum); `ADMIN_FIRST_NAME` et `ADMIN_LAST_NAME` sont facultatifs. Le script refuse de remplacer un compte existant ou de créer un deuxième admin. Garder le mot de passe hors du dépôt et des journaux de déploiement.
 
 5. Démarrer l’application :
 

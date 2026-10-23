@@ -41,7 +41,7 @@ export const getCurrentUser = cache(async () => {
   }
 
   type UserRow = {
-    id: string; firstName: string; lastName: string; email: string; username: string | null; role: "ADMIN" | "COACH" | "ATHLETE";
+    id: string; firstName: string; lastName: string; email: string; username: string | null; role: "ADMIN" | "COACH" | "ATHLETE"; accessEnabled: boolean;
     passwordHash: string | null; passwordSetAt: Date | null; avatar: string | null; clubId: string | null; createdAt: Date;
     clubName: string | null; clubLogo: string | null; clubCreatedAt: Date | null;
     coachId: string | null; planningDefaultView: string | null; weekStartsOn: number | null; printShowCoachNotes: boolean | null;
@@ -49,7 +49,7 @@ export const getCurrentUser = cache(async () => {
     athleteId: string | null; athleteGroupId: string | null; birthDate: Date | null; level: string | null; active: boolean | null;
   };
   const result = await query<UserRow>(
-    `SELECT u.id, u."firstName", u."lastName", u.email, u.username, u.role, u."passwordHash", u."passwordSetAt", CASE WHEN u.avatar LIKE 'data:image/%' THEN NULL ELSE u.avatar END AS avatar, u."clubId", u."createdAt",
+    `SELECT u.id, u."firstName", u."lastName", u.email, u.username, u.role, u."accessEnabled", u."passwordHash", u."passwordSetAt", CASE WHEN u.avatar LIKE 'data:image/%' THEN NULL ELSE u.avatar END AS avatar, u."clubId", u."createdAt",
        cl.name AS "clubName", cl.logo AS "clubLogo", cl."createdAt" AS "clubCreatedAt",
        co.id AS "coachId", co."planningDefaultView", co."weekStartsOn", co."printShowCoachNotes", co."printShowAthleteNames", co."printRepetitionChecks",
        a.id AS "athleteId", a."groupId" AS "athleteGroupId", a."birthDate", a.level, a.active
@@ -62,6 +62,7 @@ export const getCurrentUser = cache(async () => {
     [sessionUserId ?? email]
   );
   const row = result.rows[0];
+  if (row && !row.accessEnabled) return null;
   const user = row ? {
     id: row.id, firstName: row.firstName, lastName: row.lastName, email: row.email, username: row.username, role: row.role,
     passwordHash: row.passwordHash, passwordSetAt: row.passwordSetAt, avatar: row.avatar, clubId: row.clubId, createdAt: row.createdAt,
@@ -85,10 +86,14 @@ export async function requireCurrentUser(role?: "ADMIN" | "COACH" | "ATHLETE") {
   }
 
   if (role && user.role !== role) {
-    redirect(user.role === "ATHLETE" ? "/athlete" : "/coach");
+    redirect(user.role === "ATHLETE" ? "/athlete" : user.role === "ADMIN" ? "/admin" : "/coach");
   }
 
   return user;
+}
+
+export async function requireAdmin() {
+  return requireCurrentUser("ADMIN");
 }
 
 export async function requireCoach() {

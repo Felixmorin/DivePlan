@@ -12,5 +12,5 @@ export default async function Home() {
     redirect(session.user.mustChangePassword ? "/change-password" : "/athlete");
   }
 
-  redirect("/coach");
+  redirect(session.user.role === "ADMIN" ? "/admin" : "/coach");
 }

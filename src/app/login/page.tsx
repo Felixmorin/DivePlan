@@ -1,20 +1,23 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { getCurrentUser } from "@/lib/current-user";
 import { Alert } from "@/components/ui/alert";
 import { LoginForm } from "./login-form";
 import styles from "./login.module.css";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ passwordChanged?: string }> }) {
-  const session = await auth();
+  const user = await getCurrentUser();
   const query = await searchParams;
 
-  if (session?.user?.role === "ATHLETE") {
-    redirect(session.user.mustChangePassword ? "/change-password" : "/athlete");
+  if (user?.role === "ATHLETE") {
+    redirect(!user.passwordSetAt ? "/change-password" : "/athlete");
   }
 
-  if (session?.user?.role === "COACH" || session?.user?.role === "ADMIN") {
-    redirect("/coach");
+  if (user?.role === "ADMIN") {
+    redirect("/admin");
+  }
+  if (user?.role === "COACH") {
+    redirect(!user.passwordSetAt ? "/change-password" : "/coach");
   }
 
   return (

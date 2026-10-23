@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "tsx --test src/**/*.test.ts",
     "db:seed:pilot": "tsx db/seed-pilot.ts",
+    "db:create-admin": "tsx scripts/create-admin.ts",
     "db:seed": "tsx db/seed.ts",
     "avatars:migrate": "tsx scripts/migrate-avatars.ts"
   },

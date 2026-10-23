@@ -13,12 +13,15 @@ export default async function ChangePasswordPage() {
     redirect("/login");
   }
 
-  if (user.role !== "ATHLETE") {
-    redirect("/coach");
+  if (user.role === "ADMIN") {
+    redirect("/admin");
+  }
+  if (user.role !== "ATHLETE" && user.role !== "COACH") {
+    redirect("/login");
   }
 
   if (user.passwordSetAt) {
-    redirect("/athlete");
+    redirect(user.role === "ATHLETE" ? "/athlete" : "/coach");
   }
 
   return (
@@ -30,13 +33,13 @@ export default async function ChangePasswordPage() {
             <KeyRound className="h-7 w-7" />
           </div>
           <CardTitle className="text-2xl">Crée ton mot de passe</CardTitle>
-          <p className="text-sm leading-6 text-[var(--color-ink-muted)]">Bienvenue {user.firstName}. Pour sécuriser ton compte, remplace le mot de passe temporaire avant d’accéder à tes entraînements.</p>
+          <p className="text-sm leading-6 text-[var(--color-ink-muted)]">Bienvenue {user.firstName}. Pour sécuriser ton compte, remplace le mot de passe temporaire avant d’accéder à DivePlan.</p>
         </CardHeader>
         <CardContent>
           <ChangePasswordForm />
           <div className="mt-5 flex items-start gap-2 rounded-xl bg-[var(--color-surface-raised)] p-3 text-xs font-bold text-[var(--color-ink-muted)]">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-success)]" />
-            <span>Ton coach ne pourra pas voir le nouveau mot de passe.</span>
+            <span>Ton nouveau mot de passe reste privé.</span>
           </div>
           <div className="mt-4 flex items-center justify-center gap-2 text-xs font-black uppercase text-[var(--color-ink-soft)]">
             <Waves className="h-4 w-4" /> DivePlan

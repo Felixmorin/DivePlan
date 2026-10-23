@@ -19,7 +19,7 @@ const changePasswordSchema = z.object({
 export async function changeTemporaryPassword(_: ChangePasswordState, formData: FormData): Promise<ChangePasswordState> {
   const user = await getCurrentUser();
 
-  if (!user || user.role !== "ATHLETE") {
+  if (!user || !["ATHLETE", "COACH"].includes(user.role)) {
     return { error: "Ta session n'est plus valide. Reconnecte-toi avec ton mot de passe temporaire." };
   }
 
@@ -40,7 +40,7 @@ export async function changeTemporaryPassword(_: ChangePasswordState, formData: 
   await query(`UPDATE "User" SET "passwordHash" = $1, "passwordSetAt" = $2 WHERE id = $3`, [passwordHash, new Date(), user.id]);
 
   await trackEvent({
-    type: "athlete.password_changed",
+    type: `${user.role.toLowerCase()}.password_changed`,
     message: `${user.email} a remplacé son mot de passe temporaire`,
     clubId: user.clubId,
     userId: user.id
