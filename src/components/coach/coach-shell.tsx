@@ -92,11 +92,11 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
                 </Link>
               );
             })}
-            {!hasFullAccess && <SignOutWithPushCleanup action={signOutCoach} className="ml-auto shrink-0">
+            <SignOutWithPushCleanup action={signOutCoach} className="ml-auto shrink-0">
               <button type="submit" aria-label="Déconnexion" title="Déconnexion" className="flex h-8 w-8 items-center justify-center rounded-xl text-white/55 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
                 <LogOut className="h-4 w-4" />
               </button>
-            </SignOutWithPushCleanup>}
+            </SignOutWithPushCleanup>
           </nav>
         </div>
         <div className="mt-4 flex flex-col items-center gap-2 border-t border-white/10 pt-4">
