@@ -44,11 +44,10 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
   const { user } = await requireCoach();
   const blocked = await query<{ featureId: string }>(`SELECT "featureId" FROM "CoachFeatureAccess" WHERE "userId" = $1 AND enabled = FALSE`, [user.id]);
   const blockedFeatures = new Set(blocked.rows.map((row) => row.featureId));
-  const hasFullAccess = user.email.trim().toLowerCase() === "felix@diveplan.com";
   const availableNav = nav.filter((item) => !navFeature[item.href] || !blockedFeatures.has(navFeature[item.href]));
-  const visibleNav = hasFullAccess ? availableNav : availableNav.filter((item) => ["/coach", "/coach/planning", "/coach/sessions", "/coach/athletes", "/coach/groups"].includes(item.href));
   const availableUtilityNav = utilityNav.filter((item) => !navFeature[item.href] || !blockedFeatures.has(navFeature[item.href]));
-  const visibleUtilityNav = hasFullAccess ? availableUtilityNav : [];
+  const visibleNav = availableNav;
+  const visibleUtilityNav = availableUtilityNav;
   const clubName = user.club?.name ?? "Performance aquatique";
   const logo = user.club?.logo?.trim();
 
