@@ -1137,6 +1137,36 @@ a {
 .athlete-app .preference-notifications > section button { color:#087cff; }
 .athlete-app .preference-signout { display:flex; width:100%; min-height:3.8rem; align-items:center; justify-content:center; gap:.7rem; border-radius:1rem; background:#fff0f0; color:#e94343; font-weight:850; }
 
+/* Dark appearance is shared by every athlete route, including the legacy light subpages. */
+.athlete-app[data-athlete-theme="dark"] { color-scheme:dark; background:radial-gradient(circle at 50% -10%,#09263a 0,var(--color-athlete-bg) 34rem); }
+.athlete-app[data-athlete-theme="dark"] :is(.profile-competition-preview,.profile-competition-height,.profile-edit-form,.profile-edit-info-row,.profile-edit-event,.competition-progress-row,.athlete-badge-card,.progress-details-family,.progress-details-dive,.progress-dive-date) { border-color:rgba(99,174,215,.2); background:#101b29; color:#e7eef7; }
+.athlete-app[data-athlete-theme="dark"] :is(.profile-competition-preview,.profile-edit-sports,.profile-edit-note,.competition-progress-summary,.progress-details-period,.progress-details-total,.progress-details-height-group,.progress-details-list,.progress-summary,.calendar-controls > div:first-of-type,.calendar-controls > div:last-child a,.calendar-event-card,.selected-calendar-day) { border-color:rgba(99,174,215,.18); background:#0b1e30; color:#e7eef7; }
+.athlete-app[data-athlete-theme="dark"] :is(.profile-competition-title h2,.profile-competition-copy strong,.profile-edit-header h1,.athlete-preferences-header h1,.profile-edit-sports h2,.profile-edit-info-row strong,.profile-edit-event.is-active,.competition-progress-header h1,.competition-progress-summary strong,.competition-progress-code strong,.competition-progress-detail > span,.athlete-badges-header h1,.athlete-badges-golden h2,.athlete-badge-card h2,.progress-details-header h1,.progress-details-family strong,.progress-details-height-heading b,.progress-details-dive-name strong,.progress-details-dive-count,.progress-dive-date b) { color:#f1f5f9; }
+.athlete-app[data-athlete-theme="dark"] :is(.profile-competition-copy small,.profile-edit-form label,.profile-edit-info-row,.profile-edit-events-label,.profile-edit-event,.profile-edit-note,.competition-progress-summary p,.competition-progress-summary > b,.competition-progress-code span,.athlete-badges-header p,.athlete-badges-golden p,.athlete-badge-card p,.progress-details-family span,.progress-details-dive-name span,.progress-details-empty,.athlete-preferences-header > a,.profile-edit-header > a,.competition-progress-header a,.athlete-badges-header > a) { color:#a8b7ca; }
+.athlete-app[data-athlete-theme="dark"] :is(.profile-edit-header > a,.athlete-preferences-header > a,.competition-progress-header a,.competition-progress-tabs,.athlete-badges-header > a,.profile-edit-form input,.profile-edit-event,.progress-details-family,.progress-dive-date) { background:#172638; }
+.athlete-app[data-athlete-theme="dark"] :is(.profile-edit-form input,.profile-edit-form input[readonly]) { border-color:#30445a; background:#0b1725; color:#f1f5f9; }
+.athlete-app[data-athlete-theme="dark"] .profile-edit-footer { border-color:rgba(99,174,215,.2); background:rgba(7,22,36,.97); }
+.athlete-app[data-athlete-theme="dark"] .competition-progress-row { border-color:rgba(99,174,215,.2); }
+.athlete-app[data-athlete-theme="dark"] :is(.competition-progress-tabs button,.progress-details-family) { color:#c2d0e0; }
+.athlete-app[data-athlete-theme="dark"] .competition-progress-summary { background:#0b1e30; }
+.athlete-app[data-athlete-theme="dark"] .competition-progress-track,
+.athlete-app[data-athlete-theme="dark"] .competition-progress-detail > div,
+.athlete-app[data-athlete-theme="dark"] .progress-details-dive-track { background:#26384b; }
+.athlete-app[data-athlete-theme="dark"] .athlete-badges-golden { border-color:#705b28; background:#302817; }
+.athlete-app[data-athlete-theme="dark"] .athlete-badge-track { background:#26384b; }
+.athlete-app[data-athlete-theme="dark"] .athlete-badges-golden h2 { color:#ffe6a6; }
+.athlete-app[data-athlete-theme="dark"] :is(.profile-competition-height,.competition-progress-row,.athlete-badge-card,.progress-details-dive,.progress-dive-date) { box-shadow:0 8px 24px rgba(0,0,0,.16); }
+.athlete-app[data-athlete-theme="dark"] [class*="bg-white"],
+.athlete-app[data-athlete-theme="dark"] [class*="bg-slate-50"],
+.athlete-app[data-athlete-theme="dark"] [class*="bg-slate-100"] { background-color:#111d2b; }
+.athlete-app[data-athlete-theme="dark"] [class*="text-slate-900"],
+.athlete-app[data-athlete-theme="dark"] [class*="text-slate-800"],
+.athlete-app[data-athlete-theme="dark"] [class*="text-slate-700"],
+.athlete-app[data-athlete-theme="dark"] [class*="text-[#102"],
+.athlete-app[data-athlete-theme="dark"] [class*="text-[#0c1"] { color:#e7eef7; }
+.athlete-app[data-athlete-theme="dark"] [class*="border-slate-200"],
+.athlete-app[data-athlete-theme="dark"] [class*="border-slate-100"] { border-color:rgba(148,163,184,.2); }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

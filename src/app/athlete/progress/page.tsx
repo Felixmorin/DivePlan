@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
-import { Clock3, Dumbbell, Waves } from "lucide-react";
+import Link from "next/link";
+import { Clock3, Dumbbell, History, Waves } from "lucide-react";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { TechniqueDetails } from "@/components/athlete/technique-details";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 import { AthletePageHeader } from "@/components/athlete/page-header";
+import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,12 @@ export default async function AthleteProgressPage() {
       <section className="progress-card technique-card">
         <TechniqueDetails technique={techniqueWithVolumes} skillDives={totals?.skillDives ?? []} detailsHref="/athlete/progress/details" />
       </section>
+
+      <div className="mt-6 flex justify-center pb-4">
+        <Button asChild variant="action" className="w-full sm:w-auto">
+          <Link href="/athlete/week"><History className="h-4 w-4" /> Voir mon historique des entraînements</Link>
+        </Button>
+      </div>
     </AthleteShell>
   );
 }
