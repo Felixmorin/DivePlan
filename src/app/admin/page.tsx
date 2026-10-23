@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Activity, ArrowDownUp, ArrowRight, CalendarDays, Database, RotateCw, ShieldCheck, Users, Waves, Zap } from "lucide-react";
+import { Activity, ArrowDownUp, ArrowRight, CalendarDays, Database, ShieldCheck, Users, Waves, Zap } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { RefreshDashboardButton } from "@/components/admin/refresh-dashboard-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/current-user";
 import { query } from "@/lib/db";
@@ -37,7 +38,7 @@ export default async function AdminHomePage() {
   return <AdminShell active="Vue d’ensemble">
     <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div><div className="flex flex-wrap items-center gap-3"><h1 className="text-3xl font-black tracking-tight sm:text-[34px]">Administration de la plateforme</h1><span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-cyan-800"><Waves className="h-3.5 w-3.5" /> Administrateur</span></div><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Gestion globale de DivePlan, de ses coachs, de ses clubs et de ses services.</p></div>
-      <div className="flex items-center gap-3"><p className="max-w-48 text-right text-xs leading-5 text-slate-500">{transferUpdated ? <>Collecte transfert mise à jour<br /><time dateTime={new Date(transferUpdated).toISOString()} className="font-semibold text-slate-700">{formatDate(transferUpdated)}</time></> : "Aucune collecte de transfert sur 24 h"}</p><Link href="/admin" aria-label="Actualiser le tableau de bord" title="Actualiser" className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-cyan-500 hover:text-cyan-800 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><RotateCw className="h-4 w-4" /></Link></div>
+      <div className="flex items-center gap-3"><p className="max-w-48 text-right text-xs leading-5 text-slate-500">{transferUpdated ? <>Collecte transfert mise à jour<br /><time dateTime={new Date(transferUpdated).toISOString()} className="font-semibold text-slate-700">{formatDate(transferUpdated)}</time></> : "Aucune collecte de transfert sur 24 h"}</p><RefreshDashboardButton /></div>
     </header>
 
     <section aria-label="Indicateurs de la plateforme" className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
