@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import * as crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
@@ -56,6 +57,9 @@ test("live polling pauses when hidden, prevents overlap and refreshes only on pl
   let visibilityHandler = () => {};
   let requests = 0;
   let refreshes = 0;
+  const requestHeaders: Array<Record<string, string> | undefined> = [];
+  const syncStates: unknown[] = [];
+  let progressUpdates = 0;
   let resolveFetch: (response: Response) => void = () => {};
   const document = {
     visibilityState: "visible",
@@ -65,7 +69,10 @@ test("live polling pauses when hidden, prevents overlap and refreshes only on pl
   const progress: LiveProgress = { status: "IN_PROGRESS", planVersion: "v1", absences: [], diveLogs: [], exerciseLogs: [] };
   const { ActiveSessionOverview } = load<{ ActiveSessionOverview: (props: unknown) => unknown }>("src/app/coach/sessions/[id]/active-session-overview.tsx", {
     react: {
-      useState: (initial: unknown) => [typeof initial === "function" ? initial() : initial, () => {}],
+      useState: (initial: unknown) => [typeof initial === "function" ? initial() : initial, (next: unknown) => {
+        if (initial === "synced") syncStates.push(next);
+        if (initial === progress) progressUpdates += 1;
+      }],
       useEffect: (callback: typeof effect) => { effect = callback; }
     },
     "react/jsx-runtime": { jsx: () => null, jsxs: () => null },
@@ -76,8 +83,9 @@ test("live polling pauses when hidden, prevents overlap and refreshes only on pl
     document, AbortController,
     setTimeout: (callback: () => unknown, delay: number) => { timers.set(++timerId, { callback, delay }); return timerId; },
     clearTimeout: (id: number) => { timers.delete(id); },
-    fetch: (_url: string, { signal }: { signal: AbortSignal }) => {
+    fetch: (_url: string, { signal, headers }: { signal: AbortSignal; headers?: Record<string, string> }) => {
       requests += 1;
+      requestHeaders.push(headers);
       return new Promise<Response>((resolve, reject) => {
         resolveFetch = resolve;
         signal.addEventListener("abort", () => reject(new Error("Aborted")), { once: true });
@@ -96,15 +104,37 @@ test("live polling pauses when hidden, prevents overlap and refreshes only on pl
   visibilityHandler();
   visibilityHandler();
   assert.equal(requests, 1, "visibility changes cannot start concurrent fetches");
-  resolveFetch(Response.json(progress));
+  assert.equal(requestHeaders[0], undefined);
+  resolveFetch(Response.json(progress, { headers: { etag: 'W/"progress-v1"' } }));
   await pending;
   assert.equal(refreshes, 0, "unchanged plans do not refresh the full route");
+  assert.equal(progressUpdates, 1);
+  const unchangedPoll = runPollTimer();
+  assert.equal(requestHeaders[1]?.["If-None-Match"], 'W/"progress-v1"');
+  resolveFetch(new Response(null, { status: 304 }));
+  await unchangedPoll;
+  assert.equal(progressUpdates, 1, "304 does not parse JSON or replace the current progress");
+  assert.equal(syncStates.at(-1), "synced");
+  assert.equal(refreshes, 0);
+  const failedPoll = runPollTimer();
+  resolveFetch(new Response(null, { status: 500 }));
+  await failedPoll;
+  assert.equal(syncStates.at(-1), "failed");
+  const retry = [...timers].find(([, timer]) => timer.delay === 30_000)!;
+  assert.ok(retry, "errors back off to 30 seconds");
+  timers.delete(retry[0]);
+  const recovering = retry[1].callback();
+  assert.equal(requestHeaders[3]?.["If-None-Match"], 'W/"progress-v1"');
+  resolveFetch(new Response(null, { status: 304 }));
+  await recovering;
+  assert.equal(syncStates.at(-1), "synced", "304 recovers after a network failure");
+  assert.ok([...timers.values()].some((timer) => timer.delay === 15_000), "success restores normal polling");
   document.visibilityState = "hidden";
   visibilityHandler();
   assert.equal(timers.size, 0, "hidden tabs stop polling");
   document.visibilityState = "visible";
   visibilityHandler();
-  assert.equal(requests, 2, "returning to a tab fetches immediately");
+  assert.equal(requests, 5, "returning to a tab fetches immediately");
   resolveFetch(Response.json({ ...progress, planVersion: "v2" }));
   await new Promise(setImmediate);
   assert.equal(refreshes, 1, "plan edits refresh the route once");
@@ -177,9 +207,9 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
     `);
     const { getLiveSessionProgress } = load<{ getLiveSessionProgress: (id: string, club: string) => Promise<LiveProgress | null> }>("src/lib/live-session-progress.ts", dependencies);
     const { GET } = load<{ GET: (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response> }>("src/app/api/coach/sessions/[id]/progress/route.ts", {
-      ...dependencies, "@/lib/live-session-progress": { getLiveSessionProgress }
+      ...dependencies, "node:crypto": crypto, "@/lib/live-session-progress": { getLiveSessionProgress }
     });
-    const get = () => GET(new Request("https://diveplan.test/api/coach/sessions/session/progress"), { params: Promise.resolve({ id: "session" }) });
+    const get = (etag?: string) => GET(new Request("https://diveplan.test/api/coach/sessions/session/progress", { headers: etag ? { "if-none-match": etag } : {} }), { params: Promise.resolve({ id: "session" }) });
     await t.test("progress-only changes preserve the plan version; edits invalidate it", async () => {
       const initial = (await getLiveSessionProgress("session", "club-a"))!;
       await db.exec(`INSERT INTO "AthleteDiveLog" VALUES ('session', 'athlete', 'dive', 2);
@@ -193,6 +223,53 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
       await db.exec(`UPDATE "PoolDive" SET repetitions=4 WHERE id='dive'`);
       assert.notEqual((await getLiveSessionProgress("session", "club-a"))!.planVersion, initial.planVersion);
       assert.equal(await getLiveSessionProgress("session", "club-b"), null);
+    });
+    await t.test("row insertion order does not change the validator", async () => {
+      await db.exec(`INSERT INTO "AthleteDiveLog" VALUES ('session', 'second', 'dive', 1);
+        INSERT INTO "AthleteExerciseLog" VALUES ('session', 'second', 'exercise', false);
+        INSERT INTO "AthleteSessionAbsence" VALUES ('session', 'second');`);
+      const etag = (await get()).headers.get("etag")!;
+      for (const table of ["AthleteDiveLog", "AthleteExerciseLog", "AthleteSessionAbsence"]) {
+        await db.exec(`CREATE TEMP TABLE reordered AS SELECT * FROM "${table}" ORDER BY "athleteId" DESC;
+          DELETE FROM "${table}"; INSERT INTO "${table}" SELECT * FROM reordered; DROP TABLE reordered;`);
+      }
+      assert.equal((await get(etag)).status, 304);
+    });
+    await t.test("unchanged progress has no body; every displayed change invalidates the validator", async () => {
+      const first = await get();
+      const etag = first.headers.get("etag")!;
+      assert.ok(etag);
+      const unchanged = await get(etag);
+      assert.equal(unchanged.status, 304);
+      assert.equal(await unchanged.text(), "");
+      assert.equal(unchanged.headers.get("cache-control"), "private, no-store");
+      assert.equal(unchanged.headers.get("etag"), etag);
+      assert.equal((await get(`"old", ${etag.replace(/^W\//, "")}`)).status, 304);
+      for (const sql of [
+        `UPDATE "AthleteDiveLog" SET "repetitionsCompleted"=3`,
+        `UPDATE "AthleteExerciseLog" SET completed=false`,
+        `DELETE FROM "AthleteSessionAbsence"`,
+        `UPDATE "PoolDive" SET repetitions=5`,
+        `UPDATE "TrainingSession" SET status='COMPLETED'`
+      ]) {
+        const previous = (await get()).headers.get("etag")!;
+        await db.exec(sql);
+        const changed = await get(previous);
+        assert.equal(changed.status, 200, sql);
+        assert.notEqual(changed.headers.get("etag"), previous);
+        assert.ok((await changed.text()).length > 0);
+      }
+      // Even a current validator cannot bypass revoked access or a different club.
+      const currentEtag = (await get()).headers.get("etag")!;
+      user = null;
+      assert.equal((await get(currentEtag)).status, 401);
+      user = { clubId: "club-a", role: "ATHLETE" };
+      assert.equal((await get(currentEtag)).status, 403);
+      user = { clubId: "club-b", role: "COACH", coach: {} };
+      const forbidden = await get(currentEtag);
+      assert.equal(forbidden.status, 404);
+      assert.equal(forbidden.headers.get("etag"), null);
+      user = { clubId: "club-a", role: "COACH", coach: {} };
     });
     await t.test("endpoint enforces authentication, coach role and club isolation without public caching", async () => {
       user = null;
@@ -210,4 +287,30 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
   } finally {
     await db.close();
   }
+});
+
+test("synthetic unchanged polling benchmark counts JSON body bytes only", async (t) => {
+  const progress: LiveProgress = {
+    status: "IN_PROGRESS", planVersion: "synthetic-plan", absences: [], exerciseLogs: [],
+    diveLogs: Array.from({ length: 1200 }, (_, i) => ({
+      athleteId: `athlete-${Math.floor(i / 20)}`, poolDiveId: `dive-${i % 20}`, repetitionsCompleted: 3
+    }))
+  };
+  const { GET } = load<{ GET: (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response> }>("src/app/api/coach/sessions/[id]/progress/route.ts", {
+    "node:crypto": crypto,
+    "@/lib/current-user": { getCurrentUser: async () => ({ clubId: "synthetic-club", role: "COACH", coach: {} }) },
+    "@/lib/live-session-progress": { getLiveSessionProgress: async () => progress }
+  });
+  let etag: string | null = null;
+  let bytes = 0;
+  const calls = 20;
+  for (let i = 0; i < calls; i += 1) {
+    const response = await GET(new Request("https://diveplan.test/progress", { headers: etag ? { "if-none-match": etag } : {} }), { params: Promise.resolve({ id: "synthetic-session" }) });
+    assert.equal(response.status, i === 0 ? 200 : 304);
+    etag = response.headers.get("etag");
+    bytes += Buffer.byteLength(await response.text());
+  }
+  const before = calls * Buffer.byteLength(JSON.stringify(progress));
+  assert.equal(bytes, before / calls);
+  t.diagnostic(`Synthetic: ${calls} unchanged polls, JSON body bytes ${before} -> ${bytes} (-95%). Excludes headers, compression, SQL, RSC/HTML, JS and platform billing.`);
 });
