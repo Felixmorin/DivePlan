@@ -26,6 +26,7 @@ export function ActiveSessionOverview({ session: plan, initialProgress, athletes
     let timer: ReturnType<typeof setTimeout>;
     let controller: AbortController | null = null;
     let failures = 0;
+    let etag: string | null = null;
     const schedule = () => {
       if (!disposed && !halted && document.visibilityState === "visible") {
         timer = setTimeout(poll, Math.min(60_000, 15_000 * 2 ** failures));
@@ -39,11 +40,18 @@ export function ActiveSessionOverview({ session: plan, initialProgress, athletes
       setSyncStatus("loading");
       try {
         const response = await fetch(`/api/coach/sessions/${encodeURIComponent(plan.id)}/progress`, {
+          headers: etag ? { "If-None-Match": etag } : undefined,
           cache: "no-store", credentials: "same-origin", signal: controller.signal
         });
         if ([401, 403, 404].includes(response.status)) {
           halted = true;
           router.refresh();
+          return;
+        }
+        if (disposed || document.visibilityState !== "visible") return;
+        if (response.status === 304 && etag) {
+          setSyncStatus("synced");
+          failures = 0;
           return;
         }
         if (!response.ok) throw new Error("Progress unavailable");
@@ -54,6 +62,7 @@ export function ActiveSessionOverview({ session: plan, initialProgress, athletes
           router.refresh();
           return;
         }
+        etag = response.headers.get("etag");
         setProgressData(next);
         setSyncStatus("synced");
         failures = 0;
