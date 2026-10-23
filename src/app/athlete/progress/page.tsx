@@ -4,7 +4,7 @@ import { Clock3, Dumbbell, History, Waves } from "lucide-react";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { TechniqueDetails } from "@/components/athlete/technique-details";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
-import { getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
+import { getAthleteCurrentWeekSummary, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
 import { AthletePageHeader } from "@/components/athlete/page-header";
 import { Button } from "@/components/ui/button";
 
@@ -16,8 +16,10 @@ export default async function AthleteProgressPage() {
     redirect("/login");
   }
 
-  const totals = athlete ? await getAthleteProgressTotals(athlete.id) : null;
-  const sessions = totals?.thisWeekSessions ?? 0;
+  const [totals, weekSummary] = await Promise.all([
+    getAthleteProgressTotals(athlete.id),
+    getAthleteCurrentWeekSummary(athlete.id)
+  ]);
   const dives = totals?.thisWeekDiveRepetitions ?? 0;
   const minutes = totals?.thisWeekMinutes ?? 0;
   const technique = [
@@ -36,7 +38,7 @@ export default async function AthleteProgressPage() {
       <section className="progress-card progress-summary">
         <div className="section-heading"><h2>Cette semaine</h2></div>
         <div className="summary-grid">
-          <SummaryMetric icon={<Waves />} value={`${sessions} / 5`} label="séances" progress={Math.min(100, sessions * 20)} tone="blue" />
+          <SummaryMetric icon={<Waves />} value={`${weekSummary.completed} / ${weekSummary.total}`} label="séances" progress={weekSummary.total > 0 ? (weekSummary.completed / weekSummary.total) * 100 : 0} tone="blue" />
           <SummaryMetric icon={<Dumbbell />} value={String(dives)} label="plongeons" progress={Math.min(100, dives / 1.5)} tone="purple" />
           <SummaryMetric icon={<Clock3 />} value={`${Math.floor(minutes / 60)} h ${minutes % 60 ? `${minutes % 60}` : "00"}`} label="d’entraînement" progress={Math.min(100, minutes / 3)} tone="mint" />
         </div>
