@@ -156,12 +156,10 @@ export function CompletedSessionOverview({ session, timings }: { session: Sessio
             const complete = completedBlockIds.has(block.id);
             const allAbsent = block.assignments.length > 0 && participatingAssignments.length === 0;
             return <details className="completed-block" key={block.id} open={allOpen ?? false}><summary><span className="completed-block-marker">▸</span><strong>{block.title}</strong><span className={allAbsent ? "completed-absent-status" : complete ? "completed-mini-status" : "incomplete-mini-status"}>{allAbsent ? "Absent" : complete ? "Terminé" : "Non complété"}</span><b>{actual}/{planned}</b> répétitions <ChevronDown /></summary>
-              <div className="completed-block-body"><div className="completed-table-scroll"><table><thead><tr><th>Athlète</th><th>Plongeons travaillés</th><th>Répétitions (fait / prévu)</th></tr></thead><tbody>{block.assignments.map(({ athlete }) => {
+              <div className="completed-block-body"><div className="completed-table-scroll"><table><thead><tr><th>Plongeons travaillés</th><th><span>Répétitions (fait / prévu)</span><small className="completed-total-repetitions">{actual} / {planned}</small></th></tr></thead><tbody>{block.assignments.map(({ athlete }) => {
                 const absent = athleteMap.get(athlete.id)?.status === "SKIPPED";
                 const athleteDiveLogs = session.diveLogs.filter((log) => log.athleteId === athlete.id && poolIds.has(log.poolDiveId));
-                const athleteExercises = session.exerciseLogs.filter((log) => log.athleteId === athlete.id && block.drylandExercises.some((item) => item.exerciseId === log.exerciseId));
-                const athleteActual = block.type === "POOL" ? athleteDiveLogs.reduce((sum, log) => sum + log.repetitionsCompleted, 0) : block.type === "DRYLAND" ? athleteExercises.filter((log) => log.completed).reduce((sum, log) => { const item = block.drylandExercises.find((exercise) => exercise.exerciseId === log.exerciseId); return sum + (item?.sets ?? 1) * (item?.reps ?? 0); }, 0) : 0;
-                return <tr key={athlete.id} className={absent ? "completed-athlete-absent" : ""}><td><strong>{athlete.user.firstName} {athlete.user.lastName}</strong>{absent && <span className="completed-absent-status">Absent</span>}</td><td>{block.type === "POOL" ? <div className="completed-dive-rows">{(block.poolTraining?.sections ?? []).flatMap((section) => section.dives.map((dive) => {
+                return <tr key={athlete.id} className={absent ? "completed-athlete-absent" : ""}><td colSpan={2}>{block.type === "POOL" ? <div className="completed-dive-rows">{(block.poolTraining?.sections ?? []).flatMap((section) => section.dives.map((dive) => {
                   const contextCount = Math.max(1, countPoolContexts(section.label ?? section.height));
                   const plannedRepetitions = dive.repetitions * contextCount;
                   const completedRepetitions = athleteDiveLogs.filter((log) => log.poolDiveId === dive.id).reduce((sum, log) => sum + log.repetitionsCompleted, 0);
@@ -173,7 +171,7 @@ export function CompletedSessionOverview({ session, timings }: { session: Sessio
                     <span className={`completed-dive-indicator${completion >= 100 ? " is-complete" : ""}`} aria-label={absent ? "Athlète absent" : `${completion}% complété`}>{!absent && completion >= 100 ? <CircleCheck /> : absent ? "—" : `${completion}%`}</span>
                     <span className="completed-dive-progress" aria-hidden="true"><span style={{ width: `${absent ? 0 : completion}%` }} /></span>
                   </div>;
-                }))}</div> : block.type === "DRYLAND" ? block.drylandExercises.map((item) => item.exercise.name).join(", ") : "—"}</td><td>{absent ? "Absent" : `${athleteActual} / ${blockPoolPlan + blockDryPlan}`}</td></tr>;
+                }))}</div> : block.type === "DRYLAND" ? block.drylandExercises.map((item) => item.exercise.name).join(", ") : "—"}</td></tr>;
               })}</tbody></table></div></div>
             </details>;
           })}</div>
