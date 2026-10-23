@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, CircleHelp, LogOut, Shield } from "lucide-react";
+import { ArrowLeft, CircleHelp, LogOut, Shield, Sun } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { NotificationSettings } from "@/components/notifications/notification-settings";
 import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { getCurrentAthlete } from "@/lib/athlete-session";
-import { AppearanceSetting } from "@/components/athlete/appearance-setting";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +21,7 @@ export default async function AthletePreferencesPage() {
     </section>
     <section className="preference-group">
       <h2>Application</h2><div className="preference-rows">
-        <AppearanceSetting />
+        <div className="preference-row"><span className="preference-icon mint"><Sun /></span><strong>Apparence</strong><span className="preference-value">Système</span><span className="preference-chevron">›</span></div>
       </div>
     </section>
     <section className="preference-group">

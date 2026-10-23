@@ -20,9 +20,8 @@ export default async function AthleteTodayPage() {
 
   await startDueTrainingSessions();
 
-  const [readySession, recentCompletions, weekEvents, weekSummary, upcomingEvents] = await Promise.all([
+  const [readySession, weekEvents, weekSummary, upcomingEvents] = await Promise.all([
     getAssignedReadySession(athlete.id),
-    getAthleteRecentCompletions(athlete.id),
     getAthleteWeekPlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId, includeOverlapping: true }),
     getAthleteCurrentWeekSummary(athlete.id),
     getAthletePlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId })
@@ -43,7 +42,6 @@ export default async function AthleteTodayPage() {
   const blockTypes = Array.from(new Set(blocks.map((block) => block.type)));
   const sessionTime = sessionDate ? formatMontrealTime(sessionDate) : "--:--";
   const sessionDateLabel = sessionDate ? formatMontrealDate(sessionDate, { weekday: "short", day: "numeric", month: "short" }) : "À venir";
-  const latestCompletion = recentCompletions[0];
   const nextHighlights = upcomingEvents
     .filter((event) => (event.type === "COMPETITION" || event.type === "CAMP") && !event.cancelledAt && event.startsAt >= new Date())
     .slice(0, 2);
@@ -92,11 +90,9 @@ export default async function AthleteTodayPage() {
         {nextHighlights.length ? nextHighlights.map((event) => <ScheduleRow key={event.id} date={formatMontrealDate(event.startsAt, { weekday: "short", day: "numeric", month: "short" })} icon={event.type === "COMPETITION" ? <Trophy /> : <TentTree />} title={event.title} details={`${formatMontrealDate(event.startsAt, { weekday: "long", day: "numeric", month: "short" })} · ${formatMontrealTime(event.startsAt)}${event.location ? ` · ${event.location}` : ""}`} meta={event.type === "COMPETITION" ? "Compétition" : "Camp"} href={`/athlete/calendar?view=list#event-${event.id}`} />) : <EmptyState className="border-0 bg-transparent p-4" title="Aucun camp ou compétition à venir" description="Les prochains événements publiés par ton club apparaîtront ici." />}
       </section>
 
-      <SectionHeading title="Dernière séance" href="/athlete/week" linkLabel="Voir l’historique" />
+      <SectionHeading title="Workout Maison" />
       <section className="latest-card">
-        {latestCompletion ? (
-          <ScheduleRow date={latestCompletion.completedAt ? formatMontrealDate(new Date(latestCompletion.completedAt), { weekday: "short", day: "numeric", month: "short" }) : "Récente"} title={latestCompletion.title} details={`${latestCompletion.duration} min`} meta={latestCompletion.status === "COMPLETED" ? "Séance complétée" : "Séance en cours"} href="/athlete/week" status={latestCompletion.status === "COMPLETED"} />
-        ) : <EmptyState className="border-0 bg-transparent p-4" title="Aucun historique" description="Tes séances terminées apparaîtront ici." />}
+        <p className="p-5 text-sm font-semibold text-slate-500">À venir</p>
       </section>
 
     </AthleteShell>
