@@ -17,6 +17,29 @@ const coachSchema = z.object({
   temporaryPassword: z.string().min(10).max(128)
 });
 
+export async function saveCoachFeatureAudience(featureId: string, coachIds: string[]) {
+  await requireAdmin();
+  const validFeatures = ["calendar", "sessions", "simulations", "evaluations", "planning"];
+  if (!validFeatures.includes(featureId) || coachIds.length > 500 || coachIds.some((id) => typeof id !== "string" || id.length > 100)) {
+    throw new Error("Audience de fonctionnalité invalide.");
+  }
+  await withTransaction(async (client) => {
+    const selected = coachIds.length
+      ? await client.query(`SELECT id FROM "User" WHERE role = 'COACH' AND id = ANY($1::text[])`, [coachIds])
+      : { rows: [], rowCount: 0 };
+    if (selected.rows.length !== coachIds.length) throw new Error("Un coach sélectionné est introuvable.");
+    await client.query(`DELETE FROM "CoachFeatureAccess" WHERE "featureId" = $1`, [featureId]);
+    if (coachIds.length) {
+      await client.query(
+        `INSERT INTO "CoachFeatureAccess" ("userId", "featureId", "enabled") SELECT id, $1, FALSE FROM "User" WHERE id = ANY($2::text[])`,
+        [featureId, coachIds]
+      );
+    }
+  });
+  revalidatePath("/admin/coaches");
+  revalidatePath("/coach", "layout");
+}
+
 export async function createCoachAccount(formData: FormData) {
   const admin = await requireAdmin();
   const returnTo = formData.get("returnTo") === "users" ? "users" : "coaches";

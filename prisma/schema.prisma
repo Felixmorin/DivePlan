@@ -156,6 +156,18 @@ model User {
   sessionCancellationDeliveries SessionCancellationPushDelivery[]
   planningEventCancellationDeliveries PlanningEventCancellationPushDelivery[]
   planningEventDeliveries PlanningEventPushDelivery[]
+  featureAccess CoachFeatureAccess[]
+}
+
+model CoachFeatureAccess {
+  userId    String
+  featureId String
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @default(now()) @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, featureId])
+  @@index([featureId])
 }
 
 model AppEvent {

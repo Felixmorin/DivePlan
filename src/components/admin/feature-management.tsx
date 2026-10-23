@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Activity, BarChart3, CalendarDays, Check, FileText, Info, List, Megaphone, Send, Users, X } from "lucide-react";
+import { saveCoachFeatureAudience } from "@/app/admin/actions";
 
 const initialFeatures = [
   { id: "calendar", name: "Calendrier", description: "Gestion des entraînements et événements.", status: "Opérationnelle", enabled: true, icon: CalendarDays },
@@ -11,7 +13,7 @@ const initialFeatures = [
   { id: "planning", name: "Planification annuelle", description: "Planification macro et périodisation.", status: "Dégradée", enabled: false, icon: CalendarDays },
 ];
 
-export function FeatureManagement() {
+export function FeatureManagement({ coaches, excluded }: { coaches: { id: string; name: string }[]; excluded: Record<string, string[]> }) {
   const [features, setFeatures] = useState(initialFeatures);
   const [message, setMessage] = useState("Nous travaillons à rétablir la planification annuelle. Vos données sont conservées.");
   const [audience, setAudience] = useState("Tous les coachs");
@@ -43,7 +45,7 @@ export function FeatureManagement() {
         </section>
 
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" aria-label="Liste des fonctionnalités"><div className="hidden grid-cols-[minmax(190px,1.4fr)_150px_minmax(120px,1fr)_90px] gap-3 bg-slate-50 px-4 py-3 text-[11px] font-bold text-slate-600 sm:grid"><span>Fonctionnalité</span><span>Statut</span><span>Audience</span><span className="text-center">Accès global</span></div>
-          {features.map(({ id, name, description, status, enabled, icon: Icon }) => <div key={id} className="grid grid-cols-1 gap-2 border-t border-slate-100 px-4 py-3 sm:grid-cols-[minmax(190px,1.4fr)_150px_minmax(120px,1fr)_90px] sm:items-center sm:gap-3"><div className="flex items-center gap-3"><Icon className="h-5 w-5 shrink-0 text-[#18385c]" /><div><p className="text-xs font-extrabold text-[#0b214d]">{name}</p><p className="text-[10px] text-slate-500">{description}</p></div></div><div><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${status === "Opérationnelle" ? "bg-emerald-100 text-emerald-800" : status === "Dégradée" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}><span className={`h-1.5 w-1.5 rounded-full ${status === "Opérationnelle" ? "bg-emerald-600" : status === "Dégradée" ? "bg-amber-600" : "bg-slate-500"}`} />{status}</span></div><div className="flex items-center gap-2 text-xs text-slate-700"><Users className="h-4 w-4" />Tous les coachs</div><div className="flex items-center justify-between sm:justify-center"><span className="text-[10px] font-medium text-slate-500 sm:hidden">Accès global</span><Toggle enabled={enabled} onToggle={() => toggle(id)} label={enabled ? "Activé" : "Désactivé"} /></div></div>)}
+          {features.map(({ id, name, description, status, enabled, icon: Icon }) => <div key={id} className="grid grid-cols-1 gap-2 border-t border-slate-100 px-4 py-3 sm:grid-cols-[minmax(190px,1.4fr)_150px_minmax(120px,1fr)_90px] sm:items-center sm:gap-3"><div className="flex items-center gap-3"><Icon className="h-5 w-5 shrink-0 text-[#18385c]" /><div><p className="text-xs font-extrabold text-[#0b214d]">{name}</p><p className="text-[10px] text-slate-500">{description}</p></div></div><div><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${status === "Opérationnelle" ? "bg-emerald-100 text-emerald-800" : status === "Dégradée" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}><span className={`h-1.5 w-1.5 rounded-full ${status === "Opérationnelle" ? "bg-emerald-600" : status === "Dégradée" ? "bg-amber-600" : "bg-slate-500"}`} />{status}</span></div><AudiencePicker featureId={id} coaches={coaches} excludedIds={excluded[id] ?? []} /><div className="flex items-center justify-between sm:justify-center"><span className="text-[10px] font-medium text-slate-500 sm:hidden">Accès global</span><Toggle enabled={enabled} onToggle={() => toggle(id)} label={enabled ? "Activé" : "Désactivé"} /></div></div>)}
         </section>
       </div>
 
@@ -56,6 +58,23 @@ export function FeatureManagement() {
         <button type="button" disabled={!message.trim()} onClick={() => setPublished(true)} className="mt-1 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4" />{published ? "Bandeau publié" : "Publier le bandeau"}</button>{published && <p role="status" className="mt-2 flex items-center gap-1 text-xs font-semibold text-emerald-700"><Check className="h-4 w-4" />Annonce prête à être affichée.</p>}
       </aside>
     </div>
+  </div>;
+}
+
+function AudiencePicker({ featureId, coaches, excludedIds }: { featureId: string; coaches: { id: string; name: string }[]; excludedIds: string[] }) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState(excludedIds);
+  const [saving, startTransition] = useTransition();
+  const router = useRouter();
+  const excludedNames = coaches.filter((coach) => selected.includes(coach.id)).map((coach) => coach.name);
+  const save = () => startTransition(async () => {
+    await saveCoachFeatureAudience(featureId, selected);
+    router.refresh();
+  });
+
+  return <div className="relative text-xs">
+    <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="flex min-h-9 max-w-full items-center gap-2 rounded-md px-1 text-left font-medium text-slate-700 hover:bg-slate-50"><Users className="h-4 w-4 shrink-0" /><span className="truncate">{excludedNames.length ? `${coaches.length - excludedNames.length} coach${coaches.length - excludedNames.length === 1 ? "" : "s"} · ${excludedNames.length} retiré${excludedNames.length === 1 ? "" : "s"}` : "Tous les coachs"}</span></button>
+    {open && <div className="absolute left-0 top-10 z-30 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"><p className="mb-2 text-xs font-extrabold text-[#0b214d]">Retirer cette fonctionnalité</p><p className="mb-2 text-[10px] text-slate-500">Cochez les coachs qui ne doivent pas y accéder.</p><div className="max-h-48 space-y-1 overflow-y-auto">{coaches.length ? coaches.map((coach) => <label key={coach.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-slate-50"><input type="checkbox" checked={selected.includes(coach.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, coach.id] : current.filter((id) => id !== coach.id))} className="accent-blue-600" />{coach.name}</label>) : <p className="px-2 py-2 text-xs text-slate-500">Aucun compte coach.</p>}</div><div className="mt-3 flex items-center justify-between border-t pt-2"><button type="button" onClick={() => setSelected([])} className="text-[10px] font-bold text-slate-600">Effacer</button><button type="button" disabled={saving} onClick={save} className="rounded-md bg-blue-600 px-3 py-2 text-[10px] font-bold text-white disabled:opacity-50">{saving ? "Enregistrement…" : "Enregistrer"}</button></div></div>}
   </div>;
 }
 

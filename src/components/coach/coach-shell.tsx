@@ -5,6 +5,14 @@ import { signOutCoach } from "@/app/coach/settings/actions";
 import { requireCoach } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
 import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
+import { query } from "@/lib/db";
+
+const navFeature: Record<string, string> = {
+  "/coach/planning": "calendar",
+  "/coach/planification": "planning",
+  "/coach/sessions": "sessions",
+  "/coach/milestones": "simulations",
+};
 
 const nav = [
   { href: "/coach", label: "Dashboard", icon: LayoutDashboard },
@@ -26,8 +34,11 @@ const utilityNav = [
 
 export async function CoachShell({ children, active }: { children: React.ReactNode; active: string }) {
   const { user } = await requireCoach();
+  const blocked = await query<{ featureId: string }>(`SELECT "featureId" FROM "CoachFeatureAccess" WHERE "userId" = $1 AND enabled = FALSE`, [user.id]);
+  const blockedFeatures = new Set(blocked.rows.map((row) => row.featureId));
   const hasFullAccess = user.email.trim().toLowerCase() === "felix@diveplan.com";
-  const visibleNav = hasFullAccess ? nav : nav.filter((item) => ["/coach", "/coach/planning", "/coach/sessions", "/coach/athletes", "/coach/groups"].includes(item.href));
+  const availableNav = nav.filter((item) => !navFeature[item.href] || !blockedFeatures.has(navFeature[item.href]));
+  const visibleNav = hasFullAccess ? availableNav : availableNav.filter((item) => ["/coach", "/coach/planning", "/coach/sessions", "/coach/athletes", "/coach/groups"].includes(item.href));
   const visibleUtilityNav = hasFullAccess ? utilityNav : [];
   const clubName = user.club?.name ?? "Performance aquatique";
   const logo = user.club?.logo?.trim();
