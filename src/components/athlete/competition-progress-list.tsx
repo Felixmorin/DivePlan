@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, ChevronRight, Waves } from "lucide-react";
+import { ArrowLeft, Check, Waves } from "lucide-react";
 import type { CompetitionDiveItem } from "@/components/athlete/competition-list";
 
 const heights = [
@@ -36,7 +36,7 @@ export function CompetitionProgressList({ dives }: { dives: CompetitionDiveItem[
           <div className="competition-progress-code"><strong>{dive.code}</strong><span>{dive.volume} répétition{dive.volume === 1 ? "" : "s"}</span></div>
           <div className="competition-progress-detail"><span>{done} / {repetitionsTarget}</span><div><i style={{ width: `${done / repetitionsTarget * 100}%` }} /></div></div>
           {done >= repetitionsTarget && <span className="competition-progress-check"><Check /></span>}
-          <ChevronRight className="competition-progress-chevron" />
+          <span className="competition-progress-rating" aria-label={dive.latestConfidence === null || dive.latestConfidence === undefined ? "Aucune évaluation" : `Dernière évaluation : ${dive.latestConfidence} sur 5`}>{dive.latestConfidence ?? "—"}</span>
         </article>;
       })}
       {!currentDives.length && <p className="progress-details-empty">Aucun plongeon dans cette liste.</p>}

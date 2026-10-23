@@ -1050,7 +1050,7 @@ a {
 .athlete-app .competition-progress-track i, .athlete-app .competition-progress-detail > div i { display:block; height:100%; border-radius:inherit; background:#25c9c5; }
 .athlete-app .competition-progress-summary > b { color:#64748b; font-size:.8rem; }
 .athlete-app .competition-progress-rows { display:grid; gap:.5rem; }
-.athlete-app .competition-progress-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) 2.2rem 1rem; min-height:5rem; align-items:center; gap:.55rem; border:1px solid #dce8f3; border-left:5px solid #d9edfc; border-radius:.75rem; background:#fff; padding:.55rem .6rem; }
+.athlete-app .competition-progress-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) 2.2rem 1.5rem; min-height:5rem; align-items:center; gap:.55rem; border:1px solid #dce8f3; border-left:5px solid #d9edfc; border-radius:.75rem; background:#fff; padding:.55rem .6rem; }
 .athlete-app .competition-progress-row.is-complete { border-left-color:#56d8d3; }
 .athlete-app .competition-progress-code { display:flex; min-width:0; flex-direction:column; gap:.12rem; }
 .athlete-app .competition-progress-code strong { overflow:hidden; color:#0c1c4b; font-size:1.25rem; font-weight:850; text-overflow:ellipsis; }
@@ -1059,7 +1059,7 @@ a {
 .athlete-app .competition-progress-detail > div i { background:#459eff; }
 .athlete-app .is-complete .competition-progress-detail > div i { background:#24c9c5; }
 .athlete-app .competition-progress-check { display:grid; width:2rem; height:2rem; place-items:center; border-radius:50%; background:#dcf8f6; color:#08b8b5; }
-.athlete-app .competition-progress-chevron { color:#425675; }
+.athlete-app .competition-progress-rating { color:#102451; font-size:.9rem; font-weight:850; text-align:center; }
 
 .athlete-app .athlete-badges-header { display:flex; align-items:flex-start; gap:.9rem; margin:.1rem 0 1.2rem; }
 .athlete-app .athlete-badges-header > a { display:grid; width:2.7rem; height:2.7rem; flex:none; place-items:center; border-radius:50%; background:#f1f3f6; color:#102451; }
