@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Activity, AlertTriangle, ArrowRight, BarChart3, Bot, CheckCircle2, ChevronDown, Code2, Database, FileText, History, Info, LoaderCircle, Play, Plus, Settings2, Shield, ToggleLeft, ToggleRight, X } from "lucide-react";
-import { cancelQueuedAgentRun, createAgent, enqueueAgentRun, updateAgentEnabled, updateAgentTriggers } from "./actions";
+import { Activity, AlertTriangle, ArrowRight, BarChart3, Bot, CheckCircle2, ChevronDown, ChevronUp, Code2, Database, FileText, History, Info, LoaderCircle, Play, Plus, Settings2, Shield, ToggleLeft, ToggleRight, X } from "lucide-react";
+import { cancelQueuedAgentRun, createAgent, enqueueAgentRun, moveAgent as saveAgentOrder, updateAgentEnabled, updateAgentTriggers } from "./actions";
 
 type TriggerConfig = { onDemand: { enabled: boolean }; schedule: { enabled: boolean; cron: string }; afterDeploy: { enabled: boolean }; incident: { enabled: boolean } };
-export type AgentRow = { id: string; name: string; mission: string; enabled: boolean; triggers: TriggerConfig; createdAt: Date | string; updatedAt: Date | string };
+export type AgentRow = { id: string; name: string; mission: string; enabled: boolean; triggers: TriggerConfig; sortOrder: number; createdAt: Date | string; updatedAt: Date | string };
 export type RunRow = { id: string; agentId: string; trigger: string; status: string; analysisPeriod: "24h" | "7d"; startedAt: Date | string | null; finishedAt: Date | string | null; result: Report | null; error: string | null; createdAt: Date | string };
 type Report = { title: string; period: { label: string; from: string; to: string }; analyzedAt?: string; analyzedCommit?: string; summary?: string; changes?: string; diagrams?: Array<{ title: string; mermaid: string; references?: string }>; sources: Array<{ name: string; period: string; samples: number }>; facts: Array<{ category: string; fact: string; evidence: string }>; findings?: Array<{ kind: string; priority: string; impact: string; effort: string; title: string; location: string; evidence: string; limits: string; recommendation: string }>; assumptions: string[]; recommendations: string[]; missing: string[] };
 
@@ -15,7 +15,7 @@ const triggerNames: Record<string, string> = { on_demand: "À la demande", sched
 export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supabaseStatsConfigured }: { agents: AgentRow[]; runs: RunRow[]; supabaseStatsConfigured: boolean }) {
   const [agents, setAgents] = useState(initialAgents);
   const [runs, setRuns] = useState(initialRuns);
-  const [selectedId, setSelectedId] = useState(initialAgents[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState("");
   const [detailTab, setDetailTab] = useState<"summary" | "history" | "configuration">("summary");
   const [modal, setModal] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -46,6 +46,17 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
     act(() => updateAgentTriggers(selected.id, next), () => setAgents((current) => current.map((agent) => agent.id === selected.id ? { ...agent, triggers: next } : agent)));
   }
 
+  function moveAgent(agentId: string, direction: "up" | "down") {
+    const index = agents.findIndex((agent) => agent.id === agentId);
+    const nextIndex = index + (direction === "up" ? -1 : 1);
+    if (index < 0 || nextIndex < 0 || nextIndex >= agents.length) return;
+    act(() => saveAgentOrder(agentId, direction), () => setAgents((current) => {
+      const reordered = [...current];
+      [reordered[index], reordered[nextIndex]] = [reordered[nextIndex], reordered[index]];
+      return reordered.map((agent, sortOrder) => ({ ...agent, sortOrder }));
+    }));
+  }
+
   return <div className="mx-auto max-w-[1500px]">
     <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div><p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-blue-700">Administration › Automatisation</p><h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Agents IA</h1><p className="mt-1 text-sm text-slate-600">Configurez et surveillez les agents qui analysent DivePlan.</p><a href="/admin/agents/context" className="mt-2 inline-flex text-sm font-bold text-blue-700 hover:underline">Consulter le guide général et les fiches de contexte</a></div>
@@ -63,19 +74,24 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
       {agents.map((agent) => {
         const last = runs.find((run) => run.agentId === agent.id);
         const chosen = selected?.id === agent.id;
-        return <button key={agent.id} onClick={() => { setSelectedId(agent.id); setDetailTab("summary"); }} aria-expanded={chosen} className={`grid w-full grid-cols-1 gap-2 border-b border-slate-100 px-4 py-3 text-left transition last:border-0 hover:bg-blue-50/50 sm:grid-cols-[1fr_auto] lg:grid-cols-[1.15fr_2fr_.65fr_1fr_1fr_.55fr] lg:items-center lg:gap-4 lg:px-5 ${chosen ? "bg-blue-50" : ""}`}>
+        return <div key={agent.id} className={`grid grid-cols-[minmax(0,1fr)_auto] border-b border-slate-100 px-4 py-3 last:border-0 lg:grid-cols-[1.15fr_2fr_.65fr_1fr_1fr_.55fr] lg:gap-4 lg:px-5 ${chosen ? "bg-blue-50" : ""}`}>
+          <button onClick={() => { setSelectedId((current) => current === agent.id ? "" : agent.id); setDetailTab("summary"); }} aria-expanded={chosen} aria-controls="agent-detail" className="col-start-1 row-start-1 grid min-w-0 grid-cols-1 gap-2 text-left transition hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:grid-cols-[1fr_auto] lg:col-span-5 lg:grid-cols-[1.15fr_2fr_.65fr_1fr_1fr] lg:items-center lg:gap-4">
           <span className="flex min-w-0 items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-100 text-blue-800"><Activity className="h-[18px] w-[18px]" /></span><span className="truncate text-sm font-bold text-slate-900">{agent.name}</span></span>
           <span className="line-clamp-2 text-sm text-slate-600">{agent.mission}</span>
           <span><Badge good={agent.enabled}>{agent.enabled ? "Actif" : "En pause"}</Badge></span>
           <span className="text-xs text-slate-600">{last?.startedAt ? dateLabel(last.startedAt) : "Aucune exécution"}</span>
           <span className={`text-sm ${last?.status === "failed" ? "text-rose-700" : "text-sky-700"}`}>{last ? last.status === "completed" ? `${last.result?.findings?.length ?? last.result?.recommendations.length ?? 0} recommandation(s)` : last.status === "failed" ? "Échec · voir détail" : "Exécution en attente" : "Pas encore de résultat"}</span>
-          <span className="hidden lg:block"><span className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 text-xs font-bold text-blue-700">Ouvrir <ArrowRight className="h-4 w-4"/></span></span>
-        </button>;
+          </button>
+          <div className="col-start-2 row-start-1 flex items-center gap-1 lg:col-start-6 lg:justify-end" aria-label={`Ordre de ${agent.name}`}>
+            <button type="button" disabled={pending || agents.findIndex((item) => item.id === agent.id) === 0} onClick={() => moveAgent(agent.id, "up")} aria-label={`Monter ${agent.name}`} title="Monter" className="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-white disabled:cursor-not-allowed disabled:opacity-30"><ChevronUp className="h-4 w-4"/></button>
+            <button type="button" disabled={pending || agents.findIndex((item) => item.id === agent.id) === agents.length - 1} onClick={() => moveAgent(agent.id, "down")} aria-label={`Descendre ${agent.name}`} title="Descendre" className="grid h-8 w-8 place-items-center rounded-md text-slate-600 hover:bg-white disabled:cursor-not-allowed disabled:opacity-30"><ChevronDown className="h-4 w-4"/></button>
+          </div>
+        </div>;
       })}
       {!agents.length && <p className="p-8 text-center text-sm text-slate-500">Aucun agent configuré.</p>}
     </div>
 
-    {selected && <section className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    {selected && <section id="agent-detail" className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:px-5 sm:pt-4">
         <div className="flex min-w-0 items-start gap-3"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-blue-100 text-blue-700"><Activity className="h-6 w-6" /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-black text-slate-950">{selected.name}</h2><Badge good={selected.enabled}>{selected.enabled ? "Actif" : "En pause"}</Badge></div><p className="mt-0.5 max-w-4xl text-sm leading-5 text-slate-600">{selected.mission}</p>{selected.id === "sql-supabase-analyst" && <p className={`mt-1 text-xs font-semibold ${supabaseStatsConfigured ? "text-emerald-700" : "text-amber-700"}`}>Statistiques de requêtes Supabase · {supabaseStatsConfigured ? "Connexion dédiée configurée · accès à valider" : "Configuration requise"}</p>}</div></div>
         <div className="flex flex-wrap items-center gap-2">{selected.id !== "architecture-cartographer" && <><label className="sr-only" htmlFor="analysis-period">Période d’analyse</label><select id="analysis-period" value={analysisPeriod} onChange={(event) => setAnalysisPeriod(event.target.value as "24h" | "7d")} className="min-h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-600"><option value="24h">24 h</option><option value="7d">7 jours</option></select></>}<button disabled={pending || !selected.enabled || !["diveplan-observability", "sql-supabase-analyst", "architecture-cartographer"].includes(selected.id) || !selected.triggers.onDemand.enabled} onClick={runNow} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"><Play className="h-4 w-4" />{selected.id === "architecture-cartographer" ? "Lancer la cartographie" : "Exécuter maintenant"}</button><button aria-label="Configuration de l’agent" onClick={() => setSettingsOpen(true)} className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"><Settings2 className="h-4 w-4"/></button><button disabled={pending} onClick={() => act(() => updateAgentEnabled(selected.id, !selected.enabled), () => setAgents((items) => items.map((agent) => agent.id === selected.id ? { ...agent, enabled: !agent.enabled } : agent)))} aria-label={selected.enabled ? "Mettre en pause" : "Activer"} className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"><ToggleLeft className="h-4 w-4"/></button></div>
@@ -100,7 +116,7 @@ function FindingCard({finding,index}:{finding:NonNullable<Report["findings"]>[nu
   const medium = finding.priority === "medium";
   const colors = high ? "border-amber-400 bg-amber-50/70" : "border-slate-200 bg-white";
   const iconColor = high ? "bg-amber-100 text-amber-700" : medium ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600";
-  return <article className={`grid gap-3 rounded-lg border p-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(175px,.43fr)_160px] sm:items-center sm:p-2.5 ${colors}`}>
+  return <article data-index={index} className={`grid gap-3 rounded-lg border p-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(175px,.43fr)_160px] sm:items-center sm:p-2.5 ${colors}`}>
     <div className="flex min-w-0 items-start gap-3"><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${iconColor}`}>{high?<AlertTriangle className="h-5 w-5"/>:<Info className="h-5 w-5"/>}</span><div className="min-w-0"><span className={`mb-0.5 inline-block text-[10px] font-bold uppercase ${high?"text-amber-700":medium?"text-blue-700":"text-slate-500"}`}>Priorité {high?"haute":medium?"moyenne":"basse"}</span><h4 className="text-[13px] font-extrabold leading-5 text-slate-900">{finding.title}</h4><p className="text-xs leading-4 text-slate-600">{finding.evidence}</p></div></div>
     <div className="border-l border-slate-200 pl-3 text-xs text-slate-700 sm:py-1"><p className="mb-1 flex items-center gap-2 font-semibold"><BarChart3 className="h-4 w-4"/>Impact estimé</p><p>{finding.impact}</p><p className="mt-1 text-slate-500">Effort : {finding.effort}</p></div>
     <button aria-expanded={open} onClick={()=>setOpen(!open)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-blue-300 bg-white px-3 text-xs font-bold text-blue-700 hover:bg-blue-50"><FileText className="h-4 w-4"/>{open?"Masquer les détails":"Voir les détails"}</button>

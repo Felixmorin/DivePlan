@@ -2,7 +2,7 @@
 
 ## Mise en service
 
-Appliquer les migrations `db/migrations/0011_ai_agents.sql`, `db/migrations/0012_sql_supabase_analyst.sql`, `db/migrations/0013_ai_agent_run_cancellation.sql` et `db/migrations/0014_architecture_cartographer.sql` à la base PostgreSQL visée avant de déployer l’application. La migration 0011 crée le registre et la file des exécutions; la migration 0012 ajoute « Analyste SQL & Supabase » et la période enregistrée pour chaque exécution; la migration 0013 permet de retirer une exécution encore en attente; la migration 0014 ajoute « Architecte-cartographe » avec uniquement le déclenchement manuel activé.
+Appliquer les migrations `db/migrations/0011_ai_agents.sql`, `db/migrations/0012_sql_supabase_analyst.sql`, `db/migrations/0013_ai_agent_run_cancellation.sql`, `db/migrations/0014_architecture_cartographer.sql` et `db/migrations/0015_ai_agent_order.sql` à la base PostgreSQL visée avant de déployer l’application. La migration 0011 crée le registre et la file des exécutions; la migration 0012 ajoute « Analyste SQL & Supabase » et la période enregistrée pour chaque exécution; la migration 0013 permet de retirer une exécution encore en attente; la migration 0014 ajoute « Architecte-cartographe » avec uniquement le déclenchement manuel activé; la migration 0015 enregistre l’ordre d’affichage des agents.
 
 ## Architecte-cartographe
 

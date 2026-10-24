@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/current-user";
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 import { trackEvent } from "@/lib/monitoring";
 import { runNextAgentJobs } from "@/lib/agent-worker";
 
@@ -86,12 +86,35 @@ export async function updateAgentEnabled(agentId: string, enabled: boolean) {
   revalidatePath("/admin/agents");
 }
 
+export async function moveAgent(agentId: string, direction: "up" | "down") {
+  const admin = await requireAdmin();
+  const parsed = z.object({ id: z.string().min(1).max(100), direction: z.enum(["up", "down"]) }).safeParse({ id: agentId, direction });
+  if (!parsed.success) throw new Error("Déplacement d’agent invalide.");
+
+  const moved = await withTransaction(async (client) => {
+    const agents = await client.query<{ id: string; name: string }>(`SELECT id,name FROM "AiAgent" ORDER BY "sortOrder","createdAt" FOR UPDATE`);
+    const from = agents.rows.findIndex((agent) => agent.id === parsed.data.id);
+    if (from < 0) throw new Error("Agent introuvable.");
+    const to = from + (parsed.data.direction === "up" ? -1 : 1);
+    if (to < 0 || to >= agents.rows.length) return null;
+    [agents.rows[from], agents.rows[to]] = [agents.rows[to], agents.rows[from]];
+    for (const [index, agent] of agents.rows.entries()) {
+      await client.query(`UPDATE "AiAgent" SET "sortOrder"=$2,"updatedAt"=NOW() WHERE id=$1`, [agent.id, index]);
+    }
+    return agents.rows[from];
+  });
+
+  if (moved) await trackEvent({ type: "admin.agent.order.updated", message: `Ordre modifié : ${moved.name}`, userId: admin.id, metadata: { agentId: moved.id, direction: parsed.data.direction } });
+  revalidatePath("/admin/agents");
+  return moved;
+}
+
 export async function createAgent(input: unknown) {
   const admin = await requireAdmin();
   const parsed = z.object({ name: z.string().trim().min(3).max(100), mission: z.string().trim().min(20).max(1200) }).safeParse(input);
   if (!parsed.success) throw new Error("Le nom ou la mission ne respecte pas les limites.");
   const id = randomUUID();
-  await query(`INSERT INTO "AiAgent" (id,name,mission,triggers) VALUES ($1,$2,$3,$4)`, [id, parsed.data.name, parsed.data.mission, { ...defaultAgentTriggers, onDemand: { enabled: false } }]);
+  await query(`INSERT INTO "AiAgent" (id,name,mission,triggers,"sortOrder") VALUES ($1,$2,$3,$4,(SELECT COALESCE(MAX("sortOrder"),-1)+1 FROM "AiAgent"))`, [id, parsed.data.name, parsed.data.mission, { ...defaultAgentTriggers, onDemand: { enabled: false } }]);
   await trackEvent({ type: "admin.agent.created", message: `Agent créé : ${parsed.data.name}`, userId: admin.id, metadata: { agentId: id } });
   revalidatePath("/admin/agents");
   return { id };

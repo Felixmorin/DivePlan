@@ -216,7 +216,7 @@ Les migrations SQL doivent être relues et appliquées explicitement dans l’en
 
 `vercel.json` programme les appels quotidiens de `/api/cron/complete-sessions` et `/api/cron/agent-runs`. Ces routes répondent avec une erreur si `CRON_SECRET` est absent ou si l’en-tête Bearer ne correspond pas. Sur Vercel Hobby, un cron plus fréquent qu’une fois par jour échoue au déploiement; voir [docs/ai-agents.md](docs/ai-agents.md) pour les conséquences sur le délai des agents.
 
-La console d’agents et les migrations `0011_ai_agents.sql`, `0012_sql_supabase_analyst.sql`, `0013_ai_agent_run_cancellation.sql` et `0014_architecture_cartographer.sql` sont décrites dans [docs/ai-agents.md](docs/ai-agents.md), y compris les limites des statistiques Supabase et les permissions de lecture seule.
+La console d’agents et les migrations `0011_ai_agents.sql` à `0015_ai_agent_order.sql` sont décrites dans [docs/ai-agents.md](docs/ai-agents.md), y compris les limites des statistiques Supabase et les permissions de lecture seule.
 
 ## Préparation commerciale
 

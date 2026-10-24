@@ -98,6 +98,7 @@ model AiAgent {
   name      String
   mission   String
   enabled   Boolean       @default(true)
+  sortOrder Int           @default(0)
   triggers  Json           @default("{\"onDemand\":{\"enabled\":true},\"schedule\":{\"enabled\":false,\"cron\":\"0 9 * * 1\"},\"afterDeploy\":{\"enabled\":false},\"incident\":{\"enabled\":false}}")
   createdAt DateTime      @default(now()) @db.Timestamptz(6)
   updatedAt DateTime      @default(now()) @db.Timestamptz(6)
