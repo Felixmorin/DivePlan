@@ -92,7 +92,7 @@ function Send-CorrectionStatus([string]$Status, [string]$Note, [string]$PullRequ
 try {
   Send-CorrectionStatus "En cours" "Codex local, connecté à ChatGPT, prépare le correctif sur la machine de l’administrateur."
   Write-Host "Codex utilise l’authentification ChatGPT locale. Aucune clé API OpenAI n’est utilisée par ce script."
-  Get-Content -LiteralPath $promptFile -Raw | & codex exec --sandbox workspace-write --ask-for-approval never --output-last-message $answerFile -
+  Get-Content -LiteralPath $promptFile -Raw | & codex exec --sandbox workspace-write --approve-for-me --output-last-message $answerFile -
   if ($LASTEXITCODE -ne 0) { throw "Codex n’a pas terminé correctement. Consulte sa sortie ci-dessus." }
 
   $diffNames = @(& git diff --name-only HEAD)
