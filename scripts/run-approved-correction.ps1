@@ -37,7 +37,26 @@ $changes = (& git status --porcelain)
 if ($LASTEXITCODE -ne 0) { throw "Impossible de lire l’état Git." }
 if ($changes) { throw "Le dépôt a des changements locaux. Committe-les ou range-les avant de lancer le correctif." }
 
-$secureToken = Read-Host "Jeton CORRECTION_RUNNER_TOKEN de DivePlan" -AsSecureString
+$tokenStorePath = Join-Path $env:LOCALAPPDATA "DivePlan\correction-runner-token.dpapi"
+$secureToken = $null
+if (Test-Path -LiteralPath $tokenStorePath) {
+  try {
+    $secureToken = ConvertTo-SecureString (Get-Content -LiteralPath $tokenStorePath -Raw).Trim()
+    Write-Host "Jeton DivePlan chargé depuis le stockage chiffré de ce compte Windows."
+  } catch {
+    Write-Warning "Le jeton local chiffré est illisible. Saisis-le à nouveau."
+  }
+}
+if (-not $secureToken) {
+  $secureToken = Read-Host "Jeton CORRECTION_RUNNER_TOKEN de DivePlan" -AsSecureString
+  $saveToken = Read-Host "Mémoriser ce jeton chiffré pour ce compte Windows ? (o/N)"
+  if (@("o", "oui", "y", "yes") -contains $saveToken.Trim().ToLowerInvariant()) {
+    $tokenStoreDirectory = Split-Path -Parent $tokenStorePath
+    New-Item -ItemType Directory -Path $tokenStoreDirectory -Force | Out-Null
+    ConvertFrom-SecureString $secureToken | Set-Content -LiteralPath $tokenStorePath -NoNewline -Encoding ascii
+    Write-Host "Jeton mémorisé chiffré dans $tokenStorePath."
+  }
+}
 $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
 $runnerToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer)
 [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer)
@@ -92,7 +111,7 @@ function Send-CorrectionStatus([string]$Status, [string]$Note, [string]$PullRequ
 try {
   Send-CorrectionStatus "En cours" "Codex local, connecté à ChatGPT, prépare le correctif sur la machine de l’administrateur."
   Write-Host "Codex utilise l’authentification ChatGPT locale. Aucune clé API OpenAI n’est utilisée par ce script."
-  Get-Content -LiteralPath $promptFile -Raw | & codex exec --sandbox workspace-write --approve-for-me --output-last-message $answerFile -
+  Get-Content -LiteralPath $promptFile -Raw | & codex exec --approve-for-me --output-last-message $answerFile -
   if ($LASTEXITCODE -ne 0) { throw "Codex n’a pas terminé correctement. Consulte sa sortie ci-dessus." }
 
   $diffNames = @(& git diff --name-only HEAD)
