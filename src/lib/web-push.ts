@@ -228,9 +228,30 @@ export async function dispatchPlanningEventCancellation(eventId: string) {
   const deliveries = (await query<{ id: string; userId: string; date: Date; title: string }>(
     `SELECT d.id,d."userId",e.title,e."startsAt" AS date FROM "PlanningEventCancellationPushDelivery" d JOIN "PlanningEvent" e ON e.id=d."planningEventId" WHERE d."planningEventId"=$1 AND d.status='PENDING' ORDER BY d.id`, [eventId]
   )).rows;
+  if (!deliveries.length) return;
+
+  let subscriptionsByUser: Map<string, SubscriptionRow[]>;
+  try {
+    const subscriptions = (await query<SubscriptionRow & { userId: string }>(
+      `SELECT id,"userId",endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=ANY($1::text[])`, [Array.from(new Set(deliveries.map(({ userId }) => userId)))]
+    )).rows;
+    subscriptionsByUser = new Map();
+    for (const subscription of subscriptions) {
+      const { userId, ...row } = subscription;
+      const userSubscriptions = subscriptionsByUser.get(userId) ?? [];
+      userSubscriptions.push(row);
+      subscriptionsByUser.set(userId, userSubscriptions);
+    }
+  } catch {
+    for (const delivery of deliveries) {
+      await query(`UPDATE "PlanningEventCancellationPushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+    }
+    return;
+  }
+
   for (const delivery of deliveries) {
     try {
-      const subscriptions = (await query<SubscriptionRow>(`SELECT id,endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=$1`, [delivery.userId])).rows;
+      const subscriptions = subscriptionsByUser.get(delivery.userId) ?? [];
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
