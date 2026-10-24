@@ -15,13 +15,13 @@ const triggerNames: Record<string, string> = { on_demand: "À la demande", sched
 export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supabaseStatsConfigured }: { agents: AgentRow[]; runs: RunRow[]; supabaseStatsConfigured: boolean }) {
   const [agents, setAgents] = useState(initialAgents);
   const [runs, setRuns] = useState(initialRuns);
-  const [selectedId, setSelectedId] = useState(initialAgents[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState("");
   const [modal, setModal] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [analysisPeriod, setAnalysisPeriod] = useState<"24h" | "7d">("7d");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
-  const selected = agents.find((agent) => agent.id === selectedId) ?? agents[0];
+  const selected = agents.find((agent) => agent.id === selectedId);
   const activeCount = agents.filter((agent) => agent.enabled).length;
   const runningCount = runs.filter((run) => run.status === "running" || run.status === "pending").length;
   const reviewCount = runs.filter((run) => run.status === "completed" && (run.result?.recommendations.length ?? 0) > 0).length;
@@ -60,7 +60,7 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
       {agents.map((agent) => {
         const last = runs.find((run) => run.agentId === agent.id);
         const chosen = selected?.id === agent.id;
-        return <button key={agent.id} onClick={() => setSelectedId(agent.id)} className={`grid w-full grid-cols-1 gap-2 border-b border-slate-100 px-4 py-3 text-left transition last:border-0 hover:bg-blue-50/50 sm:grid-cols-[1fr_auto] lg:grid-cols-[1.15fr_2fr_.8fr_1fr_1.4fr] lg:items-center lg:gap-4 lg:px-5 ${chosen ? "bg-blue-50" : ""}`}>
+        return <button key={agent.id} onClick={() => setSelectedId((current) => current === agent.id ? "" : agent.id)} aria-expanded={chosen} className={`grid w-full grid-cols-1 gap-2 border-b border-slate-100 px-4 py-3 text-left transition last:border-0 hover:bg-blue-50/50 sm:grid-cols-[1fr_auto] lg:grid-cols-[1.15fr_2fr_.8fr_1fr_1.4fr] lg:items-center lg:gap-4 lg:px-5 ${chosen ? "bg-blue-50" : ""}`}>
           <span className="flex min-w-0 items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-100 text-blue-800"><Activity className="h-[18px] w-[18px]" /></span><span className="truncate text-sm font-bold text-slate-900">{agent.name}</span></span>
           <span className="line-clamp-2 text-sm text-slate-600">{agent.mission}</span>
           <span><Badge good={agent.enabled}>{agent.enabled ? "Actif" : "En pause"}</Badge></span>

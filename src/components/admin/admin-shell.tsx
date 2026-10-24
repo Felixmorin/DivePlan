@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Activity, Bot, LayoutDashboard, LogOut, Sparkles, UserRound } from "lucide-react";
 import { signOut } from "@/auth";
 import { requireAdmin } from "@/lib/current-user";
@@ -17,7 +16,10 @@ export async function AdminShell({ children, active }: { children: React.ReactNo
   return <div className="min-h-screen bg-[#f3f7fa] text-[var(--color-ink)]">
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-[252px] flex-col overflow-hidden bg-[#09233b] px-4 py-5 text-white lg:flex">
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-[radial-gradient(ellipse_at_bottom,_rgba(0,188,212,0.20),_transparent_68%)]" />
-      <Link href="/admin" aria-label="DivePlan, accueil administration" className="relative mb-9 flex w-fit items-center px-2 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><Image src="/icons/diveplan-admin-logo.png" alt="DivePlan" width={175} height={52} priority className="h-[52px] w-[175px] object-contain object-left" /></Link>
+      <Link href="/admin" aria-label="DivePlan, accueil administration" className="relative mb-9 flex w-fit items-center gap-3 px-2 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+        <svg aria-hidden="true" viewBox="0 0 48 48" className="h-11 w-11 shrink-0" fill="none"><path d="M5 16.5c5.2-5.1 10.4-5.1 15.6 0s10.4 5.1 15.6 0c2.5-2.4 4.7-3.6 6.8-3.6v6.3c-2.1 0-4.3 1.2-6.8 3.6-5.2 5.1-10.4 5.1-15.6 0s-10.4-5.1-15.6 0" fill="#20a7f7"/><path d="M5 27c5.2-5.1 10.4-5.1 15.6 0s10.4 5.1 15.6 0c2.5-2.4 4.7-3.6 6.8-3.6v6.3c-2.1 0-4.3 1.2-6.8 3.6-5.2 5.1-10.4 5.1-15.6 0S10.2 28.2 5 33.3" fill="#20a7f7" opacity=".78"/></svg>
+        <span className="flex flex-col leading-none"><span className="text-[25px] font-bold tracking-tight text-white">DivePlan</span><span className="mt-1.5 text-[8px] font-semibold uppercase tracking-[0.22em] text-white/55">Plonger plus loin</span></span>
+      </Link>
       <p className="relative mb-3 px-2 text-xs font-bold uppercase tracking-[0.14em] text-white/45">Administration</p>
       <nav aria-label="Navigation admin" className="relative space-y-1">{items.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={active === label ? "page" : undefined} className={`flex min-h-11 items-center gap-3 rounded-xl border-l-2 px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active === label ? "border-cyan-300 bg-gradient-to-r from-sky-700/90 to-sky-600/65 text-white shadow-sm" : "border-transparent text-white/70 hover:bg-white/8 hover:text-white"}`}><Icon className="h-[18px] w-[18px]" />{label}</Link>)}</nav>
       <div className="relative mt-auto border-t border-white/10 pt-4">
