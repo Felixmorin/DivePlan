@@ -46,7 +46,7 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
       try {
         const result = await startCorrection({ id: p.id });
         setLocalRunCommand(`pwsh -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run-approved-correction.ps1 -ProposalId ${p.id} -ExecutionId ${result.executionId}`);
-        setProposals((list) => list.map((item) => item.id === p.id ? { ...item, correctionStatus: result.correctionStatus, correctionExecutionId: result.executionId, correctionRunUrl: null, correctionPullRequestUrl: null, history: [...item.history, { at: new Date().toISOString(), event: "Exécution locale préparée pour Codex avec ChatGPT", status: result.correctionStatus }] : item));
+        setProposals((list) => list.map((item) => item.id === p.id ? { ...item, correctionStatus: result.correctionStatus, correctionExecutionId: result.executionId, correctionRunUrl: null, correctionPullRequestUrl: null, history: [...item.history, { at: new Date().toISOString(), event: "Exécution locale préparée pour Codex avec ChatGPT", status: result.correctionStatus }] } : item));
       } catch (e) { setError(e instanceof Error ? e.message : "Une erreur est survenue."); }
     });
   }
