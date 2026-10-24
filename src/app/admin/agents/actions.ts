@@ -14,11 +14,13 @@ const triggerSchema = z.object({
   incident: z.object({ enabled: z.boolean() })
 });
 
-export async function enqueueAgentRun(agentId: string) {
+export async function enqueueAgentRun(agentId: string, analysisPeriod: "24h" | "7d" = "7d") {
   const admin = await requireAdmin();
   const parsedId = z.string().min(1).max(100).safeParse(agentId);
   if (!parsedId.success) throw new Error("Agent invalide.");
-  if (parsedId.data !== "diveplan-observability") throw new Error("Aucun traitement d’exécution n’est configuré pour cet agent.");
+  if (!["diveplan-observability", "sql-supabase-analyst"].includes(parsedId.data)) throw new Error("Aucun traitement d’exécution n’est configuré pour cet agent.");
+  const period = z.enum(["24h", "7d"]).safeParse(analysisPeriod);
+  if (!period.success) throw new Error("Période d’analyse invalide.");
   const agent = await query<{ id: string; name: string; triggers: unknown; enabled: boolean }>(
     `SELECT id, name, triggers, enabled FROM "AiAgent" WHERE id = $1`, [parsedId.data]
   );
@@ -30,7 +32,7 @@ export async function enqueueAgentRun(agentId: string) {
   if (active.rows.length) throw new Error("Une exécution est déjà en cours ou en attente.");
   const id = randomUUID();
   try {
-    await query(`INSERT INTO "AiAgentRun" (id, "agentId", "trigger", status, "createdById") VALUES ($1,$2,'on_demand','pending',$3)`, [id, row.id, admin.id]);
+    await query(`INSERT INTO "AiAgentRun" (id, "agentId", "trigger", status, "createdById", "analysisPeriod") VALUES ($1,$2,'on_demand','pending',$3,$4)`, [id, row.id, admin.id, period.data]);
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") throw new Error("Une exécution est déjà en cours ou en attente.");
     throw error;

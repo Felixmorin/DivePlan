@@ -114,6 +114,7 @@ model AiAgentRun {
   result      Json?
   error       String?
   createdById String?
+  analysisPeriod String   @default("7d")
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   agent       AiAgent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)

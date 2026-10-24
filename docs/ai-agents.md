@@ -2,11 +2,21 @@
 
 ## Mise en service
 
-Appliquer `db/migrations/0011_ai_agents.sql` à la base PostgreSQL visée avant de déployer l’application. La migration crée le registre d’agents et l’historique des exécutions, puis configure « Observabilité DivePlan ».
+Appliquer les migrations `db/migrations/0011_ai_agents.sql` et `db/migrations/0012_sql_supabase_analyst.sql` à la base PostgreSQL visée avant de déployer l’application. La migration 0011 crée le registre et la file des exécutions; la migration 0012 ajoute « Analyste SQL & Supabase » et la période enregistrée pour chaque exécution.
 
 Le traitement des exécutions utilise une file PostgreSQL et la route Vercel Cron `/api/cron/agent-runs`. Définir `CRON_SECRET` dans les environnements de production Vercel; la route vérifie l’en-tête Bearer et ne traite que cinq demandes en attente par invocation. Les exécutions sont réclamées avec `FOR UPDATE SKIP LOCKED`, puis leur résultat ou leur erreur est persisté. Les rapports de cette première livraison sont des synthèses déterministes, pas une génération par LLM. Les agents créés depuis la console restent à l’état « Configuration requise » tant qu’aucun exécuteur spécifique n’est développé.
 
 La fréquence quotidienne `0 0 * * *` est compatible avec le plan Hobby; sur Hobby, Vercel peut la déclencher à n’importe quel moment de l’heure UTC prévue. Une demande « Exécuter maintenant » est mise en attente et peut donc attendre jusqu’au prochain passage du worker. Les plans Pro et Enterprise permettent de régler le cron à la minute (`* * * * *`) si un délai plus court est nécessaire. Vercel Cron ne s’exécute que sur les déploiements de production.
+
+## Analyste SQL & Supabase
+
+L’agent prend en charge le scan statique des appels SQL dans `src/app`, `src/lib` et les migrations, ainsi que les schémas PostgreSQL/Prisma inclus au déploiement. Il signale les `SELECT *`, les lectures sans pagination visible, les écritures avec `RETURNING *` et des accès SQL potentiellement répétés. Il traite spécialement les accès du détail de séance `/coach/sessions/:id`. Ce sont des constats de code ou des hypothèses; ils ne mesurent pas la durée réelle d’une requête.
+
+Les mesures observées proviennent uniquement de `DatabaseEgressTelemetryHour`, la télémétrie de résultats SQL déjà collectée par DivePlan. Elles couvrent les données présentes dans cette table et peuvent ne pas correspondre à tout l’egress facturé par Supabase. Les statistiques `pg_stat_statements`, l’API de gestion Supabase et les politiques RLS ne sont pas connectées. Le rapport affiche explicitement cette configuration manquante et les limites de chaque piste d’index.
+
+Les lectures de télémétrie passent dans une transaction PostgreSQL `READ ONLY` avec un délai de requête de huit secondes. Le code déployé est inclus dans la trace du worker pour permettre le scan sans commande shell ni exécution de code fourni par l’interface. La file et les rapports restent gérés par l’application. Lors de l’ajout d’un connecteur de statistiques Supabase, prévoir une connexion dédiée telle que `SUPABASE_READONLY_DATABASE_URL` et un rôle PostgreSQL limité aux vues et tables de statistiques explicitement autorisées (dont `pg_stat_statements` si activée). Cette variable n’est pas consommée par la version actuelle; l’agent continue de fonctionner avec le code et la télémétrie déjà disponibles.
+
+Les lancements manuels proposent 24 heures ou 7 jours; la période est persistée sur l’exécution. Le déclenchement à la demande utilise la file existante. Les déclencheurs planifié, après déploiement et sur incident/egress restent désactivés et signalés « Configuration requise » puisqu’aucun producteur par agent n’est connecté. L’agent n’applique aucune modification à la base et ne déploie rien.
 
 ## Sources et limites de l’agent Observabilité
 
