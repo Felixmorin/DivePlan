@@ -10,12 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function MonitoringPage() {
   const { clubId } = await requireFullAccessCoach();
   if (clubId === "dev-club") {
-    const events = [
-      { id: "demo-auth", type: "auth.login", message: "Connexion démo locale", source: "system demo", date: new Date().toISOString() },
-      { id: "demo-session", type: "session.viewed", message: "Séance démo ouverte", source: "system demo", date: new Date(Date.now() - 60 * 60 * 1000).toISOString() },
-      { id: "demo-db", type: "system.notice", message: "PostgreSQL non configuré pour cette session", source: "system demo", date: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString() }
-    ];
-    return <MonitoringContent events={events} failedLogins={0} completedSessions={0} />;
+    return <MonitoringContent events={createDemoEvents()} failedLogins={0} completedSessions={0} />;
   }
 
   const since = sinceHours(24);
@@ -34,6 +29,15 @@ export default async function MonitoringPage() {
     failedLogins={Number(failedResult.rows[0]?.count ?? 0)}
     completedSessions={Number(completedResult.rows[0]?.count ?? 0)}
   />;
+}
+
+function createDemoEvents() {
+  const now = Date.now();
+  return [
+    { id: "demo-auth", type: "auth.login", message: "Connexion démo locale", source: "system demo", date: new Date(now).toISOString() },
+    { id: "demo-session", type: "session.viewed", message: "Séance démo ouverte", source: "system demo", date: new Date(now - 60 * 60 * 1000).toISOString() },
+    { id: "demo-db", type: "system.notice", message: "PostgreSQL non configuré pour cette session", source: "system demo", date: new Date(now - 26 * 60 * 60 * 1000).toISOString() }
+  ];
 }
 
 function MonitoringContent({ events, failedLogins, completedSessions }: { events: Array<{ id: string; type: string; message: string; source: string; date: string }>; failedLogins: number; completedSessions: number }) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, FileText, Pencil, RefreshCw, Search, Settings, Shield, UserRound, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,13 +24,23 @@ export function MonitoringJournal({ events }: { events: EventRow[] }) {
   const [enabled, setEnabled] = useState<Category[]>(categories);
   const [range, setRange] = useState<Range>("24h");
   const [shown, setShown] = useState(10);
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const refreshClock = () => setNow(Date.now());
+    const initialRefresh = window.setTimeout(refreshClock, 0);
+    const interval = window.setInterval(refreshClock, 60_000);
+    return () => {
+      window.clearTimeout(initialRefresh);
+      window.clearInterval(interval);
+    };
+  }, []);
   const filtered = useMemo(() => {
-    const cutoff = range === "all" ? 0 : Date.now() - (range === "24h" ? 24 : range === "7d" ? 24 * 7 : 24 * 30) * 60 * 60 * 1000;
+    const cutoff = range === "all" || now === 0 ? 0 : now - (range === "24h" ? 24 : range === "7d" ? 24 * 7 : 24 * 30) * 60 * 60 * 1000;
     return events.filter((event) => {
       const timestamp = new Date(event.date).getTime();
       return enabled.includes(categoryFor(event.type)) && (range === "all" || (Number.isFinite(timestamp) && timestamp >= cutoff)) && `${event.message} ${event.source} ${event.type}`.toLocaleLowerCase("fr-CA").includes(search.toLocaleLowerCase("fr-CA"));
     });
-  }, [events, enabled, range, search]);
+  }, [events, enabled, now, range, search]);
   const visible = filtered.slice(0, shown);
   const groups = groupEvents(visible);
 
@@ -51,15 +61,15 @@ export function MonitoringJournal({ events }: { events: EventRow[] }) {
       {filtered.length > shown && <button type="button" onClick={() => setShown((count) => count + 10)} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-100 text-sm font-bold hover:bg-slate-200"><Clock3 className="h-4 w-4" /> Afficher les événements précédents <ChevronDown className="h-4 w-4" /></button>}
     </CardContent></Card>
 
-    <Card><CardContent className="p-4"><h2 className="mb-3 text-sm font-black">Filtrer par type d’événement</h2><div className="space-y-2">{categories.map((category) => { const checked = enabled.includes(category); const style = categoryStyle[category]; const Icon = categoryIcon(category); return <button key={category} type="button" aria-pressed={checked} onClick={() => setEnabled((current) => checked ? current.filter((item) => item !== category) : [...current, category])} className="flex w-full items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-left text-sm font-semibold hover:bg-slate-100"><span className={`flex h-5 w-5 items-center justify-center rounded border ${checked ? "border-sky-700 bg-sky-700 text-white" : "border-slate-300 bg-white"}`}>{checked && <Check className="h-3.5 w-3.5" />}</span><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${style.bg} ${style.fg}`}><Icon className="h-5 w-5" /></span>{category}</button>; })}</div></CardContent></Card>
+    <Card><CardContent className="p-4"><h2 className="mb-3 text-sm font-black">Filtrer par type d’événement</h2><div className="space-y-2">{categories.map((category) => { const checked = enabled.includes(category); const style = categoryStyle[category]; return <button key={category} type="button" aria-pressed={checked} onClick={() => setEnabled((current) => checked ? current.filter((item) => item !== category) : [...current, category])} className="flex w-full items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-left text-sm font-semibold hover:bg-slate-100"><span className={`flex h-5 w-5 items-center justify-center rounded border ${checked ? "border-sky-700 bg-sky-700 text-white" : "border-slate-300 bg-white"}`}>{checked && <Check className="h-3.5 w-3.5" />}</span><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${style.bg} ${style.fg}`}><CategoryIcon category={category} className="h-5 w-5" /></span>{category}</button>; })}</div></CardContent></Card>
   </div>;
 }
 
 function EventItem({ event }: { event: EventRow }) {
-  const category = categoryFor(event.type); const style = categoryStyle[category]; const Icon = eventIcon(event.type);
+  const category = categoryFor(event.type); const style = categoryStyle[category];
   const date = new Date(event.date);
   const time = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date);
-  return <article className="flex items-center gap-3 border-b border-[var(--color-border)] py-3 last:border-b-0 sm:gap-4"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${style.bg} ${style.fg}`}><Icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold">{event.message}</h3><p className="mt-1 truncate text-xs text-[var(--color-ink-muted)]">{time && `${time}  ·  `}{event.source} <span className="px-1">·</span> {event.type}</p></div><span className={`hidden shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold sm:inline-flex ${style.bg} ${style.fg}`}>{category}</span></article>;
+  return <article className="flex items-center gap-3 border-b border-[var(--color-border)] py-3 last:border-b-0 sm:gap-4"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${style.bg} ${style.fg}`}><EventIcon type={event.type} className="h-5 w-5" /></span><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold">{event.message}</h3><p className="mt-1 truncate text-xs text-[var(--color-ink-muted)]">{time && `${time}  ·  `}{event.source} <span className="px-1">·</span> {event.type}</p></div><span className={`hidden shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold sm:inline-flex ${style.bg} ${style.fg}`}>{category}</span></article>;
 }
 
 function categoryFor(type: string): Category {
@@ -69,8 +79,20 @@ function categoryFor(type: string): Category {
   if (type.startsWith("athlete.")) return "Athlètes";
   return "Système";
 }
-function categoryIcon(category: Category) { return category === "Séances" ? CheckCircle2 : category === "Aperçus" ? FileText : category === "Authentification" ? UserRound : category === "Athlètes" ? Users : Settings; }
-function eventIcon(type: string) { if (type.includes("failed") || type.includes("security")) return Shield; if (type.includes("session") && (type.includes("complete") || type.includes("finished"))) return CheckCircle2; if (type.includes("session") && (type.includes("update") || type.includes("edit"))) return Pencil; return categoryIcon(categoryFor(type)); }
+function CategoryIcon({ category, className }: { category: Category; className?: string }) {
+  if (category === "Séances") return <CheckCircle2 className={className} />;
+  if (category === "Aperçus") return <FileText className={className} />;
+  if (category === "Authentification") return <UserRound className={className} />;
+  if (category === "Athlètes") return <Users className={className} />;
+  return <Settings className={className} />;
+}
+
+function EventIcon({ type, className }: { type: string; className?: string }) {
+  if (type.includes("failed") || type.includes("security")) return <Shield className={className} />;
+  if (type.includes("session") && (type.includes("complete") || type.includes("finished"))) return <CheckCircle2 className={className} />;
+  if (type.includes("session") && (type.includes("update") || type.includes("edit"))) return <Pencil className={className} />;
+  return <CategoryIcon category={categoryFor(type)} className={className} />;
+}
 function groupEvents(events: EventRow[]): Array<[string, EventRow[]]> {
   const result = new Map<string, EventRow[]>(); const now = new Date();
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
