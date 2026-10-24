@@ -8,15 +8,12 @@ export type LiveProgress = {
   exerciseLogs: Array<{ athleteId: string; exerciseId: string; completed: boolean }>;
 };
 
-/** Explicit allowlist: never serialize user records, photos, notes or log metadata. */
+/** Plan only: progress is supplied once, through initialProgress and subsequent polls. */
 export function liveSessionForClient(session: CoachSession) {
   return {
     id: session.id,
     date: session.date instanceof Date ? session.date.toISOString() : session.date,
     week: { group: { name: session.week.group.name } },
-    absences: session.absences.map(({ athleteId }) => ({ athleteId })),
-    diveLogs: session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted }) => ({ athleteId, poolDiveId, repetitionsCompleted })),
-    exerciseLogs: session.exerciseLogs.map(({ athleteId, exerciseId, completed }) => ({ athleteId, exerciseId, completed })),
     blocks: session.blocks.map((block) => ({
       id: block.id, type: block.type, title: block.title, position: block.position,
       assignments: block.assignments.map(({ athleteId }) => ({ athleteId })),
@@ -31,4 +28,5 @@ export function liveSessionForClient(session: CoachSession) {
   };
 }
 
-export type LiveSession = ReturnType<typeof liveSessionForClient>;
+export type LivePlan = ReturnType<typeof liveSessionForClient>;
+export type LiveSession = LivePlan & Pick<LiveProgress, "absences" | "diveLogs" | "exerciseLogs">;
