@@ -40,10 +40,11 @@ export async function startCorrection(input: { id: string }) {
     const row = rows[0];
     if (!row) throw new Error("Proposition introuvable.");
     validateApprovedProposal(row);
-    if ((row.correctionStatus === "En attente d’exécution" && row.correctionExecutionId) || ["En cours", "Modifications effectuées", "PR en brouillon prête à réviser", "Terminé après révision humaine"].includes(row.correctionStatus)) {
+    if ((row.correctionStatus === "En attente d’exécution" && row.correctionExecutionId) || ["Modifications effectuées", "PR en brouillon prête à réviser", "Terminé après révision humaine"].includes(row.correctionStatus)) {
       throw new Error(`Une correction ne peut pas être lancée avec le statut « ${row.correctionStatus} ».`);
     }
-    const history = [...row.history, { at: new Date().toISOString(), event: "Correction mise en file; le runner local lancera Codex avec la session ChatGPT configurée sur ce dépôt.", actor: admin.email, status: "En attente d’exécution" }];
+    const restarting = row.correctionStatus === "En cours";
+    const history = [...row.history, { at: new Date().toISOString(), event: restarting ? "Correction redémarrée manuellement; l’exécution précédente est invalidée.": "Correction mise en file; le runner local lancera Codex avec la session ChatGPT configurée sur ce dépôt.", actor: admin.email, status: "En attente d’exécution" }];
     const proposalHash = hashCorrectionProposal(row);
     await client.query(`UPDATE "AiPrProposal" SET "correctionStatus"='En attente d’exécution',"correctionExecutionId"=$2,"correctionProposalHash"=$3,"correctionRunUrl"=NULL,"correctionPullRequestUrl"=NULL,history=$4,"updatedAt"=NOW() WHERE id=$1`, [row.id, executionId, proposalHash, JSON.stringify(history)]);
     return row;
