@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { AlertTriangle, Check, CircleHelp, Clock3, GitPullRequestArrow, History, LoaderCircle, RefreshCw, Scissors, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, Check, CircleHelp, Clock3, ExternalLink, FileText, GitPullRequestArrow, History, Layers3, LoaderCircle, RefreshCw, Scissors, ShieldCheck, X } from "lucide-react";
 import { confirmCorrectionReviewed, decideProposal, getCorrectionStatuses, prepareProposals, splitProposal, startCorrection } from "./actions";
 
 type Finding = { title?: string; priority?: string; impact?: string; effort?: string; location?: string; evidence?: string; limits?: string; recommendation?: string; confidence?: string };
@@ -15,6 +15,8 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
   const [proposals, setProposals] = useState(initial);
   const [error, setError] = useState("");
   const [runnerSetupVisible, setRunnerSetupVisible] = useState(false);
+  const [launchTarget, setLaunchTarget] = useState<Proposal | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<Proposal | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -73,10 +75,10 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
   function requestChange(p: Proposal) { const note = window.prompt("Précisez la modification attendue pour cette proposition."); if (note?.trim()) decide(p, p.status, `Modification demandée : ${note.trim()}`); }
   function split(p: Proposal) { setError(""); startTransition(async () => { try { await splitProposal(p.id); window.location.reload(); } catch (e) { setError(e instanceof Error ? e.message : "Une erreur est survenue."); } }); }
   function launchCorrection(p: Proposal) {
-    const sources = p.sources.map((source) => `• ${source.finding.title ?? "Sans titre"} — ${source.agentName} (${source.finding.location ?? "zone à déterminer"})\n  Preuve : ${source.finding.evidence ?? "Non fournie"}\n  Recommandation : ${source.finding.recommendation ?? "Non fournie"}`).join("\n");
-    const acceptance = (p.details.acceptance ?? []).map((criterion) => `• ${criterion}`).join("\n");
-    const plan = `Avant préparation avec Codex local — proposition approuvée\n\n${p.title}\nID : ${p.id}\n\nRecommandations sources et preuves :\n${sources}\n\nChangement prévu :\n${p.details.change ?? "À préciser"}\n\nRésultat attendu :\n${p.details.expected ?? "À préciser"}\n\nZones concernées :\n${p.sources.map((source) => source.finding.location ?? "À déterminer dans le dépôt").join("\n")}\n\nCritères d’acceptation :\n${acceptance}\n\nValidations prévues : ${p.details.validation ?? "À préciser"}\n\nRisques : ${p.details.risks ?? "Aucun signalé"}\nDépendances : ${(p.details.dependencies ?? []).join(", ") || "Aucune signalée"}\n\nDivePlan préparera la tâche. Tu lanceras ensuite le script local dans le dépôt; Codex utilisera ton compte ChatGPT et ouvrira une PR en brouillon après validations. Aucune fusion ni aucun déploiement ne seront effectués.`;
-    if (!window.confirm(plan)) return;
+    setLaunchTarget(p);
+  }
+  function confirmLaunchCorrection(p: Proposal) {
+    setLaunchTarget(null);
     setError("");
     startTransition(async () => {
       try {
@@ -88,7 +90,11 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
   }
   function confirmReviewed(p: Proposal) {
     if (!p.correctionExecutionId || !p.correctionPullRequestUrl) return;
-    if (!window.confirm(`Confirmer que tu as revu la PR ?\n${p.correctionPullRequestUrl}\n\nCette action enregistre une revue humaine. Elle ne confirme ni la fusion ni le déploiement.`)) return;
+    setReviewTarget(p);
+  }
+  function submitReviewed(p: Proposal) {
+    if (!p.correctionExecutionId || !p.correctionPullRequestUrl) return;
+    setReviewTarget(null);
     setError("");
     startTransition(async () => {
       try {
@@ -99,6 +105,20 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
   }
 
   return <>
+    {(launchTarget || reviewTarget) && <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/65 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget && !pending) { setLaunchTarget(null); setReviewTarget(null); } }}>
+      {launchTarget ? <section role="dialog" aria-modal="true" aria-labelledby="codex-modal-title" className="my-auto max-h-[92vh] w-full max-w-[660px] overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="max-h-[92vh] overflow-y-auto p-6 sm:p-8"><button type="button" aria-label="Fermer" onClick={() => setLaunchTarget(null)} className="float-right rounded-lg p-1 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5"/></button>
+          <h2 id="codex-modal-title" className="pr-8 text-2xl font-black tracking-tight text-slate-950">Préparer cette proposition avec Codex ?</h2>
+          <span className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800"><Check className="h-4 w-4"/>Proposition approuvée</span>
+          <h3 className="mt-4 text-lg font-black leading-snug text-slate-950">{launchTarget.title}</h3>
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-slate-200 pb-4 text-sm text-slate-600"><span className="inline-flex items-center gap-2"><Layers3 className="h-4 w-4"/>{launchTarget.sources.length} source{launchTarget.sources.length === 1 ? "" : "s"}</span><span className="inline-flex items-center gap-2"><FileText className="h-4 w-4"/>ID : {launchTarget.id.slice(0,8)}…{launchTarget.id.slice(-4)}</span></div>
+          <div className="mt-4 rounded-xl border border-slate-200 p-3.5"><h4 className="text-sm font-black text-slate-900">Sources et preuves</h4><div className="mt-2 max-h-48 space-y-2 overflow-y-auto">{launchTarget.sources.map((source,index)=><article key={`${source.runId}-${index}`} className="rounded-lg bg-slate-50 p-3"><div className="flex gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-black text-blue-700">{index+1}</span><div className="min-w-0"><h5 className="text-sm font-bold text-slate-900">{source.agentName}</h5><p className="text-xs text-slate-500">{source.finding.location ?? "Emplacement non précisé"}</p><p className="mt-2 rounded-md border border-slate-200 bg-white p-2 text-xs leading-5 text-slate-700">{source.finding.evidence ?? "Preuve non fournie dans le rapport source."}</p>{source.finding.recommendation && <p className="mt-2 text-xs leading-5 text-slate-600">Recommandation : {source.finding.recommendation}</p>}</div></div></article>)}</div></div>
+          <div className="mt-4 space-y-2 text-sm leading-5 text-slate-600"><p><b className="text-slate-800">Changement prévu :</b> {launchTarget.details.change ?? "À préciser"}</p><p><b className="text-slate-800">Résultat attendu :</b> {launchTarget.details.expected ?? "À préciser"}</p></div>
+          <p className="mt-4 border-t border-slate-200 pt-4 text-sm leading-5 text-slate-600">Codex local va analyser la recommandation et préparer les changements. Tu pourras examiner le résultat avant toute création de PR.</p>
+          <div className="mt-5 flex justify-end gap-3"><button type="button" onClick={() => setLaunchTarget(null)} className="min-h-11 rounded-xl border border-slate-300 px-5 text-sm font-bold text-slate-700 hover:bg-slate-50">Annuler</button><button type="button" disabled={pending} onClick={() => confirmLaunchCorrection(launchTarget)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-700 px-5 text-sm font-bold text-white hover:bg-blue-800 disabled:opacity-50"><GitPullRequestArrow className="h-4 w-4"/>{pending ? "Préparation…" : "Préparer avec Codex"}</button></div>
+        </div>
+      </section> : reviewTarget ? <section role="dialog" aria-modal="true" aria-labelledby="review-modal-title" className="my-auto w-full max-w-[540px] overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="p-6 sm:p-8"><button type="button" aria-label="Fermer" onClick={() => setReviewTarget(null)} className="float-right rounded-lg p-1 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5"/></button><div className="flex items-center gap-4"><span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-blue-100 text-slate-900"><GitPullRequestArrow className="h-7 w-7"/></span><h2 id="review-modal-title" className="text-xl font-black text-slate-950">Confirmer la revue de cette PR ?</h2></div><a href={reviewTarget.correctionPullRequestUrl!} target="_blank" rel="noreferrer" className="mt-5 flex items-center justify-between rounded-xl bg-slate-50 p-4 text-sm font-bold text-blue-700 hover:bg-blue-50"><span className="flex min-w-0 items-center gap-3"><GitPullRequestArrow className="h-5 w-5 shrink-0 text-slate-800"/><span className="truncate">{reviewTarget.correctionPullRequestUrl!.split("/").slice(-2).join(" #") || "Ouvrir la PR"}</span></span><ExternalLink className="h-4 w-4 shrink-0"/></a><p className="mt-4 text-sm leading-6 text-slate-700">Cette action enregistre la revue humaine. Elle ne fusionne pas la PR et ne la déploie pas.</p><div className="mt-4 flex items-start gap-3 rounded-xl bg-emerald-50 p-4 text-sm font-semibold leading-5 text-emerald-800"><Check className="mt-0.5 h-5 w-5 shrink-0"/><span>Tu pourras encore demander des modifications avant la fusion.</span></div></div><div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4 sm:px-8"><button type="button" onClick={() => setReviewTarget(null)} className="min-h-11 rounded-xl border border-slate-300 px-5 text-sm font-bold text-slate-700 hover:bg-slate-50">Annuler</button><button type="button" disabled={pending} onClick={() => submitReviewed(reviewTarget)} className="min-h-11 rounded-xl bg-blue-700 px-5 text-sm font-bold text-white hover:bg-blue-800 disabled:opacity-50">{pending ? "Confirmation…" : "Confirmer la revue"}</button></div></section> : null}
+    </div>}
     <section aria-label="État de la consolidation" className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Metric label="Exécutions disponibles" value={sourceRuns} note="Rapports terminés des autres agents" icon={GitPullRequestArrow}/>
       <Metric label="Nouvelles recommandations" value={candidates.length} note="Non encore examinées par cet agent" icon={AlertTriangle}/>
