@@ -3,12 +3,29 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Activity, ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, CircleCheck, ClipboardList, Download, Flag, MessageSquareText, NotebookText, Printer, Target, Trophy, UserCheck, Users, Waves, X } from "lucide-react";
-import type { getCoachSession } from "@/lib/coach-session";
 import { saveSessionAttendance, updateCompletedSessionSummary } from "@/app/coach/sessions/actions";
 import { formatMontrealDate } from "@/lib/timezone";
 import { countPoolContexts } from "@/lib/pool-list";
 
-type Session = Awaited<ReturnType<typeof getCoachSession>>;
+type Session = {
+  id: string;
+  date: Date;
+  notes: string | null;
+  week: { group: { name: string } };
+  blocks: Array<{
+    id: string;
+    position: number;
+    title: string;
+    type: string;
+    assignments: Array<{ id: string; sessionBlockId: string; athleteId: string; athlete: { id: string; user: { firstName: string; lastName: string } } }>;
+    drylandExercises: Array<{ exerciseId: string; sets: number | null; reps: number | null; exercise: { name: string } }>;
+    poolTraining: { sections: Array<{ id: string; label: string | null; height: string; dives: Array<{ id: string; diveCode: string; repetitions: number }> }> } | null;
+  }>;
+  completions: Array<{ athleteId: string; status: string; note: string | null }>;
+  absences: Array<{ athleteId: string }>;
+  diveLogs: Array<{ athleteId: string; poolDiveId: string; repetitionsCompleted: number }>;
+  exerciseLogs: Array<{ athleteId: string; exerciseId: string; completed: boolean }>;
+};
 type Timing = { athleteId: string; blockId: string; closedAt: Date | null };
 type AthleteRow = {
   id: string; firstName: string; lastName: string; status: string;

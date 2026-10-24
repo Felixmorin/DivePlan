@@ -38,7 +38,37 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   }
   if (session.status === "COMPLETED") {
     const timingRows = await query<{ athleteId: string; blockId: string; closedAt: Date | null }>(`SELECT "athleteId","blockId","closedAt" FROM "AthleteBlockTiming" WHERE "blockId"=ANY($1::text[])`, [session.blocks.map((block) => block.id)]);
-    return <CoachShell active="Seances"><CompletedSessionOverview session={session} timings={timingRows.rows} /></CoachShell>;
+    const completedSession = {
+      id: session.id,
+      date: session.date,
+      notes: session.notes,
+      week: { group: { name: session.week.group.name } },
+      blocks: session.blocks.map((block) => ({
+        id: block.id,
+        position: block.position,
+        title: block.title,
+        type: block.type,
+        assignments: block.assignments.map(({ id, sessionBlockId, athleteId, athlete }) => ({
+          id, sessionBlockId, athleteId,
+          athlete: { id: athlete.id, user: { firstName: athlete.user.firstName, lastName: athlete.user.lastName } }
+        })),
+        drylandExercises: block.drylandExercises.map((item) => ({
+          exerciseId: item.exerciseId, sets: item.sets, reps: item.reps,
+          exercise: { name: item.exercise.name }
+        })),
+        poolTraining: block.poolTraining && {
+          sections: block.poolTraining.sections.map((section) => ({
+            id: section.id, label: section.label, height: section.height,
+            dives: section.dives.map(({ id, diveCode, repetitions }) => ({ id, diveCode, repetitions }))
+          }))
+        }
+      })),
+      completions: session.completions.map(({ athleteId, status, note }) => ({ athleteId, status, note })),
+      absences: session.absences.map(({ athleteId }) => ({ athleteId })),
+      diveLogs: session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted }) => ({ athleteId, poolDiveId, repetitionsCompleted })),
+      exerciseLogs: session.exerciseLogs.map(({ athleteId, exerciseId, completed }) => ({ athleteId, exerciseId, completed }))
+    };
+    return <CoachShell active="Seances"><CompletedSessionOverview session={completedSession} timings={timingRows.rows} /></CoachShell>;
   }
   if (session.status === "IN_PROGRESS") {
     const progress = await getLiveSessionProgress(session.id, session.week.clubId);
