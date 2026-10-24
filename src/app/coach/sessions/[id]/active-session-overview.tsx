@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Dumbbell, RefreshCw, UserRound, Waves, X } from "lucide-react";
 import { saveSessionAttendance } from "@/app/coach/sessions/actions";
-import type { LiveProgress, LiveSession } from "@/lib/live-session";
+import type { LivePlan, LiveProgress, LiveSession } from "@/lib/live-session";
 import { formatMontrealDate } from "@/lib/timezone";
 
 type Athlete = { id: string; firstName: string; lastName: string };
 type Props = {
-  session: LiveSession;
+  session: LivePlan;
   initialProgress: LiveProgress;
   athletes: Athlete[];
 };

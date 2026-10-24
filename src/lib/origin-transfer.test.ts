@@ -44,7 +44,7 @@ test("live payload excludes inline photos, user records and private notes at eve
   const payload = liveSessionForClient(session);
   const serialized = JSON.stringify(payload);
   assert.doesNotMatch(serialized, /avatar|base64|passwordHash|private|completions/);
-  assert.equal(payload.diveLogs[0].repetitionsCompleted, 2);
+  for (const key of ["absences", "diveLogs", "exerciseLogs"]) assert.equal(key in payload, false);
   assert.equal(payload.blocks[0].poolTraining?.sections[0].dives[0].diveCode, "101A");
   assert.equal(payload.blocks[0].drylandExercises[0].exercise.name, "Gainage");
   assert.ok(serialized.length < JSON.stringify(session).length / 100);
@@ -92,7 +92,7 @@ test("live polling pauses when hidden, prevents overlap and refreshes only on pl
       });
     }
   });
-  ActiveSessionOverview({ session: { id: "session", date: "2026-10-22", week: { group: { name: "Group" } }, blocks: [], ...progress }, initialProgress: progress, athletes: [] });
+  ActiveSessionOverview({ session: { id: "session", date: "2026-10-22", week: { group: { name: "Group" } }, blocks: [] }, initialProgress: progress, athletes: [] });
   const cleanup = effect();
   const runPollTimer = () => {
     const entry = [...timers].find(([, timer]) => timer.delay === 15_000)!;
