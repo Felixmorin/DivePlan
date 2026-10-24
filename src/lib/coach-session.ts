@@ -34,16 +34,19 @@ export async function getCoachSession(sessionId: string): Promise<CoachSession> 
     query<{log:RelationalRow;athlete:RelationalRow;user:RelationalRow;exercise:RelationalRow}>(`SELECT jsonb_build_object('id',l.id,'athleteId',l."athleteId",'sessionId',l."sessionId",'exerciseId',l."exerciseId",'completed',l.completed,'rating',l.rating,'note',l.note) AS log,jsonb_build_object('id',a.id) AS athlete,jsonb_build_object('id',u.id,'firstName',u."firstName",'lastName',u."lastName",'avatar',NULL) AS "user",jsonb_build_object('name',e.name) AS exercise FROM "AthleteExerciseLog" l JOIN "Athlete" a ON a.id=l."athleteId" JOIN "User" u ON u.id=a."userId" JOIN "DrylandExercise" e ON e.id=l."exerciseId" WHERE l."sessionId"=$1`,[session.id])
   ]);
 
-  const blocks = await Promise.all(session.blocks.map(async block => {
-    const [assignmentRows, exerciseRows] = await Promise.all([
-      query<{assignment:RelationalRow;athlete:RelationalRow;user:RelationalRow}>(`SELECT jsonb_build_object('id',a.id,'sessionBlockId',a."sessionBlockId",'athleteId',a."athleteId") AS assignment,jsonb_build_object('id',at.id) AS athlete,jsonb_build_object('id',u.id,'firstName',u."firstName",'lastName',u."lastName",'avatar',CASE WHEN u.avatar LIKE 'data:image/%' THEN NULL ELSE u.avatar END) AS "user" FROM "SessionBlockAssignment" a JOIN "Athlete" at ON at.id=a."athleteId" JOIN "User" u ON u.id=at."userId" WHERE a."sessionBlockId"=$1`,[block.id]),
-      query<{item:RelationalRow;exercise:RelationalRow}>(`SELECT jsonb_build_object('blockId',d."blockId",'exerciseId',d."exerciseId",'sets',d.sets,'reps',d.reps,'duration',d.duration,'notes',d.notes,'order',d."order") AS item,jsonb_build_object('id',e.id,'name',e.name,'category',e.category,'description',e.description,'equipment',e.equipment,'defaultSets',e."defaultSets",'defaultReps',e."defaultReps",'defaultDuration',e."defaultDuration",'roundTrip',e."roundTrip",'tags',e.tags) AS exercise FROM "DrylandBlockExercise" d JOIN "DrylandExercise" e ON e.id=d."exerciseId" WHERE d."blockId"=$1 ORDER BY d."order"`,[block.id])
-    ]);
-    return {
-      ...block,
-      assignments: assignmentRows.rows.map(r=>({...r.assignment,athlete:{...r.athlete,user:r.user}})),
-      drylandExercises: exerciseRows.rows.map(r=>({...r.item,exercise:r.exercise}))
-    };
+  const blockIds = session.blocks.map((block) => block.id);
+  // These IDs come only from the club-authorized snapshot. Hydrate all blocks
+  // in two reads rather than two additional database round trips per block.
+  const [assignmentRows, exerciseRows] = blockIds.length ? await Promise.all([
+    query<{assignment:RelationalRow;athlete:RelationalRow;user:RelationalRow}>(`SELECT jsonb_build_object('id',a.id,'sessionBlockId',a."sessionBlockId",'athleteId',a."athleteId") AS assignment,jsonb_build_object('id',at.id) AS athlete,jsonb_build_object('id',u.id,'firstName',u."firstName",'lastName',u."lastName",'avatar',CASE WHEN u.avatar LIKE 'data:image/%' THEN NULL ELSE u.avatar END) AS "user" FROM "SessionBlockAssignment" a JOIN "Athlete" at ON at.id=a."athleteId" JOIN "User" u ON u.id=at."userId" WHERE a."sessionBlockId"=ANY($1::text[])`,[blockIds]),
+    query<{item:RelationalRow;exercise:RelationalRow}>(`SELECT jsonb_build_object('blockId',d."blockId",'exerciseId',d."exerciseId",'sets',d.sets,'reps',d.reps,'duration',d.duration,'notes',d.notes,'order',d."order") AS item,jsonb_build_object('id',e.id,'name',e.name,'category',e.category,'description',e.description,'equipment',e.equipment,'defaultSets',e."defaultSets",'defaultReps',e."defaultReps",'defaultDuration',e."defaultDuration",'roundTrip',e."roundTrip",'tags',e.tags) AS exercise FROM "DrylandBlockExercise" d JOIN "DrylandExercise" e ON e.id=d."exerciseId" WHERE d."blockId"=ANY($1::text[]) ORDER BY d."blockId",d."order"`,[blockIds])
+  ]) : [{ rows: [] }, { rows: [] }];
+  const assignmentsByBlock = groupByBlock(assignmentRows.rows, (row) => String(row.assignment.sessionBlockId));
+  const exercisesByBlock = groupByBlock(exerciseRows.rows, (row) => String(row.item.blockId));
+  const blocks = session.blocks.map((block) => ({
+    ...block,
+    assignments: (assignmentsByBlock.get(block.id) ?? []).map((r) => ({ ...r.assignment, athlete: { ...r.athlete, user: r.user } })),
+    drylandExercises: (exercisesByBlock.get(block.id) ?? []).map((r) => ({ ...r.item, exercise: r.exercise }))
   }));
   return {
     ...session,
@@ -71,4 +74,16 @@ export function getAthleteAverageRepsByTraining(athleteIds: string[], excludedSe
 
 export function getAthleteAverageGoldenRepsByTraining(athleteIds: string[], excludedSessionId: string) {
   return getAverageByCompletedTraining(athleteIds,excludedSessionId,"goldenRepetitions",1);
+}
+
+/** Preserve row order within each block, including the exercise order from SQL. */
+function groupByBlock<T>(rows: T[], blockId: (row: T) => string) {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = blockId(row);
+    const group = groups.get(key) ?? [];
+    group.push(row);
+    groups.set(key, group);
+  }
+  return groups;
 }
