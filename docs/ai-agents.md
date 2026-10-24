@@ -6,7 +6,7 @@ Appliquer les migrations `db/migrations/0011_ai_agents.sql` et `db/migrations/00
 
 Le traitement des exécutions utilise une file PostgreSQL et la route Vercel Cron `/api/cron/agent-runs`. Définir `CRON_SECRET` dans les environnements de production Vercel; la route vérifie l’en-tête Bearer et ne traite que cinq demandes en attente par invocation. Les exécutions sont réclamées avec `FOR UPDATE SKIP LOCKED`, puis leur résultat ou leur erreur est persisté. Les rapports de cette première livraison sont des synthèses déterministes, pas une génération par LLM. Les agents créés depuis la console restent à l’état « Configuration requise » tant qu’aucun exécuteur spécifique n’est développé.
 
-La fréquence quotidienne `0 0 * * *` est compatible avec le plan Hobby; sur Hobby, Vercel peut la déclencher à n’importe quel moment de l’heure UTC prévue. Une demande « Exécuter maintenant » est mise en attente et peut donc attendre jusqu’au prochain passage du worker. Les plans Pro et Enterprise permettent de régler le cron à la minute (`* * * * *`) si un délai plus court est nécessaire. Vercel Cron ne s’exécute que sur les déploiements de production.
+La fréquence quotidienne `0 0 * * *` est compatible avec le plan Hobby; sur Hobby, Vercel peut la déclencher à n’importe quel moment de l’heure UTC prévue. Le bouton « Exécuter maintenant » lance désormais le worker dans la même action serveur après avoir ajouté la demande à la file; le cron reste un filet de sécurité pour les exécutions planifiées ou interrompues. Vercel Cron ne s’exécute que sur les déploiements de production.
 
 ## Analyste SQL & Supabase
 

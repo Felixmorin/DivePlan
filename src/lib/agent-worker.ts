@@ -8,17 +8,18 @@ type EventCount = { type: string; count: string };
 type AgentJob = { id: string; agentId: string; analysisPeriod: "24h" | "7d"; enabled: boolean; triggers: Record<string, { enabled?: boolean }> };
 type SupabaseQueryStat = { queryId: string; calls: string; rows: string; totalMs: string; meanMs: string; sharedReadBlocks: string; sharedHitBlocks: string };
 
-export async function runNextAgentJobs() {
+export async function runNextAgentJobs(targetRunId?: string) {
   let processed = 0;
-  for (let index = 0; index < 5; index += 1) {
+  for (let index = 0; index < (targetRunId ? 1 : 5); index += 1) {
     const claimed = await query<AgentJob>(
       `WITH candidate AS (
-         SELECT r.id FROM "AiAgentRun" r WHERE r.status = 'pending' ORDER BY r."createdAt" FOR UPDATE SKIP LOCKED LIMIT 1
+         SELECT r.id FROM "AiAgentRun" r WHERE r.status = 'pending' AND ($1::text IS NULL OR r.id = $1) ORDER BY r."createdAt" FOR UPDATE SKIP LOCKED LIMIT 1
        )
        UPDATE "AiAgentRun" r SET status = 'running', "startedAt" = NOW()
        FROM candidate, "AiAgent" a
        WHERE r.id = candidate.id AND a.id = r."agentId"
-       RETURNING r.id, r."agentId", r."analysisPeriod", a.enabled, a.triggers`,
+      RETURNING r.id, r."agentId", r."analysisPeriod", a.enabled, a.triggers`,
+      [targetRunId ?? null]
     );
     const run = claimed.rows[0];
     if (!run) break;

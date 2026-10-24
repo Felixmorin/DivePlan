@@ -4,6 +4,7 @@ import { query } from "@/lib/db";
 import { AgentsConsole, type AgentRow, type RunRow } from "./agents-console";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export default async function AgentsPage() {
   await requireAdmin();

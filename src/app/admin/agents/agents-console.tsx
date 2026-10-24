@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { Activity, AlertTriangle, ArrowRight, Bot, Code2, Database, FileText, History, LoaderCircle, Play, Plus, Shield, ToggleLeft, ToggleRight, X } from "lucide-react";
-import { createAgent, enqueueAgentRun, updateAgentEnabled, updateAgentTriggers } from "./actions";
+import { cancelQueuedAgentRun, createAgent, enqueueAgentRun, updateAgentEnabled, updateAgentTriggers } from "./actions";
 
 type TriggerConfig = { onDemand: { enabled: boolean }; schedule: { enabled: boolean; cron: string }; afterDeploy: { enabled: boolean }; incident: { enabled: boolean } };
 export type AgentRow = { id: string; name: string; mission: string; enabled: boolean; triggers: TriggerConfig; createdAt: Date | string; updatedAt: Date | string };
@@ -33,9 +33,8 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
   function runNow() {
     if (!selected) return;
     act(() => enqueueAgentRun(selected.id, analysisPeriod), (value) => {
-      const id = (value as { id: string }).id;
-      const row: RunRow = { id, agentId: selected.id, trigger: "on_demand", status: "pending", analysisPeriod, startedAt: null, finishedAt: null, result: null, error: null, createdAt: new Date() };
-      setRuns((current) => [row, ...current]);
+      const run = value as RunRow;
+      setRuns((current) => [run, ...current.filter((item) => item.id !== run.id)]);
     });
   }
   function saveTriggers(next: TriggerConfig) {
@@ -85,7 +84,7 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
           ] as const).map(([key,label,detail,available]) => { const config = selected.triggers ?? defaultTriggers; const value=config[key]; return <div key={key} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-3 py-2.5"><div><p className="text-sm font-semibold text-slate-800">{label}</p><p className="text-xs text-slate-500">{detail}{key === "schedule" ? ` · ${config.schedule.cron}` : ""}</p></div><button disabled={pending || !available || !selected.enabled} aria-label={`${value.enabled ? "Désactiver" : "Activer"} ${label}`} title={available ? undefined : "Configuration requise"} onClick={() => saveTriggers({ ...config, [key]: { ...value, enabled: !value.enabled } })} className={`rounded-lg p-1 ${available ? "text-blue-700" : "cursor-not-allowed text-slate-300"}`}>{value.enabled ? <ToggleRight className="h-7 w-7"/> : <ToggleLeft className="h-7 w-7"/>}</button></div>; })}</div><p className="mt-2 text-xs text-amber-700">Les trois automatismes externes sont inactifs et ne peuvent pas être activés tant que leurs producteurs ne sont pas connectés.</p></div>
           <div><h3 className="mb-2 text-sm font-black text-slate-900">Garde-fous</h3><div className="flex items-start gap-2 rounded-xl border border-slate-100 p-3"><Shield className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700"/><p className="text-sm text-slate-600">Aucune commande arbitraire. Aucun accès d’écriture au dépôt. Aucune fusion ni mise en production automatique.</p></div></div>
         </div>
-        <div><div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-black text-slate-900">Historique des exécutions</h3><span className="text-xs text-slate-500">{selectedRuns.length} récente(s)</span></div><div className="space-y-3">{selectedRuns.slice(0,10).map((run) => <RunCard key={run.id} run={run}/>)}</div>{!selectedRuns.length && <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500"><History className="mx-auto mb-2 h-5 w-5"/>Aucune exécution. Les rapports seront conservés ici.</div>}</div>
+        <div><div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-black text-slate-900">Historique des exécutions</h3><span className="text-xs text-slate-500">{selectedRuns.length} récente(s)</span></div><div className="space-y-3">{selectedRuns.slice(0,10).map((run) => <RunCard key={run.id} run={run} busy={pending} onCancel={() => act(() => cancelQueuedAgentRun(run.id), () => setRuns((current) => current.map((item) => item.id === run.id ? { ...item, status: "cancelled", error: "Annulée par un administrateur avant le démarrage.", finishedAt: new Date() } : item)))}/>)}</div>{!selectedRuns.length && <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500"><History className="mx-auto mb-2 h-5 w-5"/>Aucune exécution. Les rapports seront conservés ici.</div>}</div>
       </div>
     </section>}
     {pending && <p className="mt-3 flex items-center gap-2 text-xs text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin"/>Enregistrement en cours…</p>}
@@ -93,8 +92,8 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
   </div>;
 }
 
-function RunCard({run}:{run:RunRow}) { const [open,setOpen]=useState(run.status === "completed"); const report=run.result; return <article className="rounded-xl border border-slate-200 p-3.5">
-  <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${run.status === "completed" ? "bg-emerald-500" : run.status === "failed" ? "bg-rose-500" : "bg-blue-500"}`}/><p className="text-sm font-bold text-slate-900">{run.status === "completed" ? "Terminée" : run.status === "failed" ? "Échouée" : run.status === "running" ? "En cours" : "En attente"}</p><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">{triggerNames[run.trigger] ?? run.trigger}</span></div><time className="text-xs text-slate-500">{dateLabel(run.startedAt ?? run.createdAt)}</time></div>
+function RunCard({run,busy,onCancel}:{run:RunRow;busy:boolean;onCancel:()=>void}) { const [open,setOpen]=useState(run.status === "completed"); const report=run.result; return <article className="rounded-xl border border-slate-200 p-3.5">
+  <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${run.status === "completed" ? "bg-emerald-500" : run.status === "failed" ? "bg-rose-500" : run.status === "cancelled" ? "bg-slate-400" : "bg-blue-500"}`}/><p className="text-sm font-bold text-slate-900">{run.status === "completed" ? "Terminée" : run.status === "failed" ? "Échouée" : run.status === "cancelled" ? "Annulée" : run.status === "running" ? "En cours" : "En attente"}</p><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">{triggerNames[run.trigger] ?? run.trigger}</span></div><div className="flex items-center gap-2"><time className="text-xs text-slate-500">{dateLabel(run.startedAt ?? run.createdAt)}</time>{run.status === "pending" && <button disabled={busy} onClick={onCancel} className="min-h-8 rounded-lg border border-rose-200 px-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Retirer de la file</button>}</div></div>
   {run.finishedAt && <p className="mt-1 text-xs text-slate-500">Fin : {dateLabel(run.finishedAt)}</p>}
   <p className="mt-1 text-xs text-slate-500">Période demandée : {run.analysisPeriod === "24h" ? "24 dernières heures" : "7 derniers jours"}</p>
   {run.error && <p className="mt-2 rounded-lg bg-rose-50 p-2 text-xs text-rose-800">{run.error}</p>}

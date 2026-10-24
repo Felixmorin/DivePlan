@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { trackEvent } from "@/lib/monitoring";
+import { runNextAgentJobs } from "@/lib/agent-worker";
 
 const triggerSchema = z.object({
   onDemand: z.object({ enabled: z.boolean() }),
@@ -28,18 +29,40 @@ export async function enqueueAgentRun(agentId: string, analysisPeriod: "24h" | "
   if (!row || !row.enabled) throw new Error("Cet agent est indisponible.");
   const triggers = triggerSchema.safeParse(row.triggers);
   if (!triggers.success || !triggers.data.onDemand.enabled) throw new Error("Le déclenchement à la demande est désactivé.");
-  const active = await query<{ id: string }>(`SELECT id FROM "AiAgentRun" WHERE "agentId" = $1 AND status IN ('pending','running') LIMIT 1`, [row.id]);
-  if (active.rows.length) throw new Error("Une exécution est déjà en cours ou en attente.");
-  const id = randomUUID();
-  try {
-    await query(`INSERT INTO "AiAgentRun" (id, "agentId", "trigger", status, "createdById", "analysisPeriod") VALUES ($1,$2,'on_demand','pending',$3,$4)`, [id, row.id, admin.id, period.data]);
-  } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") throw new Error("Une exécution est déjà en cours ou en attente.");
-    throw error;
+  const active = await query<{ id: string; status: string }>(`SELECT id, status FROM "AiAgentRun" WHERE "agentId" = $1 AND status IN ('pending','running') LIMIT 1`, [row.id]);
+  let id = active.rows[0]?.id;
+  if (active.rows[0]?.status === "running") throw new Error("Une exécution est déjà en cours.");
+  if (id) {
+    await query(`UPDATE "AiAgentRun" SET "analysisPeriod"=$2, "createdById"=$3 WHERE id=$1 AND status='pending'`, [id, period.data, admin.id]);
+  } else {
+    id = randomUUID();
+    try {
+      await query(`INSERT INTO "AiAgentRun" (id, "agentId", "trigger", status, "createdById", "analysisPeriod") VALUES ($1,$2,'on_demand','pending',$3,$4)`, [id, row.id, admin.id, period.data]);
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") throw new Error("Une exécution est déjà en cours.");
+      throw error;
+    }
+    await trackEvent({ type: "admin.agent.run.queued", message: `Exécution demandée : ${row.name}`, userId: admin.id, metadata: { agentId: row.id, runId: id } });
   }
-  await trackEvent({ type: "admin.agent.run.queued", message: `Exécution demandée : ${row.name}`, userId: admin.id, metadata: { agentId: row.id, runId: id } });
+  await runNextAgentJobs(id);
+  const finished = await query<{ id: string; agentId: string; trigger: string; status: string; analysisPeriod: "24h" | "7d"; startedAt: Date | null; finishedAt: Date | null; result: unknown; error: string | null; createdAt: Date }>(
+    `SELECT id,"agentId",trigger,status,"analysisPeriod","startedAt","finishedAt",result,error,"createdAt" FROM "AiAgentRun" WHERE id=$1`, [id]
+  );
   revalidatePath("/admin/agents");
-  return { id };
+  return finished.rows[0] ?? { id, status: "pending" };
+}
+
+export async function cancelQueuedAgentRun(runId: string) {
+  const admin = await requireAdmin();
+  const id = z.string().uuid().safeParse(runId);
+  if (!id.success) throw new Error("Exécution invalide.");
+  const cancelled = await query<{ agentId: string }>(
+    `UPDATE "AiAgentRun" SET status='cancelled', error='Annulée par un administrateur avant le démarrage.', "finishedAt"=NOW() WHERE id=$1 AND status='pending' RETURNING "agentId"`,
+    [id.data]
+  );
+  if (!cancelled.rows[0]) throw new Error("Cette exécution a déjà démarré ou a été traitée.");
+  await trackEvent({ type: "admin.agent.run.cancelled", message: "Exécution en attente retirée de la file", userId: admin.id, metadata: { agentId: cancelled.rows[0].agentId, runId: id.data } });
+  revalidatePath("/admin/agents");
 }
 
 export async function updateAgentTriggers(agentId: string, input: unknown) {
