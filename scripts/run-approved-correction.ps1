@@ -16,6 +16,12 @@ if ($LASTEXITCODE -ne 0 -or $originUrl -notmatch 'github\.com[:/]Felixmorin/Dive
   throw "Le dépôt local origin doit pointer vers github.com/Felixmorin/DivePlan."
 }
 
+if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
+  $codexExecutable = Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "OpenAI\Codex\bin\*\codex.exe") -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if ($codexExecutable) { $env:Path = "$($codexExecutable.DirectoryName);$env:Path" }
+}
+
 foreach ($tool in @("codex", "git", "gh", "npm")) {
   if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "Commande requise introuvable : $tool" }
 }
