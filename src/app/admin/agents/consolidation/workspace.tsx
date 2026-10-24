@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { AlertTriangle, Check, CircleHelp, Clock3, GitPullRequestArrow, History, LoaderCircle, RefreshCw, Scissors, ShieldCheck, X } from "lucide-react";
-import { confirmCorrectionReviewed, decideProposal, prepareProposals, splitProposal, startCorrection } from "./actions";
+import { confirmCorrectionReviewed, decideProposal, getCorrectionStatuses, prepareProposals, splitProposal, startCorrection } from "./actions";
 
 type Finding = { title?: string; priority?: string; impact?: string; effort?: string; location?: string; evidence?: string; limits?: string; recommendation?: string; confidence?: string };
 type Source = { runId: string; agentId: string; agentName: string; createdAt: string; finding: Finding };
@@ -14,7 +14,7 @@ const tone: Record<string, string> = { "En attente d’approbation": "border-blu
 export function ConsolidationWorkspace({ proposals: initial, candidates, sourceRuns }: { proposals: Proposal[]; candidates: Source[]; sourceRuns: number }) {
   const [proposals, setProposals] = useState(initial);
   const [error, setError] = useState("");
-  const [localRunCommand, setLocalRunCommand] = useState("");
+  const [runnerSetupVisible, setRunnerSetupVisible] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -36,6 +36,31 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
   const pageCount = Math.max(1, Math.ceil(filteredProposals.length / pageSize));
   const visiblePage = Math.min(page, pageCount);
   const visibleProposals = filteredProposals.slice((visiblePage - 1) * pageSize, visiblePage * pageSize);
+  const activeCorrectionKey = proposals.filter((p) => ["En attente d’exécution", "En cours", "Modifications effectuées"].includes(p.correctionStatus)).map((p) => p.id).join(",");
+  useEffect(() => {
+    if (!activeCorrectionKey) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const rows = await getCorrectionStatuses(activeCorrectionKey.split(","));
+        if (cancelled) return;
+        setProposals((current) => {
+          let changed = false;
+          const next = current.map((item) => {
+            const latest = rows.find((row) => row.id === item.id);
+            if (!latest || (item.correctionStatus === latest.correctionStatus && item.correctionExecutionId === latest.correctionExecutionId && item.correctionRunUrl === latest.correctionRunUrl && item.correctionPullRequestUrl === latest.correctionPullRequestUrl && JSON.stringify(item.history) === JSON.stringify(latest.history))) return item;
+            changed = true;
+            return { ...item, correctionStatus: latest.correctionStatus, correctionExecutionId: latest.correctionExecutionId, correctionRunUrl: latest.correctionRunUrl, correctionPullRequestUrl: latest.correctionPullRequestUrl, history: latest.history };
+          });
+          return changed ? next : current;
+        });
+      } catch { /* Keep the last displayed status and retry on the next interval. */ }
+      if (!cancelled) timer = setTimeout(poll, 15000);
+    }
+    timer = setTimeout(poll, 5000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [activeCorrectionKey]);
   function refresh() {
     setError("");
     startTransition(async () => { try { await prepareProposals(); window.location.reload(); } catch (e) { setError(e instanceof Error ? e.message : "Une erreur est survenue."); } });
@@ -55,7 +80,7 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
     startTransition(async () => {
       try {
         const result = await startCorrection({ id: p.id });
-        setLocalRunCommand(`pwsh -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\run-approved-correction.ps1 -ProposalId ${p.id} -ExecutionId ${result.executionId}`);
+        setRunnerSetupVisible(true);
         setProposals((list) => list.map((item) => item.id === p.id ? { ...item, correctionStatus: result.correctionStatus, correctionExecutionId: result.executionId, correctionRunUrl: null, correctionPullRequestUrl: null, history: [...item.history, { at: new Date().toISOString(), event: "Exécution locale préparée pour Codex avec ChatGPT", status: result.correctionStatus }] } : item));
       } catch (e) { setError(e instanceof Error ? e.message : "Une erreur est survenue."); }
     });
@@ -85,7 +110,7 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
     </div>
     {previewOpen && <section aria-label="Aperçu des recommandations avant examen" className="mt-3 rounded-2xl border border-blue-200 bg-blue-50/60 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-bold text-blue-950">Confirmez les recommandations à examiner</h3><p className="mt-1 text-sm text-blue-900">{candidates.length} recommandation(s) inédites provenant de {new Set(candidates.map((item) => item.agentId)).size} agent(s). Les doublons seront regroupés uniquement lorsque le titre et le composant correspondent exactement.</p></div><button type="button" disabled={pending} onClick={refresh} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl bg-blue-700 px-4 text-sm font-bold text-white hover:bg-blue-800 disabled:opacity-50">{pending ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <Check className="h-4 w-4"/>}Confirmer l’examen</button></div><div className="mt-3 max-h-72 space-y-2 overflow-y-auto">{candidates.map((candidate,i)=><div key={`${candidate.runId}-${i}`} className="rounded-xl border border-blue-100 bg-white p-3"><div className="flex flex-wrap items-center justify-between gap-2"><b className="text-sm text-slate-900">{candidate.finding.title}</b><span className="text-xs text-slate-500">{candidate.agentName} · {candidate.finding.location ?? "Emplacement non précisé"}</span></div><p className="mt-1 text-xs leading-5 text-slate-600">{candidate.finding.evidence ?? "Preuve non fournie dans le rapport source."} {candidate.finding.recommendation ? `· ${candidate.finding.recommendation}` : ""}</p></div>)}</div></section>}
     {error && <p role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
-    {localRunCommand && <section aria-label="Commande de correction locale" className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-4"><h2 className="font-black text-blue-950">Exécution locale prête</h2><p className="mt-1 text-sm text-blue-900">Dans un terminal PowerShell ouvert à la racine du dépôt DivePlan, exécute cette commande. Codex utilisera ta session ChatGPT.</p><pre className="mt-3 overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs text-white"><code>{localRunCommand}</code></pre></section>}
+    {runnerSetupVisible && <section aria-label="Démarrage du runner local" className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-4"><h2 className="font-black text-blue-950">Correction mise en file</h2><p className="mt-1 text-sm text-blue-900">Le runner local prendra cette correction automatiquement dès qu’il sera actif. Il suffit de l’installer une fois; aucune commande n’est nécessaire pour chaque proposition.</p><details className="mt-3"><summary className="cursor-pointer text-sm font-bold text-blue-950">Afficher la commande d’installation (une fois)</summary><p className="mt-2 text-sm text-blue-900">Dans PowerShell, à la racine du dépôt DivePlan, lance l’installation. Le runner démarrera à l’ouverture de ta session Windows et utilisera ta session ChatGPT.</p><pre className="mt-2 overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs text-white"><code>pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-correction-runner.ps1</code></pre></details></section>}
     <section aria-label="Filtres des propositions" className="mt-6 space-y-3"><div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-xl font-black text-slate-950">Propositions <span className="ml-1 text-sm font-semibold text-slate-500">{filteredProposals.length}<span className="font-medium"> / {proposals.length}</span></span></h2><p className="mt-1 text-xs text-slate-500">Affichage de {filteredProposals.length ? (visiblePage - 1) * pageSize + 1 : 0} à {Math.min(visiblePage * pageSize, filteredProposals.length)} · 20 par page</p></div><div className="flex flex-wrap gap-2"><label className="text-xs font-semibold text-slate-600">Rechercher<input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Titre, source, fichier…" className="ml-2 min-h-10 w-56 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"/></label><label className="text-xs font-semibold text-slate-600">Correction<select value={correctionFilter} onChange={(event) => { setCorrectionFilter(event.target.value); setPage(1); }} className="ml-2 min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"><option value="all">Toutes</option><option value="ready">PR à réviser</option><option value="done">Revue terminée</option><option value="active">En cours</option><option value="blocked">Bloquée / échec</option></select></label><label className="text-xs font-semibold text-slate-600">Priorité<select value={priorityFilter} onChange={(event) => { setPriorityFilter(event.target.value); setPage(1); }} className="ml-2 min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"><option value="all">Toutes</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option><option value="other">Autre / non définie</option></select></label><label className="text-xs font-semibold text-slate-600">Statut<select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }} className="ml-2 min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800"><option value="all">Tous</option>{["En attente d’approbation", "À clarifier", "À séparer", "Approuvée", "Refusée", "Périmée"].map((status) => <option key={status} value={status}>{status}</option>)}</select></label></div></div></section>
     {filteredProposals.length ? <><div className="mt-3 space-y-3">{visibleProposals.map((p) => <ProposalCard key={p.id} proposal={p} busy={pending} onDecide={decide} onRequestChange={requestChange} onSplit={split} onLaunchCorrection={launchCorrection} onConfirmReviewed={confirmReviewed}/>)}</div><nav aria-label="Pages des propositions" className="mt-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3"><span className="text-sm text-slate-600">Page {visiblePage} sur {pageCount}</span><div className="flex gap-2"><button type="button" disabled={visiblePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="min-h-9 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 disabled:opacity-40">Précédent</button><button type="button" disabled={visiblePage >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="min-h-9 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 disabled:opacity-40">Suivant</button></div></nav></> : <div className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center"><ShieldCheck className="mx-auto h-8 w-8 text-slate-400"/><h3 className="mt-3 font-bold text-slate-800">{proposals.length ? "Aucune proposition ne correspond à ces filtres" : "Aucune proposition pour l’instant"}</h3><p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-slate-500">{proposals.length ? "Modifiez les filtres pour afficher d’autres propositions." : "Les recommandations apparaîtront ici après examen des rapports. Les constats sans preuve ou changement vérifiable resteront « À clarifier »."}</p></div>}
     <p className="mt-5 text-xs leading-5 text-slate-500">La consolidation automatique regroupe uniquement les titres et composants identiques. La détection des complémentarités, dépendances et conflits doit encore être revue par un administrateur. L’approbation prépare une exécution locale; le script crée une branche et une PR brouillon après validations réussies. Aucune fusion ni aucun déploiement ne sont automatisés.</p>

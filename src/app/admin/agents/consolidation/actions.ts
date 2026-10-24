@@ -43,7 +43,7 @@ export async function startCorrection(input: { id: string }) {
     if ((row.correctionStatus === "En attente d’exécution" && row.correctionExecutionId) || ["En cours", "Modifications effectuées", "PR en brouillon prête à réviser", "Terminé après révision humaine"].includes(row.correctionStatus)) {
       throw new Error(`Une correction ne peut pas être lancée avec le statut « ${row.correctionStatus} ».`);
     }
-    const history = [...row.history, { at: new Date().toISOString(), event: "Exécution locale préparée; l’administrateur lancera Codex avec son compte ChatGPT dans le dépôt local.", actor: admin.email, status: "En attente d’exécution" }];
+    const history = [...row.history, { at: new Date().toISOString(), event: "Correction mise en file; le runner local lancera Codex avec la session ChatGPT configurée sur ce dépôt.", actor: admin.email, status: "En attente d’exécution" }];
     const proposalHash = hashCorrectionProposal(row);
     await client.query(`UPDATE "AiPrProposal" SET "correctionStatus"='En attente d’exécution',"correctionExecutionId"=$2,"correctionProposalHash"=$3,"correctionRunUrl"=NULL,"correctionPullRequestUrl"=NULL,history=$4,"updatedAt"=NOW() WHERE id=$1`, [row.id, executionId, proposalHash, JSON.stringify(history)]);
     return row;
@@ -88,6 +88,20 @@ export async function confirmCorrectionReviewed(input: { id: string; executionId
 
   await trackEvent({ type: "admin.agent.correction.reviewed", message: "Correction confirmée après revue humaine de la PR", userId: admin.id, metadata: { proposalId: parsed.data.id, executionId: parsed.data.executionId } });
   revalidatePath(path);
+}
+
+export async function getCorrectionStatuses(ids: string[]) {
+  await requireAdmin();
+  const parsed = z.array(z.string().uuid()).max(1000).safeParse(ids);
+  if (!parsed.success) throw new Error("Liste de propositions invalide.");
+  if (!parsed.data.length) return [];
+  const result = await query<{
+    id: string; correctionStatus: string; correctionExecutionId: string | null;
+    correctionRunUrl: string | null; correctionPullRequestUrl: string | null;
+    history: Array<{ at: string; event: string; actor?: string; status?: string }>;
+  }>(`SELECT id,"correctionStatus","correctionExecutionId","correctionRunUrl","correctionPullRequestUrl",history
+      FROM "AiPrProposal" WHERE id=ANY($1::uuid[])`, [parsed.data]);
+  return result.rows;
 }
 
 export async function decideProposal(input: { id: string; status: string; note?: string }) {
