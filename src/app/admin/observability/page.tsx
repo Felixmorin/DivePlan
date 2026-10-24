@@ -16,7 +16,7 @@ type EventRow = { type: string; message: string; clubName: string | null; create
 export default async function AdminObservabilityPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   await requireAdmin();
   const { period } = await searchParams;
-  const hours = period === "72h" ? 72 : period === "7d" ? 168 : 24;
+  const hours = period === "6h" ? 6 : period === "12h" ? 12 : period === "72h" ? 72 : period === "7d" ? 168 : 24;
   const [transfer, hourly, database, vitals, eventCounts, recentEvents] = await Promise.all([
     query<RouteRow>(`SELECT route, SUM(requests)::text AS requests, SUM("transferBytes")::text AS bytes, SUM(SUM(requests)) OVER ()::text AS "totalRequests", SUM(SUM("transferBytes")) OVER ()::text AS "totalBytes" FROM "TransferTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour') GROUP BY route ORDER BY SUM(requests) DESC LIMIT 30`, [hours]),
     query<HourRow>(`SELECT hour, SUM(requests)::text AS requests, SUM("transferBytes")::text AS bytes FROM "TransferTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour') GROUP BY hour ORDER BY hour`, [hours]),
@@ -34,8 +34,8 @@ export default async function AdminObservabilityPage({ searchParams }: { searchP
   return <AdminShell active="Observabilité">
     <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div><h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Observabilité</h1><p className="mt-1 text-sm leading-6 text-slate-600">Surveillez les performances et la santé de la plateforme DivePlan.</p></div>
-      <nav aria-label="Période d’observation" className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">{[["24h", "24 h"], ["72h", "3 jours"], ["7d", "7 jours"]].map(([key, label]) => {
-        const active = (key === "24h" && hours === 24) || (key === "72h" && hours === 72) || (key === "7d" && hours === 168);
+      <nav aria-label="Période d’observation" className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">{[["6h", "6 h"], ["12h", "12 h"], ["24h", "24 h"], ["72h", "3 jours"], ["7d", "7 jours"]].map(([key, label]) => {
+        const active = (key === "6h" && hours === 6) || (key === "12h" && hours === 12) || (key === "24h" && hours === 24) || (key === "72h" && hours === 72) || (key === "7d" && hours === 168);
         return <Link key={key} href={`/admin/observability?period=${key}`} aria-current={active ? "page" : undefined} className={`inline-flex min-h-9 items-center rounded-lg px-3.5 text-sm font-bold transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}>{label}</Link>;
       })}</nav>
     </header>
@@ -85,7 +85,7 @@ function vitalOrder(metric: string) { const order = ["LCP", "FCP", "INP", "CLS",
 function metricName(metric: string) { return ({ LCP: "Largest Contentful Paint", FCP: "First Contentful Paint", INP: "Interaction to Next Paint", CLS: "Cumulative Layout Shift", TTFB: "Time to First Byte" } as Record<string, string>)[metric] ?? "Mesure de performance"; }
 function formatBytes(bytes: number) { if (bytes < 1024) return `${Math.round(bytes)} o`; const units = ["Ko", "Mo", "Go"]; let value = bytes / 1024; let unit = 0; while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; } return `${value.toLocaleString("fr-CA", { maximumFractionDigits: 1 })} ${units[unit]}`; }
 function formatMetric(metric: string, value: number) { return metric === "CLS" ? value.toLocaleString("fr-CA", { maximumFractionDigits: 3 }) : `${(value >= 1000 ? (value / 1000).toLocaleString("fr-CA", { maximumFractionDigits: 1 }) + " s" : Math.round(value).toLocaleString("fr-CA") + " ms")}`; }
-function periodLabel(hours: number) { return hours === 24 ? "24 dernières heures" : hours === 72 ? "3 derniers jours" : "7 derniers jours"; }
+function periodLabel(hours: number) { return hours === 6 ? "6 dernières heures" : hours === 12 ? "12 dernières heures" : hours === 24 ? "24 dernières heures" : hours === 72 ? "3 derniers jours" : "7 derniers jours"; }
 function formatHour(date: Date, periodHours: number) { return formatMontrealDate(date, periodHours > 24 ? { day: "numeric", month: "short", hour: "2-digit" } : { hour: "2-digit" }); }
 function formatEventTime(date: Date) {
   const parts = new Intl.DateTimeFormat("fr-CA", { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23", timeZone: "America/Toronto" }).formatToParts(date);
