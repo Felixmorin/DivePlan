@@ -41,8 +41,8 @@ export async function consolidateAgentFindings() {
     const complete = sources.every((source) => source.finding.evidence && source.finding.recommendation);
     const status = complete ? "En attente d’approbation" : "À clarifier";
     await query(`INSERT INTO "AiPrProposal" (id,title,summary,sources,details,status,history) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [
-      randomUUID(), title, first.evidence ?? first.recommendation ?? "Constat rapporté par un agent d’analyse.", sources, details, status,
-      [{ at: new Date().toISOString(), event: "Proposition créée depuis les recommandations sources", actor: "Agent de consolidation", status }]
+      randomUUID(), title, first.evidence ?? first.recommendation ?? "Constat rapporté par un agent d’analyse.", JSON.stringify(sources), JSON.stringify(details), status,
+      JSON.stringify([{ at: new Date().toISOString(), event: "Proposition créée depuis les recommandations sources", actor: "Agent de consolidation", status }])
     ]);
     added += 1;
   }

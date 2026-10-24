@@ -25,7 +25,7 @@ export async function decideProposal(input: { id: string; status: string; note?:
   const row = current.rows[0];
   if (!row) throw new Error("Proposition introuvable.");
   const history = [...row.history, { at: new Date().toISOString(), event: parsed.data.note || `Statut modifié : ${parsed.data.status}`, actor: admin.email, status: parsed.data.status, snapshot: { title: row.title, summary: row.summary, sources: row.sources, details: row.details, status: parsed.data.status } }];
-  await query(`UPDATE "AiPrProposal" SET status=$2,history=$3, "updatedAt"=NOW() WHERE id=$1`, [parsed.data.id, parsed.data.status, history]);
+  await query(`UPDATE "AiPrProposal" SET status=$2,history=$3, "updatedAt"=NOW() WHERE id=$1`, [parsed.data.id, parsed.data.status, JSON.stringify(history)]);
   revalidatePath(path);
 }
 
@@ -43,12 +43,12 @@ export async function splitProposal(id: string) {
       const title = source.finding.title ?? row.title;
       const status = source.finding.evidence && source.finding.recommendation ? "En attente d’approbation" : "À clarifier";
       await client.query(`INSERT INTO "AiPrProposal" (id,title,summary,sources,details,status,history) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [
-        nextId, title, source.finding.evidence ?? row.summary, [source], row.details, status,
-        [{ at: new Date().toISOString(), event: `Proposition séparée depuis ${row.title}`, actor: admin.email, status }]
+        nextId, title, source.finding.evidence ?? row.summary, JSON.stringify([source]), JSON.stringify(row.details), status,
+        JSON.stringify([{ at: new Date().toISOString(), event: `Proposition séparée depuis ${row.title}`, actor: admin.email, status }])
       ]);
     }
     const history = [...row.history, { at: new Date().toISOString(), event: `Proposition séparée en ${row.sources.length} propositions`, actor: admin.email, status: "À séparer" }];
-    await client.query(`UPDATE "AiPrProposal" SET status='À séparer',history=$2,"updatedAt"=NOW() WHERE id=$1`, [parsed.data, history]);
+    await client.query(`UPDATE "AiPrProposal" SET status='À séparer',history=$2,"updatedAt"=NOW() WHERE id=$1`, [parsed.data, JSON.stringify(history)]);
   });
   revalidatePath(path);
 }
