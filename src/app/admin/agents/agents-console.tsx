@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Activity, AlertTriangle, ArrowRight, BarChart3, Bot, CheckCircle2, ChevronDown, ChevronUp, Code2, Database, FileText, History, Info, LoaderCircle, Play, Plus, Settings2, Shield, ToggleLeft, ToggleRight, X } from "lucide-react";
-import { cancelQueuedAgentRun, createAgent, enqueueAgentRun, moveAgent as saveAgentOrder, updateAgentEnabled, updateAgentTriggers } from "./actions";
+import { Activity, AlertTriangle, ArrowRight, BarChart3, Bot, CheckCircle2, ChevronDown, ChevronUp, Code2, Database, FileText, History, Info, LoaderCircle, Play, Settings2, Shield, ToggleLeft, ToggleRight, X } from "lucide-react";
+import { cancelQueuedAgentRun, enqueueAgentRun, moveAgent as saveAgentOrder, startAgentWorkflow, updateAgentEnabled, updateAgentName, updateAgentTriggers } from "./actions";
 
 type TriggerConfig = { onDemand: { enabled: boolean }; schedule: { enabled: boolean; cron: string }; afterDeploy: { enabled: boolean }; incident: { enabled: boolean } };
 export type AgentRow = { id: string; name: string; mission: string; enabled: boolean; triggers: TriggerConfig; sortOrder: number; createdAt: Date | string; updatedAt: Date | string };
-export type RunRow = { id: string; agentId: string; trigger: string; status: string; analysisPeriod: "24h" | "7d"; startedAt: Date | string | null; finishedAt: Date | string | null; result: Report | null; error: string | null; createdAt: Date | string };
+export type RunRow = { id: string; agentId: string; trigger: string; status: string; analysisPeriod: "24h" | "7d"; startedAt: Date | string | null; finishedAt: Date | string | null; result: Report | null; error: string | null; createdAt: Date | string; workflowId: string | null; sequence: number; workflowCount?: number };
 type Report = { title: string; period: { label: string; from: string; to: string }; analyzedAt?: string; analyzedCommit?: string; summary?: string; changes?: string; diagrams?: Array<{ title: string; mermaid: string; references?: string }>; sources: Array<{ name: string; period: string; samples: number }>; facts: Array<{ category: string; fact: string; evidence: string }>; findings?: Array<{ kind: string; priority: string; impact: string; effort: string; title: string; location: string; evidence: string; limits: string; recommendation: string }>; assumptions: string[]; recommendations: string[]; missing: string[] };
 
 const defaultTriggers: TriggerConfig = { onDemand: { enabled: true }, schedule: { enabled: false, cron: "0 9 * * 1" }, afterDeploy: { enabled: false }, incident: { enabled: false } };
@@ -17,10 +17,10 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
   const [runs, setRuns] = useState(initialRuns);
   const [selectedId, setSelectedId] = useState("");
   const [detailTab, setDetailTab] = useState<"summary" | "history" | "configuration">("summary");
-  const [modal, setModal] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [analysisPeriod, setAnalysisPeriod] = useState<"24h" | "7d">("7d");
   const [error, setError] = useState("");
+  const [workflowMessage, setWorkflowMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const selected = agents.find((agent) => agent.id === selectedId);
   const activeCount = agents.filter((agent) => agent.enabled).length;
@@ -46,6 +46,15 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
     act(() => updateAgentTriggers(selected.id, next), () => setAgents((current) => current.map((agent) => agent.id === selected.id ? { ...agent, triggers: next } : agent)));
   }
 
+  function saveName(name: string) {
+    if (!selected) return;
+    act(() => updateAgentName(selected.id, name), (value) => {
+      const updatedName = value as string;
+      setAgents((current) => current.map((agent) => agent.id === selected.id ? { ...agent, name: updatedName } : agent));
+      setSettingsOpen(false);
+    });
+  }
+
   function moveAgent(agentId: string, direction: "up" | "down") {
     const index = agents.findIndex((agent) => agent.id === agentId);
     const nextIndex = index + (direction === "up" ? -1 : 1);
@@ -57,10 +66,19 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
     }));
   }
 
+  function startWorkflow() {
+    setWorkflowMessage("");
+    act(() => startAgentWorkflow(analysisPeriod), (value) => {
+      const result = value as { runs: RunRow[]; skipped: string[] };
+      setRuns((current) => [...result.runs, ...current]);
+      setWorkflowMessage(`Workflow mis en file : ${result.runs.length} agent(s), dans l’ordre de la liste. Le traitement commence au prochain passage du worker.${result.skipped.length ? ` Agents déjà occupés et ignorés : ${result.skipped.join(", ")}.` : ""}`);
+    });
+  }
+
   return <div className="mx-auto max-w-[1500px]">
     <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div><p className="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-blue-700">Administration › Automatisation</p><h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Agents IA</h1><p className="mt-1 text-sm text-slate-600">Configurez et surveillez les agents qui analysent DivePlan.</p><a href="/admin/agents/context" className="mt-2 inline-flex text-sm font-bold text-blue-700 hover:underline">Consulter le guide général et les fiches de contexte</a><a href="/admin/agents/consolidation" className="ml-4 mt-2 inline-flex text-sm font-bold text-blue-700 hover:underline">Ouvrir l’espace de consolidation des PR →</a></div>
-      <button onClick={() => setModal(true)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><Plus className="h-4 w-4" />Créer un agent</button>
+      <button disabled={pending} onClick={startWorkflow} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><Play className="h-4 w-4" />Start workflow</button>
     </header>
     <section aria-label="Indicateurs des agents" className="grid gap-3 md:grid-cols-3">
       <Stat icon={Bot} label="agents actifs" value={activeCount} tone="blue" />
@@ -68,6 +86,7 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
       <Stat icon={AlertTriangle} label="résultats à examiner" value={reviewCount} tone="amber" />
     </section>
     {error && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-medium text-rose-800">{error}</p>}
+    {workflowMessage && <p role="status" className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-medium text-blue-900">{workflowMessage}</p>}
 
     <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="hidden grid-cols-[1.15fr_2fr_.65fr_1fr_1fr_.55fr] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:grid"><span>Agent</span><span>Mission</span><span>État</span><span>Dernière exécution</span><span>Résultat</span><span>Actions</span></div>
@@ -104,9 +123,8 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns, supaba
         {latestReport && <>{latestReport.analyzedCommit && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-950"><b>Commit :</b> {latestReport.analyzedCommit} · <b>Analyse :</b> {latestReport.analyzedAt ? dateLabel(latestReport.analyzedAt) : "date inconnue"}<p className="mt-1">{latestReport.summary} {latestReport.changes}</p></div>}{latestReport.diagrams?.map((diagram) => <ReportAccordion key={diagram.title} icon={FileText} title={`Diagramme · ${diagram.title}`}><p className="text-xs text-slate-500">Références : {diagram.references ?? "voir les sources listées"}</p><pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-slate-950 p-3 text-xs text-slate-100">{diagram.mermaid}</pre></ReportAccordion>)}<ReportAccordion icon={BarChart3} title="Métriques et faits observés">{latestReport.facts.length ? <div className="space-y-2">{latestReport.facts.map((fact,index)=><p key={index} className="text-sm text-slate-700"><b>{fact.category} :</b> {fact.fact}<span className="block text-xs text-slate-500">{fact.evidence}</span></p>)}</div> : <p className="text-sm text-slate-500">Aucune métrique dans ce rapport.</p>}</ReportAccordion><ReportAccordion icon={Database} title="Sources consultées">{latestReport.sources.map((source)=><p key={source.name} className="text-sm text-slate-700">{source.name} · {source.samples} échantillon(s) · {source.period}</p>)}</ReportAccordion><ReportAccordion icon={Info} title="Limites de l’analyse">{[...latestReport.assumptions,...latestReport.missing].map((item,index)=><p key={index} className="text-sm text-slate-700">{item}</p>)}</ReportAccordion></>}
       </div> : detailTab === "history" ? <div className="space-y-3 p-4 sm:p-5">{selectedRuns.slice(0,10).map((run) => <RunCard key={run.id} run={run} busy={pending} onCancel={() => act(() => cancelQueuedAgentRun(run.id), () => setRuns((current) => current.map((item) => item.id === run.id ? { ...item, status: "cancelled", error: "Annulée par un administrateur avant le démarrage.", finishedAt: new Date() } : item)))}/>) }{!selectedRuns.length && <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500"><History className="mx-auto mb-2 h-5 w-5"/>Aucune exécution. Les rapports seront conservés ici.</div>}</div> : <div className="p-4 text-sm text-slate-600">Les déclencheurs et permissions sont disponibles dans la fenêtre de configuration.<button onClick={()=>setSettingsOpen(true)} className="ml-2 font-bold text-blue-700">Ouvrir la configuration</button></div>}
     </section>}
-    {settingsOpen && selected && <AgentSettingsModal agent={selected} supabaseStatsConfigured={supabaseStatsConfigured} busy={pending} onClose={() => setSettingsOpen(false)} onSave={saveTriggers}/>}
+    {settingsOpen && selected && <AgentSettingsModal agent={selected} supabaseStatsConfigured={supabaseStatsConfigured} busy={pending} onClose={() => setSettingsOpen(false)} onSave={saveTriggers} onRename={saveName}/>}
     {pending && <p className="mt-3 flex items-center gap-2 text-xs text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin"/>Enregistrement en cours…</p>}
-    {modal && <CreateModal onClose={() => setModal(false)} onCreate={(name,mission) => act(() => createAgent({name,mission}), () => { setModal(false); window.location.reload(); })} />}
   </div>;
 }
 
@@ -126,9 +144,10 @@ function FindingCard({finding,index}:{finding:NonNullable<Report["findings"]>[nu
 
 function ReportAccordion({icon:Icon,title,children}:{icon:typeof Activity;title:string;children:React.ReactNode}) { const [open,setOpen]=useState(false); return <section className="overflow-hidden rounded-lg border border-slate-200"><button aria-expanded={open} onClick={()=>setOpen(!open)} className="flex min-h-10 w-full items-center gap-3 px-3 text-left text-sm font-bold text-slate-900 hover:bg-slate-50"><Icon className="h-4 w-4 text-slate-600"/>{title}<ChevronDown className={`ml-auto h-4 w-4 text-slate-600 transition-transform ${open?"rotate-180":""}`}/></button>{open&&<div className="space-y-2 border-t border-slate-100 px-3 py-3">{children}</div>}</section>; }
 
-function AgentSettingsModal({agent,supabaseStatsConfigured,busy,onClose,onSave}:{agent:AgentRow;supabaseStatsConfigured:boolean;busy:boolean;onClose:()=>void;onSave:(next:TriggerConfig)=>void}) {
+function AgentSettingsModal({agent,supabaseStatsConfigured,busy,onClose,onSave,onRename}:{agent:AgentRow;supabaseStatsConfigured:boolean;busy:boolean;onClose:()=>void;onSave:(next:TriggerConfig)=>void;onRename:(name:string)=>void}) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const [name,setName] = useState(agent.name);
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
@@ -152,6 +171,7 @@ function AgentSettingsModal({agent,supabaseStatsConfigured,busy,onClose,onSave}:
       <button ref={closeRef} onClick={onClose} aria-label="Fermer la configuration" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"><X className="h-4 w-4"/></button>
     </div>
     <div className="space-y-6 p-5 sm:p-6">
+      <section><label htmlFor="agent-name" className="mb-2 block text-sm font-black text-slate-900">Nom de l’agent</label><div className="flex flex-wrap gap-2"><input id="agent-name" value={name} onChange={(event)=>setName(event.target.value)} maxLength={100} className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-300 px-3 text-sm"/><button disabled={busy || name.trim().length<2 || name.trim()===agent.name} onClick={()=>onRename(name)} className="min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white disabled:opacity-40">Enregistrer le nom</button></div><p className="mt-1 text-xs text-slate-500">2 à 100 caractères.</p></section>
       <section><h3 className="mb-2 text-sm font-black text-slate-900">Description</h3><p className="text-sm leading-6 text-slate-600">{description}</p>{!["diveplan-observability", "sql-supabase-analyst", "architecture-cartographer", "pr-consolidation"].includes(agent.id) && <p className="mt-2 text-xs font-semibold text-amber-700">Configuration requise · aucun connecteur ou traitement d’exécution n’est associé à cet agent.</p>}</section>
       <section><h3 className="mb-2 text-sm font-black text-slate-900">Accès et permissions</h3><div className="flex flex-wrap gap-2">{(isSqlAgent ? [[Code2,"Code SQL déployé"],[Database,"Télémétrie DB en lecture seule"],[FileText,"Schéma et migrations"]] : agent.id === "architecture-cartographer" ? [[Code2,"Sources déployées en lecture seule"],[FileText,"Schéma, migrations et configuration"],[Database,"Historique de rapports"]] : agent.id === "pr-consolidation" ? [[Database,"Rapports des agents"],[FileText,"Sources et historique des propositions"]] : [[Code2,"Code (non connecté)"],[Activity,"Web Vitals"],[Database,"Télémétrie DB"],[FileText,"Événements"]]).map(([Icon,label]) => { const I=Icon as typeof Activity; return <span key={label as string} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700"><I className="h-3.5 w-3.5"/>{label as string}</span>; })}</div><p className="mt-2 text-xs leading-5 text-slate-500">{isSqlAgent ? `Scan statique sans exécuter le SQL du dépôt. Les lectures DB utilisent des transactions READ ONLY; aucun secret n’est transmis au navigateur. ${supabaseStatsConfigured ? "La connexion de statistiques Supabase sera vérifiée lors du prochain rapport." : "Statistiques Supabase: définir SUPABASE_READONLY_DATABASE_URL avec un rôle de lecture seule."}` : agent.id === "architecture-cartographer" ? "Lecture seule des sources incluses dans le déploiement. Résultats écrits dans AiAgentRun; aucun accès en écriture au dépôt, aux secrets ou aux données métier." : agent.id === "pr-consolidation" ? "Lecture seule des résultats et recommandations des autres agents; accès en écriture limité aux propositions et à leur historique. Aucun accès au dépôt ou à Git." : "Lecture seule. Aucun accès au code source, à Git ou aux secrets n’est configuré pour l’analyse."}</p></section>
       <section><h3 className="mb-2 text-sm font-black text-slate-900">Déclencheurs</h3><div className="space-y-2">{([
@@ -163,7 +183,7 @@ function AgentSettingsModal({agent,supabaseStatsConfigured,busy,onClose,onSave}:
 }
 
 function RunCard({run,busy,onCancel}:{run:RunRow;busy:boolean;onCancel:()=>void}) { const [open,setOpen]=useState(run.status === "completed"); const report=run.result; return <article className="rounded-xl border border-slate-200 p-3.5">
-  <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${run.status === "completed" ? "bg-emerald-500" : run.status === "failed" ? "bg-rose-500" : run.status === "cancelled" ? "bg-slate-400" : "bg-blue-500"}`}/><p className="text-sm font-bold text-slate-900">{run.status === "completed" ? "Terminée" : run.status === "failed" ? "Échouée" : run.status === "cancelled" ? "Annulée" : run.status === "running" ? "En cours" : "En attente"}</p><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">{triggerNames[run.trigger] ?? run.trigger}</span></div><div className="flex items-center gap-2"><time className="text-xs text-slate-500">{dateLabel(run.startedAt ?? run.createdAt)}</time>{run.status === "pending" && <button disabled={busy} onClick={onCancel} className="min-h-8 rounded-lg border border-rose-200 px-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Retirer de la file</button>}</div></div>
+  <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${run.status === "completed" ? "bg-emerald-500" : run.status === "failed" ? "bg-rose-500" : run.status === "cancelled" ? "bg-slate-400" : "bg-blue-500"}`}/><p className="text-sm font-bold text-slate-900">{run.status === "completed" ? "Terminée" : run.status === "failed" ? "Échouée" : run.status === "cancelled" ? "Annulée" : run.status === "running" ? "En cours" : "En attente"}</p><span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">{triggerNames[run.trigger] ?? run.trigger}</span>{run.workflowId && <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700">Workflow · {run.sequence + 1}{run.workflowCount ? `/${run.workflowCount}` : ""}</span>}</div><div className="flex items-center gap-2"><time className="text-xs text-slate-500">{dateLabel(run.startedAt ?? run.createdAt)}</time>{run.status === "pending" && <button disabled={busy} onClick={onCancel} className="min-h-8 rounded-lg border border-rose-200 px-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">Retirer de la file</button>}</div></div>
   {run.finishedAt && <p className="mt-1 text-xs text-slate-500">Fin : {dateLabel(run.finishedAt)}</p>}
   <p className="mt-1 text-xs text-slate-500">Période demandée : {run.analysisPeriod === "24h" ? "24 dernières heures" : "7 derniers jours"}</p>
   {run.error && <p className="mt-2 rounded-lg bg-rose-50 p-2 text-xs text-rose-800">{run.error}</p>}
@@ -176,8 +196,6 @@ function RunCard({run,busy,onCancel}:{run:RunRow;busy:boolean;onCancel:()=>void}
     <div><p className="text-xs font-black uppercase tracking-wide text-amber-700">Configuration ou données manquantes</p>{report.missing.map((m,i)=><p key={i} className="mt-1 text-xs leading-5 text-amber-800">{m}</p>)}</div>
   </div>}</>}
 </article>; }
-
-function CreateModal({onClose,onCreate}:{onClose:()=>void;onCreate:(name:string,mission:string)=>void}) { const [name,setName]=useState("");const [mission,setMission]=useState(""); return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4" role="presentation"><div role="dialog" aria-modal="true" aria-labelledby="create-agent-title" className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-center justify-between"><h2 id="create-agent-title" className="text-lg font-black">Créer un agent</h2><button onClick={onClose} aria-label="Fermer" className="rounded-lg p-2 hover:bg-slate-100"><X className="h-4 w-4"/></button></div><p className="mt-1 text-sm text-slate-500">Un nouvel agent démarre avec des déclencheurs automatiques désactivés.</p><label className="mt-5 block text-sm font-bold">Nom<input value={name} onChange={e=>setName(e.target.value)} maxLength={100} className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm"/></label><label className="mt-4 block text-sm font-bold">Mission<textarea value={mission} onChange={e=>setMission(e.target.value)} maxLength={1200} rows={4} className="mt-1.5 w-full rounded-lg border border-slate-300 p-3 text-sm"/></label><div className="mt-5 flex justify-end gap-2"><button onClick={onClose} className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold">Annuler</button><button disabled={name.trim().length<3||mission.trim().length<20} onClick={()=>onCreate(name,mission)} className="min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white disabled:opacity-40">Créer l’agent</button></div></div></div>; }
 
 function Stat({icon:Icon,label,value,tone}:{icon:typeof Bot;label:string;value:number;tone:"blue"|"sky"|"amber"}) { const colors={blue:"bg-blue-50 text-blue-700",sky:"bg-sky-50 text-sky-700",amber:"bg-amber-50 text-amber-700"}; return <div className="flex min-h-[84px] items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><span className={`grid h-11 w-11 place-items-center rounded-full ${colors[tone]}`}><Icon className="h-5 w-5"/></span><div><p className="text-2xl font-black leading-7 text-slate-950">{value}</p><p className="text-xs font-medium text-slate-600">{label}</p></div><ArrowRight className="ml-auto h-4 w-4 text-slate-400"/></div>; }
 function Badge({good,children}:{good:boolean;children:React.ReactNode}) { return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${good?"bg-emerald-50 text-emerald-800":"bg-amber-50 text-amber-800"}`}><span className={`h-1.5 w-1.5 rounded-full ${good?"bg-emerald-600":"bg-amber-600"}`}/>{children}</span>; }

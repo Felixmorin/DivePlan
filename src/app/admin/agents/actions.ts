@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/current-user";
 import { query, withTransaction } from "@/lib/db";
 import { trackEvent } from "@/lib/monitoring";
 import { runNextAgentJobs } from "@/lib/agent-worker";
+import type { RunRow } from "./agents-console";
 
 const triggerSchema = z.object({
   onDemand: z.object({ enabled: z.boolean() }),
@@ -52,6 +53,54 @@ export async function enqueueAgentRun(agentId: string, analysisPeriod: "24h" | "
   return finished.rows[0] ?? { id, status: "pending" };
 }
 
+export async function startAgentWorkflow(analysisPeriod: "24h" | "7d" = "7d") {
+  const admin = await requireAdmin();
+  const period = z.enum(["24h", "7d"]).safeParse(analysisPeriod);
+  if (!period.success) throw new Error("Période d’analyse invalide.");
+  const workflowId = randomUUID();
+  const queued = await withTransaction(async (client) => {
+    const { rows: agents } = await client.query<{ id: string; name: string; enabled: boolean; triggers: unknown }>(
+      `SELECT id,name,enabled,triggers FROM "AiAgent" ORDER BY "sortOrder","createdAt" FOR UPDATE`
+    );
+    const runnable = agents.filter((agent) => {
+      const triggers = triggerSchema.safeParse(agent.triggers);
+      return agent.enabled && triggers.success && triggers.data.onDemand.enabled;
+    });
+    if (!runnable.length) throw new Error("Aucun agent actif avec le déclenchement à la demande n’est disponible.");
+
+    const { rows: activeRuns } = await client.query<{ agentId: string }>(
+      `SELECT DISTINCT "agentId" FROM "AiAgentRun" WHERE status IN ('pending','running') AND "agentId"=ANY($1::text[])`,
+      [runnable.map((agent) => agent.id)]
+    );
+    const busyIds = new Set(activeRuns.map((run) => run.agentId));
+    const available = runnable.filter((agent) => !busyIds.has(agent.id));
+    if (!available.length) throw new Error("Tous les agents disponibles ont déjà une exécution en attente ou en cours.");
+
+    for (const [sequence, agent] of available.entries()) {
+      await client.query(
+        `INSERT INTO "AiAgentRun" (id,"agentId","trigger",status,"createdById","analysisPeriod","workflowId",sequence)
+         VALUES ($1,$2,'on_demand','pending',$3,$4,$5,$6)`,
+        [randomUUID(), agent.id, admin.id, period.data, workflowId, sequence]
+      );
+    }
+    return { agents: available, skipped: runnable.filter((agent) => busyIds.has(agent.id)).map((agent) => agent.name) };
+  });
+
+  await trackEvent({
+    type: "admin.agent.workflow.started",
+    message: `Workflow lancé : ${queued.agents.length} agent(s)`,
+    userId: admin.id,
+    metadata: { workflowId, agentCount: queued.agents.length, analysisPeriod: period.data }
+  });
+  const runs = await query<RunRow>(
+    `SELECT id,"agentId","trigger",status,"startedAt","finishedAt",result,error,"createdAt","analysisPeriod","workflowId",sequence,
+       count(*) OVER (PARTITION BY "workflowId")::int AS "workflowCount"
+     FROM "AiAgentRun" WHERE "workflowId"=$1 ORDER BY sequence`, [workflowId]
+  );
+  revalidatePath("/admin/agents");
+  return { workflowId, runs: runs.rows, skipped: queued.skipped };
+}
+
 export async function cancelQueuedAgentRun(runId: string) {
   const admin = await requireAdmin();
   const id = z.string().uuid().safeParse(runId);
@@ -86,6 +135,19 @@ export async function updateAgentEnabled(agentId: string, enabled: boolean) {
   revalidatePath("/admin/agents");
 }
 
+export async function updateAgentName(agentId: string, name: string) {
+  const admin = await requireAdmin();
+  const parsed = z.object({ id: z.string().min(1).max(100), name: z.string().trim().min(2).max(100) }).safeParse({ id: agentId, name });
+  if (!parsed.success) throw new Error("Le nom doit contenir entre 2 et 100 caractères.");
+  const result = await query<{ id: string; name: string }>(
+    `UPDATE "AiAgent" SET name=$2,"updatedAt"=NOW() WHERE id=$1 RETURNING id,name`, [parsed.data.id, parsed.data.name]
+  );
+  if (!result.rows[0]) throw new Error("Agent introuvable.");
+  await trackEvent({ type: "admin.agent.renamed", message: `Nom d’agent modifié : ${result.rows[0].name}`, userId: admin.id, metadata: { agentId: result.rows[0].id, name: result.rows[0].name } });
+  revalidatePath("/admin/agents");
+  return result.rows[0].name;
+}
+
 export async function moveAgent(agentId: string, direction: "up" | "down") {
   const admin = await requireAdmin();
   const parsed = z.object({ id: z.string().min(1).max(100), direction: z.enum(["up", "down"]) }).safeParse({ id: agentId, direction });
@@ -108,16 +170,3 @@ export async function moveAgent(agentId: string, direction: "up" | "down") {
   revalidatePath("/admin/agents");
   return moved;
 }
-
-export async function createAgent(input: unknown) {
-  const admin = await requireAdmin();
-  const parsed = z.object({ name: z.string().trim().min(3).max(100), mission: z.string().trim().min(20).max(1200) }).safeParse(input);
-  if (!parsed.success) throw new Error("Le nom ou la mission ne respecte pas les limites.");
-  const id = randomUUID();
-  await query(`INSERT INTO "AiAgent" (id,name,mission,triggers,"sortOrder") VALUES ($1,$2,$3,$4,(SELECT COALESCE(MAX("sortOrder"),-1)+1 FROM "AiAgent"))`, [id, parsed.data.name, parsed.data.mission, { ...defaultAgentTriggers, onDemand: { enabled: false } }]);
-  await trackEvent({ type: "admin.agent.created", message: `Agent créé : ${parsed.data.name}`, userId: admin.id, metadata: { agentId: id } });
-  revalidatePath("/admin/agents");
-  return { id };
-}
-
-const defaultAgentTriggers = { onDemand: { enabled: true }, schedule: { enabled: false, cron: "0 9 * * 1" }, afterDeploy: { enabled: false }, incident: { enabled: false } };

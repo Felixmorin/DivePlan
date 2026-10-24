@@ -2,6 +2,7 @@ import "server-only";
 import { query, withReadOnlyDatabaseUrl, withReadOnlyTransaction } from "@/lib/db";
 import { analyzeDivePlanSqlCode } from "@/lib/sql-agent-analysis";
 import { runArchitectureCartography, summarizePreviousCartography } from "@/lib/architecture-agent";
+import { consolidateAgentFindings } from "@/lib/pr-agent-consolidation";
 
 type RouteVolume = { route: string; requests: string; bytes: string };
 type Vital = { route: string; metric: string; average: string; samples: string };
@@ -14,7 +15,14 @@ export async function runNextAgentJobs(targetRunId?: string) {
   for (let index = 0; index < (targetRunId ? 1 : 5); index += 1) {
     const claimed = await query<AgentJob>(
       `WITH candidate AS (
-         SELECT r.id FROM "AiAgentRun" r WHERE r.status = 'pending' AND ($1::text IS NULL OR r.id = $1) ORDER BY r."createdAt" FOR UPDATE SKIP LOCKED LIMIT 1
+         SELECT r.id FROM "AiAgentRun" r
+         WHERE r.status = 'pending' AND ($1::text IS NULL OR r.id = $1)
+           AND (r."workflowId" IS NULL OR NOT EXISTS (
+             SELECT 1 FROM "AiAgentRun" previous
+             WHERE previous."workflowId"=r."workflowId" AND previous.sequence<r.sequence
+               AND previous.status NOT IN ('completed','failed','cancelled')
+           ))
+         ORDER BY r."createdAt",r."workflowId",r.sequence FOR UPDATE SKIP LOCKED LIMIT 1
        )
        UPDATE "AiAgentRun" r SET status = 'running', "startedAt" = NOW()
        FROM candidate, "AiAgent" a
@@ -40,6 +48,21 @@ export async function runNextAgentJobs(targetRunId?: string) {
           `SELECT result FROM "AiAgentRun" WHERE "agentId"=$1 AND status='completed' AND id<>$2 ORDER BY "createdAt" DESC LIMIT 1`, [run.agentId, run.id]
         );
         const result = await runArchitectureCartography(summarizePreviousCartography(previousResult.rows[0]?.result));
+        await query(`UPDATE "AiAgentRun" SET status='completed', result=$2, "finishedAt"=NOW() WHERE id=$1`, [run.id, result]);
+        continue;
+      }
+      if (run.agentId === "pr-consolidation") {
+        const consolidation = await consolidateAgentFindings();
+        const result = {
+          title: "Consolidation des propositions de PR",
+          period: { from: new Date().toISOString(), to: new Date().toISOString(), label: "Rapports terminés disponibles" },
+          sources: [{ name: "AiAgentRun", period: "Rapports terminés disponibles", samples: consolidation.examined }],
+          facts: [{ category: "Rapports examinés", fact: `${consolidation.examined} rapport(s) d’agents terminés parcourus.`, evidence: "AiAgentRun · résultats terminés" }],
+          findings: [],
+          assumptions: ["Les propositions sont des brouillons soumis à validation humaine; aucune PR n’est créée ou fusionnée automatiquement."],
+          recommendations: [`${consolidation.added} proposition(s) ajoutée(s) à l’espace de revue.`],
+          missing: []
+        };
         await query(`UPDATE "AiAgentRun" SET status='completed', result=$2, "finishedAt"=NOW() WHERE id=$1`, [run.id, result]);
         continue;
       }

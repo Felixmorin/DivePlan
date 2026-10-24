@@ -2,7 +2,9 @@
 
 ## Mise en service
 
-Appliquer les migrations `db/migrations/0011_ai_agents.sql`, `db/migrations/0012_sql_supabase_analyst.sql`, `db/migrations/0013_ai_agent_run_cancellation.sql`, `db/migrations/0014_architecture_cartographer.sql` et `db/migrations/0015_ai_agent_order.sql` à la base PostgreSQL visée avant de déployer l’application. La migration 0011 crée le registre et la file des exécutions; la migration 0012 ajoute « Analyste SQL & Supabase » et la période enregistrée pour chaque exécution; la migration 0013 permet de retirer une exécution encore en attente; la migration 0014 ajoute « Architecte-cartographe » avec uniquement le déclenchement manuel activé; la migration 0015 enregistre l’ordre d’affichage des agents.
+Appliquer les migrations `db/migrations/0011_ai_agents.sql`, `db/migrations/0012_sql_supabase_analyst.sql`, `db/migrations/0013_ai_agent_run_cancellation.sql`, `db/migrations/0014_architecture_cartographer.sql`, `db/migrations/0015_ai_agent_order.sql`, `db/migrations/0016_pr_consolidation.sql` et `db/migrations/0017_ai_agent_workflows.sql` à la base PostgreSQL visée avant de déployer l’application. Elles créent le registre et la file des exécutions, les agents disponibles, l’ordre d’affichage, l’espace de revue des PR et le lien de séquencement des workflows.
+
+Le bouton « Start workflow » met en file, dans l’ordre affiché, tous les agents actifs dont le déclenchement à la demande est activé. Les exécutions sont conservées individuellement dans `AiAgentRun` et le worker attend la fin de chaque étape avant de traiter la suivante. Les agents déjà en cours sont ignorés et affichés dans le message de lancement. Le workflow reste asynchrone : son traitement dépend du prochain appel de Vercel Cron.
 
 ## Architecte-cartographe
 

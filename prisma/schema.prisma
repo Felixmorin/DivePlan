@@ -116,12 +116,15 @@ model AiAgentRun {
   error       String?
   createdById String?
   analysisPeriod String   @default("7d")
+  workflowId  String?
+  sequence    Int      @default(0)
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   agent       AiAgent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([agentId, createdAt(sort: Desc)])
+  @@index([workflowId, sequence])
 }
 
 model TransferTelemetryHour {
