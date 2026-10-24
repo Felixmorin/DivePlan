@@ -8,7 +8,15 @@ Le bouton « Start workflow » met en file, dans l’ordre affiché, tous les ag
 
 ## Agent de correction
 
-L’Agent de correction est enregistré par `db/migrations/0018_pr_correction_agent.sql`; son mandat complet et ses garde-fous sont dans [docs/agents/agent-de-correction.md](agents/agent-de-correction.md). Il doit traiter exclusivement une proposition approuvée, vérifier sa pertinence par rapport au dépôt et préparer une PR en brouillon pour révision humaine. La console web ne dispose toutefois d’aucun runner capable d’écrire dans le dépôt, de créer une branche ou d’ouvrir une PR. Pour cette raison, ses déclencheurs restent désactivés et l’interface indique le blocage. Il ne faut pas activer son exécution avant de connecter un runner isolé et une intégration Git autorisée; aucune modification de code n’est effectuée par l’agent dans sa configuration actuelle.
+L’Agent de correction est enregistré par `db/migrations/0018_pr_correction_agent.sql`; son suivi d’exécution local est ajouté par `0019_pr_correction_runner.sql`. Depuis une proposition approuvée, un administrateur examine son périmètre puis choisit « Préparer avec Codex local ». DivePlan vérifie l’approbation, la complétude et l’empreinte, puis affiche une commande PowerShell. Le script local récupère les données approuvées par une API protégée, lance Codex connecté au compte ChatGPT, vérifie le changement, exécute lint, tests et build, puis crée une branche et une PR en brouillon si tout réussit. Aucune fusion ni aucun déploiement n’est automatique.
+
+Configuration requise :
+
+- Dans l’environnement serveur Vercel, définir `GITHUB_REPOSITORY=Felixmorin/DivePlan` et un secret aléatoire `CORRECTION_RUNNER_TOKEN`. Appliquer la migration `0019` et déployer DivePlan.
+- Sur le poste local, installer PowerShell 7 (`pwsh`), Codex CLI, GitHub CLI (`gh`), Git et npm. Se connecter avec `codex login` au compte ChatGPT et `gh auth login` au compte GitHub autorisé à créer une branche et une PR dans le dépôt.
+- Depuis une copie propre du dépôt, cliquer « Préparer avec Codex local », puis exécuter dans PowerShell la commande affichée. Le script demande `CORRECTION_RUNNER_TOKEN` via une saisie masquée. Il n’utilise pas de clé API OpenAI ni de secrets GitHub Actions.
+
+Le script crée une branche locale isolée, bloque les chemins sensibles et revérifie l’approbation avant publication. En cas d’échec de génération ou de validation, aucune PR n’est créée. Réviser la PR manuellement avant toute fusion.
 
 ## Architecte-cartographe
 
