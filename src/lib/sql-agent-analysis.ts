@@ -16,7 +16,7 @@ export type SqlFinding = {
 export type SourceFile = { path: string; content: string };
 const MAX_FILES = 1200;
 const MAX_FILE_BYTES = 1_000_000;
-const SOURCE_ROOTS = ["src/app", "src/lib", "prisma/migrations", "db/migrations"];
+const SOURCE_ROOTS = ["src/app", "src/lib", "src/components", "prisma/migrations", "db/migrations"];
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".sql"]);
 
 async function collectFiles(root: string, directory: string, files: string[]) {
@@ -36,7 +36,10 @@ export async function loadDivePlanSources(root = process.cwd()) {
     try { await collectFiles(root, directory, paths); }
     catch { missing.push(directory); }
   }
-  paths.push("prisma/schema.prisma");
+  for (const path of ["src/auth.ts", "prisma/schema.prisma", "package.json", "vercel.json", "next.config.ts", "README.md", "docs/ai-agents.md"]) {
+    try { await readFile(join(root, path)); paths.push(path); }
+    catch { if (path !== "prisma/schema.prisma") missing.push(path); }
+  }
   const files: SourceFile[] = [];
   for (const path of paths.slice(0, MAX_FILES)) {
     try {

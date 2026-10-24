@@ -1,6 +1,7 @@
 import "server-only";
 import { query, withReadOnlyDatabaseUrl, withReadOnlyTransaction } from "@/lib/db";
 import { analyzeDivePlanSqlCode } from "@/lib/sql-agent-analysis";
+import { runArchitectureCartography, summarizePreviousCartography } from "@/lib/architecture-agent";
 
 type RouteVolume = { route: string; requests: string; bytes: string };
 type Vital = { route: string; metric: string; average: string; samples: string };
@@ -31,6 +32,14 @@ export async function runNextAgentJobs(targetRunId?: string) {
       }
       if (run.agentId === "sql-supabase-analyst") {
         const result = await runSqlSupabaseAnalysis(run.analysisPeriod);
+        await query(`UPDATE "AiAgentRun" SET status='completed', result=$2, "finishedAt"=NOW() WHERE id=$1`, [run.id, result]);
+        continue;
+      }
+      if (run.agentId === "architecture-cartographer") {
+        const previousResult = await query<{ result: unknown }>(
+          `SELECT result FROM "AiAgentRun" WHERE "agentId"=$1 AND status='completed' AND id<>$2 ORDER BY "createdAt" DESC LIMIT 1`, [run.agentId, run.id]
+        );
+        const result = await runArchitectureCartography(summarizePreviousCartography(previousResult.rows[0]?.result));
         await query(`UPDATE "AiAgentRun" SET status='completed', result=$2, "finishedAt"=NOW() WHERE id=$1`, [run.id, result]);
         continue;
       }

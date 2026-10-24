@@ -9,3 +9,5 @@ historical schema reference before deployment. Do not execute migrations from
 application build or install scripts. Apply reviewed migrations explicitly in
 the intended environment, outside Vercel builds, and never use destructive DDL
 to reset restored data.
+Migration `0014_architecture_cartographer.sql` ajoute Architecte-cartographe au
+registre des agents avec le déclenchement manuel activé uniquement.

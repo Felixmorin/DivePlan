@@ -2,7 +2,13 @@
 
 ## Mise en service
 
-Appliquer les migrations `db/migrations/0011_ai_agents.sql`, `db/migrations/0012_sql_supabase_analyst.sql` et `db/migrations/0013_ai_agent_run_cancellation.sql` à la base PostgreSQL visée avant de déployer l’application. La migration 0011 crée le registre et la file des exécutions; la migration 0012 ajoute « Analyste SQL & Supabase » et la période enregistrée pour chaque exécution; la migration 0013 permet de retirer une exécution encore en attente.
+Appliquer les migrations `db/migrations/0011_ai_agents.sql`, `db/migrations/0012_sql_supabase_analyst.sql`, `db/migrations/0013_ai_agent_run_cancellation.sql` et `db/migrations/0014_architecture_cartographer.sql` à la base PostgreSQL visée avant de déployer l’application. La migration 0011 crée le registre et la file des exécutions; la migration 0012 ajoute « Analyste SQL & Supabase » et la période enregistrée pour chaque exécution; la migration 0013 permet de retirer une exécution encore en attente; la migration 0014 ajoute « Architecte-cartographe » avec uniquement le déclenchement manuel activé.
+
+## Architecte-cartographe
+
+L’agent lancé depuis `/admin/agents` inventorie les sources déployées lisibles (`src/app`, `src/components`, `src/lib`, authentification, schéma Prisma et migrations), repère les pages/API, modèles et gardes d’accès, puis compare le commit à son exécution précédente. Le résultat conserve commit, date, diagrammes Mermaid, faits, déductions/limites et informations manquantes dans `AiAgentRun.result`. La console admin permet de consulter le dernier rapport et ses diagrammes. Il n’exécute pas le SQL découvert et ne lit pas les secrets.
+
+Les documents versionnés de référence sont `docs/architecture/architecture.md` et `docs/agents/`; la console permet de les consulter sous `/admin/agents/context`. Les exécutions sur Vercel ne peuvent pas écrire dans le dépôt déployé : elles mettent donc à jour l’historique PostgreSQL, pas ces fichiers versionnés. Réviser et committer les guides du dépôt pour changer la référence partagée.
 
 Le traitement des exécutions utilise une file PostgreSQL et la route Vercel Cron `/api/cron/agent-runs`. Définir `CRON_SECRET` dans les environnements de production Vercel; la route vérifie l’en-tête Bearer et ne traite que cinq demandes en attente par invocation. Les exécutions sont réclamées avec `FOR UPDATE SKIP LOCKED`, puis leur résultat ou leur erreur est persisté. Les rapports de cette première livraison sont des synthèses déterministes, pas une génération par LLM. Les agents créés depuis la console restent à l’état « Configuration requise » tant qu’aucun exécuteur spécifique n’est développé.
 

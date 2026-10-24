@@ -19,7 +19,7 @@ export async function enqueueAgentRun(agentId: string, analysisPeriod: "24h" | "
   const admin = await requireAdmin();
   const parsedId = z.string().min(1).max(100).safeParse(agentId);
   if (!parsedId.success) throw new Error("Agent invalide.");
-  if (!["diveplan-observability", "sql-supabase-analyst"].includes(parsedId.data)) throw new Error("Aucun traitement d’exécution n’est configuré pour cet agent.");
+  if (!["diveplan-observability", "sql-supabase-analyst", "architecture-cartographer"].includes(parsedId.data)) throw new Error("Aucun traitement d’exécution n’est configuré pour cet agent.");
   const period = z.enum(["24h", "7d"]).safeParse(analysisPeriod);
   if (!period.success) throw new Error("Période d’analyse invalide.");
   const agent = await query<{ id: string; name: string; triggers: unknown; enabled: boolean }>(
