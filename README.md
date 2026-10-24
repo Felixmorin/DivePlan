@@ -22,7 +22,7 @@ Le produit est actuellement conçu pour des **pilotes accompagnés avec des club
 
 - Espace `/admin` pour créer des accès coach, les associer à un club et activer ou désactiver leur connexion.
 - Monitoring global des agrégats existants de transfert, Web Vitals, résultats PostgreSQL et événements d’authentification.
-- Console `/admin/agents` avec l’agent Observabilité DivePlan et des rapports construits depuis les agrégats disponibles. Voir [docs/ai-agents.md](docs/ai-agents.md) pour appliquer la migration, configurer Cron et connaître ses limites.
+- Console `/admin/agents` avec les agents d’analyse, de consolidation des propositions et le profil de l’Agent de correction. Voir [docs/ai-agents.md](docs/ai-agents.md) pour appliquer les migrations et connaître les limites d’exécution Git.
 - Agent manuel Architecte-cartographe dans la console agents; la migration `db/migrations/0014_architecture_cartographer.sql` doit être appliquée. Les guides partagés sont dans [docs/architecture/architecture.md](docs/architecture/architecture.md) et [docs/agents/](docs/agents/).
 - Le compteur des réponses 304 du polling coach n’est pas encore collecté; l’observabilité l’indique comme indisponible.
 

@@ -2,9 +2,13 @@
 
 ## Mise en service
 
-Appliquer les migrations `db/migrations/0011_ai_agents.sql`, `db/migrations/0012_sql_supabase_analyst.sql`, `db/migrations/0013_ai_agent_run_cancellation.sql`, `db/migrations/0014_architecture_cartographer.sql`, `db/migrations/0015_ai_agent_order.sql`, `db/migrations/0016_pr_consolidation.sql` et `db/migrations/0017_ai_agent_workflows.sql` à la base PostgreSQL visée avant de déployer l’application. Elles créent le registre et la file des exécutions, les agents disponibles, l’ordre d’affichage, l’espace de revue des PR et le lien de séquencement des workflows.
+Appliquer les migrations `db/migrations/0011_ai_agents.sql` à `db/migrations/0018_pr_correction_agent.sql` à la base PostgreSQL visée avant de déployer l’application. Elles créent le registre et la file des exécutions, les agents disponibles, l’ordre d’affichage, l’espace de revue des PR et le lien de séquencement des workflows.
 
 Le bouton « Start workflow » met en file, dans l’ordre affiché, tous les agents actifs dont le déclenchement à la demande est activé. Les exécutions sont conservées individuellement dans `AiAgentRun` et le worker attend la fin de chaque étape avant de traiter la suivante. Les agents déjà en cours sont ignorés et affichés dans le message de lancement. Le workflow reste asynchrone : son traitement dépend du prochain appel de Vercel Cron.
+
+## Agent de correction
+
+L’Agent de correction est enregistré par `db/migrations/0018_pr_correction_agent.sql`; son mandat complet et ses garde-fous sont dans [docs/agents/agent-de-correction.md](agents/agent-de-correction.md). Il doit traiter exclusivement une proposition approuvée, vérifier sa pertinence par rapport au dépôt et préparer une PR en brouillon pour révision humaine. La console web ne dispose toutefois d’aucun runner capable d’écrire dans le dépôt, de créer une branche ou d’ouvrir une PR. Pour cette raison, ses déclencheurs restent désactivés et l’interface indique le blocage. Il ne faut pas activer son exécution avant de connecter un runner isolé et une intégration Git autorisée; aucune modification de code n’est effectuée par l’agent dans sa configuration actuelle.
 
 ## Architecte-cartographe
 
