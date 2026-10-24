@@ -54,6 +54,42 @@ export async function startCorrection(input: { id: string }) {
   return { executionId, correctionStatus: "En attente d’exécution" as const, repository };
 }
 
+export async function confirmCorrectionReviewed(input: { id: string; executionId: string }) {
+  const admin = await requireAdmin();
+  const parsed = z.object({ id: z.string().uuid(), executionId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) throw new Error("Identifiants de correction invalides.");
+
+  await withTransaction(async (client) => {
+    const { rows } = await client.query<{
+      title: string; summary: string; sources: ProposalSource[]; details: ProposalDetails; status: string;
+      correctionStatus: string; correctionExecutionId: string | null; correctionProposalHash: string | null;
+      correctionPullRequestUrl: string | null; history: Array<Record<string, unknown>>;
+    }>(`SELECT title,summary,sources,details,status,"correctionStatus","correctionExecutionId","correctionProposalHash","correctionPullRequestUrl",history FROM "AiPrProposal" WHERE id=$1 FOR UPDATE`, [parsed.data.id]);
+    const proposal = rows[0];
+    if (!proposal) throw new Error("Proposition introuvable.");
+    if (proposal.correctionExecutionId !== parsed.data.executionId) throw new Error("Cette exécution n’est plus active.");
+    if (proposal.correctionStatus !== "PR en brouillon prête à réviser" || !proposal.correctionPullRequestUrl) {
+      throw new Error("La correction ne peut être confirmée qu’après la création de sa PR.");
+    }
+    validateApprovedProposal(proposal);
+    if (!proposal.correctionProposalHash || hashCorrectionProposal(proposal) !== proposal.correctionProposalHash) {
+      throw new Error("La proposition a changé depuis l’exécution; la confirmation est annulée.");
+    }
+
+    const history = [...proposal.history, {
+      at: new Date().toISOString(),
+      event: "Correction confirmée après revue humaine de la PR",
+      actor: admin.email,
+      status: "Terminé après révision humaine",
+      pullRequestUrl: proposal.correctionPullRequestUrl
+    }];
+    await client.query(`UPDATE "AiPrProposal" SET "correctionStatus"='Terminé après révision humaine',history=$3,"updatedAt"=NOW() WHERE id=$1 AND "correctionExecutionId"=$2`, [parsed.data.id, parsed.data.executionId, JSON.stringify(history)]);
+  });
+
+  await trackEvent({ type: "admin.agent.correction.reviewed", message: "Correction confirmée après revue humaine de la PR", userId: admin.id, metadata: { proposalId: parsed.data.id, executionId: parsed.data.executionId } });
+  revalidatePath(path);
+}
+
 export async function decideProposal(input: { id: string; status: string; note?: string }) {
   const admin = await requireAdmin();
   const parsed = z.object({ id: z.string().uuid(), status: z.enum(["En attente d’approbation","À clarifier","À séparer","Approuvée","Refusée","Périmée"]), note: z.string().trim().max(1000).optional() }).safeParse(input);
