@@ -154,9 +154,26 @@ async function dispatchSessionNotice(sessionId: string, kind: "PUBLISHED" | "CAN
   const deliveries = (await query<{ id: string; userId: string; date: Date; title: string }>(
     `SELECT d.id,d."userId",s.title,s.date FROM ${table} d JOIN "TrainingSession" s ON s.id=d."sessionId" WHERE d."sessionId"=$1 AND d.status='PENDING' ORDER BY d.id`, [sessionId]
   )).rows;
+  const subscriptionsByUser = new Map<string, SubscriptionRow[]>();
+  try {
+    const subscriptions = (await query<SubscriptionRow & { userId: string }>(
+      `SELECT id,"userId",endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=ANY($1::text[])`, [Array.from(new Set(deliveries.map(({ userId }) => userId)))]
+    )).rows;
+    for (const subscription of subscriptions) {
+      const { userId, ...row } = subscription;
+      const userSubscriptions = subscriptionsByUser.get(userId) ?? [];
+      userSubscriptions.push(row);
+      subscriptionsByUser.set(userId, userSubscriptions);
+    }
+  } catch {
+    for (const delivery of deliveries) {
+      await query(`UPDATE ${table} SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+    }
+    return;
+  }
   for (const delivery of deliveries) {
     try {
-      const subscriptions = (await query<SubscriptionRow>(`SELECT id,endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=$1`, [delivery.userId])).rows;
+      const subscriptions = subscriptionsByUser.get(delivery.userId) ?? [];
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
