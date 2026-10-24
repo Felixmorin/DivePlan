@@ -50,7 +50,17 @@ if (Test-Path -LiteralPath $tokenStorePath) {
 if (-not $secureToken) {
   $secureToken = Read-Host "Jeton CORRECTION_RUNNER_TOKEN de DivePlan" -AsSecureString
   $saveToken = Read-Host "Mémoriser ce jeton chiffré pour ce compte Windows ? (o/N)"
-  if ($saveToken -match '^(?i:o|oui|y|yes)
+  if (@("o", "oui", "y", "yes") -contains $saveToken.Trim().ToLowerInvariant()) {
+    $tokenStoreDirectory = Split-Path -Parent $tokenStorePath
+    New-Item -ItemType Directory -Path $tokenStoreDirectory -Force | Out-Null
+    ConvertFrom-SecureString $secureToken | Set-Content -LiteralPath $tokenStorePath -NoNewline -Encoding ascii
+    Write-Host "Jeton mémorisé chiffré dans $tokenStorePath."
+  }
+}
+$tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+$runnerToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer)
+[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer)
+if ([string]::IsNullOrWhiteSpace($runnerToken)) { throw "Jeton DivePlan manquant." }
 $headers = @{ Authorization = "Bearer $runnerToken"; Accept = "application/json" }
 $proposalUrl = "$baseUrl/api/agent-correction/proposals/$ProposalId`?execution_id=$ExecutionId"
 $proposal = Invoke-RestMethod -Method Get -Uri $proposalUrl -Headers $headers
