@@ -7,8 +7,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 const globalForPool = globalThis as typeof globalThis & { divePlanPool?: Pool };
 
-function createPool() {
-  const connectionString = process.env.DATABASE_URL;
+function createPool(connectionString = process.env.DATABASE_URL, max = 3) {
   if (!connectionString) throw new Error("DATABASE_URL is required for database access");
   const databaseUrl = new URL(connectionString);
   const sslMode = databaseUrl.searchParams.get("sslmode")?.toLowerCase();
@@ -39,7 +38,7 @@ function createPool() {
   return new Pool({
     connectionString: databaseUrl.toString(),
     // Keep per-instance connection use small for Vercel serverless functions.
-    max: 3,
+    max,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 5_000,
     // Hosted PostgreSQL providers commonly require TLS even when the URL omits sslmode.
@@ -141,5 +140,26 @@ export async function withReadOnlyTransaction<T>(work: (client: PoolClient) => P
     throw error;
   } finally {
     client.release();
+  }
+}
+
+export async function withReadOnlyDatabaseUrl<T>(connectionString: string, work: (client: PoolClient) => Promise<T>): Promise<T> {
+  const readonlyPool = createPool(connectionString, 1);
+  try {
+    const client = await readonlyPool.connect();
+    try {
+      await client.query("BEGIN TRANSACTION READ ONLY");
+      await client.query("SET LOCAL statement_timeout = '8000ms'");
+      const result = await work(client);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  } finally {
+    await readonlyPool.end();
   }
 }
