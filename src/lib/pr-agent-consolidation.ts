@@ -7,7 +7,7 @@ type Source = { runId: string; agentId: string; agentName: string; createdAt: st
 
 export async function consolidateAgentFindings() {
   const { rows } = await query<{ id: string; agentId: string; agentName: string; createdAt: Date; result: { findings?: Finding[]; recommendations?: string[] } | null }>(
-    `SELECT r.id,r."agentId",a.name AS "agentName",r."createdAt",r.result FROM "AiAgentRun" r JOIN "AiAgent" a ON a.id=r."agentId" WHERE r.status='completed' AND r.result IS NOT NULL AND r."agentId" <> 'pr-consolidation' ORDER BY r."createdAt" DESC LIMIT 500`
+    `SELECT r.id,r."agentId",a.name AS "agentName",r."createdAt",r.result FROM "AiAgentRun" r JOIN "AiAgent" a ON a.id::text=r."agentId"::text WHERE r.status='completed' AND r.result IS NOT NULL AND r."agentId"::text <> 'pr-consolidation' ORDER BY r."createdAt" DESC LIMIT 500`
   );
   const existing = await query<{ sources: Source[] }>(`SELECT sources FROM "AiPrProposal"`);
   const seen = new Set(existing.rows.flatMap((proposal) => proposal.sources.map((source) => `${source.runId}:${source.finding.title ?? ""}`)));

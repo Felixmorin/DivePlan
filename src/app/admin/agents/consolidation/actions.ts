@@ -46,7 +46,7 @@ export async function startCorrection(input: { id: string }) {
     const restarting = row.correctionStatus === "En cours";
     const history = [...row.history, { at: new Date().toISOString(), event: restarting ? "Correction redémarrée manuellement; l’exécution précédente est invalidée.": "Correction mise en file; le runner local lancera Codex avec la session ChatGPT configurée sur ce dépôt.", actor: admin.email, status: "En attente d’exécution" }];
     const proposalHash = hashCorrectionProposal(row);
-    await client.query(`UPDATE "AiPrProposal" SET "correctionStatus"='En attente d’exécution',"correctionExecutionId"=$2,"correctionProposalHash"=$3,"correctionRunUrl"=NULL,"correctionPullRequestUrl"=NULL,history=$4,"updatedAt"=NOW() WHERE id=$1`, [row.id, executionId, proposalHash, JSON.stringify(history)]);
+    await client.query(`UPDATE "AiPrProposal" SET "correctionStatus"='En attente d’exécution',"correctionExecutionId"=$2,"correctionProposalHash"=$3,"correctionRunUrl"=NULL,"correctionPullRequestUrl"=NULL,history=$4::jsonb,"updatedAt"=NOW() WHERE id=$1`, [row.id, executionId, proposalHash, JSON.stringify(history)]);
     return row;
   });
 
