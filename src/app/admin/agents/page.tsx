@@ -9,7 +9,7 @@ export const maxDuration = 300;
 export default async function AgentsPage() {
   await requireAdmin();
   const [agents, runs] = await Promise.all([
-    query<AgentRow>(`SELECT id,name,mission,enabled,triggers,"sortOrder","createdAt","updatedAt" FROM "AiAgent" ORDER BY "sortOrder","createdAt"`),
+    query<AgentRow>(`SELECT id,name,mission,enabled,triggers,"sortOrder","createdAt","updatedAt" FROM "AiAgent" ORDER BY "sortOrder","createdAt" LIMIT 100`),
     query<RunRow>(`SELECT id,"agentId","trigger",status,"startedAt","finishedAt",result,error,"createdAt","analysisPeriod","workflowId",sequence,
       CASE WHEN "workflowId" IS NULL THEN NULL ELSE count(*) OVER (PARTITION BY "workflowId")::int END AS "workflowCount"
       FROM "AiAgentRun" ORDER BY "createdAt" DESC,sequence LIMIT 100`)
