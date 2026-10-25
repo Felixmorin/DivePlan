@@ -39,14 +39,18 @@ function SessionsPageContent({ sessions }: { sessions: SessionListItem[] }) {
 }
 
 function DemoSessionsPage() {
+  return <CoachShell active="Seances"><SessionsPageContent sessions={createDemoSessions()} /></CoachShell>;
+}
+
+function createDemoSessions(): SessionListItem[] {
   const samples = [demoSession, ...weekSessions.filter((session) => session.title).slice(0, 8)];
-  const sessions: SessionListItem[] = samples.map((session, index) => ({
+  const now = Date.now();
+  return samples.map((session, index) => ({
     id: `demo-${index}`, title: session.title, groupName: index ? "Groupe pilote" : "Compétition Mustang",
-    status: index ? "COMPLETED" : "READY", date: new Date(Date.now() + (index ? -index * 7 : 2) * 86400000).toISOString(), duration: session.duration,
+    status: index ? "COMPLETED" : "READY", date: new Date(now + (index ? -index * 7 : 2) * 86400000).toISOString(), duration: session.duration,
     volume: "volume" in session ? session.volume : session.blocks.reduce((sum, block) => sum + block.volume, 0),
     athleteCount: "athletes" in session ? session.athletes : new Set(session.blocks.flatMap((block) => block.assignedTo)).size,
     blockCount: "blocks" in session ? session.blocks.length : 0,
     location: null,
   }));
-  return <CoachShell active="Seances"><SessionsPageContent sessions={sessions} /></CoachShell>;
 }

@@ -57,7 +57,26 @@ export async function createSessionFromPayload(tx: Executor, data: { clubId:stri
 export async function getSessionSnapshot(sessionId:string,clubId:string):Promise<SessionSnapshot|null>{
  const base=(await query<SessionSnapshot>("SELECT s.*, row_to_json(w) AS week FROM \"TrainingSession\" s JOIN \"TrainingWeek\" w ON w.id=s.\"weekId\" WHERE s.id=$1 AND w.\"clubId\"=$2",[sessionId,clubId])).rows[0]; if(!base)return null;
  const blocks=(await query<Block>("SELECT * FROM \"SessionBlock\" WHERE \"sessionId\"=$1 ORDER BY position",[sessionId])).rows;
- for(const b of blocks){b.assignments=(await query<Assignment>("SELECT * FROM \"SessionBlockAssignment\" WHERE \"sessionBlockId\"=$1",[b.id])).rows;b.drylandExercises=(await query<Dryland>("SELECT * FROM \"DrylandBlockExercise\" WHERE \"blockId\"=$1 ORDER BY \"order\"",[b.id])).rows;const pool=(await query<{blockId:string}>("SELECT \"blockId\" FROM \"PoolTraining\" WHERE \"blockId\"=$1",[b.id])).rows[0];b.poolTraining=pool?{...pool,sections:(await query<Section>("SELECT * FROM \"PoolSection\" WHERE \"poolTrainingId\"=$1 ORDER BY \"order\"",[b.id])).rows}:null;if(b.poolTraining)for(const s of b.poolTraining.sections)s.dives=(await query<Dive>("SELECT * FROM \"PoolDive\" WHERE \"poolSectionId\"=$1 ORDER BY \"order\"",[s.id])).rows;}
+ const blockIds=blocks.map(b=>b.id);
+ const [assignments,drylandExercises,pools,sections]=await Promise.all([
+  query<Assignment>("SELECT * FROM \"SessionBlockAssignment\" WHERE \"sessionBlockId\"=ANY($1::text[])",[blockIds]),
+  query<Dryland>("SELECT * FROM \"DrylandBlockExercise\" WHERE \"blockId\"=ANY($1::text[]) ORDER BY \"order\"",[blockIds]),
+  query<{blockId:string}>("SELECT \"blockId\" FROM \"PoolTraining\" WHERE \"blockId\"=ANY($1::text[])",[blockIds]),
+  query<Section>("SELECT * FROM \"PoolSection\" WHERE \"poolTrainingId\"=ANY($1::text[]) ORDER BY \"order\"",[blockIds])
+ ]);
+ const sectionIds=sections.rows.map(s=>s.id);
+ const dives=await query<Dive>("SELECT * FROM \"PoolDive\" WHERE \"poolSectionId\"=ANY($1::text[]) ORDER BY \"order\"",[sectionIds]);
+ const assignmentsByBlock=new Map<string,Assignment[]>(),drylandByBlock=new Map<string,Dryland[]>(),sectionsByBlock=new Map<string,Section[]>(),divesBySection=new Map<string,Dive[]>();
+ for(const row of assignments.rows){const rows=assignmentsByBlock.get(row.sessionBlockId)??[];rows.push(row);assignmentsByBlock.set(row.sessionBlockId,rows);}
+ for(const row of drylandExercises.rows){const rows=drylandByBlock.get(row.blockId)??[];rows.push(row);drylandByBlock.set(row.blockId,rows);}
+ for(const row of sections.rows){const rows=sectionsByBlock.get(row.poolTrainingId)??[];rows.push(row);sectionsByBlock.set(row.poolTrainingId,rows);}
+ for(const row of dives.rows){const rows=divesBySection.get(row.poolSectionId)??[];rows.push(row);divesBySection.set(row.poolSectionId,rows);}
+ const poolBlockIds=new Set(pools.rows.map(pool=>pool.blockId));
+ for(const b of blocks){
+  b.assignments=assignmentsByBlock.get(b.id)??[];
+  b.drylandExercises=drylandByBlock.get(b.id)??[];
+  b.poolTraining=poolBlockIds.has(b.id)?{blockId:b.id,sections:(sectionsByBlock.get(b.id)??[]).map(s=>({...s,dives:divesBySection.get(s.id)??[]}))}:null;
+ }
  return {...base,week:typeof base.week==="string"?JSON.parse(base.week):base.week,blocks};
 }
 export function parseSessionTemplatePayload(payload: unknown) { return sessionTemplatePayloadSchema.parse(payload); }

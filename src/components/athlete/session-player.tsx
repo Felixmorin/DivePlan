@@ -59,6 +59,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const [evaluationOpen, setEvaluationOpen] = useState(false);
   const [evaluationPending, startEvaluationTransition] = useTransition();
   const evaluationPrompted = useRef(false);
+  const openedBlockIds = useRef(new Set(blocks.filter((item) => item.openedAt).map((item) => item.id)));
   const [evaluationRatings, setEvaluationRatings] = useState<Record<string, number>>(() => Object.fromEntries(session.competitionEvaluations.map((item) => [item.competitionDiveId, item.rating])));
   const [diveNotes, setDiveNotes] = useState<Record<string, string>>(() => Object.fromEntries(blocks.flatMap((block) => block.poolSections.flatMap((section) => section.dives.map((dive) => [dive.id, dive.personalNote ?? ""])) )));
   const previewTracked = useRef(false);
@@ -116,7 +117,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
       || session.competitionEvaluationBlockIds.includes(block.id);
     if (evaluationAtCurrentMoment) {
       evaluationPrompted.current = true;
-      setEvaluationOpen(true);
+      queueMicrotask(() => setEvaluationOpen(true));
     }
   }, [block.id, evaluationComplete, session.competitionEvaluationAtStart, session.competitionEvaluationBlockIds, session.competitionEvaluations.length, started]);
 
@@ -127,9 +128,10 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   }, [onPreview, session.id, started]);
 
   useEffect(() => {
-    if (!started || reviewing || activeTiming?.openedAt) return;
+    if (!started || reviewing || activeTiming?.openedAt || openedBlockIds.current.has(block.id)) return;
+    openedBlockIds.current.add(block.id);
     const openedAt = new Date().toISOString();
-    setBlockTimings((previous) => ({ ...previous, [block.id]: { openedAt, closedAt: null } }));
+    queueMicrotask(() => setBlockTimings((previous) => ({ ...previous, [block.id]: { openedAt, closedAt: null } })));
     void onOpenBlock(session.id, block.id).catch(() => setError("Le début du bloc n'a pas pu être enregistré."));
   }, [activeTiming?.openedAt, block.id, onOpenBlock, reviewing, session.id, started]);
 

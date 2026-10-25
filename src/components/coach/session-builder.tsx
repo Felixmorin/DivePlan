@@ -160,7 +160,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     : initialExerciseId ? [{ id: "dryland-1", title: "Dryland 1", duration: 20, exerciseIds: [initialExerciseId], athleteIds: initialAthleteIds, exerciseOverrides: {} }] : []);
   const [drylandProgramMode, setDrylandProgramMode] = useState<"team" | "individual">("team");
   const [drylandTargetAthleteIds, setDrylandTargetAthleteIds] = useState(initialAthleteIds);
-  const [selectedDrylandBlockId, setSelectedDrylandBlockId] = useState(drylandBlocks[0]?.id ?? "");
+  const [requestedDrylandBlockId, setRequestedDrylandBlockId] = useState(drylandBlocks[0]?.id ?? "");
+  const selectedDrylandBlockId = drylandBlocks.some((block) => block.id === requestedDrylandBlockId) ? requestedDrylandBlockId : drylandBlocks[0]?.id ?? "";
   const [poolAssignments, setPoolAssignments] = useState(() =>
     Object.fromEntries(activePoolBlocks.map((block) => [block.id, (block.athleteIds.length > 0 ? block.athleteIds : initialAthleteIds).filter((id) => initialAthleteIds.includes(id))]))
   );
@@ -207,10 +208,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   });
   const watched = useWatch({ control: form.control });
   const athleteIds = useMemo(() => athletes.filter((athlete) => athlete.groupId === (watched.groupId ?? initialGroupId)).map((athlete) => athlete.id), [athletes, initialGroupId, watched.groupId]);
-  useEffect(() => {
-    if (drylandBlocks.some((block) => block.id === selectedDrylandBlockId)) return;
-    setSelectedDrylandBlockId(drylandBlocks[0]?.id ?? "");
-  }, [drylandBlocks, selectedDrylandBlockId]);
   const drylandGroupId = watched.groupId ?? initialGroupId;
   const previousDrylandGroupId = useRef(drylandGroupId);
   useEffect(() => {
@@ -228,26 +225,24 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     const validIds = new Set(athleteIds);
     return Object.fromEntries(Object.entries(poolAssignments).map(([blockId, ids]) => [blockId, ids.filter((id) => validIds.has(id))])) as Record<string, string[]>;
   }, [athleteIds, poolAssignments]);
+  const effectivePoolRowsByAthleteBlock = useMemo(() => {
+    const rows = { ...poolRowsByAthleteBlock };
+    for (const block of activePoolBlocks) {
+      for (const athleteId of effectivePoolAssignments[block.id] ?? []) {
+        const key = poolAthleteBlockKey(athleteId, block.id);
+        if (!rows[key]) rows[key] = poolSectionsToRows(block.sections);
+      }
+    }
+    return rows;
+  }, [activePoolBlocks, effectivePoolAssignments, poolRowsByAthleteBlock]);
   const individualPoolBlocks = activePoolBlocks.flatMap((block) => (effectivePoolAssignments[block.id] ?? []).map((athleteId) => ({
     ...block,
     sourceBlockId: block.id,
     id: `${block.id}-${athleteId}`,
     title: `Piscine - ${athleteDisplayName(athletes.find((athlete) => athlete.id === athleteId))}`,
     athleteIds: [athleteId],
-    sections: poolRowsToSections(poolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)] ?? poolSectionsToRows(block.sections), block.sections)
+    sections: poolRowsToSections(effectivePoolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)], block.sections)
   })));
-  useEffect(() => {
-    setPoolRowsByAthleteBlock((current) => {
-      const next = { ...current };
-      for (const block of activePoolBlocks) {
-        for (const athleteId of effectivePoolAssignments[block.id] ?? []) {
-          const key = poolAthleteBlockKey(athleteId, block.id);
-          if (!next[key]) next[key] = poolSectionsToRows(block.sections);
-        }
-      }
-      return next;
-    });
-  }, [activePoolBlocks, effectivePoolAssignments]);
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(draftKey);
@@ -258,7 +253,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
           if (draft.drylandBlocks) setDrylandBlocks(draft.drylandBlocks);
           if (draft.drylandProgramMode) setDrylandProgramMode(draft.drylandProgramMode);
           if (draft.drylandTargetAthleteIds) setDrylandTargetAthleteIds(draft.drylandTargetAthleteIds);
-          if (draft.selectedDrylandBlockId) setSelectedDrylandBlockId(draft.selectedDrylandBlockId);
+          if (draft.selectedDrylandBlockId) setRequestedDrylandBlockId(draft.selectedDrylandBlockId);
           if (draft.poolBlocks) setActivePoolBlocks(draft.poolBlocks);
           if (draft.poolAssignments) setPoolAssignments(draft.poolAssignments);
           if (draft.poolRowsByAthleteBlock) setPoolRowsByAthleteBlock(draft.poolRowsByAthleteBlock);
@@ -341,7 +336,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       const assignedCount = assignedIds.length;
       const assignedAthletes = assignedIds.map((id) => athletes.find((athlete) => athlete.id === id)).filter(Boolean);
       const lineCount = assignedIds.length > 0
-        ? assignedIds.reduce((sum, athleteId) => sum + (poolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)] ?? poolSectionsToRows(block.sections)).reduce((rowSum, row) => rowSum + row.diveCodes.length, 0), 0)
+        ? assignedIds.reduce((sum, athleteId) => sum + effectivePoolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)].reduce((rowSum, row) => rowSum + row.diveCodes.length, 0), 0)
         : block.sections.reduce((sum, section) => sum + section.dives.length, 0);
       const title = assignedAthletes.length === 1 ? `Piscine - ${athleteDisplayName(assignedAthletes[0])}` : block.title || "Piscine";
       return { id: block.id, title, type: "pool" as const, assigned: assignedIds, subtitle: `${lineCount} lignes · ${assignedCount} athlète${assignedCount === 1 ? "" : "s"}` };
@@ -490,7 +485,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   function addDrylandBlock() {
     const id = `dryland-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setDrylandBlocks((current) => [...current, { id, title: `Dryland ${current.length + 1}`, duration: 20, exerciseIds: [], athleteIds: drylandTargetAthleteIds, exerciseOverrides: {} }]);
-    setSelectedDrylandBlockId(id);
+    setRequestedDrylandBlockId(id);
     setContentOrder((current) => [...current, id]);
     pulse(id);
   }
@@ -601,7 +596,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       exerciseOverrides: Object.fromEntries(source.drylandExercises.map((item) => [item.exerciseId, { sets: item.sets, reps: item.reps, duration: item.duration, notes: item.notes }]))
     };
     setDrylandBlocks((current) => selectedBlock ? current.map((block) => block.id === id ? loadedBlock : block) : [...current, loadedBlock]);
-    setSelectedDrylandBlockId(id);
+    setRequestedDrylandBlockId(id);
     if (!selectedBlock) setContentOrder((current) => [...current, id]);
     pulse(id);
   }
@@ -727,9 +722,9 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
           )}
           {step === 2 && <div className="space-y-4">
             <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 3 sur 5</p><h2 className="mt-1 text-2xl font-black">Dryland</h2></div>
-            <DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} templates={templates.filter((template) => template.category === "Dryland")} onLoadTemplate={loadDrylandTemplate} onSaveTemplate={saveDrylandTemplate} warmup={warmup} onUpdateWarmup={(update) => setWarmup((current) => ({ ...current, ...update }))} onRemoveWarmup={() => { setWarmup((current) => ({ ...current, enabled: false })); setContentOrder((current) => current.filter((id) => id !== "warmup")); }} targetAthleteIds={drylandTargetAthleteIds} selectedBlockId={selectedDrylandBlockId} programMode={drylandProgramMode} flashBlock={flashBlock} onSelectBlock={setSelectedDrylandBlockId} onProgramModeChange={(mode) => { setDrylandProgramMode(mode); if (mode === "team") setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: drylandTargetAthleteIds }))); }} onTargetAthletesChange={(ids) => { setDrylandTargetAthleteIds(ids); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: ids }))); }} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onSaveAndContinue={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index >= 0 && index < effectiveDrylandBlocks.length - 1) setSelectedDrylandBlockId(effectiveDrylandBlocks[index + 1].id); else void advanceTo(3); }} onBack={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index > 0) setSelectedDrylandBlockId(effectiveDrylandBlocks[index - 1].id); }} onCreateExercise={addExercise}/>
+            <DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} templates={templates.filter((template) => template.category === "Dryland")} onLoadTemplate={loadDrylandTemplate} onSaveTemplate={saveDrylandTemplate} warmup={warmup} onUpdateWarmup={(update) => setWarmup((current) => ({ ...current, ...update }))} onRemoveWarmup={() => { setWarmup((current) => ({ ...current, enabled: false })); setContentOrder((current) => current.filter((id) => id !== "warmup")); }} targetAthleteIds={drylandTargetAthleteIds} selectedBlockId={selectedDrylandBlockId} programMode={drylandProgramMode} flashBlock={flashBlock} onSelectBlock={setRequestedDrylandBlockId} onProgramModeChange={(mode) => { setDrylandProgramMode(mode); if (mode === "team") setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: drylandTargetAthleteIds }))); }} onTargetAthletesChange={(ids) => { setDrylandTargetAthleteIds(ids); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: ids }))); }} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onSaveAndContinue={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index >= 0 && index < effectiveDrylandBlocks.length - 1) setRequestedDrylandBlockId(effectiveDrylandBlocks[index + 1].id); else void advanceTo(3); }} onBack={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index > 0) setRequestedDrylandBlockId(effectiveDrylandBlocks[index - 1].id); }} onCreateExercise={addExercise}/>
           </div>}
-          {step === 3 && <PoolAthletesStep athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} averagePoolVolumeByAthlete={athletePoolAverageById} insightsByAthlete={athletePoolInsightsById} blocks={activePoolBlocks} assignments={effectivePoolAssignments} rowsByAthleteBlock={poolRowsByAthleteBlock} coachAthleteNotes={coachAthleteNotes} onCoachAthleteNoteChange={(athleteId, note) => setCoachAthleteNotes((current) => ({ ...current, [athleteId]: note }))} totalDuration={totalDuration} onRowsChange={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} onBack={() => setStep(2)} onContinue={() => void advanceTo(4)} />}
+          {step === 3 && <PoolAthletesStep athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} averagePoolVolumeByAthlete={athletePoolAverageById} insightsByAthlete={athletePoolInsightsById} blocks={activePoolBlocks} assignments={effectivePoolAssignments} rowsByAthleteBlock={effectivePoolRowsByAthleteBlock} coachAthleteNotes={coachAthleteNotes} onCoachAthleteNoteChange={(athleteId, note) => setCoachAthleteNotes((current) => ({ ...current, [athleteId]: note }))} totalDuration={totalDuration} onRowsChange={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} onBack={() => setStep(2)} onContinue={() => void advanceTo(4)} />}
           {step === 4 && <PublishStep title={watched.title?.trim() || `${groups.find((group) => group.id === watched.groupId)?.name ?? "Séance"} · ${formatSessionDate(watched.date ?? "")}`} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe à choisir"} date={watched.date ?? ""} time={watched.time ?? ""} duration={totalDuration} athleteCount={visibleAthletes.length} athletes={visibleAthletes} blocks={reviewBlocks} issues={publicationIssues} poolReady={activePoolBlocks.length === 0 || individualPoolBlocks.every(poolBlockIsValid)} assignmentsReady={unassignedBlocks.length === 0} canPublish={canPublish} onSaveTemplate={saveCurrentSessionTemplate} onEditBlock={(block) => setStep(block.type === "pool" ? 3 : block.type === "dryland" ? 1 : 1)} />}
         </div>
 

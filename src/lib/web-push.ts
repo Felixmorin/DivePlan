@@ -154,9 +154,26 @@ async function dispatchSessionNotice(sessionId: string, kind: "PUBLISHED" | "CAN
   const deliveries = (await query<{ id: string; userId: string; date: Date; title: string }>(
     `SELECT d.id,d."userId",s.title,s.date FROM ${table} d JOIN "TrainingSession" s ON s.id=d."sessionId" WHERE d."sessionId"=$1 AND d.status='PENDING' ORDER BY d.id`, [sessionId]
   )).rows;
+  const subscriptionsByUser = new Map<string, SubscriptionRow[]>();
+  try {
+    const subscriptions = (await query<SubscriptionRow & { userId: string }>(
+      `SELECT id,"userId",endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=ANY($1::text[])`, [Array.from(new Set(deliveries.map(({ userId }) => userId)))]
+    )).rows;
+    for (const subscription of subscriptions) {
+      const { userId, ...row } = subscription;
+      const userSubscriptions = subscriptionsByUser.get(userId) ?? [];
+      userSubscriptions.push(row);
+      subscriptionsByUser.set(userId, userSubscriptions);
+    }
+  } catch {
+    for (const delivery of deliveries) {
+      await query(`UPDATE ${table} SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+    }
+    return;
+  }
   for (const delivery of deliveries) {
     try {
-      const subscriptions = (await query<SubscriptionRow>(`SELECT id,endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=$1`, [delivery.userId])).rows;
+      const subscriptions = subscriptionsByUser.get(delivery.userId) ?? [];
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
@@ -183,19 +200,54 @@ export async function dispatchSessionUpdate(sessionId: string, updateId: string)
   const deliveries = (await query<{ id: string; userId: string; title: string }>(
     `SELECT d.id,d."userId",s.title FROM "SessionUpdatePushDelivery" d JOIN "TrainingSession" s ON s.id=d."sessionId" WHERE d."updateId"=$1 AND d.status='PENDING' ORDER BY d.id`, [updateId]
   )).rows;
+  if (!deliveries.length) return;
+
+  let subscriptionsByUser: Map<string, SubscriptionRow[]>;
+  try {
+    const subscriptions = (await query<SubscriptionRow & { userId: string }>(
+      `SELECT id,"userId",endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=ANY($1::text[])`, [Array.from(new Set(deliveries.map(({ userId }) => userId)))]
+    )).rows;
+    subscriptionsByUser = new Map();
+    for (const subscription of subscriptions) {
+      const { userId, ...row } = subscription;
+      const userSubscriptions = subscriptionsByUser.get(userId) ?? [];
+      userSubscriptions.push(row);
+      subscriptionsByUser.set(userId, userSubscriptions);
+    }
+  } catch {
+    await query(`UPDATE "SessionUpdatePushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=ANY($1::text[]) AND status='PENDING'`, [deliveries.map(({ id }) => id)]).catch(() => undefined);
+    return;
+  }
+
+  const outcomes: { id: string; status: "SENT" | "FAILED"; lastError: string | null }[] = [];
   for (const delivery of deliveries) {
     try {
-      const subscriptions = (await query<SubscriptionRow>(`SELECT id,endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=$1`, [delivery.userId])).rows;
+      const subscriptions = subscriptionsByUser.get(delivery.userId) ?? [];
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
           if (await send(subscription, { title: "Entraînement modifié", body: `La séance « ${delivery.title} » a été mise à jour.`, url: `/athlete/session/${encodeURIComponent(sessionId)}` }) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back updating the session. */ }
       }
-      await query(`UPDATE "SessionUpdatePushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);
+      outcomes.push({ id: delivery.id, status: accepted ? "SENT" : "FAILED", lastError: accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription" });
     } catch {
-      await query(`UPDATE "SessionUpdatePushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+      outcomes.push({ id: delivery.id, status: "FAILED", lastError: "Delivery processing failed" });
     }
+  }
+  if (outcomes.length) {
+    await query(
+      `UPDATE "SessionUpdatePushDelivery" AS d
+       SET status=o.status, attempts=d.attempts+1,
+           "sentAt"=CASE WHEN o.status='SENT' THEN NOW() ELSE d."sentAt" END,
+           "lastError"=o.last_error
+       FROM unnest($1::text[], $2::text[], $3::text[]) AS o(id, status, last_error)
+       WHERE d.id=o.id AND d.status='PENDING'`,
+      [outcomes.map(({ id }) => id), outcomes.map(({ status }) => status), outcomes.map(({ lastError }) => lastError)]
+    ).catch(async () => {
+      for (const outcome of outcomes) {
+        await query(`UPDATE "SessionUpdatePushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [outcome.id]).catch(() => undefined);
+      }
+    });
   }
 }
 
@@ -207,9 +259,30 @@ export async function dispatchPlanningEventCancellation(eventId: string) {
   const deliveries = (await query<{ id: string; userId: string; date: Date; title: string }>(
     `SELECT d.id,d."userId",e.title,e."startsAt" AS date FROM "PlanningEventCancellationPushDelivery" d JOIN "PlanningEvent" e ON e.id=d."planningEventId" WHERE d."planningEventId"=$1 AND d.status='PENDING' ORDER BY d.id`, [eventId]
   )).rows;
+  if (!deliveries.length) return;
+
+  let subscriptionsByUser: Map<string, SubscriptionRow[]>;
+  try {
+    const subscriptions = (await query<SubscriptionRow & { userId: string }>(
+      `SELECT id,"userId",endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=ANY($1::text[])`, [Array.from(new Set(deliveries.map(({ userId }) => userId)))]
+    )).rows;
+    subscriptionsByUser = new Map();
+    for (const subscription of subscriptions) {
+      const { userId, ...row } = subscription;
+      const userSubscriptions = subscriptionsByUser.get(userId) ?? [];
+      userSubscriptions.push(row);
+      subscriptionsByUser.set(userId, userSubscriptions);
+    }
+  } catch {
+    for (const delivery of deliveries) {
+      await query(`UPDATE "PlanningEventCancellationPushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+    }
+    return;
+  }
+
   for (const delivery of deliveries) {
     try {
-      const subscriptions = (await query<SubscriptionRow>(`SELECT id,endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=$1`, [delivery.userId])).rows;
+      const subscriptions = subscriptionsByUser.get(delivery.userId) ?? [];
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
@@ -224,24 +297,44 @@ export async function dispatchPlanningEventCancellation(eventId: string) {
 }
 
 export async function dispatchPlanningEventPublication(eventIds: string[]) {
-  for (const eventId of eventIds) {
-    const deliveries = (await query<{ id: string; userId: string; date: Date; title: string; type: string }>(
-      `SELECT d.id,d."userId",e.title,e."startsAt" AS date,e.type FROM "PlanningEventPushDelivery" d JOIN "PlanningEvent" e ON e.id=d."planningEventId" WHERE d."planningEventId"=$1 AND d.status='PENDING' ORDER BY d.id`, [eventId]
+  if (!eventIds.length) return;
+  const deliveries = (await query<{ id: string; userId: string; date: Date; title: string; type: string }>(
+    `SELECT d.id,d."userId",e.title,e."startsAt" AS date,e.type FROM "PlanningEventPushDelivery" d JOIN "PlanningEvent" e ON e.id=d."planningEventId" WHERE d."planningEventId"=ANY($1::text[]) AND d.status='PENDING' ORDER BY d.id`, [eventIds]
+  )).rows;
+  if (!deliveries.length) return;
+
+  let subscriptionsByUser: Map<string, SubscriptionRow[]>;
+  try {
+    const subscriptions = (await query<SubscriptionRow & { userId: string }>(
+      `SELECT id,"userId",endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=ANY($1::text[])`, [Array.from(new Set(deliveries.map(({ userId }) => userId)))]
     )).rows;
+    subscriptionsByUser = new Map();
+    for (const subscription of subscriptions) {
+      const { userId, ...row } = subscription;
+      const userSubscriptions = subscriptionsByUser.get(userId) ?? [];
+      userSubscriptions.push(row);
+      subscriptionsByUser.set(userId, userSubscriptions);
+    }
+  } catch {
     for (const delivery of deliveries) {
-      try {
-        const subscriptions = (await query<SubscriptionRow>(`SELECT id,endpoint,p256dh,auth FROM "PushSubscription" WHERE "userId"=$1`, [delivery.userId])).rows;
-        let accepted = 0;
-        const kind = delivery.type === "COMPETITION" ? "Nouvelle compétition" : delivery.type === "CAMP" ? "Nouveau camp" : "Nouvel événement au calendrier";
-        for (const subscription of subscriptions) {
-          try {
-            if (await send(subscription, { title: kind, body: `${delivery.title} · ${formatMontrealDate(delivery.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`, url: "/athlete/calendar" }) === "sent") accepted++;
-          } catch { /* A push provider failure must not roll back adding the event. */ }
-        }
-        await query(`UPDATE "PlanningEventPushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);
-      } catch {
-        await query(`UPDATE "PlanningEventPushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+      await query(`UPDATE "PlanningEventPushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+    }
+    return;
+  }
+
+  for (const delivery of deliveries) {
+    try {
+      const subscriptions = subscriptionsByUser.get(delivery.userId) ?? [];
+      let accepted = 0;
+      const kind = delivery.type === "COMPETITION" ? "Nouvelle compétition" : delivery.type === "CAMP" ? "Nouveau camp" : "Nouvel événement au calendrier";
+      for (const subscription of subscriptions) {
+        try {
+          if (await send(subscription, { title: kind, body: `${delivery.title} · ${formatMontrealDate(delivery.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`, url: "/athlete/calendar" }) === "sent") accepted++;
+        } catch { /* A push provider failure must not roll back adding the event. */ }
       }
+      await query(`UPDATE "PlanningEventPushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);
+    } catch {
+      await query(`UPDATE "PlanningEventPushDelivery" SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
     }
   }
 }
