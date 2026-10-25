@@ -9,7 +9,12 @@ type Proposal = { id: string; title: string; summary: string; sources: Source[];
 function findingKey(finding: Finding) {
   const title = finding.title?.trim();
   if (!title) return null;
-  return `${title.toLocaleLowerCase("fr").replace(/[^\p{L}\p{N}]+/gu, " ").trim()}|${(finding.location ?? "").toLocaleLowerCase("fr").trim()}`;
+  return title.toLocaleLowerCase("fr").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function sourceKey(source: Source) {
+  const normalize = (value?: string) => (value ?? "").toLocaleLowerCase("fr").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  return `${source.runId}:${normalize(source.finding.title)}:${normalize(source.finding.location)}:${normalize(source.finding.recommendation)}:${normalize(source.finding.evidence)}`;
 }
 
 function proposalKey(proposal: Proposal) {
@@ -20,11 +25,35 @@ function proposalKey(proposal: Proposal) {
 function uniqueSources(sources: Source[]) {
   const seen = new Set<string>();
   return sources.filter((source) => {
-    const key = `${source.runId}:${source.finding.title ?? ""}`;
+    const key = sourceKey(source);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+function aggregateProposalContent(sources: Source[], currentDetails: Record<string, unknown> = {}) {
+  const lines = (field: "evidence" | "recommendation", fallback: string) => {
+    const values = [...new Set(sources.map((source) => {
+      const value = source.finding[field]?.trim();
+      if (!value) return null;
+      return source.finding.location ? `${source.finding.location}: ${value}` : value;
+    }).filter((value): value is string => Boolean(value)))];
+    return values.length ? values.join(" · ") : fallback;
+  };
+  const locations = [...new Set(sources.map((source) => source.finding.location?.trim()).filter((value): value is string => Boolean(value)))];
+  return {
+    summary: lines("evidence", "Constat rapporté par un agent d’analyse."),
+    details: {
+      ...currentDetails,
+      change: lines("recommendation", "Préciser le changement proposé à partir des preuves disponibles."),
+      grouping: locations.length > 1
+        ? `Même recommandation regroupée depuis ${sources.length} constat(s), dans ${locations.length} emplacements : ${locations.join(", ")}.`
+        : sources.length > 1
+          ? `Même recommandation regroupée depuis ${sources.length} constats sources.`
+          : "Recommandation issue d’une seule source; aucun regroupement automatique n’a été établi."
+    }
+  };
 }
 
 export async function consolidateAgentFindings() {
@@ -49,7 +78,7 @@ export async function consolidateAgentFindings() {
   await withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(74201931)");
     const { rows: allRows } = await client.query<{ sources: Source[] }>(`SELECT sources FROM "AiPrProposal"`);
-    const seen = new Set(allRows.flatMap((proposal) => proposal.sources.map((source) => `${source.runId}:${source.finding.title ?? ""}`)));
+    const seen = new Set(allRows.flatMap((proposal) => proposal.sources.map(sourceKey)));
     const { rows: proposals } = await client.query<Proposal>(
       `SELECT id,title,summary,sources,details,status,history,"createdAt" FROM "AiPrProposal"
        WHERE status IN ('En attente d’approbation','À clarifier') ORDER BY "createdAt",id FOR UPDATE`
@@ -65,6 +94,7 @@ export async function consolidateAgentFindings() {
       if (duplicates.length < 2) continue;
       const canonical = duplicates[0];
       const sources = uniqueSources(duplicates.flatMap((proposal) => proposal.sources));
+      const aggregate = aggregateProposalContent(sources, canonical.details);
       const status = sources.every((source) => source.finding.evidence && source.finding.recommendation)
         ? "En attente d’approbation" : "À clarifier";
       const now = new Date().toISOString();
@@ -72,8 +102,8 @@ export async function consolidateAgentFindings() {
         at: now, event: `Fusion de ${duplicates.length - 1} propositions non approuvées identiques`, actor: "Agent de consolidation", status
       }];
       await client.query(
-        `UPDATE "AiPrProposal" SET sources=$2,status=$3,history=$4,"updatedAt"=NOW() WHERE id=$1`,
-        [canonical.id, JSON.stringify(sources), status, JSON.stringify(canonicalHistory)]
+        `UPDATE "AiPrProposal" SET sources=$2,summary=$3,details=$4,status=$5,history=$6,"updatedAt"=NOW() WHERE id=$1`,
+        [canonical.id, JSON.stringify(sources), aggregate.summary, JSON.stringify(aggregate.details), status, JSON.stringify(canonicalHistory)]
       );
       for (const duplicate of duplicates.slice(1)) {
         const history = [...duplicate.history, {
@@ -81,26 +111,28 @@ export async function consolidateAgentFindings() {
         }];
         await client.query(`UPDATE "AiPrProposal" SET status='Périmée',history=$2,"updatedAt"=NOW() WHERE id=$1`, [duplicate.id, JSON.stringify(history)]);
       }
-      candidates.set(key, [{ ...canonical, sources, status, history: canonicalHistory }]);
+      candidates.set(key, [{ ...canonical, sources, summary: aggregate.summary, details: aggregate.details, status, history: canonicalHistory }]);
       merged += duplicates.length - 1;
     }
 
     for (const [key, incomingSources] of grouped) {
-      const freshSources = incomingSources.filter((source) => !seen.has(`${source.runId}:${source.finding.title ?? ""}`));
+      const freshSources = incomingSources.filter((source) => !seen.has(sourceKey(source)));
       if (!freshSources.length) continue;
       const existingProposal = candidates.get(key)?.[0];
       if (existingProposal) {
         const sources = uniqueSources([...existingProposal.sources, ...freshSources]);
+        const aggregate = aggregateProposalContent(sources, existingProposal.details);
         const status = sources.every((source) => source.finding.evidence && source.finding.recommendation)
           ? "En attente d’approbation" : "À clarifier";
         const history = [...existingProposal.history, {
-          at: new Date().toISOString(), event: `${freshSources.length} source(s) ajoutée(s) à une proposition non approuvée`, actor: "Agent de consolidation", status
+          at: new Date().toISOString(), event: `${freshSources.length} constat(s) ajouté(s) à une proposition non approuvée; les preuves et recommandations sont regroupées`, actor: "Agent de consolidation", status
         }];
         await client.query(
-          `UPDATE "AiPrProposal" SET sources=$2,status=$3,history=$4,"updatedAt"=NOW() WHERE id=$1`,
-          [existingProposal.id, JSON.stringify(sources), status, JSON.stringify(history)]
+          `UPDATE "AiPrProposal" SET sources=$2,summary=$3,details=$4,status=$5,history=$6,"updatedAt"=NOW() WHERE id=$1`,
+          [existingProposal.id, JSON.stringify(sources), aggregate.summary, JSON.stringify(aggregate.details), status, JSON.stringify(history)]
         );
-        freshSources.forEach((source) => seen.add(`${source.runId}:${source.finding.title ?? ""}`));
+        freshSources.forEach((source) => seen.add(sourceKey(source)));
+        candidates.set(key, [{ ...existingProposal, sources, summary: aggregate.summary, details: aggregate.details, status, history }]);
         merged += 1;
         continue;
       }
@@ -108,25 +140,25 @@ export async function consolidateAgentFindings() {
       const sources = uniqueSources(freshSources);
       const first = sources[0].finding;
       const title = first.title ?? "Recommandation sans titre";
+      const aggregate = aggregateProposalContent(sources);
       const details = {
-        change: first.recommendation ?? "Préciser le changement proposé à partir des preuves disponibles.",
+        ...aggregate.details,
         expected: "Résultat à confirmer lors de la préparation du correctif.",
         acceptance: ["Le problème et sa preuve sont vérifiables.", "Le changement proposé répond au constat.", "Les validations suggérées passent."],
         validation: "À exécuter après approbation; aucune validation n’a été effectuée par cette analyse.",
         risks: first.limits ?? "Risques et impacts à préciser avant correction.",
         dependencies: [], priority: first.priority ?? "À évaluer", effort: first.effort ?? "inconnu",
         confidence: first.confidence ?? "À évaluer selon la preuve du rapport source.",
-        grouping: sources.length > 1 ? "Même intitulé et même composant observés par plusieurs exécutions." : "Recommandation issue d’une seule source; aucun regroupement automatique n’a été établi."
       };
       const status = sources.every((source) => source.finding.evidence && source.finding.recommendation)
         ? "En attente d’approbation" : "À clarifier";
       const id = randomUUID();
       await client.query(`INSERT INTO "AiPrProposal" (id,title,summary,sources,details,status,history) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [
-        id, title, first.evidence ?? first.recommendation ?? "Constat rapporté par un agent d’analyse.", JSON.stringify(sources), JSON.stringify(details), status,
+        id, title, aggregate.summary, JSON.stringify(sources), JSON.stringify(details), status,
         JSON.stringify([{ at: new Date().toISOString(), event: "Proposition créée depuis les recommandations sources", actor: "Agent de consolidation", status }])
       ]);
-      candidates.set(key, [{ id, title, summary: first.evidence ?? first.recommendation ?? "", sources, details, status, history: [], createdAt: new Date() }]);
-      freshSources.forEach((source) => seen.add(`${source.runId}:${source.finding.title ?? ""}`));
+      candidates.set(key, [{ id, title, summary: aggregate.summary, sources, details, status, history: [], createdAt: new Date() }]);
+      freshSources.forEach((source) => seen.add(sourceKey(source)));
       added += 1;
     }
   });

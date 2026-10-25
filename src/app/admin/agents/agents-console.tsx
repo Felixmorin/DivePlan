@@ -163,7 +163,7 @@ function AgentSettingsModal({agent,supabaseStatsConfigured,busy,onClose,onSave,o
       : agent.id === "architecture-cartographer"
         ? "Cartographie les routes, parcours, données, permissions et dépendances en lecture seule; conserve chaque rapport dans l’historique."
       : agent.id === "pr-consolidation"
-        ? "Examine les recommandations des rapports terminés, regroupe les doublons exacts, conserve les sources et prépare des propositions soumises à décision humaine."
+        ? "Examine les recommandations des rapports terminés, regroupe les constats au même titre même s’ils viennent de différents emplacements, conserve les preuves et prépare des propositions soumises à décision humaine."
       : agent.id === "pr-correction"
         ? "Après le lancement manuel d’une proposition approuvée, un script local transmet son périmètre à Codex connecté à ChatGPT, applique un correctif, exécute les validations et ouvre une PR en brouillon si tout réussit."
       : agent.mission;
