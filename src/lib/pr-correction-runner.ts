@@ -86,7 +86,7 @@ export async function updateCorrectionExecution(input: {
       at: new Date().toISOString(), event: input.note, actor: "Agent de correction · Codex local", status: input.status
     }];
     await client.query(
-      `UPDATE "AiPrProposal" SET "correctionStatus"=$3,"correctionRunUrl"=COALESCE($4,"correctionRunUrl"),"correctionPullRequestUrl"=COALESCE($5,"correctionPullRequestUrl"),history=$6,"updatedAt"=NOW() WHERE id=$1 AND "correctionExecutionId"=$2`,
+      `UPDATE "AiPrProposal" SET "correctionStatus"=$3,status=CASE WHEN $3 IN ('Bloqué','Vérifications échouées','Abandonné') THEN 'Fermée' ELSE status END,"correctionRunUrl"=COALESCE($4,"correctionRunUrl"),"correctionPullRequestUrl"=COALESCE($5,"correctionPullRequestUrl"),history=$6,"updatedAt"=NOW() WHERE id=$1 AND "correctionExecutionId"=$2`,
       [input.proposalId, input.executionId, input.status, input.runUrl ?? null, input.pullRequestUrl ?? null, JSON.stringify(history)]
     );
   });

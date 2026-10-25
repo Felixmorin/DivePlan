@@ -8,7 +8,7 @@ Le bouton « Start workflow » met en file, dans l’ordre affiché, tous les ag
 
 ## Agent de correction
 
-L’Agent de correction est enregistré par `db/migrations/0018_pr_correction_agent.sql`; son suivi d’exécution local est ajouté par `0019_pr_correction_runner.sql`. Depuis une proposition approuvée, un administrateur examine son périmètre puis choisit « Préparer avec Codex local ». DivePlan vérifie l’approbation, la complétude et l’empreinte, puis affiche une commande PowerShell. Le script local récupère les données approuvées par une API protégée, lance Codex connecté au compte ChatGPT, vérifie le changement, exécute lint, tests et build, puis crée une branche et une PR en brouillon si tout réussit. Aucune fusion ni aucun déploiement n’est automatique.
+L’Agent de correction est enregistré par `db/migrations/0018_pr_correction_agent.sql`; son suivi d’exécution local est ajouté par `0019_pr_correction_runner.sql`. `0020_close_failed_pr_proposals.sql` ajoute le statut `Fermée` aux propositions. Depuis une proposition approuvée, un administrateur examine son périmètre puis choisit « Préparer avec Codex local ». DivePlan vérifie l’approbation, la complétude et l’empreinte, puis affiche une commande PowerShell. Le script local récupère les données approuvées par une API protégée, lance Codex connecté au compte ChatGPT, vérifie le changement, exécute lint, tests et build, puis crée une branche et une PR en brouillon si tout réussit. Si l’exécution est bloquée, échoue ou est abandonnée sans PR, la proposition passe à `Fermée`. Aucune fusion ni aucun déploiement n’est automatique.
 
 Configuration requise :
 
