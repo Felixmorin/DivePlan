@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { performance } from "node:perf_hooks";
 
 const globalForPool = globalThis as typeof globalThis & { divePlanPool?: Pool };
 
@@ -50,13 +51,13 @@ function createPool(connectionString = process.env.DATABASE_URL, max = 3) {
 export const pool = globalForPool.divePlanPool ?? createPool();
 if (process.env.NODE_ENV !== "production") globalForPool.divePlanPool = pool;
 
-type EgressScope = { clubId: string | null; requests: number; resultBytes: number; timer?: ReturnType<typeof setTimeout> };
+type EgressScope = { clubId: string | null; requests: number; resultBytes: number; durationMs: number; maxDurationMs: number; slowQueries: number; timer?: ReturnType<typeof setTimeout> };
 const egressScope = new AsyncLocalStorage<EgressScope>();
 
 function getEgressScope() {
   let scope = egressScope.getStore();
   if (!scope) {
-    scope = { clubId: null, requests: 0, resultBytes: 0 };
+    scope = { clubId: null, requests: 0, resultBytes: 0, durationMs: 0, maxDurationMs: 0, slowQueries: 0 };
     egressScope.enterWith(scope);
   }
   return scope;
@@ -66,26 +67,38 @@ export function setDatabaseEgressClub(clubId: string | null) {
   if (clubId) getEgressScope().clubId = clubId;
 }
 
-function recordDatabaseResult(result: QueryResult<QueryResultRow>) {
+function recordDatabaseResult(result: QueryResult<QueryResultRow>, durationMs: number) {
   if (["BEGIN", "COMMIT", "ROLLBACK"].includes(result.command)) return;
   const scope = getEgressScope();
   scope.requests += 1;
   scope.resultBytes += Buffer.byteLength(JSON.stringify(result.rows));
+  scope.durationMs += durationMs;
+  scope.maxDurationMs = Math.max(scope.maxDurationMs, durationMs);
+  if (durationMs >= 200) scope.slowQueries += 1;
   if (scope.timer) clearTimeout(scope.timer);
   scope.timer = setTimeout(() => {
     if (!scope.clubId || scope.requests === 0) return;
     const requests = scope.requests;
     const resultBytes = scope.resultBytes;
+    const durationMs = scope.durationMs;
+    const maxDurationMs = scope.maxDurationMs;
+    const slowQueries = scope.slowQueries;
     scope.requests = 0;
     scope.resultBytes = 0;
+    scope.durationMs = 0;
+    scope.maxDurationMs = 0;
+    scope.slowQueries = 0;
     void pool.query(
-      `INSERT INTO "DatabaseEgressTelemetryHour" ("clubId", hour, route, requests, "resultBytes", "updatedAt")
-       VALUES ($1, date_trunc('hour', NOW()), 'Application entière', $2, $3, NOW())
+      `INSERT INTO "DatabaseEgressTelemetryHour" ("clubId", hour, route, requests, "resultBytes", "durationMs", "maxDurationMs", "slowQueries", "updatedAt")
+       VALUES ($1, date_trunc('hour', NOW()), 'Application entière', $2, $3, $4, $5, $6, NOW())
        ON CONFLICT ("clubId", hour, route) DO UPDATE SET
          requests = "DatabaseEgressTelemetryHour".requests + EXCLUDED.requests,
          "resultBytes" = "DatabaseEgressTelemetryHour"."resultBytes" + EXCLUDED."resultBytes",
+         "durationMs" = "DatabaseEgressTelemetryHour"."durationMs" + EXCLUDED."durationMs",
+         "maxDurationMs" = GREATEST("DatabaseEgressTelemetryHour"."maxDurationMs", EXCLUDED."maxDurationMs"),
+         "slowQueries" = "DatabaseEgressTelemetryHour"."slowQueries" + EXCLUDED."slowQueries",
          "updatedAt" = NOW()`,
-      [scope.clubId, requests, resultBytes]
+      [scope.clubId, requests, resultBytes, durationMs, maxDurationMs, slowQueries]
     ).catch((error: unknown) => console.error("Database egress telemetry write failed", error));
   }, 500);
 }
@@ -95,8 +108,9 @@ export async function query<Row extends QueryResultRow = QueryResultRow>(
   values: readonly unknown[] = []
 ): Promise<QueryResult<Row>> {
   getEgressScope();
+  const startedAt = performance.now();
   const result = await pool.query<Row>(text, [...values]);
-  recordDatabaseResult(result);
+  recordDatabaseResult(result, performance.now() - startedAt);
   return result;
 }
 
@@ -106,8 +120,9 @@ export async function withTransaction<T>(work: (client: PoolClient) => Promise<T
   const instrumentedClient = new Proxy(client, {
     get(target, property, receiver) {
       if (property === "query") return async (...args: unknown[]) => {
+        const startedAt = performance.now();
         const result = await Reflect.apply(target.query, target, args) as unknown as QueryResult<QueryResultRow>;
-        recordDatabaseResult(result);
+        recordDatabaseResult(result, performance.now() - startedAt);
         return result;
       };
       const value = Reflect.get(target, property, target) as unknown;
