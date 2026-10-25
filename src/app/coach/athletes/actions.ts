@@ -624,15 +624,23 @@ export async function updateAthleteDiveFamily(formData: FormData) {
     );
     const oldTotal = logs.rows.reduce((sum, row) => sum + row.repetitionsCompleted, 0);
     let remaining = parsed.data.repetitions;
-    for (const log of logs.rows) {
+    const updatedRepetitions = logs.rows.map((log) => {
       const next = oldTotal === 0 ? 0 : Math.floor(parsed.data.repetitions * log.repetitionsCompleted / oldTotal);
-      await tx.query(`UPDATE "AthleteDiveLog" SET "repetitionsCompleted"=$1 WHERE id=$2`, [next, log.id]);
       remaining -= next;
-    }
-    for (const log of logs.rows) {
+      return next;
+    });
+    for (let index = 0; index < logs.rows.length; index += 1) {
       if (remaining <= 0) break;
-      await tx.query(`UPDATE "AthleteDiveLog" SET "repetitionsCompleted"="repetitionsCompleted"+1 WHERE id=$1`, [log.id]);
+      updatedRepetitions[index] += 1;
       remaining -= 1;
+    }
+    if (logs.rows.length > 0) {
+      await tx.query(
+        `UPDATE "AthleteDiveLog" AS l SET "repetitionsCompleted" = updated."repetitionsCompleted"
+         FROM unnest($1::text[], $2::int[]) AS updated(id, "repetitionsCompleted")
+         WHERE l.id = updated.id`,
+        [logs.rows.map((log) => log.id), updatedRepetitions]
+      );
     }
   });
 
