@@ -571,7 +571,7 @@ export async function reorderCompetitionDives(formData: FormData) {
   const listResult = await query(`SELECT l.id FROM "CompetitionDiveList" l JOIN "Athlete" a ON a.id=l."athleteId" WHERE l.id=$1 AND l."athleteId"=$2 AND a."clubId"=$3 LIMIT 1`, [listId, athleteId, clubId]);
   if (!listResult.rows[0]) throw new Error("Liste introuvable.");
   const currentResult = await query<{ id: string }>(
-    `SELECT d.id FROM "CompetitionDive" d JOIN "Athlete" a ON a.id = d."athleteId" WHERE d."athleteId" = $1 AND d."listId"=$2 AND d.height = $3 AND a."clubId" = $4`,
+    `SELECT d.id FROM "CompetitionDive" d JOIN "Athlete" a ON a.id = d."athleteId" WHERE d."athleteId" = $1 AND d."listId"=$2 AND d.height = $3 AND a."clubId" = $4 LIMIT 51`,
     [athleteId, listId, height, clubId]
   );
   const currentDives = currentResult.rows;
