@@ -103,7 +103,7 @@ export async function clearCorrectionQueue() {
     const at = new Date().toISOString();
     await client.query(
       `UPDATE "AiPrProposal" SET "correctionStatus"='Abandonné',"correctionExecutionId"=NULL,
-       history=history || jsonb_build_array(jsonb_build_object('at',$2,'event','Correction retirée de la file par un administrateur.','actor',$3,'status','Abandonné')),
+       history=history || jsonb_build_array(jsonb_build_object('at',$2::text,'event','Correction retirée de la file par un administrateur.','actor',$3::text,'status','Abandonné')),
        "updatedAt"=NOW() WHERE id=ANY($1::text[])`,
       [rows.map((row) => row.id), at, admin.email]
     );
