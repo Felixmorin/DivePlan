@@ -167,12 +167,12 @@ export async function decideProposal(input: { id: string; status: string; note?:
     }];
     await client.query(
       `UPDATE "AiPrProposal" SET status=$2,
-        "correctionStatus"=CASE WHEN $4 IS NOT NULL THEN 'En attente d’exécution' ELSE "correctionStatus" END,
-        "correctionExecutionId"=COALESCE($4,"correctionExecutionId"),
-        "correctionProposalHash"=COALESCE($5,"correctionProposalHash"),
-        "correctionRunUrl"=CASE WHEN $4 IS NOT NULL THEN NULL ELSE "correctionRunUrl" END,
-        "correctionPullRequestUrl"=CASE WHEN $4 IS NOT NULL THEN NULL ELSE "correctionPullRequestUrl" END,
-        history=$3,"updatedAt"=NOW() WHERE id=$1`,
+        "correctionStatus"=CASE WHEN $4::text IS NOT NULL THEN 'En attente d’exécution' ELSE "correctionStatus" END,
+        "correctionExecutionId"=COALESCE($4::text,"correctionExecutionId"),
+        "correctionProposalHash"=COALESCE($5::text,"correctionProposalHash"),
+        "correctionRunUrl"=CASE WHEN $4::text IS NOT NULL THEN NULL ELSE "correctionRunUrl" END,
+        "correctionPullRequestUrl"=CASE WHEN $4::text IS NOT NULL THEN NULL ELSE "correctionPullRequestUrl" END,
+        history=$3::jsonb,"updatedAt"=NOW() WHERE id=$1`,
       [parsed.data.id, parsed.data.status, JSON.stringify(nextHistory), executionId, proposalHash]
     );
     return executionId && queuedRepository ? { executionId, repository: queuedRepository } : null;
