@@ -78,7 +78,7 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
         const result = await clearCorrectionQueue();
         const clearedAt = new Date().toISOString();
         const cleared = new Set(result.clearedIds);
-        setProposals((list) => list.map((item) => cleared.has(item.id) ? { ...item, correctionStatus: "Abandonné", correctionExecutionId: null, updatedAt: new Date(), history: [...item.history, { at: clearedAt, event: "Correction retirée de la file par un administrateur.", status: "Abandonné" }] : item));
+        setProposals((list) => list.map((item) => cleared.has(item.id) ? { ...item, correctionStatus: "Abandonné", correctionExecutionId: null, updatedAt: new Date(), history: [...item.history, { at: clearedAt, event: "Correction retirée de la file par un administrateur.", status: "Abandonné" }] } : item));
       } catch (e) { setError(e instanceof Error ? e.message : "Une erreur est survenue."); }
     });
   }
