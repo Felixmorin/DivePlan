@@ -96,12 +96,13 @@ export async function getCorrectionStatuses(ids: string[]) {
   const parsed = z.array(z.string().uuid()).max(1000).safeParse(ids);
   if (!parsed.success) throw new Error("Liste de propositions invalide.");
   if (!parsed.data.length) return [];
+  // UUID-formatted strings are stored in a TEXT primary key (migration 0016).
   const result = await query<{
     id: string; correctionStatus: string; correctionExecutionId: string | null;
     correctionRunUrl: string | null; correctionPullRequestUrl: string | null;
     history: Array<{ at: string; event: string; actor?: string; status?: string }>;
   }>(`SELECT id,"correctionStatus","correctionExecutionId","correctionRunUrl","correctionPullRequestUrl",history
-      FROM "AiPrProposal" WHERE id=ANY($1::uuid[])`, [parsed.data]);
+      FROM "AiPrProposal" WHERE id=ANY($1::text[])`, [parsed.data]);
   return result.rows;
 }
 
