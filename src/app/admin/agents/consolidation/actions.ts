@@ -109,8 +109,7 @@ export async function decideProposal(input: { id: string; status: string; note?:
   const admin = await requireAdmin();
   const parsed = z.object({ id: z.string().uuid(), status: z.enum(["En attente d’approbation","À clarifier","À séparer","Approuvée","Refusée","Périmée"]), note: z.string().trim().max(1000).optional() }).safeParse(input);
   if (!parsed.success) throw new Error("Décision invalide.");
-  let queued: { executionId: string; repository: string } | null = null;
-  await withTransaction(async (client) => {
+  const queued = await withTransaction(async (client): Promise<{ executionId: string; repository: string } | null> => {
     const { rows } = await client.query<{
       id: string; title: string; summary: string; sources: ProposalSource[]; details: ProposalDetails;
       status: string; correctionStatus: string; correctionExecutionId: string | null;
@@ -121,6 +120,7 @@ export async function decideProposal(input: { id: string; status: string; note?:
     const enqueue = parsed.data.status === "Approuvée" && row.status !== "Approuvée";
     let executionId: string | null = null;
     let proposalHash: string | null = null;
+    let queuedRepository: string | null = null;
     if (enqueue) {
       if (!process.env.CORRECTION_RUNNER_TOKEN) throw new Error("Définir CORRECTION_RUNNER_TOKEN dans les variables d’environnement serveur de DivePlan avant d’approuver une proposition pour la file locale.");
       const repository = process.env.GITHUB_REPOSITORY ?? "Felixmorin/DivePlan";
@@ -133,7 +133,7 @@ export async function decideProposal(input: { id: string; status: string; note?:
       }
       executionId = row.correctionStatus === "En attente d’exécution" && row.correctionExecutionId ? row.correctionExecutionId : randomUUID();
       proposalHash = hashCorrectionProposal(row);
-      queued = { executionId, repository };
+      queuedRepository = repository;
     }
     const nextHistory = [...(row.history ?? []), {
       at: new Date().toISOString(),
@@ -152,6 +152,7 @@ export async function decideProposal(input: { id: string; status: string; note?:
         history=$3,"updatedAt"=NOW() WHERE id=$1`,
       [parsed.data.id, parsed.data.status, JSON.stringify(nextHistory), executionId, proposalHash]
     );
+    return executionId && queuedRepository ? { executionId, repository: queuedRepository } : null;
   });
   if (queued) {
     await trackEvent({ type: "admin.agent.correction.prepared", message: "Proposition approuvée et ajoutée à la file du Codex local", userId: admin.id, metadata: { proposalId: parsed.data.id, executionId: queued.executionId } });
