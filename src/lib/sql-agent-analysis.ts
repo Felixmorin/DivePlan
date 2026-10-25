@@ -51,14 +51,43 @@ export async function loadDivePlanSources(root = process.cwd()) {
 }
 
 function extractQueries(content: string) {
-  const calls: Array<{ sql: string; line: number; context: string }> = [];
-  const matcher = /(?:\bquery|\.query)\s*(?:<[^>]*>)?\s*\(\s*([`'"])([\s\S]*?)\1/g;
+  const calls: Array<{ sql: string; line: number; index: number }> = [];
+  const matcher = /\bquery\s*(?:<[^>]*>)?\s*\(\s*([`'"])([\s\S]*?)\1/g;
   for (const match of content.matchAll(matcher)) {
     const index = match.index ?? 0;
     const line = content.slice(0, index).split("\n").length;
-    calls.push({ sql: match[2], line, context: content.slice(Math.max(0, index - 800), index) });
+    calls.push({ sql: match[2], line, index });
   }
   return calls;
+}
+
+function matchingBrace(content: string, openIndex: number) {
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+  for (let index = openIndex; index < content.length; index += 1) {
+    const char = content[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === quote) quote = "";
+      continue;
+    }
+    if (char === "'" || char === '"' || char === "`") { quote = char; continue; }
+    if (char === "{") depth += 1;
+    else if (char === "}" && --depth === 0) return index;
+  }
+  return -1;
+}
+
+function isCallInsideLoop(content: string, callIndex: number) {
+  const scopes = [/\b(?:for|while)\s*\([^)]*\)\s*\{/g, /\.map\s*\([^=]*=>\s*\{/g];
+  for (const matcher of scopes) for (const match of content.matchAll(matcher)) {
+    const open = (match.index ?? 0) + match[0].lastIndexOf("{");
+    const close = matchingBrace(content, open);
+    if (close > callIndex) return true;
+  }
+  return false;
 }
 
 export function analyzeSqlSourceFiles(files: SourceFile[], options: { unavailableRoots?: string[]; truncated?: boolean } = {}) {
@@ -92,7 +121,7 @@ export function analyzeSqlSourceFiles(files: SourceFile[], options: { unavailabl
       for (const column of unindexed.slice(0, 2)) {
         findings.push({ kind: "hypothesis", priority: "low", impact: `Le filtre sur ${table}.${column} peut nécessiter une lecture plus large si la table est volumineuse.`, effort: "moyen", title: `Piste d’index à vérifier · ${table}.${column}`, location, evidence: `Filtre SQL détecté sur ${table}.${column}; aucun index de modèle correspondant n’apparaît dans le schéma Prisma fourni.`, limits: "La base peut avoir un index créé hors Prisma; le plan de requête, les cardinalités et la sélectivité ne sont pas consultés.", recommendation: "Vérifier les index réels et EXPLAIN (ANALYZE, BUFFERS); ne créer un index qu’après validation de la charge et du coût d’écriture." });
       }
-      if (/\b(for|while)\s*\([^)]*\)\s*\{[\s\S]{0,700}$/i.test(call.context) || /\.map\s*\([^)]*=>\s*(?:query|.*\.query)\s*\(/i.test(call.context)) {
+      if (isCallInsideLoop(file.content, call.index)) {
         findings.push({ kind: "code", priority: "high", impact: "Une requête répétée dans une boucle peut multiplier les allers-retours (N+1).", effort: "moyen", title: "Accès SQL potentiellement répété dans une boucle", location, evidence: "Un appel SQL est précédé d’une boucle dans le même contexte source.", limits: "La proximité textuelle est une heuristique; elle ne prouve pas que l’appel est exécuté à chaque itération.", recommendation: "Vérifier le chemin d’exécution et envisager une jointure, une requête groupée ou un chargement par lots." });
       }
     }
@@ -105,10 +134,7 @@ export function analyzeSqlSourceFiles(files: SourceFile[], options: { unavailabl
   const sessionFiles = files.filter((file) => file.path.includes("src/app/coach/sessions/") || file.path.includes("src/lib/coach-session"));
   const sessionQueries = sessionFiles.flatMap((file) => extractQueries(file.content).map((call) => ({ file, call })));
   if (sessionQueries.length) {
-    const loopCandidates = sessionFiles.flatMap((file) => {
-      const lines = file.content.split("\n");
-      return lines.flatMap((line, index) => /\b(?:for|while)\s*\(|\.map\s*\(/.test(line) && lines.slice(index, index + 16).some((nearby) => /\bquery\s*\(|\.query\s*\(/.test(nearby)) ? [`${file.path}:${index + 1}`] : []);
-    });
+    const loopCandidates = sessionFiles.flatMap((file) => extractQueries(file.content).filter((call) => isCallInsideLoop(file.content, call.index)).map((call) => `${file.path}:${call.line}`));
     const loopEvidence = loopCandidates.length ? `; appels proches d’une boucle repérés à ${loopCandidates.slice(0, 4).join(", ")}` : "";
     findings.push({ kind: "hypothesis", priority: loopCandidates.length ? "high" : "medium", impact: "Le détail de séance assemble plusieurs données; le coût total dépend du volume de relations et des accès exécutés par branche.", effort: "moyen", title: "Vérifier le coût SQL du détail de séance", location: "src/app/coach/sessions/[id]/page.tsx · src/lib/coach-session.ts", evidence: `${sessionQueries.length} appels SQL extraits des fichiers de séances${loopEvidence}.`, limits: "Le nombre effectif d’appels, les octets et la durée ne sont pas mesurés par cette analyse du code.", recommendation: "Comparer les appels et volumes en production; regrouper les chargements répétitifs si les traces confirment un N+1." });
   }

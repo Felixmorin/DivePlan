@@ -46,7 +46,7 @@ export async function startCorrection(input: { id: string }) {
     const restarting = row.correctionStatus === "En cours";
     const history = [...row.history, { at: new Date().toISOString(), event: restarting ? "Correction redémarrée manuellement; l’exécution précédente est invalidée.": "Correction mise en file; le runner local lancera Codex avec la session ChatGPT configurée sur ce dépôt.", actor: admin.email, status: "En attente d’exécution" }];
     const proposalHash = hashCorrectionProposal(row);
-    await client.query(`UPDATE "AiPrProposal" SET "correctionStatus"='En attente d’exécution',"correctionExecutionId"=$2,"correctionProposalHash"=$3,"correctionRunUrl"=NULL,"correctionPullRequestUrl"=NULL,history=$4,"updatedAt"=NOW() WHERE id=$1`, [row.id, executionId, proposalHash, JSON.stringify(history)]);
+    await client.query(`UPDATE "AiPrProposal" SET "correctionStatus"='En attente d’exécution',"correctionExecutionId"=$2,"correctionProposalHash"=$3,"correctionRunUrl"=NULL,"correctionPullRequestUrl"=NULL,history=$4::jsonb,"updatedAt"=NOW() WHERE id=$1`, [row.id, executionId, proposalHash, JSON.stringify(history)]);
     return row;
   });
 
@@ -96,12 +96,13 @@ export async function getCorrectionStatuses(ids: string[]) {
   const parsed = z.array(z.string().uuid()).max(1000).safeParse(ids);
   if (!parsed.success) throw new Error("Liste de propositions invalide.");
   if (!parsed.data.length) return [];
+  // UUID-formatted strings are stored in a TEXT primary key (migration 0016).
   const result = await query<{
     id: string; correctionStatus: string; correctionExecutionId: string | null;
     correctionRunUrl: string | null; correctionPullRequestUrl: string | null;
     history: Array<{ at: string; event: string; actor?: string; status?: string }>;
   }>(`SELECT id,"correctionStatus","correctionExecutionId","correctionRunUrl","correctionPullRequestUrl",history
-      FROM "AiPrProposal" WHERE id=ANY($1::uuid[])`, [parsed.data]);
+      FROM "AiPrProposal" WHERE id=ANY($1::text[])`, [parsed.data]);
   return result.rows;
 }
 
@@ -170,15 +171,24 @@ export async function splitProposal(id: string) {
     const row = result.rows[0];
     if (!row) throw new Error("Proposition introuvable.");
     if (row.sources.length < 2) throw new Error("Cette proposition ne contient pas plusieurs recommandations à séparer.");
-    for (const source of row.sources) {
-      const nextId = randomUUID();
-      const title = source.finding.title ?? row.title;
+    const proposals = row.sources.map((source) => {
       const status = source.finding.evidence && source.finding.recommendation ? "En attente d’approbation" : "À clarifier";
-      await client.query(`INSERT INTO "AiPrProposal" (id,title,summary,sources,details,status,history) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [
-        nextId, title, source.finding.evidence ?? row.summary, JSON.stringify([source]), JSON.stringify(row.details), status,
-        JSON.stringify([{ at: new Date().toISOString(), event: `Proposition séparée depuis ${row.title}`, actor: admin.email, status }])
-      ]);
-    }
+      return {
+        id: randomUUID(),
+        title: source.finding.title ?? row.title,
+        summary: source.finding.evidence ?? row.summary,
+        sources: [source],
+        details: row.details,
+        status,
+        history: [{ at: new Date().toISOString(), event: `Proposition séparée depuis ${row.title}`, actor: admin.email, status }]
+      };
+    });
+    await client.query(
+      `INSERT INTO "AiPrProposal" (id,title,summary,sources,details,status,history)
+       SELECT id,title,summary,sources,details,status,history
+       FROM jsonb_to_recordset($1::jsonb) AS proposals(id uuid,title text,summary text,sources jsonb,details jsonb,status text,history jsonb)`,
+      [JSON.stringify(proposals)]
+    );
     const history = [...row.history, { at: new Date().toISOString(), event: `Proposition séparée en ${row.sources.length} propositions`, actor: admin.email, status: "À séparer" }];
     await client.query(`UPDATE "AiPrProposal" SET status='À séparer',history=$2,"updatedAt"=NOW() WHERE id=$1`, [parsed.data, JSON.stringify(history)]);
   });
