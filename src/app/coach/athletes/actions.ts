@@ -114,16 +114,23 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
   let updated = 0;
 
   await withTransaction(async (tx) => {
+    const groupIds = new Map<string, string>();
+
     for (const record of records) {
       let groupId: string | null = null;
 
       if (record.group) {
-        const existingGroup = await tx.query<{ id: string }>(`SELECT id FROM "TrainingGroup" WHERE "clubId" = $1 AND name = $2 LIMIT 1`, [clubId, record.group]);
-        const group = existingGroup.rows[0] ?? (await tx.query<{ id: string }>(
-          `INSERT INTO "TrainingGroup" (id, name, "clubId", "coachId") VALUES ($1, $2, $3, $4) RETURNING id`,
-          [randomUUID(), record.group, clubId, coach.id]
-        )).rows[0];
-        groupId = group.id;
+        groupId = groupIds.get(record.group) ?? null;
+
+        if (!groupId) {
+          const existingGroup = await tx.query<{ id: string }>(`SELECT id FROM "TrainingGroup" WHERE "clubId" = $1 AND name = $2 LIMIT 1`, [clubId, record.group]);
+          const group = existingGroup.rows[0] ?? (await tx.query<{ id: string }>(
+            `INSERT INTO "TrainingGroup" (id, name, "clubId", "coachId") VALUES ($1, $2, $3, $4) RETURNING id`,
+            [randomUUID(), record.group, clubId, coach.id]
+          )).rows[0];
+          groupId = group.id;
+          groupIds.set(record.group, groupId);
+        }
       }
 
       const existing = await tx.query<{ id: string }>(
