@@ -109,12 +109,56 @@ export async function decideProposal(input: { id: string; status: string; note?:
   const admin = await requireAdmin();
   const parsed = z.object({ id: z.string().uuid(), status: z.enum(["En attente d’approbation","À clarifier","À séparer","Approuvée","Refusée","Périmée"]), note: z.string().trim().max(1000).optional() }).safeParse(input);
   if (!parsed.success) throw new Error("Décision invalide.");
-  const current = await query<{ title: string; summary: string; sources: unknown; details: unknown; status: string; history: unknown[] }>(`SELECT title,summary,sources,details,status,history FROM "AiPrProposal" WHERE id=$1`, [parsed.data.id]);
-  const row = current.rows[0];
-  if (!row) throw new Error("Proposition introuvable.");
-  const history = [...row.history, { at: new Date().toISOString(), event: parsed.data.note || `Statut modifié : ${parsed.data.status}`, actor: admin.email, status: parsed.data.status, snapshot: { title: row.title, summary: row.summary, sources: row.sources, details: row.details, status: parsed.data.status } }];
-  await query(`UPDATE "AiPrProposal" SET status=$2,history=$3, "updatedAt"=NOW() WHERE id=$1`, [parsed.data.id, parsed.data.status, JSON.stringify(history)]);
+  const queued = await withTransaction(async (client): Promise<{ executionId: string; repository: string } | null> => {
+    const { rows } = await client.query<{
+      id: string; title: string; summary: string; sources: ProposalSource[]; details: ProposalDetails;
+      status: string; correctionStatus: string; correctionExecutionId: string | null;
+      history: Array<Record<string, unknown>>;
+    }>(`SELECT id,title,summary,sources,details,status,"correctionStatus","correctionExecutionId",history FROM "AiPrProposal" WHERE id=$1 FOR UPDATE`, [parsed.data.id]);
+    const row = rows[0];
+    if (!row) throw new Error("Proposition introuvable.");
+    const enqueue = parsed.data.status === "Approuvée" && row.status !== "Approuvée";
+    let executionId: string | null = null;
+    let proposalHash: string | null = null;
+    let queuedRepository: string | null = null;
+    if (enqueue) {
+      if (!process.env.CORRECTION_RUNNER_TOKEN) throw new Error("Définir CORRECTION_RUNNER_TOKEN dans les variables d’environnement serveur de DivePlan avant d’approuver une proposition pour la file locale.");
+      const repository = process.env.GITHUB_REPOSITORY ?? "Felixmorin/DivePlan";
+      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) throw new Error("GITHUB_REPOSITORY est invalide.");
+      const agent = await client.query<{ enabled: boolean }>(`SELECT enabled FROM "AiAgent" WHERE id='pr-correction'`);
+      if (!agent.rows[0]?.enabled) throw new Error("L’Agent de correction est en pause. Activez-le dans la console avant d’approuver une proposition pour la file locale.");
+      validateApprovedProposal({ ...row, status: "Approuvée" });
+      if (["Modifications effectuées", "PR en brouillon prête à réviser", "Terminé après révision humaine"].includes(row.correctionStatus)) {
+        throw new Error(`Cette proposition a déjà une correction au statut « ${row.correctionStatus} » et ne peut pas être remise en file.`);
+      }
+      executionId = row.correctionStatus === "En attente d’exécution" && row.correctionExecutionId ? row.correctionExecutionId : randomUUID();
+      proposalHash = hashCorrectionProposal(row);
+      queuedRepository = repository;
+    }
+    const nextHistory = [...(row.history ?? []), {
+      at: new Date().toISOString(),
+      event: enqueue ? "Proposition approuvée et ajoutée à la file du runner local." : parsed.data.note || `Statut modifié : ${parsed.data.status}`,
+      actor: admin.email,
+      status: enqueue ? "En attente d’exécution" : parsed.data.status,
+      snapshot: { title: row.title, summary: row.summary, sources: row.sources, details: row.details, status: parsed.data.status }
+    }];
+    await client.query(
+      `UPDATE "AiPrProposal" SET status=$2,
+        "correctionStatus"=CASE WHEN $4 IS NOT NULL THEN 'En attente d’exécution' ELSE "correctionStatus" END,
+        "correctionExecutionId"=COALESCE($4,"correctionExecutionId"),
+        "correctionProposalHash"=COALESCE($5,"correctionProposalHash"),
+        "correctionRunUrl"=CASE WHEN $4 IS NOT NULL THEN NULL ELSE "correctionRunUrl" END,
+        "correctionPullRequestUrl"=CASE WHEN $4 IS NOT NULL THEN NULL ELSE "correctionPullRequestUrl" END,
+        history=$3,"updatedAt"=NOW() WHERE id=$1`,
+      [parsed.data.id, parsed.data.status, JSON.stringify(nextHistory), executionId, proposalHash]
+    );
+    return executionId && queuedRepository ? { executionId, repository: queuedRepository } : null;
+  });
+  if (queued) {
+    await trackEvent({ type: "admin.agent.correction.prepared", message: "Proposition approuvée et ajoutée à la file du Codex local", userId: admin.id, metadata: { proposalId: parsed.data.id, executionId: queued.executionId } });
+  }
   revalidatePath(path);
+  return queued ? { correctionStatus: "En attente d’exécution" as const, executionId: queued.executionId, repository: queued.repository } : null;
 }
 
 export async function splitProposal(id: string) {

@@ -4,6 +4,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
 $baseUrl = $DivePlanUrl.TrimEnd('/')
 $root = (& git rev-parse --show-toplevel 2>$null)
 if ($LASTEXITCODE -ne 0 -or -not $root) { throw "Ouvre PowerShell à la racine du dépôt DivePlan." }
@@ -48,7 +52,9 @@ if (-not $runnerToken) {
 $headers = @{ Authorization = "Bearer $runnerToken"; Accept = "application/json" }
 $claimUrl = "$baseUrl/api/agent-correction/queue/claim"
 $workerPath = Join-Path $root "scripts\run-approved-correction.ps1"
-$logPath = Join-Path $tokenDirectory "correction-runner.log"
+$logDirectory = Join-Path $root "logs"
+New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+$logPath = Join-Path $logDirectory "correction-runner.log"
 
 Write-Host "Runner DivePlan actif. Vérification toutes les $PollSeconds secondes. Arrêt : Ctrl+C."
 Write-Host "Les tâches approuvées seront lancées dans : $root"
@@ -67,13 +73,14 @@ while ($true) {
     if ($response.task) {
       $task = $response.task
       $started = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-      Add-Content -LiteralPath $logPath -Value "$started Début $($task.proposalId) / $($task.executionId)"
+      $runLogPath = Join-Path $logDirectory "correction-runner-$($task.executionId).log"
+      Add-Content -LiteralPath $runLogPath -Value "$started Début $($task.proposalId) / $($task.executionId)"
       Write-Host "$started Correction prise en charge : $($task.proposalId)"
       $pwshPath = (Get-Process -Id $PID).Path
-      & $pwshPath -NoProfile -ExecutionPolicy Bypass -File $workerPath -ProposalId $task.proposalId -ExecutionId $task.executionId -DivePlanUrl $baseUrl *>&1 | Tee-Object -FilePath $logPath -Append
+      & $pwshPath -NoProfile -ExecutionPolicy Bypass -File $workerPath -ProposalId $task.proposalId -ExecutionId $task.executionId -DivePlanUrl $baseUrl *>&1 | Tee-Object -FilePath $runLogPath -Append -Encoding utf8
       $exitCode = $LASTEXITCODE
       $finished = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-      Add-Content -LiteralPath $logPath -Value "$finished Fin $($task.proposalId) (code $exitCode)"
+      Add-Content -LiteralPath $runLogPath -Value "$finished Fin $($task.proposalId) (code $exitCode)"
     }
   } catch {
     $message = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Runner: $($_.Exception.Message)"

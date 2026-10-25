@@ -5,6 +5,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
 $repository = "Felixmorin/DivePlan"
 $baseUrl = $DivePlanUrl.TrimEnd('/')
 $root = (& git rev-parse --show-toplevel 2>$null)
