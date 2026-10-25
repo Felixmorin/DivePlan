@@ -16,6 +16,7 @@ Configuration requise :
 - Sur le poste local, installer PowerShell 7 (`pwsh`), Codex CLI, GitHub CLI (`gh`), Git et npm. Se connecter avec `codex login` au compte ChatGPT et `gh auth login` au compte GitHub autorisé à créer une branche et une PR dans le dépôt.
 - Depuis une copie propre du dépôt, cliquer « Préparer avec Codex local », puis exécuter dans PowerShell la commande affichée. Le script demande `CORRECTION_RUNNER_TOKEN` via une saisie masquée. Il n’utilise pas de clé API OpenAI ni de secrets GitHub Actions.
 - Chaque exécution conserve ses sorties du runner et de Codex dans `logs/correction-runner-<execution-id>.log` à la racine du dépôt. Le dossier `logs/` est ignoré par Git.
+- Pour rechercher à la demande les erreurs récurrentes et les besoins de métriques ou de fonctionnalités dans ces journaux, lance `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\review-correction-runner-logs.ps1`. Cet agent local compare les pistes au code sans le modifier et écrit un rapport daté dans `logs/runner-log-review-<date>.md`. Les journaux fournis sont envoyés à Codex pour analyse.
 
 Le script crée une branche locale isolée, bloque les chemins sensibles et revérifie l’approbation avant publication. En cas d’échec de génération ou de validation, aucune PR n’est créée. Réviser la PR manuellement avant toute fusion.
 
