@@ -91,6 +91,28 @@ export async function confirmCorrectionReviewed(input: { id: string; executionId
   revalidatePath(path);
 }
 
+export async function clearCorrectionQueue() {
+  const admin = await requireAdmin();
+  const result = await withTransaction(async (client) => {
+    const { rows } = await client.query<{ id: string; history: Array<Record<string, unknown>> }>(
+      `SELECT id,history FROM "AiPrProposal"
+       WHERE status='Approuvée' AND "correctionStatus"='En attente d’exécution'
+       FOR UPDATE`
+    );
+    if (!rows.length) return [];
+    const at = new Date().toISOString();
+    await client.query(
+      `UPDATE "AiPrProposal" SET "correctionStatus"='Abandonné',"correctionExecutionId"=NULL,
+       history=history || jsonb_build_array(jsonb_build_object('at',$2,'event','Correction retirée de la file par un administrateur.','actor',$3,'status','Abandonné')),
+       "updatedAt"=NOW() WHERE id=ANY($1::text[])`,
+      [rows.map((row) => row.id), at, admin.email]
+    );
+    return rows.map((row) => row.id);
+  });
+  revalidatePath(path);
+  return { clearedIds: result, count: result.length };
+}
+
 export async function getCorrectionStatuses(ids: string[]) {
   await requireAdmin();
   const parsed = z.array(z.string().uuid()).max(1000).safeParse(ids);
