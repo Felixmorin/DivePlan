@@ -56,15 +56,17 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
     until = parseMontrealSessionDate(`${seasonStartYear + 1}-08-31`, "00:00");
   }
 
-  const [rows, dateRows] = await Promise.all([
-    query<DiveVolume>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,d."diveCode" AS code,s.height,s.label AS "heightLabel",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND ($2::timestamptz IS NULL OR l.timestamp >= $2) AND ($3::timestamptz IS NULL OR l.timestamp < $3) GROUP BY family,d."diveCode",s.height,s.label HAVING SUM(l."repetitionsCompleted") > 0 ORDER BY family,d."diveCode",s.height`, [athlete.id, from, until]),
-    query<DiveDateVolume>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,d."diveCode" AS code,s.height,s.label AS "heightLabel",to_char(l.timestamp AT TIME ZONE 'America/Toronto','YYYY-MM-DD') AS date,SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND ($2::timestamptz IS NULL OR l.timestamp >= $2) AND ($3::timestamptz IS NULL OR l.timestamp < $3) GROUP BY family,d."diveCode",s.height,s.label,date HAVING SUM(l."repetitionsCompleted") > 0 ORDER BY date DESC`, [athlete.id, from, until])
-  ]).then(([dives, dates]) => [dives.rows, dates.rows] as const);
+  const dateRows = (await query<DiveDateVolume>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,d."diveCode" AS code,s.height,s.label AS "heightLabel",to_char(l.timestamp AT TIME ZONE 'America/Toronto','YYYY-MM-DD') AS date,SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND ($2::timestamptz IS NULL OR l.timestamp >= $2) AND ($3::timestamptz IS NULL OR l.timestamp < $3) GROUP BY family,d."diveCode",s.height,s.label,date HAVING SUM(l."repetitionsCompleted") > 0 ORDER BY family,d."diveCode",s.height,date DESC`, [athlete.id, from, until])).rows;
   const datesByDive = new Map<string, DiveDateVolume[]>();
+  const diveTotals = new Map<string, DiveVolume>();
   for (const row of dateRows) {
     const key = diveKey(row);
     datesByDive.set(key, [...(datesByDive.get(key) ?? []), row]);
+    const dive = diveTotals.get(key);
+    if (dive) dive.volume += row.volume;
+    else diveTotals.set(key, { family: row.family, code: row.code, height: row.height, heightLabel: row.heightLabel, volume: row.volume });
   }
+  const rows = [...diveTotals.values()];
   const totals = new Map<string, number>();
   for (const dive of rows) totals.set(dive.family, (totals.get(dive.family) ?? 0) + dive.volume);
   const families = familyOrder.filter((family) => (totals.get(family) ?? 0) > 0);

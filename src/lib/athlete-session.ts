@@ -210,6 +210,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
       volume: block.estimatedVolume,
       exercises:blockExercises.map(item=>({id:item.id,name:item.name,category:item.category,sets:item.sets,reps:item.reps,duration:item.itemDuration,roundTrip:item.roundTrip,equipment:item.equipment,completed:item.completed??false,rating:item.rating??null,note:item.note??null})),
       poolSections
+      };
     })
   };
 }
