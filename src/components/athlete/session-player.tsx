@@ -610,7 +610,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
           </section>}
           {!hasRecordedWork && <p className="text-center text-sm text-white/68">Tu peux enregistrer la séance sans ressenti.</p>}
           {error && <ErrorBanner message={error} />}
-          <div className="fixed inset-x-0 bottom-0 z-30 bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-7 backdrop-blur">
+          <div className="bg-[var(--color-athlete-bg)]/95 px-4 pb-0 pt-3 backdrop-blur">
             <div className="mx-auto flex max-w-[430px] flex-col gap-2">
               <Button type="button" variant="outline" className="h-12 w-full !border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" onClick={previousStep}>Modifier la séance</Button>
               <Button type="button" variant="action" className="h-14 w-full rounded-2xl" disabled={isPending} onClick={completeSession}><Save className="h-5 w-5" /> {isPending ? "Enregistrement..." : "Enregistrer la séance"}</Button>
@@ -624,7 +624,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
 
   return (
     <AthleteShell hideNav className="session-player-light">
-      <div className="space-y-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <div className="space-y-4 pb-0">
         <header className="sticky top-0 z-30 -mx-4 bg-[#f7fbff]/95 px-4 pb-3 pt-2 backdrop-blur">
           <div className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <button type="button" onClick={leaveSession} className="min-h-10 justify-self-start rounded-xl px-1 text-sm font-bold text-[var(--color-action)]">Quitter</button>
@@ -745,7 +745,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
 
         {error && <ErrorBanner message={error} />}
 
-        <div className="bg-[var(--color-athlete-bg)]/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+        <div className="bg-[var(--color-athlete-bg)]/95 px-4 pb-0 pt-3 backdrop-blur">
           <div className="mx-auto grid max-w-[430px] grid-cols-[1fr_1.35fr] gap-2">
             <Button type="button" variant="outline" className="h-14 !border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" disabled={current === 0 && stepIndex === 0} onClick={previousStep}><ChevronLeft className="h-5 w-5" /> Précédent</Button>
             <Button type="button" variant="action" className="h-14 rounded-2xl" onClick={nextStep}>{current === blocks.length - 1 && isLastBlockStep ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
