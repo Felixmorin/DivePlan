@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 type DatabaseRow = { requests: string; bytes: string; duration: string; maxDuration: string; slow: string; priorRequests: string; priorBytes: string; priorDuration: string };
 type TransferRow = { route: string; requests: string; bytes: string; priorRequests: string; priorBytes: string };
 type ComponentRow = { component: string; requests: string; bytes: string; averageMs: string; lastObserved: Date | null };
+type PageSqlRow = { route: string; requests: string; bytes: string; averageMs: string; maxMs: string; slow: string };
 
 const periods = [{ key: "24h", hours: 24, label: "24 h" }, { key: "7d", hours: 168, label: "7 jours" }, { key: "30d", hours: 720, label: "30 jours" }];
 
@@ -17,7 +18,7 @@ export default async function AdminOptimisationPage({ searchParams }: { searchPa
   await requireAdmin();
   const { period } = await searchParams;
   const selected = periods.find((item) => item.key === period) ?? periods[0];
-  const [database, routes, components] = await Promise.all([
+  const [database, routes, components, sqlPages] = await Promise.all([
     query<DatabaseRow>(`SELECT
       COALESCE(SUM(requests) FILTER (WHERE component <> 'historical_unclassified' AND hour >= NOW() - ($1::int * INTERVAL '1 hour')), 0)::text AS requests,
       COALESCE(SUM("resultBytes") FILTER (WHERE component <> 'historical_unclassified' AND hour >= NOW() - ($1::int * INTERVAL '1 hour')), 0)::text AS bytes,
@@ -36,11 +37,17 @@ export default async function AdminOptimisationPage({ searchParams }: { searchPa
       COALESCE(SUM("transferBytes") FILTER (WHERE hour < NOW() - ($1::int * INTERVAL '1 hour') AND hour >= NOW() - ($1::int * 2 * INTERVAL '1 hour')), 0)::text AS "priorBytes"
       FROM "TransferTelemetryHour"
       WHERE hour >= NOW() - ($1::int * 2 * INTERVAL '1 hour')
-      GROUP BY route ORDER BY SUM("transferBytes") FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')) DESC NULLS LAST LIMIT 15`, [selected.hours]),
+      GROUP BY route ORDER BY SUM("transferBytes") FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')) DESC NULLS LAST`, [selected.hours]),
     query<ComponentRow>(`SELECT component, SUM(requests)::text AS requests, SUM("resultBytes")::text AS bytes,
       (SUM("durationMs") / NULLIF(SUM(requests), 0))::text AS "averageMs", MAX("updatedAt") AS "lastObserved"
       FROM "DatabaseEgressTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')
-      GROUP BY component ORDER BY SUM("resultBytes") DESC`, [selected.hours])
+      GROUP BY component ORDER BY SUM("resultBytes") DESC`, [selected.hours]),
+    query<PageSqlRow>(`SELECT route, SUM(requests)::text AS requests, SUM("resultBytes")::text AS bytes,
+      (SUM("durationMs") / NULLIF(SUM(requests), 0))::text AS "averageMs", MAX("maxDurationMs")::text AS "maxMs",
+      SUM("slowQueries")::text AS slow
+      FROM "DatabaseEgressTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')
+        AND component <> 'historical_unclassified'
+      GROUP BY route ORDER BY SUM("resultBytes") DESC`, [selected.hours])
   ]);
   const db = database.rows[0];
   const dbRequests = Number(db?.requests ?? 0);
@@ -81,9 +88,14 @@ export default async function AdminOptimisationPage({ searchParams }: { searchPa
     </section>
 
     <Card className="mt-4 overflow-hidden"><CardContent className="p-4 sm:p-5">
-      <PanelHeading icon={ArrowRight} title="Routes à optimiser" detail="Classées par volume transféré sur la période actuelle" />
+      <PanelHeading icon={ArrowRight} title="Requêtes HTTP par page" detail="Classées par volume transféré sur la période actuelle" />
       <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-left text-sm"><thead><tr className="text-xs text-slate-500"><th className="py-2 pr-4 font-semibold">Route</th><th className="py-2 pr-4 text-right font-semibold">Requêtes</th><th className="py-2 pr-4 text-right font-semibold">Transfert</th><th className="py-2 text-right font-semibold">Par requête</th></tr></thead><tbody>{routes.rows.map((row) => <tr key={row.route} className="border-t border-slate-100"><td className="max-w-[340px] truncate py-3 pr-4 font-medium text-slate-800" title={row.route}>{row.route}</td><td className="py-3 pr-4 text-right tabular-nums text-slate-600">{Number(row.requests).toLocaleString("fr-CA")}</td><td className="py-3 pr-4 text-right tabular-nums text-slate-600">{formatBytes(Number(row.bytes))}</td><td className="py-3 text-right tabular-nums font-semibold text-slate-900">{formatBytes(Number(row.requests) ? Number(row.bytes) / Number(row.requests) : 0)}</td></tr>)}{!routes.rows.length && <tr><td colSpan={4} className="py-8 text-center text-sm text-slate-500">Aucune mesure de transfert pour ces périodes. La collecte commencera lorsque le trafic instrumenté sera observé.</td></tr>}</tbody></table></div>
-      <p className="mt-3 text-xs text-slate-500">Le transfert HTTP est ventilé par route. Ces mesures ne représentent pas le FOT facturé par Vercel.</p>
+      <p className="mt-3 text-xs text-slate-500">La page, ses ressources et leurs transferts sont regroupés par route normalisée. Ces mesures ne représentent pas le FOT facturé par Vercel.</p>
+    </CardContent></Card>
+    <Card className="mt-4 overflow-hidden"><CardContent className="p-4 sm:p-5">
+      <PanelHeading icon={Database} title="Résultats SQL par page" detail={`${selected.label} · regroupés par route visitée`} />
+      <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead><tr className="text-xs text-slate-500"><th className="py-2 pr-4">Page</th><th className="py-2 pr-4 text-right">Résultats SQL</th><th className="py-2 pr-4 text-right">Requêtes</th><th className="py-2 pr-4 text-right">Moyenne</th><th className="py-2 pr-4 text-right">Max. observé</th><th className="py-2 text-right">Lentes ≥ 200 ms</th></tr></thead><tbody>{sqlPages.rows.map((row) => <tr key={row.route} className="border-t border-slate-100"><td className="py-3 pr-4 font-semibold">{row.route}</td><td className="py-3 pr-4 text-right tabular-nums">{formatBytes(Number(row.bytes))}</td><td className="py-3 pr-4 text-right tabular-nums">{Number(row.requests).toLocaleString("fr-CA")}</td><td className="py-3 pr-4 text-right tabular-nums">{Number(row.averageMs).toLocaleString("fr-CA", { maximumFractionDigits: 1 })} ms</td><td className="py-3 pr-4 text-right tabular-nums">{Number(row.maxMs).toLocaleString("fr-CA", { maximumFractionDigits: 1 })} ms</td><td className="py-3 text-right tabular-nums">{Number(row.slow).toLocaleString("fr-CA")}</td></tr>)}{!sqlPages.rows.length && <tr><td colSpan={6} className="py-8 text-center text-sm text-slate-500">Aucune mesure SQL disponible pour cette période.</td></tr>}</tbody></table></div>
+      <p className="mt-3 text-xs text-slate-500">Les routes sont normalisées : les identifiants dynamiques sont remplacés par :id. Les résultats SQL correspondent à la taille JSON retournée à l’application.</p>
     </CardContent></Card>
     <Card className="mt-4 overflow-hidden"><CardContent className="p-4 sm:p-5">
       <PanelHeading icon={Database} title="Quelle part vient de chaque composant ?" detail={`${selected.label} · résultats SQL depuis le déploiement`} />

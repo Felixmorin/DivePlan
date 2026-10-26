@@ -34,7 +34,7 @@ function resourceType(entry: PerformanceResourceTiming | PerformanceNavigationTi
 }
 
 function record(entry: PerformanceResourceTiming | PerformanceNavigationTiming) {
-  if (!telemetryEnabled || typeof window === "undefined" || !/^\/(coach|athlete)(\/|$)/.test(currentRoute)) return;
+  if (!telemetryEnabled || typeof window === "undefined" || !/^\/(coach|athlete|admin)(\/|$)/.test(currentRoute)) return;
   try {
     const url = new URL(entry.name, window.location.href);
     if (url.origin !== window.location.origin || url.pathname.startsWith("/api/monitoring/transfer")) return;

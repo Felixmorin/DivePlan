@@ -2,9 +2,12 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/auth";
-import { query, setDatabaseEgressClub, withDatabaseEgressComponent } from "@/lib/db";
+import { query, setDatabaseEgressClub, setDatabaseEgressRoute, withDatabaseEgressComponent } from "@/lib/db";
 
 export const getCurrentUser = cache(async () => withDatabaseEgressComponent("authentication", async () => {
+  const requestHeaders = await headers();
+  const pageRoute = requestHeaders.get("x-diveplan-page-route");
+  if (pageRoute) setDatabaseEgressRoute(pageRoute);
   const session = await auth();
   const sessionUserId = session?.user?.id;
   const email = session?.user?.email?.toLowerCase();

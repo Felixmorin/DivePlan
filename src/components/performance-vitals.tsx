@@ -12,7 +12,7 @@ const initialRoute = typeof window === "undefined" ? "/" : window.location.pathn
 
 function report(metric: { name: string; value: number }) {
   if (!enabled || !names.has(metric.name as VitalName) || !Number.isFinite(metric.value) || metric.value < 0) return;
-  if (typeof window === "undefined" || !/^\/(coach|athlete)(\/|$)/.test(initialRoute)) return;
+  if (typeof window === "undefined" || !/^\/(coach|athlete|admin)(\/|$)/.test(initialRoute)) return;
   const values = (window as Window & { __divePlanVitals?: Map<string, Vital> }).__divePlanVitals ?? new Map<string, Vital>();
   values.set(metric.name, { route: initialRoute, name: metric.name as VitalName, value: metric.value });
   (window as Window & { __divePlanVitals?: Map<string, Vital> }).__divePlanVitals = values;

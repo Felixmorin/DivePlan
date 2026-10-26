@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "invalid_origin" }, { status: 403 });
 
   const user = await getCurrentUser();
-  if (!user?.clubId || !["COACH", "ATHLETE"].includes(user.role)) return Response.json({ error: "unauthorized" }, { status: 401 });
+  if (!user?.clubId || !["COACH", "ATHLETE", "ADMIN"].includes(user.role)) return Response.json({ error: "unauthorized" }, { status: 401 });
 
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > maxRequestBytes) return Response.json({ error: "payload_too_large" }, { status: 413 });
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     const route = typeof item.route === "string" ? normalizeTelemetryRoute(item.route) : null;
     const name = item.name;
     const numericValue = Number(item.value);
-    if (!route || !/^\/(coach|athlete)(\/|$)/.test(route)
+    if (!route || !/^\/(coach|athlete|admin)(\/|$)/.test(route)
       || typeof name !== "string" || !vitalNames.has(name)
       || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 60_000
       || (name === "CLS" && numericValue > 10)) continue;
