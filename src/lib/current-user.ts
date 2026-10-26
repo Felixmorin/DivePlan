@@ -1,9 +1,9 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { query, setDatabaseEgressClub } from "@/lib/db";
+import { query, setDatabaseEgressClub, withDatabaseEgressComponent } from "@/lib/db";
 
-export const getCurrentUser = cache(async () => {
+export const getCurrentUser = cache(async () => withDatabaseEgressComponent("authentication", async () => {
   const session = await auth();
   const sessionUserId = session?.user?.id;
   const email = session?.user?.email?.toLowerCase();
@@ -76,7 +76,7 @@ export const getCurrentUser = cache(async () => {
 
   setDatabaseEgressClub(user?.clubId ?? null);
   return user;
-});
+}));
 
 export async function requireCurrentUser(role?: "ADMIN" | "COACH" | "ATHLETE") {
   const user = await getCurrentUser();
