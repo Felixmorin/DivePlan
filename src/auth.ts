@@ -3,7 +3,7 @@ import { AuthError } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { trackEvent } from "@/lib/monitoring";
 import { verifyPassword } from "@/lib/password";
-import { query } from "@/lib/db";
+import { query, setDatabaseEgressClub } from "@/lib/db";
 
 type UserRole = "ADMIN" | "COACH" | "ATHLETE";
 
@@ -59,6 +59,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!user) {
           return null;
         }
+
+        setDatabaseEgressClub(user.clubId);
 
         if (!user.accessEnabled) return null;
 

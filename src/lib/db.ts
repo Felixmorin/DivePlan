@@ -51,13 +51,16 @@ function createPool(connectionString = process.env.DATABASE_URL, max = 3) {
 export const pool = globalForPool.divePlanPool ?? createPool();
 if (process.env.NODE_ENV !== "production") globalForPool.divePlanPool = pool;
 
-type EgressScope = { clubId: string | null; route: string | null; requests: number; resultBytes: number; durationMs: number; maxDurationMs: number; slowQueries: number; timer?: ReturnType<typeof setTimeout> };
+export type DatabaseEgressComponent = "authentication" | "initial_session_load" | "other";
+type EgressBucket = { requests: number; resultBytes: number; durationMs: number; maxDurationMs: number; slowQueries: number };
+type EgressScope = { clubId: string | null; route: string | null; buckets: Map<DatabaseEgressComponent, EgressBucket>; timer?: ReturnType<typeof setTimeout> };
 const egressScope = new AsyncLocalStorage<EgressScope>();
+const egressComponent = new AsyncLocalStorage<DatabaseEgressComponent>();
 
 function getEgressScope() {
   let scope = egressScope.getStore();
   if (!scope) {
-    scope = { clubId: null, route: null, requests: 0, resultBytes: 0, durationMs: 0, maxDurationMs: 0, slowQueries: 0 };
+    scope = { clubId: null, route: null, buckets: new Map() };
     egressScope.enterWith(scope);
   }
   return scope;
@@ -72,39 +75,38 @@ export function setDatabaseEgressRoute(route: string | null) {
   scope.route = route && route.startsWith("/") && route.length <= 200 ? route : null;
 }
 
+export function withDatabaseEgressComponent<T>(component: DatabaseEgressComponent, work: () => Promise<T>): Promise<T> {
+  return egressComponent.run(component, work);
+}
+
 function recordDatabaseResult(result: QueryResult<QueryResultRow>, durationMs: number) {
   if (["BEGIN", "COMMIT", "ROLLBACK"].includes(result.command)) return;
   const scope = getEgressScope();
-  scope.requests += 1;
-  scope.resultBytes += Buffer.byteLength(JSON.stringify(result.rows));
-  scope.durationMs += durationMs;
-  scope.maxDurationMs = Math.max(scope.maxDurationMs, durationMs);
-  if (durationMs >= 200) scope.slowQueries += 1;
+  const component = egressComponent.getStore() ?? "other";
+  const bucket = scope.buckets.get(component) ?? { requests: 0, resultBytes: 0, durationMs: 0, maxDurationMs: 0, slowQueries: 0 };
+  bucket.requests += 1;
+  bucket.resultBytes += Buffer.byteLength(JSON.stringify(result.rows));
+  bucket.durationMs += durationMs;
+  bucket.maxDurationMs = Math.max(bucket.maxDurationMs, durationMs);
+  if (durationMs >= 200) bucket.slowQueries += 1;
+  scope.buckets.set(component, bucket);
   if (scope.timer) clearTimeout(scope.timer);
   scope.timer = setTimeout(() => {
-    if (!scope.clubId || scope.requests === 0) return;
-    const requests = scope.requests;
-    const resultBytes = scope.resultBytes;
-    const durationMs = scope.durationMs;
-    const maxDurationMs = scope.maxDurationMs;
-    const slowQueries = scope.slowQueries;
+    if (!scope.clubId || scope.buckets.size === 0) return;
     const route = scope.route ?? "Application entière";
-    scope.requests = 0;
-    scope.resultBytes = 0;
-    scope.durationMs = 0;
-    scope.maxDurationMs = 0;
-    scope.slowQueries = 0;
-    void pool.query(
-      `INSERT INTO "DatabaseEgressTelemetryHour" ("clubId", hour, route, requests, "resultBytes", "durationMs", "maxDurationMs", "slowQueries", "updatedAt")
-       VALUES ($1, date_trunc('hour', NOW()), $7, $2, $3, $4, $5, $6, NOW())
-       ON CONFLICT ("clubId", hour, route) DO UPDATE SET
+    const buckets = [...scope.buckets.entries()];
+    scope.buckets.clear();
+    for (const [component, bucket] of buckets) void pool.query(
+      `INSERT INTO "DatabaseEgressTelemetryHour" ("clubId", hour, route, component, requests, "resultBytes", "durationMs", "maxDurationMs", "slowQueries", "updatedAt")
+       VALUES ($1, date_trunc('hour', NOW()), $7, $8, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT ("clubId", hour, route, component) DO UPDATE SET
          requests = "DatabaseEgressTelemetryHour".requests + EXCLUDED.requests,
          "resultBytes" = "DatabaseEgressTelemetryHour"."resultBytes" + EXCLUDED."resultBytes",
          "durationMs" = "DatabaseEgressTelemetryHour"."durationMs" + EXCLUDED."durationMs",
          "maxDurationMs" = GREATEST("DatabaseEgressTelemetryHour"."maxDurationMs", EXCLUDED."maxDurationMs"),
          "slowQueries" = "DatabaseEgressTelemetryHour"."slowQueries" + EXCLUDED."slowQueries",
          "updatedAt" = NOW()`,
-      [scope.clubId, requests, resultBytes, durationMs, maxDurationMs, slowQueries, route]
+      [scope.clubId, bucket.requests, bucket.resultBytes, bucket.durationMs, bucket.maxDurationMs, bucket.slowQueries, route, component]
     ).catch((error: unknown) => console.error("Database egress telemetry write failed", error));
   }, 500);
 }

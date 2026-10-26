@@ -4,7 +4,7 @@ import { CoachShell } from "@/components/coach/coach-shell";
 import { Button } from "@/components/ui/button";
 import { demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
-import { query } from "@/lib/db";
+import { query, withDatabaseEgressComponent } from "@/lib/db";
 import { completeExpiredTrainingSessions, startDueTrainingSessions } from "@/lib/session-status";
 import { SessionsList, type SessionListItem } from "./sessions-list";
 
@@ -14,16 +14,18 @@ export default async function SessionsPage() {
   const { clubId } = await requireCoach();
   if (clubId === "dev-club") return <DemoSessionsPage />;
 
-  await completeExpiredTrainingSessions();
-  await startDueTrainingSessions();
-  const result = await query<SessionListItem>(
-    `SELECT s.id, s.title, g.name AS "groupName", s.status, s.duration, s.date, pe.location,
+  const result = await withDatabaseEgressComponent("initial_session_load", async () => {
+    await completeExpiredTrainingSessions();
+    await startDueTrainingSessions();
+    return query<SessionListItem>(
+      `SELECT s.id, s.title, g.name AS "groupName", s.status, s.duration, s.date, pe.location,
        COALESCE((SELECT sum(b."estimatedVolume")::int FROM "SessionBlock" b WHERE b."sessionId" = s.id), 0) AS volume,
        (SELECT count(*)::int FROM "SessionBlock" b WHERE b."sessionId" = s.id) AS "blockCount",
        (SELECT count(DISTINCT a."athleteId")::int FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id) AS "athleteCount"
      FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id = s."weekId" JOIN "TrainingGroup" g ON g.id = w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id = s."planningEventId"
-     WHERE w."clubId" = $1 ORDER BY s.date DESC`, [clubId]
-  );
+       WHERE w."clubId" = $1 ORDER BY s.date DESC`, [clubId]
+    );
+  });
 
   return <CoachShell active="Seances"><SessionsPageContent sessions={result.rows} /></CoachShell>;
 }

@@ -2,9 +2,9 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/auth";
-import { query, setDatabaseEgressClub, setDatabaseEgressRoute } from "@/lib/db";
+import { query, setDatabaseEgressClub, setDatabaseEgressRoute, withDatabaseEgressComponent } from "@/lib/db";
 
-export const getCurrentUser = cache(async () => {
+export const getCurrentUser = cache(async () => withDatabaseEgressComponent("authentication", async () => {
   const requestHeaders = await headers();
   setDatabaseEgressRoute(requestHeaders.get("x-diveplan-route"));
   const session = await auth();
@@ -79,7 +79,7 @@ export const getCurrentUser = cache(async () => {
 
   setDatabaseEgressClub(user?.clubId ?? null);
   return user;
-});
+}));
 
 export async function requireCurrentUser(role?: "ADMIN" | "COACH" | "ATHLETE") {
   const user = await getCurrentUser();

@@ -11,21 +11,22 @@ import { addMontrealDays, formatMontrealDate, formatMontrealTime, startOfMontrea
 import { isSessionStartAvailable } from "@/lib/session-availability";
 import { AthletePageHeader } from "@/components/athlete/page-header";
 import { startDueTrainingSessions } from "@/lib/session-status";
+import { withDatabaseEgressComponent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export default async function AthleteTodayPage() {
-  const athlete = await getCurrentAthlete();
+  const athlete = await withDatabaseEgressComponent("initial_session_load", () => getCurrentAthlete());
   if (!athlete) redirect("/login");
 
-  await startDueTrainingSessions();
+  await withDatabaseEgressComponent("initial_session_load", () => startDueTrainingSessions());
 
-  const [readySession, weekEvents, weekSummary, upcomingEvents] = await Promise.all([
+  const [readySession, weekEvents, weekSummary, upcomingEvents] = await withDatabaseEgressComponent("initial_session_load", () => Promise.all([
     getAssignedReadySession(athlete.id),
     getAthleteWeekPlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId, includeOverlapping: true }),
     getAthleteCurrentWeekSummary(athlete.id),
     getAthletePlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId })
-  ]);
+  ]));
 
   const todayKey = toMontrealDateInputValue(new Date());
   const weekDays = Array.from({ length: 7 }, (_, index) => {

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { SessionPlayer } from "@/components/athlete/session-player";
 import { getAthleteSession, getCurrentAthlete } from "@/lib/athlete-session";
 import { closeAthleteBlock, completeAthleteSession, openAthleteBlock, recordAthleteSessionPreview, saveAthleteDiveNote, saveAthleteProgress, saveCompetitionDiveEvaluation, startAthleteSession } from "./actions";
+import { withDatabaseEgressComponent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export default async function AthleteSessionPage({ params }: { params: Promise<{
     redirect("/login");
   }
 
-  const session = await getAthleteSession(id, athlete.id);
+  const session = await withDatabaseEgressComponent("initial_session_load", () => getAthleteSession(id, athlete.id));
 
   if (!session) {
     notFound();

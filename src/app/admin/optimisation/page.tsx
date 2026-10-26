@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 type DatabaseRow = { requests: string; bytes: string; duration: string; maxDuration: string; slow: string; priorRequests: string; priorBytes: string; priorDuration: string };
 type TransferRow = { route: string; requests: string; bytes: string; priorRequests: string; priorBytes: string };
+type ComponentRow = { component: string; route: string; requests: string; bytes: string; averageMs: string };
 
 const periods = [{ key: "24h", hours: 24, label: "24 h" }, { key: "7d", hours: 168, label: "7 jours" }, { key: "30d", hours: 720, label: "30 jours" }];
 
@@ -16,7 +17,7 @@ export default async function AdminOptimisationPage({ searchParams }: { searchPa
   await requireAdmin();
   const { period } = await searchParams;
   const selected = periods.find((item) => item.key === period) ?? periods[0];
-  const [database, routes] = await Promise.all([
+  const [database, routes, components] = await Promise.all([
     query<DatabaseRow>(`SELECT
       COALESCE(SUM(requests) FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')), 0)::text AS requests,
       COALESCE(SUM("resultBytes") FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')), 0)::text AS bytes,
@@ -35,7 +36,11 @@ export default async function AdminOptimisationPage({ searchParams }: { searchPa
       COALESCE(SUM("transferBytes") FILTER (WHERE hour < NOW() - ($1::int * INTERVAL '1 hour') AND hour >= NOW() - ($1::int * 2 * INTERVAL '1 hour')), 0)::text AS "priorBytes"
       FROM "TransferTelemetryHour"
       WHERE hour >= NOW() - ($1::int * 2 * INTERVAL '1 hour')
-      GROUP BY route ORDER BY SUM("transferBytes") FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')) DESC NULLS LAST LIMIT 15`, [selected.hours])
+      GROUP BY route ORDER BY SUM("transferBytes") FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')) DESC NULLS LAST LIMIT 15`, [selected.hours]),
+    query<ComponentRow>(`SELECT component, route, SUM(requests)::text AS requests, SUM("resultBytes")::text AS bytes,
+      (SUM("durationMs") / NULLIF(SUM(requests), 0))::text AS "averageMs"
+      FROM "DatabaseEgressTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')
+      GROUP BY component, route ORDER BY SUM("resultBytes") DESC`, [selected.hours])
   ]);
   const db = database.rows[0];
   const dbRequests = Number(db?.requests ?? 0);
@@ -78,7 +83,12 @@ export default async function AdminOptimisationPage({ searchParams }: { searchPa
     <Card className="mt-4 overflow-hidden"><CardContent className="p-4 sm:p-5">
       <PanelHeading icon={ArrowRight} title="Routes à optimiser" detail="Classées par volume transféré sur la période actuelle" />
       <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-left text-sm"><thead><tr className="text-xs text-slate-500"><th className="py-2 pr-4 font-semibold">Route</th><th className="py-2 pr-4 text-right font-semibold">Requêtes</th><th className="py-2 pr-4 text-right font-semibold">Transfert</th><th className="py-2 text-right font-semibold">Par requête</th></tr></thead><tbody>{routes.rows.map((row) => <tr key={row.route} className="border-t border-slate-100"><td className="max-w-[340px] truncate py-3 pr-4 font-medium text-slate-800" title={row.route}>{row.route}</td><td className="py-3 pr-4 text-right tabular-nums text-slate-600">{Number(row.requests).toLocaleString("fr-CA")}</td><td className="py-3 pr-4 text-right tabular-nums text-slate-600">{formatBytes(Number(row.bytes))}</td><td className="py-3 text-right tabular-nums font-semibold text-slate-900">{formatBytes(Number(row.requests) ? Number(row.bytes) / Number(row.requests) : 0)}</td></tr>)}{!routes.rows.length && <tr><td colSpan={4} className="py-8 text-center text-sm text-slate-500">Aucune mesure de transfert pour ces périodes. La collecte commencera lorsque le trafic instrumenté sera observé.</td></tr>}</tbody></table></div>
-      <p className="mt-3 text-xs text-slate-500">L’egress PostgreSQL est agrégé à l’échelle de l’application. Le transfert HTTP est ventilé par route. Ces mesures ne représentent pas le FOT facturé par Vercel.</p>
+      <p className="mt-3 text-xs text-slate-500">Le transfert HTTP est ventilé par route. Ces mesures ne représentent pas le FOT facturé par Vercel.</p>
+    </CardContent></Card>
+    <Card className="mt-4 overflow-hidden"><CardContent className="p-4 sm:p-5">
+      <PanelHeading icon={Database} title="Egress SQL par composant et route" detail={`${selected.label} · mesures depuis la migration 0023`} />
+      <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="text-xs text-slate-500"><th className="py-2 pr-4">Composant</th><th className="py-2 pr-4">Route</th><th className="py-2 pr-4 text-right">Requêtes</th><th className="py-2 pr-4 text-right">Résultats SQL</th><th className="py-2 text-right">Latence moyenne</th></tr></thead><tbody>{components.rows.map((row) => <tr key={`${row.component}-${row.route}`} className="border-t border-slate-100"><td className="py-3 pr-4 font-semibold">{componentLabel(row.component)}</td><td className="max-w-[300px] truncate py-3 pr-4" title={row.route}>{row.route}</td><td className="py-3 pr-4 text-right tabular-nums">{Number(row.requests).toLocaleString("fr-CA")}</td><td className="py-3 pr-4 text-right tabular-nums">{formatBytes(Number(row.bytes))}</td><td className="py-3 text-right tabular-nums">{Number(row.averageMs).toLocaleString("fr-CA", { maximumFractionDigits: 1 })} ms</td></tr>)}{!components.rows.length && <tr><td colSpan={5} className="py-8 text-center text-sm text-slate-500">Aucune mesure SQL par composant pour cette période.</td></tr>}</tbody></table></div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">L’authentification inclut les résultats des recherches d’utilisateur rattaché à un club. Le chargement initial regroupe les requêtes de la liste coach et de l’accueil athlète. Les anciennes lignes restent classées « Autres requêtes ». Les octets correspondent à la taille JSON des lignes PostgreSQL, pas au trafic réseau facturé.</p>
     </CardContent></Card>
   </AdminShell>;
 }
@@ -88,4 +98,5 @@ function Metric({ icon: Icon, label, value, detail }: { icon: typeof Activity; l
 }
 function PanelHeading({ icon: Icon, title, detail }: { icon: typeof Activity; title: string; detail: string }) { return <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-3"><div><h2 className="font-black text-slate-950">{title}</h2><p className="mt-1 text-xs text-slate-500">{detail}</p></div><Icon className="h-5 w-5 shrink-0 text-slate-600" /></div>; }
 function Summary({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-slate-200 p-3"><p className="text-xs font-semibold text-slate-500">{label}</p><p className="mt-1 text-sm font-bold tabular-nums text-slate-900">{value}</p></div>; }
+function componentLabel(component: string) { return ({ authentication: "Authentification", initial_session_load: "Chargement initial", other: "Autres requêtes" } as Record<string, string>)[component] ?? component; }
 function formatBytes(bytes: number) { if (bytes < 1024) return `${Math.round(bytes)} o`; const units = ["Ko", "Mo", "Go"]; let value = bytes / 1024; let unit = 0; while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; } return `${value.toLocaleString("fr-CA", { maximumFractionDigits: 1 })} ${units[unit]}`; }
