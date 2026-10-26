@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
 import { query, setDatabaseEgressRoute } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
-import { buildSessionTemplatePayload, getSessionSnapshot, parseSessionTemplatePayload } from "@/lib/session-template";
+import { buildSessionTemplatePayload, getSessionSnapshots, parseSessionTemplatePayload } from "@/lib/session-template";
 import type { SessionPoolHeight } from "@/lib/session-template";
 import { getCoachPoolInsights } from "@/lib/coach-pool-insights";
 import Link from "next/link";
@@ -135,10 +135,11 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     const parsed = (() => { try { return parseSessionTemplatePayload(item.payload); } catch { return null; } })();
     return parsed ? [{ id: item.id, name: item.name, category: item.category, payload: parsed }] : [];
   });
-  const recentSessions = (await Promise.all(recentSessionIdsR.rows.map(async (item) => {
-    const snapshot = await getSessionSnapshot(item.id, clubId);
-    return snapshot ? { id: item.id, title: item.title, date: item.date, groupId: item.groupId, payload: buildSessionTemplatePayload(snapshot) } : null;
-  }))).filter((item): item is NonNullable<typeof item> => Boolean(item));
+  const recentSnapshots = await getSessionSnapshots(recentSessionIdsR.rows.map((item) => item.id), clubId);
+  const recentSessions = recentSessionIdsR.rows.flatMap((item) => {
+    const snapshot = recentSnapshots.get(item.id);
+    return snapshot ? [{ id: item.id, title: item.title, date: item.date, groupId: item.groupId, payload: buildSessionTemplatePayload(snapshot) }] : [];
+  });
 
   return (
     <CoachShell active="Seances">
