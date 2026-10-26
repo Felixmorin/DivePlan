@@ -1021,11 +1021,11 @@ export async function updateTrainingSession(formData: FormData) {
   }
 
   const [completions,diveLogs,exerciseLogs]=await Promise.all([
-    query<{startedAt:Date|null;status:string}>(`SELECT "startedAt",status FROM "AthleteSessionCompletion" WHERE "sessionId"=$1`,[sessionId]),
+    query<{started:boolean}>(`SELECT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" WHERE "sessionId"=$1 AND ("startedAt" IS NOT NULL OR status<>'NOT_STARTED')) AS started`,[sessionId]),
     query<{id:string}>(`SELECT id FROM "AthleteDiveLog" WHERE "sessionId"=$1 LIMIT 1`,[sessionId]),
     query<{id:string}>(`SELECT id FROM "AthleteExerciseLog" WHERE "sessionId"=$1 LIMIT 1`,[sessionId])
   ]);
-  const hasStarted = completions.rows.some((completion) => completion.startedAt || completion.status !== "NOT_STARTED") || diveLogs.rowCount! > 0 || exerciseLogs.rowCount! > 0;
+  const hasStarted = completions.rows[0]?.started || diveLogs.rowCount! > 0 || exerciseLogs.rowCount! > 0;
 
   if (hasStarted) {
     throw new Error("Cette seance a deja ete commencee. Duplique-la pour modifier la planification sans alterer les donnees realisees.");
