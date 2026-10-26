@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import * as crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 import test from "node:test";
 import ts from "typescript";
 import { PGlite } from "@electric-sql/pglite";
+import type { LiveProgressReply } from "./live-session-progress";
+import { normalizeTelemetryRoute } from "./telemetry-route";
 import { liveSessionForClient } from "./live-session";
 import type { CoachSession } from "./coach-session";
 import type { LiveProgress } from "./live-session";
@@ -154,7 +155,8 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
     const dependencies = {
       "@/lib/current-user": { getCurrentUser: async () => user },
       "@/lib/db": { query: (sql: string, values: unknown[]) => db.query(sql, values) },
-      "server-only": {}
+      "server-only": {},
+      "@/lib/telemetry-route": { normalizeTelemetryRoute }
     };
     const { POST } = load<{ POST: (request: Request) => Promise<Response> }>("src/app/api/monitoring/transfer/route.ts", dependencies);
     const request = (body: unknown, origin = "https://diveplan.test") => new Request("https://diveplan.test/api/monitoring/transfer", {
@@ -205,9 +207,9 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
       INSERT INTO "PoolSection" VALUES ('section', 'block');
       INSERT INTO "PoolDive" VALUES ('dive', 'section', 3);
     `);
-    const { getLiveSessionProgress } = load<{ getLiveSessionProgress: (id: string, club: string) => Promise<LiveProgress | null> }>("src/lib/live-session-progress.ts", dependencies);
+    const { getLiveSessionProgress, getLiveSessionProgressReply } = load<{ getLiveSessionProgress: (id: string, club: string) => Promise<LiveProgress | null>; getLiveSessionProgressReply: (id: string, club: string, validators?: string[]) => Promise<LiveProgressReply | null> }>("src/lib/live-session-progress.ts", dependencies);
     const { GET } = load<{ GET: (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response> }>("src/app/api/coach/sessions/[id]/progress/route.ts", {
-      ...dependencies, "node:crypto": crypto, "@/lib/live-session-progress": { getLiveSessionProgress }
+      ...dependencies, "@/lib/live-session-progress": { getLiveSessionProgressReply }
     });
     const get = (etag?: string) => GET(new Request("https://diveplan.test/api/coach/sessions/session/progress", { headers: etag ? { "if-none-match": etag } : {} }), { params: Promise.resolve({ id: "session" }) });
     await t.test("progress-only changes preserve the plan version; edits invalidate it", async () => {
@@ -271,6 +273,25 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
       assert.equal(forbidden.headers.get("etag"), null);
       user = { clubId: "club-a", role: "COACH", coach: {} };
     });
+    await t.test("an unchanged SQL reply omits progress before it reaches the application", async () => {
+      const first = (await getLiveSessionProgressReply("session", "club-a"))!;
+      assert.ok(first.progress);
+      const unchanged = (await getLiveSessionProgressReply("session", "club-a", [first.etag]))!;
+      assert.equal(unchanged.etag, first.etag);
+      assert.equal(unchanged.progress, null);
+      assert.doesNotMatch(JSON.stringify(unchanged), /athleteId|diveLogs|exerciseLogs|absences/);
+      assert.equal(await getLiveSessionProgressReply("session", "club-b", [first.etag]), null);
+      assert.equal(await getLiveSessionProgressReply("missing", "club-a", [first.etag]), null);
+      // Old validators or malformed values safely force a complete response.
+      assert.ok((await getLiveSessionProgressReply("session", "club-a", ['"old-node-validator"']))?.progress);
+      assert.ok((await getLiveSessionProgressReply("session", "club-a", ["' OR true --"]))?.progress);
+      // Identical rows under another club/session never reuse this validator.
+      await db.exec(`INSERT INTO "TrainingWeek" VALUES ('week-b','club-b','group');
+        INSERT INTO "TrainingSession" VALUES ('session-b','week-b','COMPLETED','Piscine');`);
+      const other = await getLiveSessionProgressReply("session-b", "club-b", [first.etag]);
+      assert.ok(other?.progress);
+      assert.notEqual(other.etag, first.etag);
+    });
     await t.test("endpoint enforces authentication, coach role and club isolation without public caching", async () => {
       user = null;
       assert.equal((await get()).status, 401);
@@ -283,6 +304,28 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
       assert.equal(response.status, 200);
       assert.equal(response.headers.get("cache-control"), "private, no-store");
       assert.doesNotMatch(await response.text(), /avatar|base64|passwordHash/);
+    });
+    await t.test("synthetic benchmark measures parsed SQL result bytes for twenty unchanged polls", async (t) => {
+      await db.exec(`UPDATE "TrainingSession" SET status='IN_PROGRESS' WHERE id='session';
+        DELETE FROM "AthleteDiveLog"; DELETE FROM "AthleteExerciseLog"; DELETE FROM "AthleteSessionAbsence";
+        INSERT INTO "SessionBlockAssignment" SELECT 'assignment-'||i,'block','athlete-'||i FROM generate_series(0,59) AS i;
+        INSERT INTO "PoolDive" SELECT 'dive-'||i,'section',5 FROM generate_series(0,19) AS i;
+        INSERT INTO "DrylandExercise" SELECT 'exercise-'||i,'Synthetic' FROM generate_series(0,4) AS i;
+        INSERT INTO "DrylandBlockExercise" SELECT 'block','exercise-'||i,i FROM generate_series(0,4) AS i;
+        INSERT INTO "AthleteDiveLog" SELECT 'session','athlete-'||a,'dive-'||d,3 FROM generate_series(0,59) AS a CROSS JOIN generate_series(0,19) AS d;
+        INSERT INTO "AthleteExerciseLog" SELECT 'session','athlete-'||a,'exercise-'||e,true FROM generate_series(0,59) AS a CROSS JOIN generate_series(0,4) AS e;
+        INSERT INTO "AthleteSessionAbsence" VALUES ('session','athlete-59');`);
+      const first = (await getLiveSessionProgressReply("session", "club-a"))!;
+      const calls = 20;
+      const before = calls * Buffer.byteLength(JSON.stringify([first.progress]));
+      let after = Buffer.byteLength(JSON.stringify([first]));
+      for (let i = 1; i < calls; i += 1) {
+        const reply = (await getLiveSessionProgressReply("session", "club-a", [first.etag]))!;
+        assert.equal(reply.progress, null);
+        after += Buffer.byteLength(JSON.stringify([reply]));
+      }
+      assert.ok(after < before * 0.06);
+      t.diagnostic(`Synthetic parsed PostgreSQL rows JSON, ${calls} identical polls: ${before} -> ${after} bytes. Excludes protocol/TLS, auth queries, HTTP/RSC/JS and billed Supabase/Vercel egress. SQL computation and invocation count remain.`);
     });
   } finally {
     await db.close();
@@ -297,9 +340,11 @@ test("synthetic unchanged polling benchmark counts JSON body bytes only", async 
     }))
   };
   const { GET } = load<{ GET: (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response> }>("src/app/api/coach/sessions/[id]/progress/route.ts", {
-    "node:crypto": crypto,
     "@/lib/current-user": { getCurrentUser: async () => ({ clubId: "synthetic-club", role: "COACH", coach: {} }) },
-    "@/lib/live-session-progress": { getLiveSessionProgress: async () => progress }
+    "@/lib/live-session-progress": { getLiveSessionProgressReply: async (_id: string, _club: string, validators: string[]) => {
+      const etag = '"synthetic-validator"';
+      return { etag, progress: validators.includes(etag) ? null : progress };
+    } }
   });
   let etag: string | null = null;
   let bytes = 0;

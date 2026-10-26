@@ -10,7 +10,7 @@ import { z } from "zod";
 type Status = {
   id: string; correctionStatus: string; correctionExecutionId: string | null;
   correctionRunUrl: string | null; correctionPullRequestUrl: string | null;
-  history: Array<{ at: string; event: string }>;
+  latestHistory: { at: string; event: string } | null;
 };
 
 test("correction status polling matches the migrated TEXT proposal IDs", async (t) => {
@@ -25,12 +25,12 @@ test("correction status polling matches the migrated TEXT proposal IDs", async (
     const third = "33333333-3333-4333-8333-333333333333";
     const missing = "44444444-4444-4444-8444-444444444444";
     const executionId = "55555555-5555-4555-8555-555555555555";
-    const history = [{ at: "2026-10-25T12:00:00Z", event: "Synthetic status update" }];
+    const history = [{ at: "2026-10-25T11:00:00Z", event: "Synthetic initial event" }, { at: "2026-10-25T12:00:00Z", event: "Synthetic status update" }];
     for (const id of [first, second, third]) {
       await db.query(`INSERT INTO "AiPrProposal" (id,title,summary) VALUES ($1,'Synthetic proposal','Synthetic evidence')`, [id]);
     }
-    await db.query(`UPDATE "AiPrProposal" SET "correctionStatus"='En cours', "correctionExecutionId"=$2, history=$3::jsonb WHERE id=$1`, [first, executionId, JSON.stringify(history)]);
-    await db.query(`UPDATE "AiPrProposal" SET "correctionStatus"='PR en brouillon prête à réviser', "correctionPullRequestUrl"='https://example.test/pull/1' WHERE id=$1`, [second]);
+    await db.query(`UPDATE "AiPrProposal" SET status='Approuvée', "correctionStatus"='En cours', "correctionExecutionId"=$2, history=$3::jsonb WHERE id=$1`, [first, executionId, JSON.stringify(history)]);
+    await db.query(`UPDATE "AiPrProposal" SET status='Approuvée', "correctionExecutionId"=$2,"correctionStatus"='PR en brouillon prête à réviser', "correctionPullRequestUrl"='https://example.test/pull/1' WHERE id=$1`, [second, executionId]);
 
     let authorized = true;
     let reads = 0;
@@ -60,14 +60,15 @@ test("correction status polling matches the migrated TEXT proposal IDs", async (
     } });
     const getStatuses = exports.getCorrectionStatuses!;
 
-    await t.test("returns only requested proposals with their history and runner fields", async () => {
+    await t.test("returns only requested proposals with their latest history event and runner fields", async () => {
       const rows = await getStatuses([first, second, missing, first]);
       assert.deepEqual(Array.from(rows, (row) => row.id).sort(), [first, second]);
       const row = rows.find((item) => item.id === first)!;
       assert.equal(row.correctionStatus, "En cours");
       assert.equal(row.correctionExecutionId, executionId);
       assert.equal(row.correctionRunUrl, null);
-      assert.deepEqual(row.history, history);
+      assert.deepEqual(row.latestHistory, history[1]);
+      assert.equal("history" in row, false);
       assert.equal(rows.find((item) => item.id === second)?.correctionPullRequestUrl, "https://example.test/pull/1");
       assert.equal(reads, 1, "one query for a batch of IDs");
     });
@@ -79,6 +80,15 @@ test("correction status polling matches the migrated TEXT proposal IDs", async (
       assert.equal((await getStatuses([])).length, 0);
       assert.equal(reads, before, "empty authorized input makes no SQL call");
       assert.equal((await getStatuses(Array(1000).fill(first))).length, 1);
+    });
+    await t.test("excludes unapproved proposals and proposals without an execution", async () => {
+      assert.equal((await getStatuses([third])).length, 0);
+      await db.query(`UPDATE "AiPrProposal" SET status='Approuvée' WHERE id=$1`, [third]);
+      assert.equal((await getStatuses([third])).length, 0);
+      await db.query(`UPDATE "AiPrProposal" SET status='Refusée', "correctionExecutionId"=$2 WHERE id=$1`, [third, executionId]);
+      assert.equal((await getStatuses([third])).length, 0);
+      await db.query(`UPDATE "AiPrProposal" SET status='Approuvée' WHERE id=$1`, [third]);
+      assert.equal((await getStatuses([third])).length, 1);
     });
     await t.test("rejects invalid or oversized inputs before reading data", async () => {
       const before = reads;
