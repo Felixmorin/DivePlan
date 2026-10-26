@@ -114,21 +114,32 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
   let updated = 0;
 
   await withTransaction(async (tx) => {
+    const emails = [...new Set(records.map((record) => record.email))];
+    const existingAthletes = emails.length
+      ? await tx.query<{ email: string }>(
+          `SELECT u.email FROM "User" u INNER JOIN "Athlete" a ON a."userId" = u.id WHERE u.email = ANY($1::text[])`,
+          [emails]
+        )
+      : { rows: [] };
+    const existingEmails = new Set(existingAthletes.rows.map((row) => row.email));
+    const groupIds = new Map<string, string>();
+
     for (const record of records) {
       let groupId: string | null = null;
 
       if (record.group) {
-        const existingGroup = await tx.query<{ id: string }>(`SELECT id FROM "TrainingGroup" WHERE "clubId" = $1 AND name = $2 LIMIT 1`, [clubId, record.group]);
-        const group = existingGroup.rows[0] ?? (await tx.query<{ id: string }>(
-          `INSERT INTO "TrainingGroup" (id, name, "clubId", "coachId") VALUES ($1, $2, $3, $4) RETURNING id`,
-          [randomUUID(), record.group, clubId, coach.id]
-        )).rows[0];
-        groupId = group.id;
+        groupId = groupIds.get(record.group) ?? null;
+        if (!groupId) {
+          const existingGroup = await tx.query<{ id: string }>(`SELECT id FROM "TrainingGroup" WHERE "clubId" = $1 AND name = $2 LIMIT 1`, [clubId, record.group]);
+          const group = existingGroup.rows[0] ?? (await tx.query<{ id: string }>(
+            `INSERT INTO "TrainingGroup" (id, name, "clubId", "coachId") VALUES ($1, $2, $3, $4) RETURNING id`,
+            [randomUUID(), record.group, clubId, coach.id]
+          )).rows[0];
+          groupId = group.id;
+          groupIds.set(record.group, groupId);
+        }
       }
 
-      const existing = await tx.query<{ id: string }>(
-        `SELECT a.id FROM "User" u LEFT JOIN "Athlete" a ON a."userId" = u.id WHERE u.email = $1 LIMIT 1`, [record.email]
-      );
       const account = await tx.query<{ id: string }>(
         `INSERT INTO "User" (id, "firstName", "lastName", email, role, "clubId") VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (email) DO UPDATE SET "firstName" = EXCLUDED."firstName", "lastName" = EXCLUDED."lastName", role = EXCLUDED.role, "clubId" = EXCLUDED."clubId"
@@ -142,11 +153,12 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
         [randomUUID(), userId, clubId, groupId, new Date("2010-01-01"), record.level]
       );
 
-      if (existing.rows[0]?.id) {
+      if (existingEmails.has(record.email)) {
         updated += 1;
       } else {
         imported += 1;
       }
+      existingEmails.add(record.email);
     }
   });
 
@@ -392,8 +404,25 @@ export async function copyCompetitionDiveList(formData: FormData): Promise<{ id:
   const id = randomUUID();
   await withTransaction(async (tx) => {
     await tx.query(`INSERT INTO "CompetitionDiveList" (id,"athleteId",name,position,heights) VALUES ($1,$2,$3,$4,$5)`, [id, athleteId, name, position.rows[0].position, source.rows[0].heights]);
-    for (const dive of sourceDives.rows) {
-      await tx.query(`INSERT INTO "CompetitionDive" (id,"athleteId","listId",height,"platformHeight","diveCode","diveName",difficulty,status,position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [randomUUID(), athleteId, id, dive.height, dive.platformHeight, dive.diveCode, dive.diveName, dive.difficulty, dive.status, dive.position]);
+    if (sourceDives.rows.length > 0) {
+      await tx.query(
+        `INSERT INTO "CompetitionDive" (id,"athleteId","listId",height,"platformHeight","diveCode","diveName",difficulty,status,position)
+         SELECT dive_id, $2, $3, height, platform_height, dive_code, dive_name, difficulty, status, position
+         FROM unnest($1::text[], $4::"PoolHeight"[], $5::double precision[], $6::text[], $7::text[], $8::double precision[], $9::"CompetitionDiveStatus"[], $10::integer[])
+           AS dives(dive_id, height, platform_height, dive_code, dive_name, difficulty, status, position)`,
+        [
+          sourceDives.rows.map(() => randomUUID()),
+          athleteId,
+          id,
+          sourceDives.rows.map((dive) => dive.height),
+          sourceDives.rows.map((dive) => dive.platformHeight),
+          sourceDives.rows.map((dive) => dive.diveCode),
+          sourceDives.rows.map((dive) => dive.diveName),
+          sourceDives.rows.map((dive) => dive.difficulty),
+          sourceDives.rows.map((dive) => dive.status),
+          sourceDives.rows.map((dive) => dive.position)
+        ]
+      );
     }
   });
   revalidatePath(`/coach/athletes/${athleteId}`);
@@ -456,14 +485,19 @@ export async function saveCoachCompetitionDiveEvaluation(input: z.infer<typeof c
 
   const evaluatedAt = new Date();
   await withTransaction(async (tx) => {
-    for (const dive of dives) {
-      const rating = data.ratings.find((entry) => entry.competitionDiveId === dive.id)!.rating;
-      await tx.query(
-        `INSERT INTO "AthleteCompetitionDiveEvaluation" (id, "athleteId", "coachId", "competitionDiveId", "diveCode", height, rating, evaluator, "evaluatedAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'COACH', $8)`,
-        [randomUUID(), athlete.id, coach.id, dive.id, dive.diveCode, dive.height, rating, evaluatedAt]
-      );
-    }
+    const evaluations = dives.map((dive) => ({
+      id: randomUUID(),
+      competitionDiveId: dive.id,
+      diveCode: dive.diveCode,
+      height: dive.height,
+      rating: data.ratings.find((entry) => entry.competitionDiveId === dive.id)!.rating
+    }));
+    await tx.query(
+      `INSERT INTO "AthleteCompetitionDiveEvaluation" (id, "athleteId", "coachId", "competitionDiveId", "diveCode", height, rating, evaluator, "evaluatedAt")
+       SELECT item.id, $2, $3, item."competitionDiveId", item."diveCode", item.height::"PoolHeight", item.rating, 'COACH', $4
+       FROM jsonb_to_recordset($1::jsonb) AS item(id text, "competitionDiveId" text, "diveCode" text, height text, rating integer)`,
+      [JSON.stringify(evaluations), athlete.id, coach.id, evaluatedAt]
+    );
   });
   revalidatePath(`/coach/athletes/${athlete.id}`);
 }
@@ -571,7 +605,7 @@ export async function reorderCompetitionDives(formData: FormData) {
   const listResult = await query(`SELECT l.id FROM "CompetitionDiveList" l JOIN "Athlete" a ON a.id=l."athleteId" WHERE l.id=$1 AND l."athleteId"=$2 AND a."clubId"=$3 LIMIT 1`, [listId, athleteId, clubId]);
   if (!listResult.rows[0]) throw new Error("Liste introuvable.");
   const currentResult = await query<{ id: string }>(
-    `SELECT d.id FROM "CompetitionDive" d JOIN "Athlete" a ON a.id = d."athleteId" WHERE d."athleteId" = $1 AND d."listId"=$2 AND d.height = $3 AND a."clubId" = $4`,
+    `SELECT d.id FROM "CompetitionDive" d JOIN "Athlete" a ON a.id = d."athleteId" WHERE d."athleteId" = $1 AND d."listId"=$2 AND d.height = $3 AND a."clubId" = $4 LIMIT 51`,
     [athleteId, listId, height, clubId]
   );
   const currentDives = currentResult.rows;
@@ -624,15 +658,23 @@ export async function updateAthleteDiveFamily(formData: FormData) {
     );
     const oldTotal = logs.rows.reduce((sum, row) => sum + row.repetitionsCompleted, 0);
     let remaining = parsed.data.repetitions;
-    for (const log of logs.rows) {
+    const updatedRepetitions = logs.rows.map((log) => {
       const next = oldTotal === 0 ? 0 : Math.floor(parsed.data.repetitions * log.repetitionsCompleted / oldTotal);
-      await tx.query(`UPDATE "AthleteDiveLog" SET "repetitionsCompleted"=$1 WHERE id=$2`, [next, log.id]);
       remaining -= next;
-    }
-    for (const log of logs.rows) {
+      return next;
+    });
+    for (let index = 0; index < logs.rows.length; index += 1) {
       if (remaining <= 0) break;
-      await tx.query(`UPDATE "AthleteDiveLog" SET "repetitionsCompleted"="repetitionsCompleted"+1 WHERE id=$1`, [log.id]);
+      updatedRepetitions[index] += 1;
       remaining -= 1;
+    }
+    if (logs.rows.length > 0) {
+      await tx.query(
+        `UPDATE "AthleteDiveLog" AS l SET "repetitionsCompleted" = updated."repetitionsCompleted"
+         FROM unnest($1::text[], $2::int[]) AS updated(id, "repetitionsCompleted")
+         WHERE l.id = updated.id`,
+        [logs.rows.map((log) => log.id), updatedRepetitions]
+      );
     }
   });
 

@@ -48,12 +48,17 @@ export async function saveCompetitionDiveEvaluation(input: z.infer<typeof compet
   if (previous.rowCount) throw new Error("Cette évaluation a déjà été enregistrée.");
   const evaluatedAt = new Date();
   await withTransaction(async (tx) => {
-    for (const dive of dives) {
-      await tx.query(
-        `INSERT INTO "AthleteCompetitionDiveEvaluation" (id, "athleteId", "sessionId", "competitionDiveId", "diveCode", height, rating, evaluator, "evaluatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,'ATHLETE',$8)`,
-        [randomUUID(), athlete.id, session.id, dive.id, dive.diveCode, dive.height, data.ratings.find((entry) => entry.competitionDiveId === dive.id)!.rating, evaluatedAt]
-      );
-    }
+    const ratingsByDiveId = new Map(data.ratings.map((entry) => [entry.competitionDiveId, entry.rating]));
+    const values: unknown[] = [];
+    const rows = dives.map((dive, index) => {
+      const offset = index * 8;
+      values.push(randomUUID(), athlete.id, session.id, dive.id, dive.diveCode, dive.height, ratingsByDiveId.get(dive.id)!, evaluatedAt);
+      return `($${offset + 1},$${offset + 2},$${offset + 3},$${offset + 4},$${offset + 5},$${offset + 6},$${offset + 7},'ATHLETE',$${offset + 8})`;
+    });
+    await tx.query(
+      `INSERT INTO "AthleteCompetitionDiveEvaluation" (id, "athleteId", "sessionId", "competitionDiveId", "diveCode", height, rating, evaluator, "evaluatedAt") VALUES ${rows.join(",")}`,
+      values
+    );
   });
   revalidatePath(`/athlete/session/${session.id}`);
   revalidatePath("/athlete/profile");
