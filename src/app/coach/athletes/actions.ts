@@ -404,8 +404,25 @@ export async function copyCompetitionDiveList(formData: FormData): Promise<{ id:
   const id = randomUUID();
   await withTransaction(async (tx) => {
     await tx.query(`INSERT INTO "CompetitionDiveList" (id,"athleteId",name,position,heights) VALUES ($1,$2,$3,$4,$5)`, [id, athleteId, name, position.rows[0].position, source.rows[0].heights]);
-    for (const dive of sourceDives.rows) {
-      await tx.query(`INSERT INTO "CompetitionDive" (id,"athleteId","listId",height,"platformHeight","diveCode","diveName",difficulty,status,position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [randomUUID(), athleteId, id, dive.height, dive.platformHeight, dive.diveCode, dive.diveName, dive.difficulty, dive.status, dive.position]);
+    if (sourceDives.rows.length > 0) {
+      await tx.query(
+        `INSERT INTO "CompetitionDive" (id,"athleteId","listId",height,"platformHeight","diveCode","diveName",difficulty,status,position)
+         SELECT dive_id, $2, $3, height, platform_height, dive_code, dive_name, difficulty, status, position
+         FROM unnest($1::text[], $4::"PoolHeight"[], $5::double precision[], $6::text[], $7::text[], $8::double precision[], $9::"CompetitionDiveStatus"[], $10::integer[])
+           AS dives(dive_id, height, platform_height, dive_code, dive_name, difficulty, status, position)`,
+        [
+          sourceDives.rows.map(() => randomUUID()),
+          athleteId,
+          id,
+          sourceDives.rows.map((dive) => dive.height),
+          sourceDives.rows.map((dive) => dive.platformHeight),
+          sourceDives.rows.map((dive) => dive.diveCode),
+          sourceDives.rows.map((dive) => dive.diveName),
+          sourceDives.rows.map((dive) => dive.difficulty),
+          sourceDives.rows.map((dive) => dive.status),
+          sourceDives.rows.map((dive) => dive.position)
+        ]
+      );
     }
   });
   revalidatePath(`/coach/athletes/${athleteId}`);
