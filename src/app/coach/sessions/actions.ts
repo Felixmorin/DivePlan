@@ -862,6 +862,7 @@ export async function updatePoolSectionLine(_previousState: { success: boolean }
     }, new Map<string, typeof updates>()));
     let nextOrder = (await tx.query<{ order: number }>(`SELECT COALESCE(MAX("order"),-1)::int AS "order" FROM "PoolSection" WHERE "poolTrainingId"=$1`, [section.poolTrainingId])).rows[0]?.order ?? -1;
     let nextVolume = 0;
+    const diveWrites: Array<{ dive: typeof updates[number]; targetSectionId: string; plannedRepetitions: number; postSessionChange: boolean }> = [];
     for (const [groupIndex, [context, groupDives]] of groups.entries()) {
       let targetSectionId = sectionId;
       if (groupIndex === 0) {
@@ -874,23 +875,32 @@ export async function updatePoolSectionLine(_previousState: { success: boolean }
       for (const dive of groupDives) {
         const postSessionChange = section.hasCompleted && (dive.diveCode !== dive.originalDiveCode || dive.repetitions !== dive.originalRepetitions || dive.context !== previousContext);
         const plannedRepetitions = section.hasCompleted ? dive.originalRepetitions : dive.repetitions;
-        await tx.query(`UPDATE "PoolDive" SET "poolSectionId"=$1,"diveCode"=$2,"diveName"=$2,repetitions=$3,"postSessionModified"="postSessionModified" OR $4 WHERE id=$5`, [targetSectionId, dive.diveCode, plannedRepetitions, postSessionChange, dive.id]);
-        if (section.hasCompleted && dive.repetitions !== dive.originalRepetitions) {
-          // In a completed session this field is the realized repetition count.
-          // Keep the plan above intact and save the correction for each completed assignee.
-          await tx.query(
-            `INSERT INTO "AthleteDiveLog" (id,"athleteId","sessionId","poolDiveId","actualDiveCode","repetitionsCompleted","goldenRepetitions",rating)
-             SELECT gen_random_uuid()::text,a."athleteId",$1,$2,$5,$3,0,'Coach'
-             FROM "SessionBlockAssignment" a
-             JOIN "AthleteSessionCompletion" c ON c."athleteId"=a."athleteId" AND c."sessionId"=$1 AND c.status='COMPLETED'
-             WHERE a."sessionBlockId"=$4
-             ON CONFLICT ("athleteId","sessionId","poolDiveId")
-             DO UPDATE SET "actualDiveCode"=COALESCE("AthleteDiveLog"."actualDiveCode",EXCLUDED."actualDiveCode"),"repetitionsCompleted"=EXCLUDED."repetitionsCompleted"`,
-            [sessionId, dive.id, dive.repetitions, section.blockId, dive.diveCode]
-          );
-        }
+        diveWrites.push({ dive, targetSectionId, plannedRepetitions, postSessionChange });
         nextVolume += Math.max(1, countPoolContexts(context)) * plannedRepetitions;
       }
+    }
+    await tx.query(
+      `UPDATE "PoolDive" d
+       SET "poolSectionId"=u."poolSectionId","diveCode"=u."diveCode","diveName"=u."diveCode",repetitions=u.repetitions,
+           "postSessionModified"=d."postSessionModified" OR u."postSessionChange"
+       FROM unnest($1::text[],$2::text[],$3::text[],$4::int[],$5::boolean[]) AS u(id,"poolSectionId","diveCode",repetitions,"postSessionChange")
+       WHERE d.id=u.id`,
+      [diveWrites.map(({ dive }) => dive.id), diveWrites.map(({ targetSectionId }) => targetSectionId), diveWrites.map(({ dive }) => dive.diveCode), diveWrites.map(({ plannedRepetitions }) => plannedRepetitions), diveWrites.map(({ postSessionChange }) => postSessionChange)]
+    );
+    const actualCorrections = section.hasCompleted ? diveWrites.filter(({ dive }) => dive.repetitions !== dive.originalRepetitions) : [];
+    if (actualCorrections.length > 0) {
+      // In a completed session, keep the plan intact and save realized repetitions for every completed assignee.
+      await tx.query(
+        `INSERT INTO "AthleteDiveLog" (id,"athleteId","sessionId","poolDiveId","actualDiveCode","repetitionsCompleted","goldenRepetitions",rating)
+         SELECT gen_random_uuid()::text,a."athleteId",$1,u."poolDiveId",u."diveCode",u.repetitions,0,'Coach'
+         FROM "SessionBlockAssignment" a
+         JOIN "AthleteSessionCompletion" c ON c."athleteId"=a."athleteId" AND c."sessionId"=$1 AND c.status='COMPLETED'
+         CROSS JOIN unnest($3::text[],$4::int[],$5::text[]) AS u("poolDiveId",repetitions,"diveCode")
+         WHERE a."sessionBlockId"=$2
+         ON CONFLICT ("athleteId","sessionId","poolDiveId")
+         DO UPDATE SET "actualDiveCode"=COALESCE("AthleteDiveLog"."actualDiveCode",EXCLUDED."actualDiveCode"),"repetitionsCompleted"=EXCLUDED."repetitionsCompleted"`,
+        [sessionId, section.blockId, actualCorrections.map(({ dive }) => dive.id), actualCorrections.map(({ dive }) => dive.repetitions), actualCorrections.map(({ dive }) => dive.diveCode)]
+      );
     }
     await tx.query(`UPDATE "SessionBlock" SET "estimatedVolume"=GREATEST(0,"estimatedVolume"+$1-$2) WHERE id=$3`, [nextVolume, previousVolume, section.blockId]);
   });

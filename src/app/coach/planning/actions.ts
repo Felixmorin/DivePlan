@@ -82,18 +82,22 @@ export async function createPlanningEvent(formData: FormData) {
 
   const createdEventIds: string[] = [];
   await withTransaction(async (tx) => {
-    for (const occurrence of startsAt) {
-      const created = await tx.query<{ id: string }>(
-        `INSERT INTO "PlanningEvent" (id, "clubId", "groupId", "athleteId", type, title, "startsAt", "endsAt", duration, location, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-        [randomUUID(), clubId, target.groupId ?? null, target.athleteId ?? null, data.type, data.title, occurrence,
-          data.type === PlanningEventType.COMPETITION && data.endsAt ? parseMontrealDateTimeInput(data.endsAt) : null,
-          data.duration ?? null, data.location || null, data.notes || null]
-      );
-      const eventId = created.rows[0].id;
+    const values: unknown[] = [];
+    const rows = startsAt.map((occurrence) => {
+      const eventId = randomUUID();
       createdEventIds.push(eventId);
-      await savePlanningEventPublicationTargets(tx, eventId);
-    }
+      const offset = values.length;
+      values.push(eventId, clubId, target.groupId ?? null, target.athleteId ?? null, data.type, data.title, occurrence,
+        data.type === PlanningEventType.COMPETITION && data.endsAt ? parseMontrealDateTimeInput(data.endsAt) : null,
+        data.duration ?? null, data.location || null, data.notes || null);
+      return `(${Array.from({ length: 11 }, (_, index) => `$${offset + index + 1}`).join(",")})`;
+    });
+    await tx.query(
+      `INSERT INTO "PlanningEvent" (id, "clubId", "groupId", "athleteId", type, title, "startsAt", "endsAt", duration, location, notes)
+       VALUES ${rows.join(",")}`,
+      values
+    );
+    await savePlanningEventPublicationTargets(tx, createdEventIds);
   });
 
   await dispatchPlanningEventPublication(createdEventIds).catch(() => undefined);

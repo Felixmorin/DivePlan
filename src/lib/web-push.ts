@@ -129,7 +129,7 @@ export async function savePlanningEventCancellationTargets(tx: PoolClient, event
   }
 }
 
-export async function savePlanningEventPublicationTargets(tx: PoolClient, eventId: string) {
+export async function savePlanningEventPublicationTargets(tx: PoolClient, eventIds: string[]) {
   await tx.query("SAVEPOINT web_push_planning_event_publication_targets");
   try {
     await tx.query(
@@ -139,8 +139,8 @@ export async function savePlanningEventPublicationTargets(tx: PoolClient, eventI
        JOIN "Athlete" athlete ON athlete.active=true AND athlete."clubId"=e."clubId"
          AND (e."athleteId"=athlete.id OR (e."athleteId" IS NULL AND (e."groupId" IS NULL OR e."groupId"=athlete."groupId")))
        JOIN "User" u ON u.id=athlete."userId" AND u.role='ATHLETE'
-       WHERE e.id=$1
-       ON CONFLICT ("planningEventId","userId") DO NOTHING`, [eventId]
+         WHERE e.id=ANY($1::text[])
+         ON CONFLICT ("planningEventId","userId") DO NOTHING`, [eventIds]
     );
     await tx.query("RELEASE SAVEPOINT web_push_planning_event_publication_targets");
   } catch {
@@ -166,11 +166,10 @@ async function dispatchSessionNotice(sessionId: string, kind: "PUBLISHED" | "CAN
       subscriptionsByUser.set(userId, userSubscriptions);
     }
   } catch {
-    for (const delivery of deliveries) {
-      await query(`UPDATE ${table} SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
-    }
+    await query(`UPDATE ${table} SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=ANY($1::text[]) AND status='PENDING'`, [deliveries.map(({ id }) => id)]).catch(() => undefined);
     return;
   }
+  const outcomes: { id: string; status: "SENT" | "FAILED"; lastError: string | null }[] = [];
   for (const delivery of deliveries) {
     try {
       const subscriptions = subscriptionsByUser.get(delivery.userId) ?? [];
@@ -183,10 +182,23 @@ async function dispatchSessionNotice(sessionId: string, kind: "PUBLISHED" | "CAN
           if (await send(subscription, payload) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back publishing. */ }
       }
-      await query(`UPDATE ${table} SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);
+      outcomes.push({ id: delivery.id, status: accepted ? "SENT" : "FAILED", lastError: accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription" });
     } catch {
-      await query(`UPDATE ${table} SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=$1 AND status='PENDING'`, [delivery.id]).catch(() => undefined);
+      outcomes.push({ id: delivery.id, status: "FAILED", lastError: "Delivery processing failed" });
     }
+  }
+  if (outcomes.length) {
+    await query(
+      `UPDATE ${table} AS d
+       SET status=o.status, attempts=d.attempts+1,
+           "sentAt"=CASE WHEN o.status='SENT' THEN NOW() ELSE d."sentAt" END,
+           "lastError"=o.last_error
+       FROM unnest($1::text[], $2::text[], $3::text[]) AS o(id, status, last_error)
+       WHERE d.id=o.id AND d.status='PENDING'`,
+      [outcomes.map(({ id }) => id), outcomes.map(({ status }) => status), outcomes.map(({ lastError }) => lastError)]
+    ).catch(async () => {
+      await query(`UPDATE ${table} SET status='FAILED', attempts=attempts+1, "lastError"='Delivery processing failed' WHERE id=ANY($1::text[]) AND status='PENDING'`, [outcomes.map(({ id }) => id)]).catch(() => undefined);
+    });
   }
 }
 
