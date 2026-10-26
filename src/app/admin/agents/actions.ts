@@ -114,6 +114,22 @@ export async function cancelQueuedAgentRun(runId: string) {
   revalidatePath("/admin/agents");
 }
 
+export async function releaseStuckLocalAgentRun(runId: string) {
+  const admin = await requireAdmin();
+  const id = z.string().uuid().safeParse(runId);
+  if (!id.success) throw new Error("Exécution invalide.");
+  const released = await query<{ agentId: string }>(
+    `UPDATE "AiAgentRun"
+     SET status='failed',error='Débloquée par un administrateur; le runner local n’a pas terminé la mise à jour.',"finishedAt"=NOW()
+     WHERE id=$1 AND "agentId"=ANY(ARRAY['nextjs-code-analyst','sql-supabase-analyst']) AND status='running'
+     RETURNING "agentId"`,
+    [id.data]
+  );
+  if (!released.rows[0]) throw new Error("Aucune exécution locale en cours à débloquer.");
+  await trackEvent({ type: "admin.agent.run.released", message: "Exécution locale bloquée débloquée par un administrateur", userId: admin.id, metadata: { agentId: released.rows[0].agentId, runId: id.data } });
+  revalidatePath("/admin/agents");
+}
+
 export async function updateAgentTriggers(agentId: string, input: unknown) {
   const admin = await requireAdmin();
   const id = z.string().min(1).max(100).safeParse(agentId);
