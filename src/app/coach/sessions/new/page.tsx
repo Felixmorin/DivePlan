@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireCoach } from "@/lib/current-user";
-import { query } from "@/lib/db";
+import { query, setDatabaseEgressRoute } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { buildSessionTemplatePayload, getSessionSnapshot, parseSessionTemplatePayload } from "@/lib/session-template";
 import type { SessionPoolHeight } from "@/lib/session-template";
@@ -15,6 +15,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export default async function NewSessionPage({ searchParams }: { searchParams: Promise<{ templateId?: string; exerciseId?: string; planningEventId?: string }> }) {
+  setDatabaseEgressRoute("/coach/sessions/new");
   const { clubId } = await requireCoach();
   const { templateId, exerciseId, planningEventId } = await searchParams;
   if (clubId === "dev-club") {
