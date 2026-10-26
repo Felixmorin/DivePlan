@@ -31,7 +31,6 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
   const filteredProposals = proposals.filter((proposal) => proposal.status !== "Approuvée").filter((proposal) => {
     const priority = String(proposal.details.priority ?? "").toLocaleLowerCase("fr");
     const matchesPriority = priorityFilter === "all" || (priorityFilter === "other" ? !["high", "medium", "low"].includes(priority) : priority === priorityFilter);
-    const matchesCorrection = correctionFilter === "all" || (correctionFilter === "ready" ? proposal.correctionStatus === "PR en brouillon prête à réviser" : correctionFilter === "done" ? ["Terminé sans modification", "Terminé après révision humaine"].includes(proposal.correctionStatus) : correctionFilter === "active" ? ["En cours", "Modifications effectuées", "En attente d’exécution"].includes(proposal.correctionStatus) : ["Bloqué", "Vérifications échouées", "Abandonné"].includes(proposal.correctionStatus));
     const query = search.trim().toLocaleLowerCase("fr");
     const searchable = [proposal.title, proposal.summary, ...proposal.sources.flatMap((source) => [source.agentName, source.finding.location, source.finding.title])].join(" ").toLocaleLowerCase("fr");
     const isCompletedCorrection = ["Terminé sans modification", "Terminé après révision humaine"].includes(proposal.correctionStatus);
