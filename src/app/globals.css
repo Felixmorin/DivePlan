@@ -952,17 +952,17 @@ a {
 .athlete-app .text-\[var\(--color-ink-muted\)\] { color:#526987 !important; }
 .athlete-app .technique-row svg { background:#eef9fc; border-radius:50%; box-sizing:content-box; padding:.42rem; }
 .athlete-app .today-card .today-cta, .athlete-app .today-card .today-cta * { color:#fff !important; }
-.athlete-app nav a.bg-white\/8 { background:transparent; }
-.athlete-app nav a[aria-current="page"] { color:#102451; }
-.athlete-app nav a[aria-current="page"] svg { color:#ed163d; fill:none; }
-.athlete-app nav a:hover svg { color:#ed163d; fill:none; }
-.athlete-app nav a:not([aria-current="page"]) svg { color:#8997ac; }
+.athlete-app nav.fixed a.bg-white\/8 { background:transparent; }
+.athlete-app nav.fixed a[aria-current="page"] { color:#102451; }
+.athlete-app nav.fixed a[aria-current="page"] svg { color:#ed163d; fill:none; }
+.athlete-app nav.fixed a:hover svg { color:#ed163d; fill:none; }
+.athlete-app nav.fixed a:not([aria-current="page"]) svg { color:#8997ac; }
 .athlete-app [aria-label="Calendrier mensuel"] > .grid:first-of-type { color:#77869d; }
-.athlete-app nav { border:1px solid #edf2f7; border-bottom:0; border-radius:1.4rem 1.4rem 0 0; background:rgba(255,255,255,.96); padding-top:.45rem; box-shadow:0 -10px 30px rgba(20,48,84,.08); backdrop-filter:blur(12px); }
-.athlete-app nav a { color:#8190a8; }
-.athlete-app nav a[aria-current="page"] { color:#0d2254; }
-.athlete-app nav a[aria-current="page"] svg { color:#ed163d; fill:none; }
-.athlete-app nav svg { width:1.45rem; height:1.45rem; }
+.athlete-app nav.fixed { border:1px solid #edf2f7; border-bottom:0; border-radius:1.4rem 1.4rem 0 0; background:rgba(255,255,255,.96); padding-top:.45rem; box-shadow:0 -10px 30px rgba(20,48,84,.08); backdrop-filter:blur(12px); }
+.athlete-app nav.fixed a { color:#8190a8; }
+.athlete-app nav.fixed a[aria-current="page"] { color:#0d2254; }
+.athlete-app nav.fixed a[aria-current="page"] svg { color:#ed163d; fill:none; }
+.athlete-app nav.fixed svg { width:1.45rem; height:1.45rem; }
 .athlete-app .calendar-controls > div:first-of-type { display:none; }
 .athlete-app [aria-label="Calendrier mensuel"] { border-color:#dce8f3; border-radius:1rem; background:#fff; box-shadow:none; }
 .athlete-app [aria-label="Calendrier mensuel"] h2 { color:#0c1c4b; }
