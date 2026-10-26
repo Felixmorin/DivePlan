@@ -9,6 +9,7 @@ type Vital = { route: string; metric: string; average: string; samples: string }
 type EventCount = { type: string; count: string };
 type AgentJob = { id: string; agentId: string; analysisPeriod: "24h" | "7d"; enabled: boolean; triggers: Record<string, { enabled?: boolean }> };
 type SupabaseQueryStat = { queryId: string; calls: string; rows: string; totalMs: string; meanMs: string; sharedReadBlocks: string; sharedHitBlocks: string };
+type SupabaseIndexStat = { schemaName: string; tableName: string; indexName: string; scans: string; tuplesRead: string; tuplesFetched: string };
 
 export async function runNextAgentJobs(targetRunId?: string) {
   let processed = 0;
@@ -136,6 +137,7 @@ async function runSqlSupabaseAnalysis(analysisPeriod: "24h" | "7d") {
   });
   const statsConnection = process.env.SUPABASE_READONLY_DATABASE_URL;
   const queryStats = statsConnection ? await readSupabaseQueryStats(statsConnection) : null;
+  const indexStats = statsConnection ? await readSupabaseIndexStats(statsConnection) : null;
   const periodLabel = analysisPeriod === "24h" ? "Dernières 24 heures" : "7 derniers jours";
   const observed = egress.map((row) => ({
     kind: "observed" as const, priority: "medium" as const,
@@ -156,6 +158,17 @@ async function runSqlSupabaseAnalysis(analysisPeriod: "24h" | "7d") {
     limits: "Cumul des statistiques depuis leur réinitialisation, sans historique par jour; le texte SQL est volontairement exclu du rapport.",
     recommendation: "Examiner la requête identifiée par queryid dans un outil sécurisé, puis mesurer une optimisation avec un plan d’exécution contrôlé."
   })) ?? [];
+  const indexFindings = indexStats?.rows.map((row) => ({
+    kind: "observed" as const,
+    priority: "low" as const,
+    impact: `${Number(row.scans).toLocaleString("fr-CA")} scans · ${Number(row.tuplesRead).toLocaleString("fr-CA")} entrées lues · ${Number(row.tuplesFetched).toLocaleString("fr-CA")} lignes récupérées.`,
+    effort: "faible" as const,
+    title: `Usage d’index PostgreSQL · ${row.indexName}`,
+    location: `pg_stat_user_indexes · ${row.schemaName}.${row.tableName}`,
+    evidence: `idx_scan=${row.scans}; idx_tup_read=${row.tuplesRead}; idx_tup_fetch=${row.tuplesFetched}; stats_reset=${indexStats.resetAt ?? "inconnu"}`,
+    limits: "Compteurs cumulés depuis stats_reset, sans historique par jour; un faible nombre de scans ne suffit pas à justifier la suppression d’un index et les compteurs peuvent être réinitialisés.",
+    recommendation: "Comparer ces compteurs à la charge représentative et aux lectures de table sur la même période; ne proposer aucune suppression sur ce seul relevé."
+  })) ?? [];
   const codeFindings = code.findings.map((finding) => ({ ...finding, priority: finding.priority, impact: finding.impact, effort: finding.effort }));
   return {
     title: "Analyse SQL & Supabase DivePlan",
@@ -163,23 +176,51 @@ async function runSqlSupabaseAnalysis(analysisPeriod: "24h" | "7d") {
     sources: [
       { name: "Code SQL, scripts, tests, schéma Prisma et migrations", period: "État déployé du dépôt", samples: code.fileCount },
       { name: "DatabaseEgressTelemetryHour par route", period: periodLabel, samples: egress.length },
-      ...(queryStats?.available ? [{ name: "pg_stat_statements", period: `Depuis ${queryStats.resetAt ?? "réinitialisation inconnue"} · cumul global`, samples: queryStats.rows.length }] : [])
+      ...(queryStats?.available ? [{ name: "pg_stat_statements", period: `Depuis ${queryStats.resetAt ?? "réinitialisation inconnue"} · cumul global`, samples: queryStats.rows.length }] : []),
+      ...(indexStats?.available ? [{ name: "pg_stat_user_indexes", period: `Depuis ${indexStats.resetAt ?? "réinitialisation inconnue"} · cumul global`, samples: indexStats.rows.length }] : [])
     ],
-    facts: [{ category: "Inventaire du code", fact: `${code.queryCount} instructions SQL détectées dans ${code.fileCount} fichiers : application, scripts (${code.scriptQueryCount}), tests (${code.testQueryCount}) et migrations (${code.migrationQueryCount}). ${code.testFileCount} fichier(s) de test inclus.`, evidence: "Scan statique des sources déployées; scripts, tests et migrations sont distingués des accès applicatifs." }, ...observed.map((finding) => ({ category: "Egress mesuré", fact: finding.impact, evidence: finding.evidence })), ...queryFindings.map((finding) => ({ category: "Statistiques Supabase", fact: finding.impact, evidence: finding.evidence }))],
-    findings: [...observed, ...queryFindings, ...codeFindings].sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.priority] - { high: 0, medium: 1, low: 2 }[b.priority])),
+    facts: [{ category: "Inventaire du code", fact: `${code.queryCount} instructions SQL détectées dans ${code.fileCount} fichiers : application, scripts (${code.scriptQueryCount}), tests (${code.testQueryCount}) et migrations (${code.migrationQueryCount}). ${code.testFileCount} fichier(s) de test inclus.`, evidence: "Scan statique des sources déployées; scripts, tests et migrations sont distingués des accès applicatifs." }, ...observed.map((finding) => ({ category: "Egress mesuré", fact: finding.impact, evidence: finding.evidence })), ...queryFindings.map((finding) => ({ category: "Statistiques Supabase", fact: finding.impact, evidence: finding.evidence })), ...indexFindings.map((finding) => ({ category: "Usage des index", fact: `${finding.title}: ${finding.impact}`, evidence: finding.evidence }))],
+    findings: [...observed, ...queryFindings, ...indexFindings, ...codeFindings.filter((finding) => finding.title !== "Usage réel des index non observé" || !indexStats?.available)].sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.priority] - { high: 0, medium: 1, low: 2 }[b.priority])),
     assumptions: [
       ...code.assumptions.filter((item) => !item.startsWith("Aucune intégration à l’API de statistiques Supabase")),
       queryStats?.available
         ? "pg_stat_statements a été lu en lecture seule; ses compteurs sont cumulés depuis le dernier reset, pas limités à la période choisie."
-        : "Les statistiques pg_stat_statements ne sont pas disponibles dans cette exécution; les constats se limitent au code et à la télémétrie interne."
+        : "Les statistiques pg_stat_statements ne sont pas disponibles dans cette exécution; les constats se limitent au code et à la télémétrie interne.",
+      indexStats?.available
+        ? "pg_stat_user_indexes a été lu en lecture seule; ses compteurs sont cumulés depuis stats_reset, pas limités à la période choisie."
+        : "Les statistiques pg_stat_user_indexes ne sont pas disponibles dans cette exécution."
     ],
     recommendations: code.findings.slice(0, 12).map((finding) => `${finding.title} (${finding.priority} · impact ${finding.impact} · effort ${finding.effort}) — ${finding.recommendation}`),
     missing: [
       ...code.missing.filter((item) => !item.startsWith("Statistiques Supabase / pg_stat_statements")),
       ...(egress.length ? [] : [`Aucune ligne d’egress interne disponible pour ${periodLabel}; la télémétrie peut être inactive ou vide.`]),
-      ...(!statsConnection ? ["Statistiques Supabase: Configuration requise · définir SUPABASE_READONLY_DATABASE_URL avec un rôle de lecture seule."] : queryStats?.available ? [] : [queryStats?.message ?? "Connexion configurée, mais pg_stat_statements est absent ou non accessible en lecture seule."])
+      ...(!statsConnection ? ["Statistiques Supabase: Configuration requise · définir SUPABASE_READONLY_DATABASE_URL avec un rôle de lecture seule."] : queryStats?.available ? [] : [queryStats?.message ?? "Connexion configurée, mais pg_stat_statements est absent ou non accessible en lecture seule."]),
+      ...(statsConnection && !indexStats?.available ? [indexStats?.message ?? "pg_stat_user_indexes n’est pas accessible en lecture seule."] : [])
     ]
   };
+}
+
+async function readSupabaseIndexStats(connectionString: string) {
+  try {
+    const hostname = new URL(connectionString).hostname;
+    if (!hostname.endsWith(".supabase.co") && !hostname.endsWith(".pooler.supabase.com")) {
+      return { available: false as const, rows: [] as SupabaseIndexStat[], resetAt: null, message: "SUPABASE_READONLY_DATABASE_URL doit pointer vers un hôte PostgreSQL Supabase." };
+    }
+    return await withReadOnlyDatabaseUrl(connectionString, async (client) => {
+      const stats = await client.query<SupabaseIndexStat>(
+        `SELECT schemaname AS "schemaName", relname AS "tableName", indexrelname AS "indexName",
+          idx_scan::text AS scans, idx_tup_read::text AS "tuplesRead", idx_tup_fetch::text AS "tuplesFetched"
+         FROM pg_stat_user_indexes
+         ORDER BY idx_scan ASC, schemaname, relname, indexrelname LIMIT 100`
+      );
+      const reset = await client.query<{ resetAt: string | null }>(
+        `SELECT stats_reset::text AS "resetAt" FROM pg_stat_database WHERE datname = current_database() LIMIT 1`
+      );
+      return { available: true as const, rows: stats.rows, resetAt: reset.rows[0]?.resetAt ?? null, message: null };
+    });
+  } catch (error) {
+    return { available: false as const, rows: [] as SupabaseIndexStat[], resetAt: null, message: describeStatsConnectionFailure(error) };
+  }
 }
 
 async function readSupabaseQueryStats(connectionString: string) {
