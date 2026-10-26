@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { SessionPlayer } from "@/components/athlete/session-player";
 import { getAthleteSession, getCurrentAthlete } from "@/lib/athlete-session";
-import { closeAthleteBlock, completeAthleteSession, openAthleteBlock, recordAthleteSessionPreview, saveAthleteDiveNote, saveAthleteProgress, saveCompetitionDiveEvaluation, startAthleteSession } from "./actions";
+import { completeAthleteSession, recordAthleteSessionPreview, saveAthleteDiveNote, saveAthleteProgress, saveCompetitionDiveEvaluation, startAthleteSession } from "./actions";
 import { withDatabaseEgressComponent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -19,5 +19,5 @@ export default async function AthleteSessionPage({ params }: { params: Promise<{
     notFound();
   }
 
-  return <SessionPlayer session={session} onStart={startAthleteSession} onPreview={recordAthleteSessionPreview} onOpenBlock={openAthleteBlock} onCloseBlock={closeAthleteBlock} onSaveProgress={saveAthleteProgress} onComplete={completeAthleteSession} onSaveDiveNote={saveAthleteDiveNote} onSaveCompetitionEvaluation={saveCompetitionDiveEvaluation} />;
+  return <SessionPlayer session={session} onStart={startAthleteSession} onPreview={recordAthleteSessionPreview} onSaveProgress={saveAthleteProgress} onComplete={completeAthleteSession} onSaveDiveNote={saveAthleteDiveNote} onSaveCompetitionEvaluation={saveCompetitionDiveEvaluation} />;
 }

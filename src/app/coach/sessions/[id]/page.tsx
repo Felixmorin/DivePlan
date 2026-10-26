@@ -37,7 +37,6 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     return <DraftSessionOverview session={session} published={session.status === "READY"} location={planningEventRows.rows[0]?.location ?? null} coachName={coach ? `${coach.firstName} ${coach.lastName}` : "À confirmer"} groupAthleteCount={Number(athleteCountRows.rows[0]?.count ?? 0)} />;
   }
   if (session.status === "COMPLETED") {
-    const timingRows = await query<{ athleteId: string; blockId: string; closedAt: Date | null }>(`SELECT "athleteId","blockId","closedAt" FROM "AthleteBlockTiming" WHERE "blockId"=ANY($1::text[])`, [session.blocks.map((block) => block.id)]);
     const completedSession = {
       id: session.id,
       date: session.date,
@@ -68,7 +67,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       diveLogs: session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted }) => ({ athleteId, poolDiveId, repetitionsCompleted })),
       exerciseLogs: session.exerciseLogs.map(({ athleteId, exerciseId, completed }) => ({ athleteId, exerciseId, completed }))
     };
-    return <CoachShell active="Seances"><CompletedSessionOverview session={completedSession} timings={timingRows.rows} /></CoachShell>;
+    return <CoachShell active="Seances"><CompletedSessionOverview session={completedSession} /></CoachShell>;
   }
   if (session.status === "IN_PROGRESS") {
     const progress = await getLiveSessionProgress(session.id, session.week.clubId);

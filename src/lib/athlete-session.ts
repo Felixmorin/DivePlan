@@ -44,8 +44,6 @@ export type AthleteSessionBlock = {
   description: string | null;
   type: "WARMUP" | "DRYLAND" | "POOL" | "COOLDOWN" | "CUSTOM";
   duration: number;
-  openedAt: string | null;
-  closedAt: string | null;
   volume: number;
   exercises: AthleteSessionExercise[];
   poolSections: Array<{
@@ -172,6 +170,18 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
     query<{id:string;diveCode:string;height:PoolHeight;platformHeight:number|null}>(`SELECT id,"diveCode",height,"platformHeight" FROM "CompetitionDive" WHERE "athleteId"=$1 ORDER BY height,position,"createdAt"`,[athleteId]),
     query<{competitionDiveId:string;rating:number}>(`SELECT "competitionDiveId",rating FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId"=$1 AND "sessionId"=$2 AND evaluator='ATHLETE'`,[athleteId,sessionId])
   ]);
+  const blockIds=blocks.map(block=>block.id);
+  const [exercises,sections]=blockIds.length?await Promise.all([
+    query<{blockId:string;id:string;name:string;category:string;sets:number|null;reps:number|null;itemDuration:number|null;roundTrip:boolean;equipment:string|null;completed:boolean|null;rating:string|null;note:string|null}>(`SELECT d."blockId",e.id,e.name,e.category,d.sets,d.reps,d.duration AS "itemDuration",e."roundTrip",e.equipment,l.completed,l.rating,l.note FROM "DrylandBlockExercise" d JOIN "DrylandExercise" e ON e.id=d."exerciseId" LEFT JOIN "AthleteExerciseLog" l ON l."exerciseId"=e.id AND l."athleteId"=$2 AND l."sessionId"=$3 WHERE d."blockId"=ANY($1::text[]) ORDER BY d."blockId",d."order"`,[blockIds,athleteId,sessionId]),
+    query<{id:string;poolTrainingId:string;label:string|null;height:PoolHeight}>(`SELECT s.id,s."poolTrainingId",s.label,s.height FROM "PoolSection" s WHERE s."poolTrainingId"=ANY($1::text[]) ORDER BY s."poolTrainingId",s."order"`,[blockIds])
+  ]):[{rows:[] as {blockId:string;id:string;name:string;category:string;sets:number|null;reps:number|null;itemDuration:number|null;roundTrip:boolean;equipment:string|null;completed:boolean|null;rating:string|null;note:string|null}[]},{rows:[] as {id:string;poolTrainingId:string;label:string|null;height:PoolHeight}[]}];
+  const exercisesByBlock=new Map<string,typeof exercises.rows>();
+  for(const exercise of exercises.rows){const rows=exercisesByBlock.get(exercise.blockId)??[];rows.push(exercise);exercisesByBlock.set(exercise.blockId,rows);}
+  const dives=sections.rows.length?await query<{poolSectionId:string;id:string;diveCode:string;diveName:string;repetitions:number;postSessionModified:boolean;actualDiveCode:string|null;completedRepetitions:number|null;goldenRepetitions:number|null;feedbackCompleted:boolean|null;rating:string|null;note:string|null;personalNote:string|null}>(`SELECT d."poolSectionId",d.id,d."diveCode",d."diveName",d.repetitions,d."postSessionModified",l."actualDiveCode",l."repetitionsCompleted" AS "completedRepetitions",l."goldenRepetitions",l."feedbackCompleted",l.rating,l.note,n.note AS "personalNote" FROM "PoolDive" d LEFT JOIN "AthleteDiveLog" l ON l."poolDiveId"=d.id AND l."athleteId"=$2 AND l."sessionId"=$3 LEFT JOIN "AthleteDiveNote" n ON n."poolDiveId"=d.id AND n."athleteId"=$2 WHERE d."poolSectionId"=ANY($1::text[]) ORDER BY d."poolSectionId",d."order"`,[sections.rows.map(section=>section.id),athleteId,sessionId]):{rows:[] as {poolSectionId:string;id:string;diveCode:string;diveName:string;repetitions:number;postSessionModified:boolean;actualDiveCode:string|null;completedRepetitions:number|null;goldenRepetitions:number|null;feedbackCompleted:boolean|null;rating:string|null;note:string|null;personalNote:string|null}[]};
+  const divesBySection=new Map<string,typeof dives.rows>();
+  for(const dive of dives.rows){const rows=divesBySection.get(dive.poolSectionId)??[];rows.push(dive);divesBySection.set(dive.poolSectionId,rows);}
+  const sectionsByBlock=new Map<string,typeof sections.rows>();
+  for(const section of sections.rows){const rows=sectionsByBlock.get(section.poolTrainingId)??[];rows.push(section);sectionsByBlock.set(section.poolTrainingId,rows);}
 
   return {
     id: session.id,
@@ -188,23 +198,19 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
     competitionEvaluationBlockIds: blocks.filter((block) => block.competitionEvaluation).map((block) => block.id),
     competitionDives: competitionDives.rows.map((dive) => ({ id: dive.id, code: dive.diveCode, height: dive.height, platformHeight: dive.platformHeight })),
     competitionEvaluations:competitionEvaluations.rows,
-    blocks: await Promise.all(blocks.map(async (block) => {
-      const timing=(await query<{openedAt:Date;closedAt:Date|null}>(`SELECT "openedAt","closedAt" FROM "AthleteBlockTiming" WHERE "athleteId"=$1 AND "blockId"=$2`,[athleteId,block.id])).rows[0];
-      const exercises=(await query<{id:string;name:string;category:string;sets:number|null;reps:number|null;itemDuration:number|null;roundTrip:boolean;equipment:string|null;completed:boolean|null;rating:string|null;note:string|null}>(`SELECT e.id,e.name,e.category,d.sets,d.reps,d.duration AS "itemDuration",e."roundTrip",e.equipment,l.completed,l.rating,l.note FROM "DrylandBlockExercise" d JOIN "DrylandExercise" e ON e.id=d."exerciseId" LEFT JOIN "AthleteExerciseLog" l ON l."exerciseId"=e.id AND l."athleteId"=$2 AND l."sessionId"=$3 WHERE d."blockId"=$1 ORDER BY d."order"`,[block.id,athleteId,sessionId])).rows;
-      const sections=(await query<{id:string;label:string|null;height:PoolHeight}>(`SELECT s.id,s.label,s.height FROM "PoolSection" s WHERE s."poolTrainingId"=$1 ORDER BY s."order"`,[block.id])).rows;
-      const poolSections=await Promise.all(sections.map(async section=>({id:section.id,label:section.label??poolHeightLabel(section.height),height:section.height,dives:await (async()=>{const dives=(await query<{id:string;diveCode:string;diveName:string;repetitions:number;postSessionModified:boolean;label:string|null;actualDiveCode:string|null;completedRepetitions:number|null;goldenRepetitions:number|null;feedbackCompleted:boolean|null;rating:string|null;note:string|null;personalNote:string|null}>(`SELECT d.id,d."diveCode",d."diveName",d.repetitions,d."postSessionModified",s.label,l."actualDiveCode",l."repetitionsCompleted" AS "completedRepetitions",l."goldenRepetitions",l."feedbackCompleted",l.rating,l.note,n.note AS "personalNote" FROM "PoolDive" d JOIN "PoolSection" s ON s.id=d."poolSectionId" LEFT JOIN "AthleteDiveLog" l ON l."poolDiveId"=d.id AND l."athleteId"=$2 AND l."sessionId"=$3 LEFT JOIN "AthleteDiveNote" n ON n."poolDiveId"=d.id AND n."athleteId"=$2 WHERE d."poolSectionId"=$1 ORDER BY d."order"`,[section.id,athleteId,sessionId])).rows;return dives.map(dive=>({id:dive.id,code:dive.diveCode,postSessionModified:dive.postSessionModified,actualCode:dive.actualDiveCode??null,name:dive.diveName,repetitions:dive.repetitions*Math.max(1,countPoolContexts(section.label??poolHeightLabel(section.height))),actualRepetitions:dive.actualDiveCode!==null?(dive.completedRepetitions??0):null,completedRepetitions:dive.completedRepetitions??0,goldenRepetitions:dive.goldenRepetitions??0,feedbackCompleted:dive.feedbackCompleted??false,personalNote:dive.personalNote??null,rating:dive.rating??null,note:dive.note??null}));})()})));
+    blocks: blocks.map((block) => {
+      const blockExercises=exercisesByBlock.get(block.id)??[];
+      const poolSections=(sectionsByBlock.get(block.id)??[]).map(section=>({id:section.id,label:section.label??poolHeightLabel(section.height),height:section.height,dives:(divesBySection.get(section.id)??[]).map(dive=>({id:dive.id,code:dive.diveCode,postSessionModified:dive.postSessionModified,actualCode:dive.actualDiveCode??null,name:dive.diveName,repetitions:dive.repetitions*Math.max(1,countPoolContexts(section.label??poolHeightLabel(section.height))),actualRepetitions:dive.actualDiveCode!==null?(dive.completedRepetitions??0):null,completedRepetitions:dive.completedRepetitions??0,goldenRepetitions:dive.goldenRepetitions??0,feedbackCompleted:dive.feedbackCompleted??false,personalNote:dive.personalNote??null,rating:dive.rating??null,note:dive.note??null}))}));
       return {
       id: block.id,
       title: block.title,
       description: block.description,
       type: block.type,
       duration: block.duration,
-      openedAt: timing?.openedAt.toISOString() ?? null,
-      closedAt: timing?.closedAt?.toISOString() ?? null,
       volume: block.estimatedVolume,
-      exercises:exercises.map(item=>({id:item.id,name:item.name,category:item.category,sets:item.sets,reps:item.reps,duration:item.itemDuration,roundTrip:item.roundTrip,equipment:item.equipment,completed:item.completed??false,rating:item.rating??null,note:item.note??null})),
+      exercises:blockExercises.map(item=>({id:item.id,name:item.name,category:item.category,sets:item.sets,reps:item.reps,duration:item.itemDuration,roundTrip:item.roundTrip,equipment:item.equipment,completed:item.completed??false,rating:item.rating??null,note:item.note??null})),
       poolSections
-    };}))
+    })
   };
 }
 

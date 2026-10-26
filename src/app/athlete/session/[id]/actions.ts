@@ -183,29 +183,6 @@ export async function recordAthleteSessionPreview(sessionId: string) {
   });
 }
 
-export async function openAthleteBlock(sessionId: string, blockId: string) {
-  const athlete = await getCurrentAthlete();
-  if (!athlete) throw new Error("Aucun athlete actif trouve.");
-
-  const readyBlocks = await getAssignedSessionBlocks(sessionId, athlete.id);
-  if (!readyBlocks.some((block) => block.id === blockId)) throw new Error("Ce bloc n'est pas accessible a l'athlete courant.");
-
-  const block = await query(`SELECT b.id FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b.id = $1 AND b."sessionId" = $2 AND a."athleteId" = $3 LIMIT 1`, [blockId, sessionId, athlete.id]);
-  if (!block) throw new Error("Ce bloc n'est pas accessible a l'athlete courant.");
-
-  await query(`INSERT INTO "AthleteBlockTiming" ("athleteId", "blockId", "openedAt") VALUES ($1,$2,$3) ON CONFLICT ("athleteId", "blockId") DO NOTHING`, [athlete.id, blockId, new Date()]);
-}
-
-export async function closeAthleteBlock(sessionId: string, blockId: string) {
-  const athlete = await getCurrentAthlete();
-  if (!athlete) throw new Error("Aucun athlete actif trouve.");
-
-  const readyBlocks = await getAssignedSessionBlocks(sessionId, athlete.id);
-  if (!readyBlocks.some((block) => block.id === blockId)) throw new Error("Ce bloc n'est pas accessible a l'athlete courant.");
-
-  await query(`UPDATE "AthleteBlockTiming" t SET "closedAt" = $1 FROM "SessionBlock" b WHERE t."blockId" = b.id AND t."athleteId" = $2 AND t."blockId" = $3 AND b."sessionId" = $4`, [new Date(), athlete.id, blockId, sessionId]);
-}
-
 export async function completeAthleteSession(payload: CompleteSessionPayload) {
   const athlete = await getCurrentAthlete();
 
@@ -244,11 +221,6 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
 
   const earnedMilestones = await persistAthleteProgress(payload, athlete.id, assignedBlocks, async (tx): Promise<MilestoneKey[]> => {
     const completedAt = new Date();
-    await tx.query(
-      `UPDATE "AthleteBlockTiming" t SET "closedAt" = $1 FROM "SessionBlock" b
-       WHERE b.id = t."blockId" AND b."sessionId" = $2 AND t."athleteId" = $3 AND t."closedAt" IS NULL`,
-      [completedAt, payload.sessionId, athlete.id]
-    );
     await tx.query(
       `UPDATE "AthleteSessionCompletion" SET "completedAt" = $1, status = 'COMPLETED', rating = $2, note = $3
        WHERE "athleteId" = $4 AND "sessionId" = $5`,

@@ -731,7 +731,6 @@ export async function deleteAthlete(formData: FormData) {
     await tx.query(`DELETE FROM "AthleteDiveLog" WHERE "athleteId" = $1`, [athlete.id]);
     await tx.query(`DELETE FROM "AthleteDiveNote" WHERE "athleteId" = $1`, [athlete.id]);
     await tx.query(`DELETE FROM "AthleteExerciseLog" WHERE "athleteId" = $1`, [athlete.id]);
-    await tx.query(`DELETE FROM "AthleteBlockTiming" WHERE "athleteId" = $1`, [athlete.id]);
     await tx.query(`DELETE FROM "AthleteSkill" WHERE "athleteId" = $1`, [athlete.id]);
     await tx.query(`DELETE FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId" = $1`, [athlete.id]);
     await tx.query(`DELETE FROM "CompetitionDive" WHERE "athleteId" = $1`, [athlete.id]);

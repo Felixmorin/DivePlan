@@ -21,8 +21,6 @@ type SessionPlayerProps = {
   session: AthleteSessionView;
   onStart: (sessionId: string) => Promise<void>;
   onPreview: (sessionId: string) => Promise<void>;
-  onOpenBlock: (sessionId: string, blockId: string) => Promise<void>;
-  onCloseBlock: (sessionId: string, blockId: string) => Promise<void>;
   onSaveProgress: (payload: SaveAthleteProgressPayload) => Promise<void>;
   onComplete: (payload: CompleteSessionPayload) => Promise<Array<{ key: MilestoneKey; title: string; description: string }>>;
   onSaveDiveNote: (sessionId: string, poolDiveId: string, note: string) => Promise<void>;
@@ -34,13 +32,12 @@ type DiveChecks = Record<string, DiveRepState[]>;
 type ExerciseChecks = Record<string, boolean>;
 type SaveStatus = "saved" | "saving" | "error";
 
-export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onCloseBlock, onSaveProgress, onComplete, onSaveDiveNote, onSaveCompetitionEvaluation }: SessionPlayerProps) {
+export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onComplete, onSaveDiveNote, onSaveCompetitionEvaluation }: SessionPlayerProps) {
   const router = useRouter();
   const blocks = session.blocks;
   const [current, setCurrent] = useState(() => getResumeBlockIndex(session));
   const [stepIndex, setStepIndex] = useState(() => getResumeStepIndex(session, getResumeBlockIndex(session)));
   const [started, setStarted] = useState(session.completionStatus === "IN_PROGRESS" || session.completionStatus === "COMPLETED");
-  const [blockTimings, setBlockTimings] = useState(() => Object.fromEntries(blocks.map((item) => [item.id, { openedAt: item.openedAt, closedAt: item.closedAt }])));
   const [now, setNow] = useState(() => Date.now());
   const [reviewing, setReviewing] = useState(session.completionStatus === "COMPLETED");
   const [isPending, startTransition] = useTransition();
@@ -59,7 +56,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const [evaluationOpen, setEvaluationOpen] = useState(false);
   const [evaluationPending, startEvaluationTransition] = useTransition();
   const evaluationPrompted = useRef(false);
-  const openedBlockIds = useRef(new Set(blocks.filter((item) => item.openedAt).map((item) => item.id)));
   const [evaluationRatings, setEvaluationRatings] = useState<Record<string, number>>(() => Object.fromEntries(session.competitionEvaluations.map((item) => [item.competitionDiveId, item.rating])));
   const [diveNotes, setDiveNotes] = useState<Record<string, string>>(() => Object.fromEntries(blocks.flatMap((block) => block.poolSections.flatMap((section) => section.dives.map((dive) => [dive.id, dive.personalNote ?? ""])) )));
   const previewTracked = useRef(false);
@@ -107,7 +103,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
   const blockRemaining = countBlockRemaining(block, exerciseChecks, diveChecks);
   const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
   const canStart = session.sessionStatus === "IN_PROGRESS" || isSessionStartAvailable(session.date, new Date(now));
-  const activeTiming = blockTimings[block.id];
   const evaluationComplete = session.competitionDives.length > 0 && session.competitionDives.every((dive) => evaluationRatings[dive.id] !== undefined);
   const evaluationRequired = session.competitionEvaluationAtStart || session.competitionEvaluationBlockIds.length > 0;
 
@@ -126,14 +121,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     previewTracked.current = true;
     void onPreview(session.id).catch(() => undefined);
   }, [onPreview, session.id, started]);
-
-  useEffect(() => {
-    if (!started || reviewing || activeTiming?.openedAt || openedBlockIds.current.has(block.id)) return;
-    openedBlockIds.current.add(block.id);
-    const openedAt = new Date().toISOString();
-    queueMicrotask(() => setBlockTimings((previous) => ({ ...previous, [block.id]: { openedAt, closedAt: null } })));
-    void onOpenBlock(session.id, block.id).catch(() => setError("Le début du bloc n'a pas pu être enregistré."));
-  }, [activeTiming?.openedAt, block.id, onOpenBlock, reviewing, session.id, started]);
 
   useEffect(() => {
     if (started || canStart) return;
@@ -395,14 +382,12 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     }
 
     if (current < blocks.length - 1) {
-      closeBlock(block.id);
       setCurrent(current + 1);
       setStepIndex(0);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
-    closeBlock(block.id);
     setReviewing(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -425,13 +410,6 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
     setCurrent(current - 1);
     setStepIndex(previousBlock.poolSections.length > 0 ? previousBlock.poolSections.length - 1 : 0);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function closeBlock(blockId: string) {
-    if (blockTimings[blockId]?.closedAt) return;
-    const closedAt = new Date().toISOString();
-    setBlockTimings((previous) => ({ ...previous, [blockId]: { ...previous[blockId], closedAt } }));
-    void onCloseBlock(session.id, blockId).catch(() => setError("La fin du bloc n'a pas pu être enregistrée."));
   }
 
   function openDiveNoteEditor(dive: AthleteSessionView["blocks"][number]["poolSections"][number]["dives"][number]) {
@@ -921,9 +899,6 @@ function buildSessionProgressPayload(
 
 function getResumeBlockIndex(session: AthleteSessionView) {
   if (session.completionStatus !== "IN_PROGRESS") return 0;
-
-  const activeBlockIndex = session.blocks.findIndex((block) => block.openedAt && !block.closedAt);
-  if (activeBlockIndex >= 0) return activeBlockIndex;
 
   const nextIncompleteIndex = session.blocks.findIndex((block) =>
     block.exercises.some((exercise) => !exercise.completed)

@@ -26,7 +26,6 @@ type Session = {
   diveLogs: Array<{ athleteId: string; poolDiveId: string; repetitionsCompleted: number }>;
   exerciseLogs: Array<{ athleteId: string; exerciseId: string; completed: boolean }>;
 };
-type Timing = { athleteId: string; blockId: string; closedAt: Date | null };
 type AthleteRow = {
   id: string; firstName: string; lastName: string; status: string;
   plannedDryland: number; actualDryland: number; plannedPool: number; actualPool: number;
@@ -48,7 +47,7 @@ function pct(actual: number, planned: number) {
   return planned > 0 ? Math.min(100, Math.round(actual / planned * 100)) : 0;
 }
 
-export function CompletedSessionOverview({ session, timings }: { session: Session; timings: Timing[] }) {
+export function CompletedSessionOverview({ session }: { session: Session }) {
   const [allOpen, setAllOpen] = useState<boolean | null>(null);
   const [editingSummary, setEditingSummary] = useState(false);
   const [presenceOpen, setPresenceOpen] = useState(false);
@@ -101,7 +100,6 @@ export function CompletedSessionOverview({ session, timings }: { session: Sessio
   const plannedReps = plannedDry + plannedPoolReps;
   const actualReps = actualDry + actualPoolReps;
   const athleteCompletedBlock = (block: Session["blocks"][number], athleteId: string) => {
-    if (timings.some((timing) => timing.athleteId === athleteId && timing.blockId === block.id && timing.closedAt)) return true;
     if (block.type === "POOL") {
       const ids = new Set(block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.id)) ?? []);
       const actual = session.diveLogs.filter((log) => log.athleteId === athleteId && ids.has(log.poolDiveId)).reduce((sum, log) => sum + log.repetitionsCompleted, 0);
