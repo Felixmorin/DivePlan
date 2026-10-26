@@ -18,6 +18,11 @@ const MAX_FILES = 1200;
 const MAX_FILE_BYTES = 1_000_000;
 const SOURCE_ROOTS = ["src/app", "src/lib", "src/components", "prisma/migrations", "db/migrations"];
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".sql"]);
+const AGENT_INFRASTRUCTURE_FILES = new Set([
+  "src/lib/agent-worker.ts",
+  "src/lib/pr-agent-consolidation.ts",
+  "src/lib/sql-agent-analysis.ts"
+]);
 
 async function collectFiles(root: string, directory: string, files: string[]) {
   const entries = await readdir(join(root, directory), { withFileTypes: true });
@@ -83,9 +88,11 @@ function matchingBrace(content: string, openIndex: number) {
 function isCallInsideLoop(content: string, callIndex: number) {
   const scopes = [/\b(?:for|while)\s*\([^)]*\)\s*\{/g, /\.map\s*\([^=]*=>\s*\{/g];
   for (const matcher of scopes) for (const match of content.matchAll(matcher)) {
+    const start = match.index ?? 0;
+    if (start >= callIndex) continue;
     const open = (match.index ?? 0) + match[0].lastIndexOf("{");
     const close = matchingBrace(content, open);
-    if (close > callIndex) return true;
+    if (open < callIndex && close > callIndex) return true;
   }
   return false;
 }
@@ -97,6 +104,7 @@ export function analyzeSqlSourceFiles(files: SourceFile[], options: { unavailabl
   const schemaFile = files.find((file) => file.path.endsWith("schema.prisma"));
   const indexFields = readSchemaIndexFields(schemaFile?.content ?? "");
   for (const file of files) {
+    if (file.path.startsWith("src/app/admin/agents/") || AGENT_INFRASTRUCTURE_FILES.has(file.path)) continue;
     if (file.path.endsWith("schema.prisma") || /\.(?:test|spec)\.tsx?$/.test(file.path)) continue;
     for (const call of extractQueries(file.content)) {
       const sql = call.sql.replace(/\s+/g, " ").trim();

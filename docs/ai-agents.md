@@ -40,6 +40,8 @@ Les lectures de télémétrie passent dans une transaction PostgreSQL `READ ONLY
 
 Les statistiques `pg_stat_statements` sont des compteurs cumulés depuis leur dernière réinitialisation, pas des données filtrées sur 24 heures ou 7 jours. Le choix de période s’applique à la télémétrie d’egress DivePlan; les rapports identifient séparément la période cumulée Supabase et l’heure de remise à zéro lorsqu’elle est disponible. Sans `SUPABASE_READONLY_DATABASE_URL`, ou si l’extension/les permissions manquent, l’analyse locale continue et l’état affiche « Configuration requise » ou l’accès à valider.
 
+L’agent de consolidation déduplique les recommandations identiques du même agent entre ses exécutions, en ignorant les numéros de ligne qui changent lors d’une édition. L’aperçu compte les constats distincts, et non toutes leurs répétitions historiques. L’analyse SQL ignore le code d’administration des agents et ses propres modules, afin d’éviter que l’agent recommande des corrections à son infrastructure.
+
 Les lancements manuels proposent 24 heures ou 7 jours; la période est persistée sur l’exécution. Le déclenchement à la demande utilise la file existante. Les déclencheurs planifié, après déploiement et sur incident/egress restent désactivés et signalés « Configuration requise » puisqu’aucun producteur par agent n’est connecté. L’agent n’applique aucune modification à la base et ne déploie rien.
 
 ## Sources et limites de l’agent Observabilité
