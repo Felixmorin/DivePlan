@@ -7,23 +7,35 @@ import { query } from "@/lib/db";
 import { MILESTONES } from "@/lib/milestones";
 import { getClubMilestones } from "@/lib/milestone-data";
 import { saveMilestoneText } from "./actions";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 type AwardRow = { key: string; athleteId: string; firstName: string; lastName: string; groupName: string | null; awardedAt: Date };
 
-export default async function CoachMilestonesPage() {
+const AWARDS_PER_PAGE = 50;
+
+export default async function CoachMilestonesPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const { clubId } = await requireFullAccessCoach();
+  const requestedPage = Number((await searchParams).page);
+  const requestedPageNumber = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const isDemo = clubId === "dev-club";
-  const [result, milestones] = await Promise.all([
-    isDemo ? Promise.resolve(null) : query<AwardRow>(
-      `SELECT m.key, a.id AS "athleteId", u."firstName", u."lastName", g.name AS "groupName", m."awardedAt"
-     FROM "AthleteMilestone" m JOIN "Athlete" a ON a.id = m."athleteId"
-     JOIN "User" u ON u.id = a."userId" LEFT JOIN "TrainingGroup" g ON g.id = a."groupId"
-       WHERE a."clubId" = $1 ORDER BY m."awardedAt" DESC, u."lastName", u."firstName"`, [clubId]
+  const [countResult, milestones] = await Promise.all([
+    isDemo ? Promise.resolve(null) : query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM "AthleteMilestone" m JOIN "Athlete" a ON a.id = m."athleteId" WHERE a."clubId" = $1`, [clubId]
     ),
     getClubMilestones(clubId)
   ]);
+  const totalAwards = countResult?.rows[0]?.count ?? 0;
+  const totalPages = Math.ceil(totalAwards / AWARDS_PER_PAGE);
+  const page = Math.min(requestedPageNumber, Math.max(totalPages, 1));
+  const result = isDemo ? null : await query<AwardRow>(
+    `SELECT m.key, a.id AS "athleteId", u."firstName", u."lastName", g.name AS "groupName", m."awardedAt"
+     FROM "AthleteMilestone" m JOIN "Athlete" a ON a.id = m."athleteId"
+     JOIN "User" u ON u.id = a."userId" LEFT JOIN "TrainingGroup" g ON g.id = a."groupId"
+     WHERE a."clubId" = $1 ORDER BY m."awardedAt" DESC, u."lastName", u."firstName", m.id
+     LIMIT $2 OFFSET $3`, [clubId, AWARDS_PER_PAGE, (page - 1) * AWARDS_PER_PAGE]
+  );
   const awards = result?.rows ?? [];
 
   return <CoachShell active="Milestones">
@@ -33,6 +45,11 @@ export default async function CoachMilestonesPage() {
       <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-ink-muted)]">Suis les réussites du club. Les répétitions comptabilisées sont celles réellement complétées et enregistrées par les athlètes.</p></div>
       <MilestonePreviewButton milestone={milestones.find((milestone) => milestone.key === MILESTONES.repetitions500.key)!} />
     </header>
+    {!isDemo && totalPages > 1 && <nav aria-label="Pagination des réussites" className="mb-4 flex items-center justify-end gap-3 text-sm font-semibold">
+      <span>Page {Math.min(page, totalPages)} sur {totalPages} · {totalAwards} réussites</span>
+      {page > 1 && <Link href={`/coach/milestones?page=${page - 1}`} className="rounded-lg border border-[var(--color-border)] px-3 py-2">Précédente</Link>}
+      {page < totalPages && <Link href={`/coach/milestones?page=${page + 1}`} className="rounded-lg border border-[var(--color-border)] px-3 py-2">Suivante</Link>}
+    </nav>}
     <div className="grid gap-4 xl:grid-cols-3">
       {milestones.map((milestone) => {
         const holders = awards.filter((award) => award.key === milestone.key);
@@ -63,5 +80,10 @@ export default async function CoachMilestonesPage() {
         </Card>;
       })}
     </div>
+    {!isDemo && totalPages > 1 && <nav aria-label="Pagination des réussites" className="mt-4 flex items-center justify-end gap-3 text-sm font-semibold">
+      <span>Page {Math.min(page, totalPages)} sur {totalPages} · {totalAwards} réussites</span>
+      {page > 1 && <Link href={`/coach/milestones?page=${page - 1}`} className="rounded-lg border border-[var(--color-border)] px-3 py-2">Précédente</Link>}
+      {page < totalPages && <Link href={`/coach/milestones?page=${page + 1}`} className="rounded-lg border border-[var(--color-border)] px-3 py-2">Suivante</Link>}
+    </nav>}
   </CoachShell>;
 }
