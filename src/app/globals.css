@@ -1172,8 +1172,6 @@ a {
 .athlete-app .preference-notifications > section h3 { color:#102451; font-size:.9rem; }
 .athlete-app .preference-notifications > section p { color:#607492; font-size:.75rem; }
 .athlete-app .preference-notifications > section fieldset { margin-top:.6rem; }
-.athlete-app .preference-notifications > section label { border-color:#dce8f3; color:#536987; }
-.athlete-app .preference-notifications > section label:has(input:checked) { border-color:#15bfc6; background:#e5f9f8; color:#0c1c4b; }
 .athlete-app .preference-notifications > section button { color:#087cff; }
 .athlete-app .preference-signout { display:flex; width:100%; min-height:3.8rem; align-items:center; justify-content:center; gap:.7rem; border-radius:1rem; background:#fff0f0; color:#e94343; font-weight:850; }
 
