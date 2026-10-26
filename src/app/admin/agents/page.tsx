@@ -14,5 +14,5 @@ export default async function AgentsPage() {
       CASE WHEN "workflowId" IS NULL THEN NULL ELSE count(*) OVER (PARTITION BY "workflowId")::int END AS "workflowCount"
       FROM "AiAgentRun" ORDER BY "createdAt" DESC,sequence LIMIT 100`)
   ]);
-  return <AdminShell active="Agents"><AgentsConsole agents={agents.rows} runs={runs.rows} supabaseStatsConfigured={Boolean(process.env.SUPABASE_READONLY_DATABASE_URL)} /></AdminShell>;
+  return <AdminShell active="Agents"><AgentsConsole agents={agents.rows} runs={runs.rows} /></AdminShell>;
 }

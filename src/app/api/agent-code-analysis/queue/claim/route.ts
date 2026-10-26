@@ -10,9 +10,9 @@ export async function POST(request: Request) {
 
   try {
     const task = await withTransaction(async (client) => {
-      const { rows } = await client.query<{ id: string; analysisPeriod: "24h" | "7d" }>(
-        `SELECT id,"analysisPeriod" FROM "AiAgentRun"
-         WHERE "agentId"='nextjs-code-analyst' AND status='pending'
+      const { rows } = await client.query<{ id: string; agentId: string; analysisPeriod: "24h" | "7d" }>(
+        `SELECT id,"agentId","analysisPeriod" FROM "AiAgentRun"
+         WHERE "agentId"=ANY(ARRAY['nextjs-code-analyst','sql-supabase-analyst']) AND status='pending'
          ORDER BY "createdAt" ASC LIMIT 1 FOR UPDATE SKIP LOCKED`
       );
       const run = rows[0];

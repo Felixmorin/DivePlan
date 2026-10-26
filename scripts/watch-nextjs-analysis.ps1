@@ -4,6 +4,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
 $baseUrl = $DivePlanUrl.TrimEnd("/")
 $root = (& git rev-parse --show-toplevel 2>$null)
 if ($LASTEXITCODE -ne 0 -or -not $root) { throw "Ouvre PowerShell à la racine du dépôt DivePlan." }
@@ -26,26 +30,30 @@ try { $runnerToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer
 $headers = @{ Authorization = "Bearer $runnerToken"; Accept = "application/json" }
 $claimUrl = "$baseUrl/api/agent-code-analysis/queue/claim"
 $analyzerPath = Join-Path $root "scripts\analyze-nextjs-code.ps1"
-$reportDirectory = Join-Path $root "logs\nextjs-code-analysis"
+$logsRoot = Join-Path $root "logs"
+$reportDirectory = Join-Path $logsRoot "nextjs-code-analysis"
 New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
 $logPath = Join-Path $reportDirectory "runner.log"
 $pwshPath = (Get-Process -Id $PID).Path
 
-Write-Host "Runner d’analyse Next.js actif. Vérification toutes les $PollSeconds secondes. Arrêt : Ctrl+C."
-Write-Host "Les rapports restent dans : $reportDirectory"
+Write-Host "Runner d’analyse Codex DivePlan actif. Vérification toutes les $PollSeconds secondes. Arrêt : Ctrl+C."
+Write-Host "Les rapports restent dans logs\nextjs-code-analysis et logs\sql-supabase-analysis."
 while ($true) {
   try {
     $response = Invoke-RestMethod -Method Post -Uri $claimUrl -Headers $headers -ContentType "application/json" -Body "{}" -TimeoutSec 30
     if ($response.task) {
       $task = $response.task
       $started = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-      $runLogPath = Join-Path $reportDirectory "runner-$($task.id).log"
+      $analysisDirectory = if ($task.agentId -eq "sql-supabase-analyst") { "sql-supabase-analysis" } else { "nextjs-code-analysis" }
+      $taskLogDirectory = Join-Path $logsRoot $analysisDirectory
+      New-Item -ItemType Directory -Path $taskLogDirectory -Force | Out-Null
+      $runLogPath = Join-Path $taskLogDirectory "runner-$($task.id).log"
       Add-Content -LiteralPath $runLogPath -Value "$started Début de l’analyse $($task.id)"
-      Write-Host "$started Analyse Next.js prise en charge : $($task.id)"
-      & $pwshPath -NoProfile -ExecutionPolicy Bypass -File $analyzerPath -RunId ([guid]$task.id) -DivePlanUrl $baseUrl *>&1 | Tee-Object -FilePath $runLogPath -Append -Encoding utf8
+      Write-Host "$started Analyse Codex prise en charge : $($task.agentId) / $($task.id)"
+      & $pwshPath -NoProfile -ExecutionPolicy Bypass -File $analyzerPath -AgentId $task.agentId -RunId ([guid]$task.id) -DivePlanUrl $baseUrl *>&1 | Tee-Object -FilePath $runLogPath -Append -Encoding utf8
       $exitCode = $LASTEXITCODE
       if ($exitCode -ne 0) {
-        $failureBody = @{ status = "failed"; error = "L’analyse Codex locale a échoué. Consulte logs/nextjs-code-analysis/runner-$($task.id).log." } | ConvertTo-Json -Compress
+        $failureBody = @{ status = "failed"; agentId = $task.agentId; error = "L’analyse Codex locale a échoué. Consulte logs/$analysisDirectory/runner-$($task.id).log." } | ConvertTo-Json -Compress
         try { Invoke-RestMethod -Method Post -Uri "$baseUrl/api/agent-code-analysis/runs/$($task.id)/status" -Headers $headers -ContentType "application/json" -Body $failureBody -TimeoutSec 30 | Out-Null } catch {}
       }
       Add-Content -LiteralPath $runLogPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Fin (code $exitCode)"

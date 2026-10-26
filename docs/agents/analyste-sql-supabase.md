@@ -1,15 +1,23 @@
 # Fiche agent — Analyste SQL & Supabase
 
-> Référence : commit `09c79ca238dd02f3f7eac36bae052186e55ab773` · 2026-10-24 · périmètre : analyse SQL et sources Supabase disponibles.
+> Mode actuel : Codex local, lancé par le runner DivePlan.
 
 ## Contexte pertinent
 
-Analyser les requêtes du code et les mesures SQL réellement accessibles. Examiner `src/`, `scripts/`, `db/`, `prisma/schema.prisma`, les migrations, les tests et la télémétrie `DatabaseEgressTelemetryHour`. Les constats extraits des tests sont signalés comme tels et ne sont pas présentés comme un accès de production. Le worker peut consulter `pg_stat_statements` uniquement avec `SUPABASE_READONLY_DATABASE_URL` configuré et des permissions valides. Les sources sont incluses dans les traces Next.js des routes `/api/cron/agent-runs` et `/admin/agents`; les erreurs de connexion sont classées sans exposer le message PostgreSQL brut ni l’URL.
+Codex analyse localement le SQL du dépôt, les accès de données dans `src/app` et `src/lib`, `prisma/schema.prisma` et les migrations SQL. Il repère les lectures répétées, les volumes potentiellement excessifs, les risques N+1, les pistes d’index déclarées et les duplications. Depuis Admin → Agents, le bouton « Démarrer l’analyse Codex » met la demande en file pour le runner local.
+
+Installer le runner une fois, depuis la racine du dépôt :
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-nextjs-analysis-runner.ps1
+```
+
+Le rapport complet est conservé sous `logs/sql-supabase-analysis/`. DivePlan ne reçoit que l’état de l’exécution et le chemin du rapport afin d’afficher l’historique.
 
 ## Contrôles et risques
 
-Identifier si le constat vient d’un motif textuel, de la télémétrie locale ou des statistiques cumulées PostgreSQL; confirmer période, couverture et permission read-only. Les motifs `SELECT *`, pagination et appels répétés sont des pistes, pas des mesures de performance. Ne pas exposer les textes SQL des statistiques, identifiants personnels ou chaîne de connexion.
+Séparer les faits lisibles dans le code et les hypothèses de coût. Vérifier les appels autour des boucles, les références, les filtres et index présents dans le dépôt. Un index manquant du dépôt peut exister en production; les plans d’exécution et volumes réels ne sont pas observés par ce rapport.
 
 ## Limites
 
-N’exécute pas de requêtes tirées des sources; lecture des statistiques sous transaction `READ ONLY`. Ne modifie ni données ni schéma, n’applique aucune migration, ne crée pas de PR, ne fusionne ni ne déploie. RLS, plans réels et API de gestion Supabase ne sont pas consultés.
+L’analyse est statique et locale. Aucun SQL n’est exécuté; aucune base Supabase/PostgreSQL, statistique de production, politique RLS effective, facture ou plan d’exécution n’est consulté. Codex tourne avec `--sandbox read-only --ephemeral`; le runner ne modifie pas le dépôt et n’applique pas de migrations. Le rapport n’avance aucun montant d’économie. Aucune clé API ni rapport complet n’est envoyé à DivePlan.
