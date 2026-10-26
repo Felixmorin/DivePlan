@@ -116,6 +116,15 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
   await withTransaction(async (tx) => {
     const groupIds = new Map<string, string>();
     const groupNames = [...new Set(records.map((record) => record.group).filter(Boolean))];
+    const existingAthleteEmails = new Set<string>();
+    const emails = [...new Set(records.map((record) => record.email))];
+    if (emails.length > 0) {
+      const existingAthletes = await tx.query<{ email: string }>(
+        `SELECT u.email FROM "User" u JOIN "Athlete" a ON a."userId" = u.id WHERE u.email = ANY($1::text[])`,
+        [emails]
+      );
+      for (const athlete of existingAthletes.rows) existingAthleteEmails.add(athlete.email);
+    }
     if (groupNames.length > 0) {
       const existingGroups = await tx.query<{ id: string; name: string }>(
         `SELECT id, name FROM "TrainingGroup" WHERE "clubId" = $1 AND name = ANY($2::text[])`,
@@ -141,9 +150,6 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
         }
       }
 
-      const existing = await tx.query<{ id: string }>(
-        `SELECT a.id FROM "User" u LEFT JOIN "Athlete" a ON a."userId" = u.id WHERE u.email = $1 LIMIT 1`, [record.email]
-      );
       const account = await tx.query<{ id: string }>(
         `INSERT INTO "User" (id, "firstName", "lastName", email, role, "clubId") VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (email) DO UPDATE SET "firstName" = EXCLUDED."firstName", "lastName" = EXCLUDED."lastName", role = EXCLUDED.role, "clubId" = EXCLUDED."clubId"
@@ -157,11 +163,12 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
         [randomUUID(), userId, clubId, groupId, new Date("2010-01-01"), record.level]
       );
 
-      if (existing.rows[0]?.id) {
+      if (existingAthleteEmails.has(record.email)) {
         updated += 1;
       } else {
         imported += 1;
       }
+      existingAthleteEmails.add(record.email);
     }
   });
 
