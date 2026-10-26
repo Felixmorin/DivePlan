@@ -1,11 +1,16 @@
 param(
   [string]$Model,
-  [ValidateSet("nextjs-code-analyst", "sql-supabase-analyst")][string]$AgentId = "nextjs-code-analyst",
+  [ValidateSet("nextjs-code-analyst", "sql-supabase-analyst")][string]$AgentId,
   [guid]$RunId,
   [string]$DivePlanUrl = "https://dive-plan.vercel.app"
 )
 
 $ErrorActionPreference = "Stop"
+$hasQueuedRun = $RunId -ne [guid]::Empty
+if (-not $AgentId) {
+  if ($hasQueuedRun) { throw "Le runner doit transmettre AgentId pour une exécution mise en file. Redémarre scripts\watch-nextjs-analysis.ps1." }
+  $AgentId = "nextjs-code-analyst"
+}
 $utf8 = [System.Text.UTF8Encoding]::new($false)
 [Console]::InputEncoding = $utf8
 [Console]::OutputEncoding = $utf8
