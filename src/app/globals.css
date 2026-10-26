@@ -89,6 +89,35 @@ body {
   letter-spacing: 0;
 }
 
+/* Admin theme: subdued surfaces and readable contrast for long sessions. */
+html.admin-dark .admin-shell { background: #101820 !important; color: #e3ebf2 !important; color-scheme: dark; }
+html.admin-dark .admin-shell :is([class~="bg-white"], [class~="bg-white/95"], [class~="bg-slate-50"], [class~="bg-slate-50/60"], [class~="bg-slate-50/70"], [class~="bg-slate-100"], [class~="bg-[#f3f7fa]"]) {
+  background-color: #192530 !important;
+}
+html.admin-dark .admin-shell :is([class~="bg-blue-50"], [class~="bg-blue-100"], [class~="bg-sky-50"], [class~="bg-cyan-50"]) { background-color: #172f41 !important; }
+html.admin-dark .admin-shell :is([class~="bg-emerald-50"], [class~="bg-emerald-100"], [class~="bg-green-50"]) { background-color: #18352e !important; }
+html.admin-dark .admin-shell :is([class~="bg-amber-50"], [class~="bg-amber-100"]) { background-color: #3a3020 !important; }
+html.admin-dark .admin-shell :is([class~="bg-rose-50"], [class~="bg-red-50"]) { background-color: #3a242a !important; }
+html.admin-dark .admin-shell :is([class~="bg-violet-50"], [class~="bg-violet-100"]) { background-color: #2b2940 !important; }
+html.admin-dark .admin-shell :is([class~="text-slate-950"], [class~="text-slate-900"], [class~="text-slate-800"], [class~="text-slate-700"]) { color: #e3ebf2 !important; }
+html.admin-dark .admin-shell :is([class~="text-slate-600"], [class~="text-slate-500"], [class~="text-slate-400"]) { color: #a7b6c4 !important; }
+html.admin-dark .admin-shell :is([class~="text-blue-950"], [class~="text-blue-900"], [class~="text-blue-800"], [class~="text-blue-700"], [class~="text-cyan-800"], [class~="text-sky-800"]) { color: #8bcaff !important; }
+html.admin-dark .admin-shell :is([class~="text-emerald-800"], [class~="text-emerald-700"], [class~="text-green-800"], [class~="text-green-700"]) { color: #7de0ae !important; }
+html.admin-dark .admin-shell :is([class~="text-amber-900"], [class~="text-amber-800"], [class~="text-amber-700"]) { color: #f1cb79 !important; }
+html.admin-dark .admin-shell :is([class~="text-rose-800"], [class~="text-rose-700"], [class~="text-red-800"], [class~="text-red-700"]) { color: #ff9da9 !important; }
+html.admin-dark .admin-shell :is([class~="text-violet-800"], [class~="text-violet-700"]) { color: #c3b4ff !important; }
+html.admin-dark .admin-shell :is([class~="border-slate-100"], [class~="border-slate-200"], [class~="border-slate-300"], [class~="border-slate-200/80"]) { border-color: #31414f !important; }
+html.admin-dark .admin-shell :is([class~="hover:bg-slate-50"], [class~="hover:bg-slate-100"]):hover { background-color: #263744 !important; }
+html.admin-dark .admin-shell input:not([type="checkbox"]):not([type="radio"]),
+html.admin-dark .admin-shell select,
+html.admin-dark .admin-shell textarea { background-color: #111c26; border-color: #3a4b59; color: #e3ebf2; }
+html.admin-dark .admin-shell input::placeholder,
+html.admin-dark .admin-shell textarea::placeholder { color: #8799a8; }
+html.admin-dark .admin-shell option { background: #192530; color: #e3ebf2; }
+html.admin-dark .admin-shell .admin-theme-toggle { border-color: #425363; background: #192530; color: #dce8f1; }
+html.admin-dark .admin-shell .admin-theme-toggle:hover { background: #263744; }
+html.admin-dark .admin-shell :focus-visible { outline-color: #67d9ee; }
+
 a {
   color: inherit;
   text-decoration: none;

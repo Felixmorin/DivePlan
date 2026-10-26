@@ -40,7 +40,7 @@ export async function startCorrection(input: { id: string }) {
     const row = rows[0];
     if (!row) throw new Error("Proposition introuvable.");
     validateApprovedProposal(row);
-    if ((row.correctionStatus === "En attente d’exécution" && row.correctionExecutionId) || ["Modifications effectuées", "PR en brouillon prête à réviser", "Terminé après révision humaine"].includes(row.correctionStatus)) {
+    if ((row.correctionStatus === "En attente d’exécution" && row.correctionExecutionId) || ["Modifications effectuées", "PR en brouillon prête à réviser", "Terminé sans modification", "Terminé après révision humaine"].includes(row.correctionStatus)) {
       throw new Error(`Une correction ne peut pas être lancée avec le statut « ${row.correctionStatus} ».`);
     }
     const restarting = row.correctionStatus === "En cours";
@@ -151,7 +151,7 @@ export async function decideProposal(input: { id: string; status: string; note?:
       const agent = await client.query<{ enabled: boolean }>(`SELECT enabled FROM "AiAgent" WHERE id='pr-correction'`);
       if (!agent.rows[0]?.enabled) throw new Error("L’Agent de correction est en pause. Activez-le dans la console avant d’approuver une proposition pour la file locale.");
       validateApprovedProposal({ ...row, status: "Approuvée" });
-      if (["Modifications effectuées", "PR en brouillon prête à réviser", "Terminé après révision humaine"].includes(row.correctionStatus)) {
+      if (["Modifications effectuées", "PR en brouillon prête à réviser", "Terminé sans modification", "Terminé après révision humaine"].includes(row.correctionStatus)) {
         throw new Error(`Cette proposition a déjà une correction au statut « ${row.correctionStatus} » et ne peut pas être remise en file.`);
       }
       executionId = row.correctionStatus === "En attente d’exécution" && row.correctionExecutionId ? row.correctionExecutionId : randomUUID();

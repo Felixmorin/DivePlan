@@ -22,9 +22,9 @@ Ne jamais modifier la branche principale, fusionner, déployer, modifier ou supp
 
 ## États de suivi
 
-En attente d’exécution · En cours · Bloqué · Modifications effectuées · Vérifications échouées · PR en brouillon prête à réviser · Terminé après révision humaine · Abandonné.
+En attente d’exécution · En cours · Bloqué · Modifications effectuées · Vérifications échouées · PR en brouillon prête à réviser · Terminé sans modification · Terminé après révision humaine · Abandonné.
 
-« Terminé après révision humaine » n’implique jamais une fusion ou un déploiement.
+« Terminé sans modification » signifie que Codex a terminé son analyse et conclu qu’aucun changement n’était nécessaire. « Terminé après révision humaine » n’implique jamais une fusion ou un déploiement.
 
 ## Intégration DivePlan
 

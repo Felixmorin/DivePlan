@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { query, withTransaction } from "@/lib/db";
 
-export type CorrectionStatus = "En attente d’exécution" | "En cours" | "Bloqué" | "Modifications effectuées" | "Vérifications échouées" | "PR en brouillon prête à réviser" | "Terminé après révision humaine" | "Abandonné";
+export type CorrectionStatus = "En attente d’exécution" | "En cours" | "Bloqué" | "Modifications effectuées" | "Vérifications échouées" | "PR en brouillon prête à réviser" | "Terminé sans modification" | "Terminé après révision humaine" | "Abandonné";
 
 export type ProposalDetails = {
   change?: string;
@@ -76,7 +76,7 @@ export async function updateCorrectionExecution(input: {
     const proposal = rows[0];
     if (!proposal) throw new Error("Proposition introuvable.");
     if (proposal.correctionExecutionId !== input.executionId) throw new Error("Cette exécution ne correspond plus à la demande active.");
-    if (["En cours", "Modifications effectuées", "PR en brouillon prête à réviser", "Terminé après révision humaine"].includes(input.status)) {
+    if (["En cours", "Modifications effectuées", "PR en brouillon prête à réviser", "Terminé sans modification", "Terminé après révision humaine"].includes(input.status)) {
       validateApprovedProposal(proposal);
       if (!proposal.correctionProposalHash || hashCorrectionProposal(proposal) !== proposal.correctionProposalHash) {
         throw new Error("Le contenu de la proposition a changé; cette exécution ne peut pas publier son résultat.");

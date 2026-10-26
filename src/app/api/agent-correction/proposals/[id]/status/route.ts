@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 const statusSchema = z.object({
   executionId: z.string().uuid(),
-  status: z.enum(["En cours", "Bloqué", "Modifications effectuées", "Vérifications échouées", "PR en brouillon prête à réviser", "Abandonné"]),
+  status: z.enum(["En cours", "Bloqué", "Modifications effectuées", "Vérifications échouées", "PR en brouillon prête à réviser", "Terminé sans modification", "Abandonné"]),
   note: z.string().trim().min(1).max(1500),
   runNumber: z.number().int().positive().optional(),
   pullRequestUrl: z.string().url().optional()

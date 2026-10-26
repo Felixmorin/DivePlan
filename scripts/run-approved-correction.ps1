@@ -121,8 +121,8 @@ try {
   $diffNames = @(& git diff --name-only HEAD)
   $workingChanges = @(& git status --porcelain)
   if (-not $workingChanges) {
-    Send-CorrectionStatus "Bloqué" "Codex n’a proposé aucun changement de code; aucune PR n’a été créée."
-    Write-Host "Aucun changement : exécution bloquée sans PR."
+    Send-CorrectionStatus "Terminé sans modification" "Codex a terminé l’analyse et conclu qu’aucun changement de code n’était nécessaire; aucune PR n’a été créée."
+    Write-Host "Aucun changement nécessaire : exécution terminée sans PR."
     return
   }
   $forbidden = '(?i)(^|/)(\.github/workflows/|\.env($|\.)|db/migrations/|\.codex/)|(^|/)(package\.json|package-lock\.json)$'
