@@ -1,5 +1,15 @@
 # Agents IA administrés
 
+## Analyste local du code Next.js
+
+Cet agent utilise Codex CLI et la session ChatGPT locale pour analyser les sources Next.js et TypeScript de DivePlan. Il repère des pistes de coûts d’exécution, les fichiers ou dépendances qui semblent inutilisés, les duplications et les améliorations de lisibilité. Il vérifie les références et les conventions Next.js avant de classer un fichier comme candidat inutilisé.
+
+Après avoir appliqué la migration `0021_nextjs_code_analyst.sql`, installer le runner local depuis la racine du dépôt avec `pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-nextjs-analysis-runner.ps1`. Codex CLI doit être connecté au compte ChatGPT; le serveur doit avoir `CORRECTION_RUNNER_TOKEN` configuré. Le runner local, qui démarre avec la session Windows, vérifie la file créée par le bouton « Démarrer l’analyse Codex » dans Admin → Agents.
+
+Le rapport daté est écrit localement sous `logs/nextjs-code-analysis/`; seul l’état et le chemin local remontent dans l’historique DivePlan. L’exécution utilise `codex exec --sandbox read-only --ephemeral` et ne modifie aucun fichier, ne lance aucune validation, ne crée pas de PR et ne déploie rien.
+
+Le périmètre exclut SQL, migrations, schéma Prisma, statistiques PostgreSQL et plans d’exécution. Les coûts en dollars ne sont pas disponibles; les recommandations de performance sont des pistes à mesurer avec les métriques et factures des fournisseurs.
+
 ## Mise en service
 
 Appliquer les migrations `db/migrations/0011_ai_agents.sql` à `db/migrations/0018_pr_correction_agent.sql` à la base PostgreSQL visée avant de déployer l’application. Elles créent le registre et la file des exécutions, les agents disponibles, l’ordre d’affichage, l’espace de revue des PR et le lien de séquencement des workflows.

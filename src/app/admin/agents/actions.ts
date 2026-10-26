@@ -20,7 +20,7 @@ export async function enqueueAgentRun(agentId: string, analysisPeriod: "24h" | "
   const admin = await requireAdmin();
   const parsedId = z.string().min(1).max(100).safeParse(agentId);
   if (!parsedId.success) throw new Error("Agent invalide.");
-  if (!["diveplan-observability", "sql-supabase-analyst", "architecture-cartographer"].includes(parsedId.data)) throw new Error("Aucun traitement d’exécution n’est configuré pour cet agent.");
+  if (!["diveplan-observability", "sql-supabase-analyst", "architecture-cartographer", "nextjs-code-analyst"].includes(parsedId.data)) throw new Error("Aucun traitement d’exécution n’est configuré pour cet agent.");
   const period = z.enum(["24h", "7d"]).safeParse(analysisPeriod);
   if (!period.success) throw new Error("Période d’analyse invalide.");
   const agent = await query<{ id: string; name: string; triggers: unknown; enabled: boolean }>(
@@ -45,7 +45,7 @@ export async function enqueueAgentRun(agentId: string, analysisPeriod: "24h" | "
     }
     await trackEvent({ type: "admin.agent.run.queued", message: `Exécution demandée : ${row.name}`, userId: admin.id, metadata: { agentId: row.id, runId: id } });
   }
-  await runNextAgentJobs(id);
+  if (row.id !== "nextjs-code-analyst") await runNextAgentJobs(id);
   const finished = await query<{ id: string; agentId: string; trigger: string; status: string; analysisPeriod: "24h" | "7d"; startedAt: Date | null; finishedAt: Date | null; result: unknown; error: string | null; createdAt: Date }>(
     `SELECT id,"agentId",trigger,status,"analysisPeriod","startedAt","finishedAt",result,error,"createdAt" FROM "AiAgentRun" WHERE id=$1`, [id]
   );
@@ -64,7 +64,7 @@ export async function startAgentWorkflow(analysisPeriod: "24h" | "7d" = "7d") {
     );
     const runnable = agents.filter((agent) => {
       const triggers = triggerSchema.safeParse(agent.triggers);
-      return agent.enabled && triggers.success && triggers.data.onDemand.enabled;
+      return agent.id !== "nextjs-code-analyst" && agent.enabled && triggers.success && triggers.data.onDemand.enabled;
     });
     if (!runnable.length) throw new Error("Aucun agent actif avec le déclenchement à la demande n’est disponible.");
 

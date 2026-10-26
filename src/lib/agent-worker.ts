@@ -17,7 +17,7 @@ export async function runNextAgentJobs(targetRunId?: string) {
     const claimed = await query<AgentJob>(
       `WITH candidate AS (
          SELECT r.id FROM "AiAgentRun" r
-         WHERE r.status = 'pending' AND ($1::text IS NULL OR r.id = $1)
+         WHERE r.status = 'pending' AND r."agentId" <> 'nextjs-code-analyst' AND ($1::text IS NULL OR r.id = $1)
            AND (r."workflowId" IS NULL OR NOT EXISTS (
              SELECT 1 FROM "AiAgentRun" previous
              WHERE previous."workflowId"=r."workflowId" AND previous.sequence<r.sequence
