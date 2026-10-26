@@ -48,7 +48,7 @@ export async function createCoachAccount(formData: FormData) {
   const { firstName, lastName, email, clubId, temporaryPassword } = parsed.data;
   const club = await query<{ id: string }>(`SELECT id FROM "Club" WHERE id = $1`, [clubId]);
   if (!club.rows[0]) redirect(adminFormErrorPath(returnTo, "club"));
-  const existing = await query<{ id: string }>(`SELECT id FROM "User" WHERE lower(email) = $1`, [email]);
+  const existing = await query<{ id: string }>(`SELECT id FROM "User" WHERE lower(email) = $1 LIMIT 1`, [email]);
   if (existing.rows[0]) redirect(adminFormErrorPath(returnTo, "exists"));
   const passwordHash = await hashPassword(temporaryPassword);
   const userId = randomUUID();

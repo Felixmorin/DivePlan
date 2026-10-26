@@ -46,10 +46,66 @@ export async function createSessionFromPayload(tx: Executor, data: { clubId:stri
   if(!week){const result=await tx.query<Week>("INSERT INTO \"TrainingWeek\" (id,\"clubId\",\"groupId\",\"startDate\",title,status) VALUES ($1,$2,$3,$4,$5,'PUBLISHED') RETURNING *",[id(),data.clubId,data.groupId,start,`Semaine du ${formatMontrealDate(start)}`]);week=result.rows[0];}
   const sessionId=id();
   const session=(await tx.query<SessionSnapshot>("INSERT INTO \"TrainingSession\" (id,date,title,duration,notes,\"weekId\",\"coachId\",status,\"competitionEvaluationAtStart\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",[sessionId,data.date,data.title,data.duration,data.notes??null,week.id,data.coachId,data.status??SessionStatus.READY,data.payload.competitionEvaluationAtStart])).rows[0];
-  for(const b of data.payload.blocks){const blockId=id(); await tx.query("INSERT INTO \"SessionBlock\" (id,\"sessionId\",type,title,description,duration,position,\"estimatedVolume\",\"competitionEvaluation\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",[blockId,sessionId,b.type,b.title,b.description,b.duration,b.position,b.estimatedVolume,b.competitionEvaluation]);
-    for(const athleteId of b.athleteIds.filter(v=>validAthletes.has(v))) await tx.query("INSERT INTO \"SessionBlockAssignment\" (id,\"sessionBlockId\",\"athleteId\") VALUES ($1,$2,$3) ON CONFLICT (\"sessionBlockId\",\"athleteId\") DO NOTHING",[id(),blockId,athleteId]);
-    for(const e of b.drylandExercises.filter(v=>validExercises.has(v.exerciseId))) await tx.query("INSERT INTO \"DrylandBlockExercise\" (\"blockId\",\"exerciseId\",sets,reps,duration,notes,\"order\") VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (\"blockId\",\"order\") DO NOTHING",[blockId,e.exerciseId,e.sets,e.reps,e.duration,e.notes,e.order]);
-    if(b.poolTraining){await tx.query("INSERT INTO \"PoolTraining\" (\"blockId\") VALUES ($1)",[blockId]); for(const [i,s] of b.poolTraining.sections.entries()){const sectionId=id();await tx.query("INSERT INTO \"PoolSection\" (id,\"poolTrainingId\",height,label,\"order\") VALUES ($1,$2,$3,$4,$5)",[sectionId,blockId,s.height,s.label,i]);for(const d of s.dives)await tx.query("INSERT INTO \"PoolDive\" (id,\"poolSectionId\",\"diveCode\",\"diveName\",position,repetitions,notes,\"order\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",[id(),sectionId,d.diveCode,d.diveName,d.position,d.repetitions,d.notes,d.order]);}}
+  const blocks = data.payload.blocks.map((block) => ({ ...block, id: id() }));
+  if (blocks.length) {
+    await tx.query(
+      `INSERT INTO "SessionBlock" (id,"sessionId",type,title,description,duration,position,"estimatedVolume","competitionEvaluation")
+       SELECT id,$2,type,title,description,duration,position,"estimatedVolume","competitionEvaluation"
+       FROM jsonb_to_recordset($1::jsonb) AS item(id text,type "BlockType",title text,description text,duration integer,position integer,"estimatedVolume" integer,"competitionEvaluation" boolean)`,
+      [JSON.stringify(blocks.map(({ id: blockId, type, title, description, duration, position, estimatedVolume, competitionEvaluation }) => ({ id: blockId, type, title, description, duration, position, estimatedVolume, competitionEvaluation }))), sessionId]
+    );
+  }
+
+  const assignments = blocks.flatMap((block) => block.athleteIds
+    .filter((athleteId) => validAthletes.has(athleteId))
+    .map((athleteId) => ({ id: id(), sessionBlockId: block.id, athleteId })));
+  if (assignments.length) {
+    await tx.query(
+      `INSERT INTO "SessionBlockAssignment" (id,"sessionBlockId","athleteId")
+       SELECT id,"sessionBlockId","athleteId" FROM jsonb_to_recordset($1::jsonb) AS item(id text,"sessionBlockId" text,"athleteId" text)
+       ON CONFLICT ("sessionBlockId","athleteId") DO NOTHING`,
+      [JSON.stringify(assignments)]
+    );
+  }
+
+  const drylandExercises = blocks.flatMap((block) => block.drylandExercises
+    .filter((exercise) => validExercises.has(exercise.exerciseId))
+    .map((exercise) => ({ blockId: block.id, ...exercise })));
+  if (drylandExercises.length) {
+    await tx.query(
+      `INSERT INTO "DrylandBlockExercise" ("blockId","exerciseId",sets,reps,duration,notes,"order")
+       SELECT "blockId","exerciseId",sets,reps,duration,notes,"order" FROM jsonb_to_recordset($1::jsonb) AS item("blockId" text,"exerciseId" text,sets integer,reps integer,duration integer,notes text,"order" integer)
+       ON CONFLICT ("blockId","order") DO NOTHING`,
+      [JSON.stringify(drylandExercises)]
+    );
+  }
+
+  const poolBlocks = blocks.filter((block) => block.poolTraining);
+  if (poolBlocks.length) {
+    await tx.query(
+      `INSERT INTO "PoolTraining" ("blockId") SELECT "blockId" FROM jsonb_to_recordset($1::jsonb) AS item("blockId" text)`,
+      [JSON.stringify(poolBlocks.map((block) => ({ blockId: block.id })))]
+    );
+  }
+
+  const sections = poolBlocks.flatMap((block) => block.poolTraining!.sections.map((section, order) => ({
+    id: id(), poolTrainingId: block.id, height: section.height, label: section.label, order, dives: section.dives
+  })));
+  if (sections.length) {
+    await tx.query(
+      `INSERT INTO "PoolSection" (id,"poolTrainingId",height,label,"order")
+       SELECT id,"poolTrainingId",height,label,"order" FROM jsonb_to_recordset($1::jsonb) AS item(id text,"poolTrainingId" text,height "PoolHeight",label text,"order" integer)`,
+      [JSON.stringify(sections.map(({ id: sectionId, poolTrainingId, height, label, order }) => ({ id: sectionId, poolTrainingId, height, label, order })))]
+    );
+  }
+
+  const dives = sections.flatMap((section) => section.dives.map((dive) => ({ id: id(), poolSectionId: section.id, ...dive })));
+  if (dives.length) {
+    await tx.query(
+      `INSERT INTO "PoolDive" (id,"poolSectionId","diveCode","diveName",position,repetitions,notes,"order")
+       SELECT id,"poolSectionId","diveCode","diveName",position,repetitions,notes,"order" FROM jsonb_to_recordset($1::jsonb) AS item(id text,"poolSectionId" text,"diveCode" text,"diveName" text,position text,repetitions integer,notes text,"order" integer)`,
+      [JSON.stringify(dives)]
+    );
   }
   return {...session,week,blocks:[]};
 }
