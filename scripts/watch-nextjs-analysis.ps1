@@ -32,8 +32,9 @@ $claimUrl = "$baseUrl/api/agent-code-analysis/queue/claim"
 $analyzerPath = Join-Path $root "scripts\analyze-nextjs-code.ps1"
 $logsRoot = Join-Path $root "logs"
 $reportDirectory = Join-Path $logsRoot "nextjs-code-analysis"
-New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
-$logPath = Join-Path $reportDirectory "runner.log"
+$sqlReportDirectory = Join-Path $logsRoot "sql-supabase-analysis"
+New-Item -ItemType Directory -Path $reportDirectory, $sqlReportDirectory -Force | Out-Null
+$logPath = Join-Path $logsRoot "codex-analysis-runner.log"
 $pwshPath = (Get-Process -Id $PID).Path
 
 Write-Host "Runner d’analyse Codex DivePlan actif. Vérification toutes les $PollSeconds secondes. Arrêt : Ctrl+C."
