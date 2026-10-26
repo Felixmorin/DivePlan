@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { auth } from "@/auth";
 import { query, setDatabaseEgressClub, withDatabaseEgressComponent } from "@/lib/db";
 

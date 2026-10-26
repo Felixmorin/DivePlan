@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { query, withTransaction } from "@/lib/db";
+import { agentFindingIdentity } from "@/lib/agent-finding-identity";
 
 type Finding = { title?: string; priority?: string; impact?: string; effort?: string; location?: string; evidence?: string; limits?: string; recommendation?: string; confidence?: string; kind?: string };
 type Source = { runId: string; agentId: string; agentName: string; createdAt: string; finding: Finding };
@@ -9,12 +10,9 @@ type Proposal = { id: string; title: string; summary: string; sources: Source[];
 function findingKey(finding: Finding) {
   const title = finding.title?.trim();
   if (!title) return null;
-  return title.toLocaleLowerCase("fr").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-}
-
-function sourceKey(source: Source) {
-  const normalize = (value?: string) => (value ?? "").toLocaleLowerCase("fr").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-  return `${source.runId}:${normalize(source.finding.title)}:${normalize(source.finding.location)}:${normalize(source.finding.recommendation)}:${normalize(source.finding.evidence)}`;
+  const normalize = (value: string) => value.toLocaleLowerCase("fr").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const recommendation = finding.recommendation?.trim();
+  return `${normalize(title)}::${recommendation ? normalize(recommendation) : ""}`;
 }
 
 function proposalKey(proposal: Proposal) {
@@ -25,7 +23,7 @@ function proposalKey(proposal: Proposal) {
 function uniqueSources(sources: Source[]) {
   const seen = new Set<string>();
   return sources.filter((source) => {
-    const key = sourceKey(source);
+    const key = agentFindingIdentity(source);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -77,8 +75,9 @@ export async function consolidateAgentFindings() {
   let merged = 0;
   await withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(74201931)");
-    const { rows: allRows } = await client.query<{ sources: Source[] }>(`SELECT sources FROM "AiPrProposal"`);
-    const seen = new Set(allRows.flatMap((proposal) => proposal.sources.map(sourceKey)));
+    const { rows: allRows } = await client.query<{ sources: Source[]; status: string }>(`SELECT sources,status FROM "AiPrProposal"`);
+    const seen = new Set(allRows.flatMap((proposal) => proposal.sources.map(agentFindingIdentity)));
+    const approvedKeys = new Set(allRows.filter((proposal) => proposal.status === "Approuvée").map((proposal) => proposalKey(proposal as Proposal)).filter((key): key is string => Boolean(key)));
     const { rows: proposals } = await client.query<Proposal>(
       `SELECT id,title,summary,sources,details,status,history,"createdAt" FROM "AiPrProposal"
        WHERE status IN ('En attente d’approbation','À clarifier') ORDER BY "createdAt",id FOR UPDATE`
@@ -116,7 +115,8 @@ export async function consolidateAgentFindings() {
     }
 
     for (const [key, incomingSources] of grouped) {
-      const freshSources = incomingSources.filter((source) => !seen.has(sourceKey(source)));
+      if (approvedKeys.has(key) && !candidates.has(key)) continue;
+      const freshSources = uniqueSources(incomingSources).filter((source) => !seen.has(agentFindingIdentity(source)));
       if (!freshSources.length) continue;
       const existingProposal = candidates.get(key)?.[0];
       if (existingProposal) {
@@ -131,7 +131,7 @@ export async function consolidateAgentFindings() {
           `UPDATE "AiPrProposal" SET sources=$2,summary=$3,details=$4,status=$5,history=$6,"updatedAt"=NOW() WHERE id=$1`,
           [existingProposal.id, JSON.stringify(sources), aggregate.summary, JSON.stringify(aggregate.details), status, JSON.stringify(history)]
         );
-        freshSources.forEach((source) => seen.add(sourceKey(source)));
+        freshSources.forEach((source) => seen.add(agentFindingIdentity(source)));
         candidates.set(key, [{ ...existingProposal, sources, summary: aggregate.summary, details: aggregate.details, status, history }]);
         merged += 1;
         continue;
@@ -158,7 +158,7 @@ export async function consolidateAgentFindings() {
         JSON.stringify([{ at: new Date().toISOString(), event: "Proposition créée depuis les recommandations sources", actor: "Agent de consolidation", status }])
       ]);
       candidates.set(key, [{ id, title, summary: aggregate.summary, sources, details, status, history: [], createdAt: new Date() }]);
-      freshSources.forEach((source) => seen.add(sourceKey(source)));
+      freshSources.forEach((source) => seen.add(agentFindingIdentity(source)));
       added += 1;
     }
   });
