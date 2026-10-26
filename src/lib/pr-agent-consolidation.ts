@@ -10,7 +10,9 @@ type Proposal = { id: string; title: string; summary: string; sources: Source[];
 function findingKey(finding: Finding) {
   const title = finding.title?.trim();
   if (!title) return null;
-  return title.toLocaleLowerCase("fr").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const normalize = (value: string) => value.toLocaleLowerCase("fr").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const recommendation = finding.recommendation?.trim();
+  return `${normalize(title)}::${recommendation ? normalize(recommendation) : ""}`;
 }
 
 function proposalKey(proposal: Proposal) {
@@ -73,8 +75,9 @@ export async function consolidateAgentFindings() {
   let merged = 0;
   await withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(74201931)");
-    const { rows: allRows } = await client.query<{ sources: Source[] }>(`SELECT sources FROM "AiPrProposal"`);
+    const { rows: allRows } = await client.query<{ sources: Source[]; status: string }>(`SELECT sources,status FROM "AiPrProposal"`);
     const seen = new Set(allRows.flatMap((proposal) => proposal.sources.map(agentFindingIdentity)));
+    const approvedKeys = new Set(allRows.filter((proposal) => proposal.status === "Approuvée").map((proposal) => proposalKey(proposal as Proposal)).filter((key): key is string => Boolean(key)));
     const { rows: proposals } = await client.query<Proposal>(
       `SELECT id,title,summary,sources,details,status,history,"createdAt" FROM "AiPrProposal"
        WHERE status IN ('En attente d’approbation','À clarifier') ORDER BY "createdAt",id FOR UPDATE`
@@ -112,6 +115,7 @@ export async function consolidateAgentFindings() {
     }
 
     for (const [key, incomingSources] of grouped) {
+      if (approvedKeys.has(key) && !candidates.has(key)) continue;
       const freshSources = uniqueSources(incomingSources).filter((source) => !seen.has(agentFindingIdentity(source)));
       if (!freshSources.length) continue;
       const existingProposal = candidates.get(key)?.[0];

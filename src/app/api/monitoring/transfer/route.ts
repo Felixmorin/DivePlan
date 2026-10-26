@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/current-user";
 import { query } from "@/lib/db";
+import { normalizeTelemetryRoute } from "@/lib/telemetry-route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,15 +19,6 @@ function ratingThresholds(name: string, value: number) {
   };
   const [good, needsImprovement] = limits[name];
   return { goodSamples: Number(value <= good), needsImprovementSamples: Number(value > good && value <= needsImprovement) };
-}
-
-function normalizeRoute(input: unknown): string | null {
-  if (typeof input !== "string" || input.length > 200 || !input.startsWith("/") || input.startsWith("//")) return null;
-  const segments = input.split("/").filter(Boolean).map((segment) => {
-    if (/^[0-9]+$/.test(segment) || /^[a-z0-9_-]{20,}$/i.test(segment) || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(segment)) return ":id";
-    return segment.replace(/[^a-zA-Z0-9._~-]/g, "");
-  });
-  return `/${segments.join("/")}`.slice(0, 200);
 }
 
 export async function POST(request: Request) {
@@ -60,7 +52,7 @@ export async function POST(request: Request) {
   for (const value of Array.isArray(rawEntries) ? rawEntries : []) {
     if (!value || typeof value !== "object") continue;
     const item = value as Record<string, unknown>;
-    const route = normalizeRoute(item.route);
+    const route = typeof item.route === "string" ? normalizeTelemetryRoute(item.route) : null;
     if (!route || typeof item.resourceType !== "string" || !resourceTypes.has(item.resourceType)) continue;
     const requests = Number(item.requests);
     const transferBytes = Number(item.transferBytes);
@@ -74,7 +66,7 @@ export async function POST(request: Request) {
   for (const value of Array.isArray(rawVitals) ? rawVitals : []) {
     if (!value || typeof value !== "object") continue;
     const item = value as Record<string, unknown>;
-    const route = normalizeRoute(item.route);
+    const route = typeof item.route === "string" ? normalizeTelemetryRoute(item.route) : null;
     const name = item.name;
     const numericValue = Number(item.value);
     if (!route || !/^\/(coach|athlete)(\/|$)/.test(route)

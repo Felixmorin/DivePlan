@@ -161,11 +161,11 @@ async function runSqlSupabaseAnalysis(analysisPeriod: "24h" | "7d") {
     title: "Analyse SQL & Supabase DivePlan",
     period: { from: new Date(Date.now() - periodHours * 3600000).toISOString(), to: new Date().toISOString(), label: periodLabel },
     sources: [
-      { name: "Code SQL, schéma Prisma et migrations", period: "État déployé du dépôt", samples: code.fileCount },
-      { name: "DatabaseEgressTelemetryHour", period: periodLabel, samples: egress.length },
+      { name: "Code SQL, scripts, tests, schéma Prisma et migrations", period: "État déployé du dépôt", samples: code.fileCount },
+      { name: "DatabaseEgressTelemetryHour par route", period: periodLabel, samples: egress.length },
       ...(queryStats?.available ? [{ name: "pg_stat_statements", period: `Depuis ${queryStats.resetAt ?? "réinitialisation inconnue"} · cumul global`, samples: queryStats.rows.length }] : [])
     ],
-    facts: [{ category: "Inventaire du code", fact: `${code.queryCount} appels SQL extraits de ${code.fileCount} fichiers analysés.`, evidence: "Scan statique des sources déployées" }, ...observed.map((finding) => ({ category: "Egress mesuré", fact: finding.impact, evidence: finding.evidence })), ...queryFindings.map((finding) => ({ category: "Statistiques Supabase", fact: finding.impact, evidence: finding.evidence }))],
+    facts: [{ category: "Inventaire du code", fact: `${code.queryCount} instructions SQL détectées dans ${code.fileCount} fichiers : application, scripts (${code.scriptQueryCount}), tests (${code.testQueryCount}) et migrations (${code.migrationQueryCount}). ${code.testFileCount} fichier(s) de test inclus.`, evidence: "Scan statique des sources déployées; scripts, tests et migrations sont distingués des accès applicatifs." }, ...observed.map((finding) => ({ category: "Egress mesuré", fact: finding.impact, evidence: finding.evidence })), ...queryFindings.map((finding) => ({ category: "Statistiques Supabase", fact: finding.impact, evidence: finding.evidence }))],
     findings: [...observed, ...queryFindings, ...codeFindings].sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.priority] - { high: 0, medium: 1, low: 2 }[b.priority])),
     assumptions: [
       ...code.assumptions.filter((item) => !item.startsWith("Aucune intégration à l’API de statistiques Supabase")),
