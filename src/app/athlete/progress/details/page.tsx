@@ -39,8 +39,8 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
   const showAllValue = Array.isArray(params.all) ? params.all[0] : params.all;
   const showAll = showAllValue === "1";
 
-  let from: Date | null = null;
-  let until: Date | null = null;
+  let from: Date;
+  let until: Date;
   if (period === "week") {
     from = startOfMontrealWeek();
     until = addMontrealDays(from, 7);
@@ -56,7 +56,7 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
     until = parseMontrealSessionDate(`${seasonStartYear + 1}-08-31`, "00:00");
   }
 
-  const dateRows = (await query<DiveDateVolume>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,d."diveCode" AS code,s.height,s.label AS "heightLabel",to_char(l.timestamp AT TIME ZONE 'America/Toronto','YYYY-MM-DD') AS date,SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND ($2::timestamptz IS NULL OR l.timestamp >= $2) AND ($3::timestamptz IS NULL OR l.timestamp < $3) GROUP BY family,d."diveCode",s.height,s.label,date HAVING SUM(l."repetitionsCompleted") > 0 ORDER BY family,d."diveCode",s.height,date DESC`, [athlete.id, from, until])).rows;
+  const dateRows = (await query<DiveDateVolume>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,d."diveCode" AS code,s.height,s.label AS "heightLabel",to_char(l.timestamp AT TIME ZONE 'America/Toronto','YYYY-MM-DD') AS date,SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 AND l.timestamp >= $2 AND l.timestamp < $3 GROUP BY family,d."diveCode",s.height,s.label,date HAVING SUM(l."repetitionsCompleted") > 0 ORDER BY family,d."diveCode",s.height,date DESC`, [athlete.id, from, until])).rows;
   const datesByDive = new Map<string, DiveDateVolume[]>();
   const diveTotals = new Map<string, DiveVolume>();
   for (const row of dateRows) {
