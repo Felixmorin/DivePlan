@@ -43,5 +43,5 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "Surveille les corrections explicitement préparées dans DivePlan et lance Codex localement." -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
 Write-Host "Runner installé et démarré. Il redémarrera à chaque ouverture de session Windows."
-Write-Host "Journaux des exécutions : $(Join-Path $root 'logs\correction-runner-<execution-id>.log')"
+Write-Host "Journaux classés automatiquement dans : $(Join-Path $root 'logs\avec-pr') et $(Join-Path $root 'logs\sans-pr')"
 Write-Host "Pour le retirer : Unregister-ScheduledTask -TaskName '$taskName' -Confirm:`$false"

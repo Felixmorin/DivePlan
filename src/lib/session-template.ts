@@ -57,7 +57,7 @@ export async function createSessionFromPayload(tx: Executor, data: { clubId:stri
   const validAthletes=new Set(athleteIds.map(r=>r.id)), validExercises=new Set(exerciseIds.map(r=>r.id));
   const start = startOfMontrealWeek(data.date);
   let week=(await tx.query<Week>("SELECT id,\"clubId\",\"groupId\",\"startDate\",title,status FROM \"TrainingWeek\" WHERE \"clubId\"=$1 AND \"groupId\"=$2 AND \"startDate\"=$3 LIMIT 1",[data.clubId,data.groupId,start])).rows[0];
-  if(!week){const result=await tx.query<Week>("INSERT INTO \"TrainingWeek\" (id,\"clubId\",\"groupId\",\"startDate\",title,status) VALUES ($1,$2,$3,$4,$5,'PUBLISHED') RETURNING *",[id(),data.clubId,data.groupId,start,`Semaine du ${formatMontrealDate(start)}`]);week=result.rows[0];}
+  if(!week){const result=await tx.query<Week>("INSERT INTO \"TrainingWeek\" (id,\"clubId\",\"groupId\",\"startDate\",title,status) VALUES ($1,$2,$3,$4,$5,'PUBLISHED') RETURNING id,\"clubId\",\"groupId\",\"startDate\",title,status",[id(),data.clubId,data.groupId,start,`Semaine du ${formatMontrealDate(start)}`]);week=result.rows[0];}
   const sessionId=id();
   const session=(await tx.query<SessionSnapshot>("INSERT INTO \"TrainingSession\" (id,date,title,duration,notes,\"weekId\",\"coachId\",status,\"competitionEvaluationAtStart\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",[sessionId,data.date,data.title,data.duration,data.notes??null,week.id,data.coachId,data.status??SessionStatus.READY,data.payload.competitionEvaluationAtStart])).rows[0];
   const blocks: unknown[][] = [], assignments: unknown[][] = [], drylandExercises: unknown[][] = [];

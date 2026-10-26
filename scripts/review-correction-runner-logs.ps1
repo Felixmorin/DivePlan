@@ -22,12 +22,12 @@ $loginStatus = (& codex login status 2>&1 | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or $loginStatus -notmatch "Logged in using ChatGPT") { throw "Connecte d’abord Codex au compte ChatGPT : codex login" }
 
 $logDirectory = Join-Path $root "logs"
-$logFiles = @(Get-ChildItem -LiteralPath $logDirectory -Filter "correction-runner-*.log" -File -ErrorAction SilentlyContinue |
+$logFiles = @(Get-ChildItem -LiteralPath $logDirectory -Filter "correction-runner-*.log" -File -Recurse -ErrorAction SilentlyContinue |
   Sort-Object LastWriteTime -Descending | Select-Object -First $RunLimit)
 if (-not $logFiles.Count) { throw "Aucun journal d’exécution trouvé dans $logDirectory." }
 
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$reportPath = Join-Path $logDirectory "runner-log-review-$stamp.md"
+$reportPath = Join-Path (Join-Path $logDirectory "sans-pr") "runner-log-review-$stamp.md"
 $tempPath = Join-Path ([IO.Path]::GetTempPath()) "diveplan-runner-log-review-$stamp.md"
 $promptPath = Join-Path ([IO.Path]::GetTempPath()) "diveplan-runner-log-review-$stamp-prompt.md"
 $runLogs = foreach ($file in $logFiles) {

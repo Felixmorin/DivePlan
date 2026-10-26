@@ -53,8 +53,10 @@ $headers = @{ Authorization = "Bearer $runnerToken"; Accept = "application/json"
 $claimUrl = "$baseUrl/api/agent-correction/queue/claim"
 $workerPath = Join-Path $root "scripts\run-approved-correction.ps1"
 $logDirectory = Join-Path $root "logs"
-New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
-$logPath = Join-Path $logDirectory "correction-runner.log"
+$logsWithPrDirectory = Join-Path $logDirectory "avec-pr"
+$logsWithoutPrDirectory = Join-Path $logDirectory "sans-pr"
+New-Item -ItemType Directory -Path $logsWithPrDirectory, $logsWithoutPrDirectory -Force | Out-Null
+$logPath = Join-Path $logsWithoutPrDirectory "correction-runner.log"
 
 Write-Host "Runner DivePlan actif. Vérification toutes les $PollSeconds secondes. Arrêt : Ctrl+C."
 Write-Host "Les tâches approuvées seront lancées dans : $root"
@@ -81,6 +83,11 @@ while ($true) {
       $exitCode = $LASTEXITCODE
       $finished = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
       Add-Content -LiteralPath $runLogPath -Value "$finished Fin $($task.proposalId) (code $exitCode)"
+      $runLogContent = Get-Content -LiteralPath $runLogPath -Raw
+      $destinationDirectory = if ($runLogContent -match '(?i)https://github\.com/Felixmorin/DivePlan/pull/\d+') { $logsWithPrDirectory } else { $logsWithoutPrDirectory }
+      $destinationPath = Join-Path $destinationDirectory (Split-Path -Leaf $runLogPath)
+      Move-Item -LiteralPath $runLogPath -Destination $destinationPath
+      Write-Host "Journal classé dans : $destinationPath"
     }
   } catch {
     $message = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') Runner: $($_.Exception.Message)"
