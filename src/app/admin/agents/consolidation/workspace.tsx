@@ -42,7 +42,7 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
   const pageCount = Math.max(1, Math.ceil(filteredProposals.length / pageSize));
   const visiblePage = Math.min(page, pageCount);
   const visibleProposals = filteredProposals.slice((visiblePage - 1) * pageSize, visiblePage * pageSize);
-  const activeCorrectionKey = proposals.filter((p) => ["En attente d’exécution", "En cours", "Modifications effectuées"].includes(p.correctionStatus)).map((p) => p.id).join(",");
+  const activeCorrectionKey = proposals.filter((p) => p.status === "Approuvée" && p.correctionExecutionId && ["En attente d’exécution", "En cours", "Modifications effectuées"].includes(p.correctionStatus)).map((p) => p.id).join(",");
   useEffect(() => {
     if (!activeCorrectionKey) return;
     let cancelled = false;
@@ -55,9 +55,10 @@ export function ConsolidationWorkspace({ proposals: initial, candidates, sourceR
           let changed = false;
           const next = current.map((item) => {
             const latest = rows.find((row) => row.id === item.id);
-            if (!latest || (item.correctionStatus === latest.correctionStatus && item.correctionExecutionId === latest.correctionExecutionId && item.correctionRunUrl === latest.correctionRunUrl && item.correctionPullRequestUrl === latest.correctionPullRequestUrl && JSON.stringify(item.history) === JSON.stringify(latest.history))) return item;
+            const hasLatestEvent = !latest?.latestHistory || item.history.some((event) => event.at === latest.latestHistory?.at && event.event === latest.latestHistory?.event);
+            if (!latest || (item.correctionStatus === latest.correctionStatus && item.correctionExecutionId === latest.correctionExecutionId && item.correctionRunUrl === latest.correctionRunUrl && item.correctionPullRequestUrl === latest.correctionPullRequestUrl && hasLatestEvent)) return item;
             changed = true;
-            return { ...item, correctionStatus: latest.correctionStatus, correctionExecutionId: latest.correctionExecutionId, correctionRunUrl: latest.correctionRunUrl, correctionPullRequestUrl: latest.correctionPullRequestUrl, history: latest.history };
+            return { ...item, correctionStatus: latest.correctionStatus, correctionExecutionId: latest.correctionExecutionId, correctionRunUrl: latest.correctionRunUrl, correctionPullRequestUrl: latest.correctionPullRequestUrl, history: latest.latestHistory && !hasLatestEvent ? [...item.history, latest.latestHistory] : item.history };
           });
           return changed ? next : current;
         });

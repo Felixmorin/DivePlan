@@ -122,9 +122,10 @@ export async function getCorrectionStatuses(ids: string[]) {
   const result = await query<{
     id: string; correctionStatus: string; correctionExecutionId: string | null;
     correctionRunUrl: string | null; correctionPullRequestUrl: string | null;
-    history: Array<{ at: string; event: string; actor?: string; status?: string }>;
-  }>(`SELECT id,"correctionStatus","correctionExecutionId","correctionRunUrl","correctionPullRequestUrl",history
-      FROM "AiPrProposal" WHERE id=ANY($1::text[])`, [parsed.data]);
+    latestHistory: { at: string; event: string; actor?: string; status?: string } | null;
+  }>(`SELECT id,"correctionStatus","correctionExecutionId","correctionRunUrl","correctionPullRequestUrl",history->-1 AS "latestHistory"
+      FROM "AiPrProposal" WHERE id=ANY($1::text[])
+        AND status='Approuvée' AND "correctionExecutionId" IS NOT NULL`, [parsed.data]);
   return result.rows;
 }
 
