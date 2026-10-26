@@ -1302,3 +1302,14 @@ a {
 
 .absent-mini-status{padding:4px 8px;border-radius:15px;background:#eef2f6;color:#66778c;font-size:9px;font-weight:800}
 .completed-overview{font-size:15px}.completed-head h1{font-size:34px}.completed-head p{font-size:16px}.completed-status{font-size:14px;padding:8px 14px}.completed-actions>a,.completed-actions details>summary{min-height:46px;font-size:14px;padding:0 15px}.completed-stats{gap:10px}.completed-stat{min-height:128px;padding:15px;grid-template-columns:40px minmax(0,1fr)}.completed-stat>span{width:36px;height:36px}.completed-stat>span svg{width:20px;height:20px}.completed-stat label{font-size:13px}.completed-stat strong{font-size:24px}.completed-stat small{font-size:12px}.completed-panel{margin-bottom:16px;padding:16px}.completed-panel h2{font-size:19px}.completed-panel h2>svg{width:22px;height:22px}.completed-insights{gap:12px;margin-top:14px}.completed-insights article{min-height:110px;padding:16px}.completed-insights article>svg{width:24px;height:24px}.completed-insights strong{font-size:14px}.completed-insights p{font-size:13px}.completed-panel-head>a,.completed-panel-head>button{font-size:12px;padding:9px 12px}.completed-athlete-table,.completed-block-body table{font-size:13px}.completed-athlete-table th,.completed-block-body th{font-size:12px;padding:10px}.completed-athlete-table td,.completed-block-body td{padding:11px}.completed-avatar{width:36px;height:36px;font-size:12px}.completed-category>summary,.completed-block>summary{min-height:46px;font-size:13px;padding:9px 12px;gap:12px}.completed-category>summary>strong{font-size:14px}.completed-category-status{font-size:12px}.completed-block>summary>strong{font-size:13px}.completed-mini-status,.incomplete-mini-status,.absent-mini-status{font-size:11px;padding:5px 9px}.completed-block-body th,.completed-block-body td{padding:10px}.completed-dive-chips{gap:5px}.completed-dive-chips>span{font-size:12px;padding:5px 8px}.completed-dive-chips>span svg{width:14px;height:14px}.completed-followup-row{padding:10px 12px}.completed-followup-row strong{font-size:13px}.completed-followup-row small{font-size:12px}.completed-checkbox{width:19px;height:19px}.completed-footer>a,.completed-footer>button.completed-save{min-height:46px;font-size:13px}.completed-empty{font-size:14px}
+
+/* iOS Safari zooms the page when an editable control uses text smaller than 16px. */
+@media (max-width: 767px) {
+  :is(
+    input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="image"]):not([type="hidden"]),
+    textarea,
+    select
+  ) {
+    font-size: 16px !important;
+  }
+}
