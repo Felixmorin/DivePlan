@@ -63,6 +63,8 @@
   padding: 12px 0;
 }
 
+.content { width: 100%; }
+
 .brand {
   width: min(100%, 340px);
   margin: 0 auto 34px;
@@ -134,6 +136,7 @@
   .heroTitle { font-size: clamp(1.8rem, 7.4vw, 2.5rem); }
   .heroSubtitle { margin-top: 7px; font-size: 1rem; }
   .panel { flex: 1; justify-content: flex-start; padding: 20px 20px max(22px, env(safe-area-inset-bottom)); }
+  .content { margin: auto 0; }
   .brand { width: min(100%, 290px); margin-bottom: 20px; }
   .formCard { width: 100%; max-width: 470px; padding: 22px 20px 20px; border-color: transparent; border-radius: 18px; background: #fff; box-shadow: 0 12px 35px rgba(32, 67, 112, .08); }
   .formCard h1 { font-size: 1.65rem; }
@@ -141,7 +144,7 @@
   .inputWrap input { height: 52px; }
   .formOptions { font-size: .81rem; }
   .accessHelp { margin-top: 18px; }
-  .copyright { margin-top: auto; padding-top: 23px; }
+  .copyright { margin-top: 0; padding-top: 23px; }
 }
 
 @media (max-width: 360px) {

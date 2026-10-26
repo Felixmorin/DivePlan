@@ -651,7 +651,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   }
 
   return (
-    <div className="pb-24 lg:pb-0">
+    <div className="pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-0">
       <Stepper current={step} onStepChange={(nextStep) => { void advanceTo(nextStep); }} />
       {initialTemplate && !editingSession && (
         <div className="mb-5 rounded-[var(--radius-panel)] border border-[var(--color-brand)]/35 bg-[var(--color-brand)]/10 p-4">
@@ -753,7 +753,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
         />}
       </div>
 
-      {step !== 2 && step !== 3 && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border)] bg-white/95 p-3 shadow-[0_-16px_34px_rgba(7,20,35,0.12)] backdrop-blur lg:hidden">
+      {step !== 2 && step !== 3 && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border)] bg-white/95 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-16px_34px_rgba(7,20,35,0.12)] backdrop-blur lg:hidden">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <Button type="button" variant="outline" disabled={step === 0 || isPending} onClick={() => setStep(step - 1)}>Retour</Button>
           {step === 4 && !editingSession && <Button type="button" variant="outline" size="sm" disabled={isPending} onClick={() => publishSession("DRAFT")} aria-label="Enregistrer comme brouillon privé"><FileText className="h-4 w-4" /> Brouillon</Button>}
