@@ -16,7 +16,7 @@ export function MobileBottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-1/2 z-20 grid w-full max-w-[430px] -translate-x-1/2 grid-cols-4 border-t border-white/10 bg-[var(--color-athlete-bg)] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 shadow-[0_-16px_34px_rgba(0,0,0,0.28)]">
+    <nav className="mx-auto grid w-full max-w-[430px] grid-cols-4 border-t border-white/10 bg-[var(--color-athlete-bg)] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2">
       {items.map((item) => {
         const Icon = item.icon;
         const active = pathname === item.href || (item.href !== "/athlete" && pathname.startsWith(item.href));
