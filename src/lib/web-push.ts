@@ -129,7 +129,7 @@ export async function savePlanningEventCancellationTargets(tx: PoolClient, event
   }
 }
 
-export async function savePlanningEventPublicationTargets(tx: PoolClient, eventId: string) {
+export async function savePlanningEventPublicationTargets(tx: PoolClient, eventIds: string[]) {
   await tx.query("SAVEPOINT web_push_planning_event_publication_targets");
   try {
     await tx.query(
@@ -139,8 +139,8 @@ export async function savePlanningEventPublicationTargets(tx: PoolClient, eventI
        JOIN "Athlete" athlete ON athlete.active=true AND athlete."clubId"=e."clubId"
          AND (e."athleteId"=athlete.id OR (e."athleteId" IS NULL AND (e."groupId" IS NULL OR e."groupId"=athlete."groupId")))
        JOIN "User" u ON u.id=athlete."userId" AND u.role='ATHLETE'
-       WHERE e.id=$1
-       ON CONFLICT ("planningEventId","userId") DO NOTHING`, [eventId]
+         WHERE e.id=ANY($1::text[])
+         ON CONFLICT ("planningEventId","userId") DO NOTHING`, [eventIds]
     );
     await tx.query("RELEASE SAVEPOINT web_push_planning_event_publication_targets");
   } catch {
