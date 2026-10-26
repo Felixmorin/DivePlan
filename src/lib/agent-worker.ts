@@ -224,9 +224,34 @@ async function readSupabaseQueryStats(connectionString: string) {
       }
       return { available: true as const, rows: stats.rows, resetAt, message: null };
     });
-  } catch {
-    return { available: false as const, rows: [] as SupabaseQueryStat[], resetAt: null, message: "Connexion statistique configurée, mais indisponible. Vérifier le rôle en lecture seule, TLS et l’accès à pg_stat_statements." };
+  } catch (error) {
+    return { available: false as const, rows: [] as SupabaseQueryStat[], resetAt: null, message: describeStatsConnectionFailure(error) };
   }
+}
+
+function describeStatsConnectionFailure(error: unknown) {
+  const candidate = error && typeof error === "object" ? error as { code?: unknown; message?: unknown } : {};
+  const code = typeof candidate.code === "string" ? candidate.code : "";
+  const message = typeof candidate.message === "string" ? candidate.message.toLowerCase() : "";
+  if (code === "28P01" || code === "28000") {
+    return "Connexion statistique refusée par PostgreSQL (authentification ou rôle). Vérifier l’utilisateur et son autorisation de connexion.";
+  }
+  if (code === "42501") {
+    return "Connexion établie, mais le rôle en lecture seule n’a pas les permissions requises pour consulter pg_stat_statements.";
+  }
+  if (code === "3F000" || code === "42P01") {
+    return "La connexion fonctionne, mais pg_stat_statements ou son schéma est introuvable pour ce rôle.";
+  }
+  if (["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ETIMEDOUT", "ECONNRESET"].includes(code)) {
+    return "Connexion au serveur statistique impossible (résolution DNS, réseau ou port). Vérifier l’hôte et le port Supabase.";
+  }
+  if (/certificate|tls|ssl|self.signed|issuer/.test(message) || code.startsWith("ERR_TLS")) {
+    return "Échec de la connexion TLS au serveur statistique. Vérifier le mode TLS et le certificat CA Supabase.";
+  }
+  if (error instanceof TypeError) {
+    return "URL de connexion statistique invalide. Vérifier le format de SUPABASE_READONLY_DATABASE_URL sans afficher son contenu.";
+  }
+  return "Connexion statistique indisponible. Vérifier le rôle en lecture seule, l’accès à pg_stat_statements, TLS et la connectivité réseau.";
 }
 
 function formatBytes(bytes: number) {

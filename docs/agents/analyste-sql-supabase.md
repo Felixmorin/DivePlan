@@ -4,7 +4,7 @@
 
 ## Contexte pertinent
 
-Analyser les requêtes du code et les mesures SQL réellement accessibles. Examiner `src/lib/db.ts`, `src/lib/sql-agent-analysis.ts`, chemins chargement séance `src/app/coach/sessions/**` et `src/lib/coach-session.ts`, `prisma/schema.prisma`, migrations et télémétrie `DatabaseEgressTelemetryHour`. Le worker peut consulter `pg_stat_statements` uniquement avec `SUPABASE_READONLY_DATABASE_URL` configuré et des permissions valides.
+Analyser les requêtes du code et les mesures SQL réellement accessibles. Examiner `src/lib/db.ts`, `src/lib/sql-agent-analysis.ts`, chemins chargement séance `src/app/coach/sessions/**` et `src/lib/coach-session.ts`, `prisma/schema.prisma`, migrations et télémétrie `DatabaseEgressTelemetryHour`. Le worker peut consulter `pg_stat_statements` uniquement avec `SUPABASE_READONLY_DATABASE_URL` configuré et des permissions valides. Les sources sont incluses dans les traces Next.js des routes `/api/cron/agent-runs` et `/admin/agents`; les erreurs de connexion sont classées sans exposer le message PostgreSQL brut ni l’URL.
 
 ## Contrôles et risques
 
