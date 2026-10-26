@@ -25,14 +25,14 @@ export async function AdminShell({ children, active }: { children: React.ReactNo
       <p className="relative mb-3 px-2 text-xs font-bold uppercase tracking-[0.14em] text-white/45">Administration</p>
       <nav aria-label="Navigation admin" className="relative space-y-1">{items.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={active === label ? "page" : undefined} className={`flex min-h-11 items-center gap-3 rounded-xl border-l-2 px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active === label ? "border-cyan-300 bg-gradient-to-r from-sky-700/90 to-sky-600/65 text-white shadow-sm" : "border-transparent text-white/70 hover:bg-white/8 hover:text-white"}`}><Icon className="h-[18px] w-[18px]" />{label}</Link>)}</nav>
       <div className="relative mt-auto border-t border-white/10 pt-4">
-        <AdminThemeToggle />
+        <AdminThemeToggle placement="sidebar" />
         <p className="text-xs font-bold text-white/85">Administrateur plateforme</p><p className="mt-1 truncate text-xs text-white/50">{user.firstName} {user.lastName}</p>
         <form className="mt-3" action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}><button className="flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-white/70 hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><LogOut className="h-4 w-4" /> Déconnexion</button></form>
       </div>
     </aside>
     <div className="lg:ml-[252px]">
       <header className="sticky top-0 z-10 min-h-[58px] border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur sm:px-6 lg:hidden">
-        <div className="flex items-center gap-2"><nav aria-label="Navigation admin mobile" className="flex min-w-0 flex-1 gap-1 overflow-x-auto py-2">{items.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={active === label ? "page" : undefined} className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active === label ? "bg-[#0b3555] text-white" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" />{label}</Link>)}</nav><AdminThemeToggle /></div>
+        <div className="flex items-center gap-2"><nav aria-label="Navigation admin mobile" className="flex min-w-0 flex-1 gap-1 overflow-x-auto py-2">{items.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={active === label ? "page" : undefined} className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active === label ? "bg-[#0b3555] text-white" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" />{label}</Link>)}</nav><AdminThemeToggle placement="mobile" /></div>
       </header>
       <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-7 xl:px-8">{children}</main>
     </div>

@@ -114,9 +114,36 @@ html.admin-dark .admin-shell textarea { background-color: #111c26; border-color:
 html.admin-dark .admin-shell input::placeholder,
 html.admin-dark .admin-shell textarea::placeholder { color: #8799a8; }
 html.admin-dark .admin-shell option { background: #192530; color: #e3ebf2; }
-html.admin-dark .admin-shell .admin-theme-toggle { border-color: #425363; background: #192530; color: #dce8f1; }
-html.admin-dark .admin-shell .admin-theme-toggle:hover { background: #263744; }
 html.admin-dark .admin-shell :focus-visible { outline-color: #67d9ee; }
+
+.admin-theme-toggle { display: inline-flex; min-height: 48px; align-items: center; gap: 10px; border: 1px solid #d3dee7; border-radius: 13px; padding: 6px 11px; color: #263b4d; text-align: left; background: #fff; cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease; }
+.admin-theme-toggle:hover { background: #f2f7fa; }
+.admin-theme-toggle:active { transform: scale(.98); }
+.admin-theme-toggle:focus-visible { outline: 3px solid #55c9de; outline-offset: 2px; }
+.admin-theme-toggle--sidebar { width: 100%; margin-bottom: 16px; border-color: rgb(255 255 255 / 14%); background: rgb(255 255 255 / 6%); color: #f1f7fb; }
+.admin-theme-toggle--sidebar:hover { background: rgb(255 255 255 / 12%); }
+.admin-theme-icon { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border-radius: 10px; color: #157c98; background: #e8f7fa; }
+.admin-theme-icon svg { width: 17px; height: 17px; stroke-width: 2.2; }
+.admin-theme-copy { display: grid; min-width: 48px; flex: 1; gap: 1px; line-height: 1.15; }
+.admin-theme-copy span { color: #6c7e8d; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.admin-theme-copy strong { color: inherit; font-size: 13px; font-weight: 750; }
+.admin-theme-track { display: flex; width: 36px; height: 21px; flex: none; align-items: center; border-radius: 999px; padding: 2px; background: #aab8c3; transition: background-color 180ms ease; }
+.admin-theme-track > span { width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(6 20 32 / 28%); transition: transform 180ms cubic-bezier(.2,.8,.2,1); }
+.admin-theme-track.is-dark { background: #0787a1; }
+.admin-theme-track.is-dark > span { transform: translateX(15px); }
+.admin-theme-toggle--sidebar .admin-theme-copy span { color: #a9bdcb; }
+.admin-theme-toggle--sidebar .admin-theme-icon { color: #86e7f3; background: #214454; }
+.admin-theme-toggle--mobile { min-height: 42px; gap: 7px; padding: 4px 8px; border-radius: 12px; }
+.admin-theme-toggle--mobile .admin-theme-icon { width: 29px; height: 29px; border-radius: 9px; }
+.admin-theme-toggle--mobile .admin-theme-copy span { font-size: 9px; }
+.admin-theme-toggle--mobile .admin-theme-copy strong { font-size: 12px; }
+.admin-theme-toggle--mobile .admin-theme-track { width: 32px; height: 19px; }
+.admin-theme-toggle--mobile .admin-theme-track > span { width: 15px; height: 15px; }
+.admin-theme-toggle--mobile .admin-theme-track.is-dark > span { transform: translateX(13px); }
+html.admin-dark .admin-shell .admin-theme-toggle--mobile { border-color: #435564; background: #192530; color: #e3ebf2; }
+html.admin-dark .admin-shell .admin-theme-toggle--mobile:hover { background: #263744; }
+html.admin-dark .admin-shell .admin-theme-toggle--mobile .admin-theme-copy span { color: #a7b6c4; }
+html.admin-dark .admin-shell .admin-theme-toggle--mobile .admin-theme-icon { color: #91e7f0; background: #214454; }
 
 a {
   color: inherit;

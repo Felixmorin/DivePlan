@@ -5,7 +5,7 @@ import { Moon, Sun } from "lucide-react";
 
 const storageKey = "diveplan-admin-theme";
 
-export function AdminThemeToggle() {
+export function AdminThemeToggle({ placement }: { placement: "sidebar" | "mobile" }) {
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
@@ -28,11 +28,13 @@ export function AdminThemeToggle() {
   return <button
     type="button"
     onClick={toggleTheme}
-    aria-label={dark ? "Activer le thème clair" : "Activer le thème sombre"}
-    aria-pressed={dark}
-    className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] admin-theme-toggle"
+    role="switch"
+    aria-label="Thème sombre"
+    aria-checked={dark}
+    className={`admin-theme-toggle admin-theme-toggle--${placement}`}
   >
-    {dark ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
-    <span>{dark ? "Thème clair" : "Thème sombre"}</span>
+    <span className="admin-theme-icon" aria-hidden="true">{dark ? <Moon /> : <Sun />}</span>
+    <span className="admin-theme-copy"><span>Apparence</span><strong>{dark ? "Sombre" : "Clair"}</strong></span>
+    <span className={`admin-theme-track${dark ? " is-dark" : ""}`} aria-hidden="true"><span /></span>
   </button>;
 }
