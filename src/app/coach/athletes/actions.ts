@@ -114,26 +114,15 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
   let updated = 0;
 
   await withTransaction(async (tx) => {
-    const groupIds = new Map<string, string>();
-    const groupNames = [...new Set(records.map((record) => record.group).filter(Boolean))];
-    const existingAthleteEmails = new Set<string>();
     const emails = [...new Set(records.map((record) => record.email))];
-    if (emails.length > 0) {
-      const existingAthletes = await tx.query<{ email: string }>(
-        `SELECT u.email FROM "User" u JOIN "Athlete" a ON a."userId" = u.id WHERE u.email = ANY($1::text[])`,
-        [emails]
-      );
-      for (const athlete of existingAthletes.rows) existingAthleteEmails.add(athlete.email);
-    }
-    if (groupNames.length > 0) {
-      const existingGroups = await tx.query<{ id: string; name: string }>(
-        `SELECT id, name FROM "TrainingGroup" WHERE "clubId" = $1 AND name = ANY($2::text[])`,
-        [clubId, groupNames]
-      );
-      for (const group of existingGroups.rows) {
-        if (!groupIds.has(group.name)) groupIds.set(group.name, group.id);
-      }
-    }
+    const existingAthletes = emails.length
+      ? await tx.query<{ email: string }>(
+          `SELECT u.email FROM "User" u INNER JOIN "Athlete" a ON a."userId" = u.id WHERE u.email = ANY($1::text[])`,
+          [emails]
+        )
+      : { rows: [] };
+    const existingEmails = new Set(existingAthletes.rows.map((row) => row.email));
+    const groupIds = new Map<string, string>();
 
     for (const record of records) {
       let groupId: string | null = null;
@@ -141,7 +130,8 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
       if (record.group) {
         groupId = groupIds.get(record.group) ?? null;
         if (!groupId) {
-          const group = (await tx.query<{ id: string }>(
+          const existingGroup = await tx.query<{ id: string }>(`SELECT id FROM "TrainingGroup" WHERE "clubId" = $1 AND name = $2 LIMIT 1`, [clubId, record.group]);
+          const group = existingGroup.rows[0] ?? (await tx.query<{ id: string }>(
             `INSERT INTO "TrainingGroup" (id, name, "clubId", "coachId") VALUES ($1, $2, $3, $4) RETURNING id`,
             [randomUUID(), record.group, clubId, coach.id]
           )).rows[0];
@@ -163,12 +153,12 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
         [randomUUID(), userId, clubId, groupId, new Date("2010-01-01"), record.level]
       );
 
-      if (existingAthleteEmails.has(record.email)) {
+      if (existingEmails.has(record.email)) {
         updated += 1;
       } else {
         imported += 1;
       }
-      existingAthleteEmails.add(record.email);
+      existingEmails.add(record.email);
     }
   });
 
