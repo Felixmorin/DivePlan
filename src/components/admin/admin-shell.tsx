@@ -7,6 +7,7 @@ import { AdminThemeToggle } from "@/components/admin/admin-theme-toggle";
 const items = [
   { href: "/admin", label: "Vue d’ensemble", icon: LayoutDashboard },
   { href: "/admin/sante-app", label: "Santé App", icon: HeartPulse },
+  { href: "/admin/sante-generale", label: "Santé générale", icon: HeartPulse },
   { href: "/admin/users", label: "Utilisateurs", icon: UserRound },
   { href: "/admin/coaches", label: "Fonctionnalités", icon: Sparkles },
   { href: "/admin/observability", label: "Observabilité", icon: Activity },
