@@ -485,22 +485,18 @@ export async function saveCoachCompetitionDiveEvaluation(input: z.infer<typeof c
 
   const evaluatedAt = new Date();
   await withTransaction(async (tx) => {
-    const ratingsByDiveId = new Map(data.ratings.map((entry) => [entry.competitionDiveId, entry.rating]));
     const evaluations = dives.map((dive) => ({
       id: randomUUID(),
-      athleteId: athlete.id,
-      coachId: coach.id,
       competitionDiveId: dive.id,
       diveCode: dive.diveCode,
       height: dive.height,
-      rating: ratingsByDiveId.get(dive.id)!,
-      evaluatedAt: evaluatedAt.toISOString()
+      rating: data.ratings.find((entry) => entry.competitionDiveId === dive.id)!.rating
     }));
     await tx.query(
       `INSERT INTO "AthleteCompetitionDiveEvaluation" (id, "athleteId", "coachId", "competitionDiveId", "diveCode", height, rating, evaluator, "evaluatedAt")
-       SELECT id, "athleteId", "coachId", "competitionDiveId", "diveCode", height, rating, 'COACH', "evaluatedAt"
-       FROM jsonb_to_recordset($1::jsonb) AS evaluation(id text, "athleteId" text, "coachId" text, "competitionDiveId" text, "diveCode" text, height text, rating integer, "evaluatedAt" timestamptz)`,
-      [JSON.stringify(evaluations)]
+       SELECT item.id, $2, $3, item."competitionDiveId", item."diveCode", item.height::"PoolHeight", item.rating, 'COACH', $4
+       FROM jsonb_to_recordset($1::jsonb) AS item(id text, "competitionDiveId" text, "diveCode" text, height text, rating integer)`,
+      [JSON.stringify(evaluations), athlete.id, coach.id, evaluatedAt]
     );
   });
   revalidatePath(`/coach/athletes/${athlete.id}`);
