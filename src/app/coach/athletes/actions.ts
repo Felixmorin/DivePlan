@@ -670,9 +670,9 @@ export async function updateAthleteDiveFamily(formData: FormData) {
     }
     if (logs.rows.length > 0) {
       await tx.query(
-        `UPDATE "AthleteDiveLog" AS l SET "repetitionsCompleted" = updates.repetitions
-         FROM unnest($1::text[], $2::int[]) AS updates(id, repetitions)
-         WHERE l.id = updates.id`,
+        `UPDATE "AthleteDiveLog" AS l SET "repetitionsCompleted" = updated."repetitionsCompleted"
+         FROM unnest($1::text[], $2::int[]) AS updated(id, "repetitionsCompleted")
+         WHERE l.id = updated.id`,
         [logs.rows.map((log) => log.id), updatedRepetitions]
       );
     }
