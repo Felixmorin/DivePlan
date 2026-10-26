@@ -646,7 +646,7 @@ export function SessionPlayer({ session, onStart, onPreview, onOpenBlock, onClos
 
   return (
     <AthleteShell hideNav className="session-player-light">
-      <div className="space-y-4">
+      <div className="space-y-4 pb-[calc(8rem+env(safe-area-inset-bottom))]">
         <header className="sticky top-0 z-30 -mx-4 bg-[#f7fbff]/95 px-4 pb-3 pt-2 backdrop-blur">
           <div className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <button type="button" onClick={leaveSession} className="min-h-10 justify-self-start rounded-xl px-1 text-sm font-bold text-[var(--color-action)]">Quitter</button>
