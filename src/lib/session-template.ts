@@ -56,7 +56,7 @@ export async function createSessionFromPayload(tx: Executor, data: { clubId:stri
   const exerciseIds = (await tx.query<{id:string}>("SELECT id FROM \"DrylandExercise\" WHERE id=ANY($1::text[])",[data.payload.blocks.flatMap(b=>b.drylandExercises.map(e=>e.exerciseId))])).rows;
   const validAthletes=new Set(athleteIds.map(r=>r.id)), validExercises=new Set(exerciseIds.map(r=>r.id));
   const start = startOfMontrealWeek(data.date);
-  let week=(await tx.query<Week>("SELECT * FROM \"TrainingWeek\" WHERE \"clubId\"=$1 AND \"groupId\"=$2 AND \"startDate\"=$3 LIMIT 1",[data.clubId,data.groupId,start])).rows[0];
+  let week=(await tx.query<Week>("SELECT id,\"clubId\",\"groupId\",\"startDate\",title,status FROM \"TrainingWeek\" WHERE \"clubId\"=$1 AND \"groupId\"=$2 AND \"startDate\"=$3 LIMIT 1",[data.clubId,data.groupId,start])).rows[0];
   if(!week){const result=await tx.query<Week>("INSERT INTO \"TrainingWeek\" (id,\"clubId\",\"groupId\",\"startDate\",title,status) VALUES ($1,$2,$3,$4,$5,'PUBLISHED') RETURNING *",[id(),data.clubId,data.groupId,start,`Semaine du ${formatMontrealDate(start)}`]);week=result.rows[0];}
   const sessionId=id();
   const session=(await tx.query<SessionSnapshot>("INSERT INTO \"TrainingSession\" (id,date,title,duration,notes,\"weekId\",\"coachId\",status,\"competitionEvaluationAtStart\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",[sessionId,data.date,data.title,data.duration,data.notes??null,week.id,data.coachId,data.status??SessionStatus.READY,data.payload.competitionEvaluationAtStart])).rows[0];
@@ -86,17 +86,17 @@ export async function createSessionFromPayload(tx: Executor, data: { clubId:stri
 }
 
 export async function getSessionSnapshot(sessionId:string,clubId:string):Promise<SessionSnapshot|null>{
- const base=(await query<SessionSnapshot>("SELECT s.*, row_to_json(w) AS week FROM \"TrainingSession\" s JOIN \"TrainingWeek\" w ON w.id=s.\"weekId\" WHERE s.id=$1 AND w.\"clubId\"=$2",[sessionId,clubId])).rows[0]; if(!base)return null;
- const blocks=(await query<Block>("SELECT * FROM \"SessionBlock\" WHERE \"sessionId\"=$1 ORDER BY position",[sessionId])).rows;
+ const base=(await query<SessionSnapshot>("SELECT s.id,s.date,s.title,s.duration,s.notes,s.\"weekId\",s.\"coachId\",s.status,s.\"planningEventId\",s.\"competitionEvaluationAtStart\",row_to_json(w) AS week FROM \"TrainingSession\" s JOIN \"TrainingWeek\" w ON w.id=s.\"weekId\" WHERE s.id=$1 AND w.\"clubId\"=$2",[sessionId,clubId])).rows[0]; if(!base)return null;
+ const blocks=(await query<Block>("SELECT id,\"sessionId\",type,title,description,duration,position,\"estimatedVolume\",\"competitionEvaluation\" FROM \"SessionBlock\" WHERE \"sessionId\"=$1 ORDER BY position",[sessionId])).rows;
  const blockIds=blocks.map(b=>b.id);
  const [assignments,drylandExercises,pools,sections]=await Promise.all([
-  query<Assignment>("SELECT * FROM \"SessionBlockAssignment\" WHERE \"sessionBlockId\"=ANY($1::text[])",[blockIds]),
-  query<Dryland>("SELECT * FROM \"DrylandBlockExercise\" WHERE \"blockId\"=ANY($1::text[]) ORDER BY \"order\"",[blockIds]),
+  query<Assignment>("SELECT \"sessionBlockId\",\"athleteId\" FROM \"SessionBlockAssignment\" WHERE \"sessionBlockId\"=ANY($1::text[])",[blockIds]),
+  query<Dryland>("SELECT \"blockId\",\"exerciseId\",sets,reps,duration,notes,\"order\" FROM \"DrylandBlockExercise\" WHERE \"blockId\"=ANY($1::text[]) ORDER BY \"order\"",[blockIds]),
   query<{blockId:string}>("SELECT \"blockId\" FROM \"PoolTraining\" WHERE \"blockId\"=ANY($1::text[])",[blockIds]),
-  query<Section>("SELECT * FROM \"PoolSection\" WHERE \"poolTrainingId\"=ANY($1::text[]) ORDER BY \"order\"",[blockIds])
+  query<Section>("SELECT id,\"poolTrainingId\",height,label,\"order\" FROM \"PoolSection\" WHERE \"poolTrainingId\"=ANY($1::text[]) ORDER BY \"order\"",[blockIds])
  ]);
  const sectionIds=sections.rows.map(s=>s.id);
- const dives=await query<Dive>("SELECT * FROM \"PoolDive\" WHERE \"poolSectionId\"=ANY($1::text[]) ORDER BY \"order\"",[sectionIds]);
+ const dives=await query<Dive>("SELECT id,\"poolSectionId\",\"diveCode\",\"diveName\",position,repetitions,notes,\"postSessionModified\",\"order\" FROM \"PoolDive\" WHERE \"poolSectionId\"=ANY($1::text[]) ORDER BY \"order\"",[sectionIds]);
  const assignmentsByBlock=new Map<string,Assignment[]>(),drylandByBlock=new Map<string,Dryland[]>(),sectionsByBlock=new Map<string,Section[]>(),divesBySection=new Map<string,Dive[]>();
  for(const row of assignments.rows){const rows=assignmentsByBlock.get(row.sessionBlockId)??[];rows.push(row);assignmentsByBlock.set(row.sessionBlockId,rows);}
  for(const row of drylandExercises.rows){const rows=drylandByBlock.get(row.blockId)??[];rows.push(row);drylandByBlock.set(row.blockId,rows);}
