@@ -4,7 +4,7 @@
 
 ## Mandat et contexte
 
-Cartographier routes, composants, API, services, permissions, données et déploiement observables dans les sources. Comparer le commit et les livrables précédents, séparer preuve et interprétation, signaler les zones centrales et les informations absentes. Codex accède en lecture seule au dépôt local du runner et ajoute une synthèse avec des références vérifiées. Le rapport compare le commit local au commit déployé de la cartographie. Lire d’abord [le guide général](guide-general.md) et [la carte](../architecture/architecture.md).
+Cartographier routes, composants, API, services, permissions, données et déploiement observables dans les sources. Évaluer le system design et l’architecture logicielle : frontières, responsabilités, flux de données, dépendances, fiabilité, sécurité et maintenabilité. Comparer le commit et les livrables précédents, séparer preuve et interprétation, signaler les risques démontrables et les exigences manquantes. Codex accède en lecture seule au dépôt local du runner et vérifie ses références. Le rapport compare le commit local au commit déployé de la cartographie. Lire d’abord [le guide général](guide-general.md) et [la carte](../architecture/architecture.md).
 
 ## Sources à examiner
 

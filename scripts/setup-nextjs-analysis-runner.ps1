@@ -4,6 +4,16 @@ $ErrorActionPreference = "Stop"
 $taskName = "DivePlan Next.js Code Analyst"
 $root = (& git rev-parse --show-toplevel 2>$null)
 if ($LASTEXITCODE -ne 0 -or -not $root) { throw "Ouvre PowerShell à la racine du dépôt DivePlan." }
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if ($existingTask -and $existingTask.State -eq "Running") {
+  Stop-ScheduledTask -TaskName $taskName
+  for ($attempt = 0; $attempt -lt 20; $attempt += 1) {
+    Start-Sleep -Milliseconds 250
+    $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if (-not $existingTask -or $existingTask.State -ne "Running") { break }
+  }
+  if ($existingTask -and $existingTask.State -eq "Running") { throw "Le runner existant ne s’est pas arrêté; ferme sa fenêtre PowerShell puis relance l’installation." }
+}
 $watchScript = Join-Path $root "scripts\watch-nextjs-analysis.ps1"
 if (-not (Test-Path -LiteralPath $watchScript)) { throw "Script du runner introuvable : $watchScript" }
 
@@ -37,7 +47,7 @@ $action = New-ScheduledTaskAction -Execute $pwshPath -Argument $arguments -Worki
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero)
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "Surveille les demandes d’analyse de code Next.js dans DivePlan et lance Codex localement en lecture seule." -Force | Out-Null
+Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "Surveille les demandes des agents Codex locaux DivePlan et les traite en lecture seule." -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
 Write-Host "Runner d’analyse installé et démarré. Il redémarrera à chaque ouverture de session Windows."
 Write-Host "Pour le désinstaller, retire la tâche planifiée '$taskName' dans le Planificateur de tâches Windows."
