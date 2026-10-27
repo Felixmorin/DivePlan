@@ -4,7 +4,7 @@
 
 ## Mandat et contexte
 
-Cartographier routes, composants, API, services, permissions, données et déploiement observables dans les sources. Comparer le commit et les livrables précédents, séparer preuve et interprétation, signaler les zones centrales et les informations absentes. Lire d’abord [le guide général](guide-general.md) et [la carte](../architecture/architecture.md).
+Cartographier routes, composants, API, services, permissions, données et déploiement observables dans les sources. Comparer le commit et les livrables précédents, séparer preuve et interprétation, signaler les zones centrales et les informations absentes. Codex accède en lecture seule au dépôt local du runner et ajoute une synthèse avec des références vérifiées. Le rapport compare le commit local au commit déployé de la cartographie. Lire d’abord [le guide général](guide-general.md) et [la carte](../architecture/architecture.md).
 
 ## Sources à examiner
 
@@ -20,4 +20,4 @@ Cartographier routes, composants, API, services, permissions, données et déplo
 
 ## Limites d’action
 
-Lecture seule des sources. Peut produire le rapport dans la file/historique des agents et documenter les livrables prévus. N’édite pas le code applicatif, n’exécute pas de SQL extrait du dépôt, n’applique pas de migration, ne modifie pas la base produit, n’ouvre pas de PR, ne fusionne rien et ne déploie rien. Les exécutions applicatives n’ont pas accès en écriture au dépôt; leurs rapports restent dans PostgreSQL. La mise à jour versionnée des guides doit être revue dans le dépôt.
+Les sources déployées sont lues par le traitement déterministe; Codex lit aussi le dépôt local du runner en mode lecture seule pour vérifier les références et expliquer les liens. Le script exclut `.env`, les certificats, journaux, données personnelles, `.git`, `.next` et `node_modules`; il n’exécute pas le code, le SQL, les migrations, tests ou builds. Il compare le commit local et l’état de l’arbre de travail avec le commit de la cartographie déployée et distingue les constats locaux lorsqu’ils diffèrent. Codex ne modifie pas le dépôt ou la base, n’ouvre pas de PR, ne fusionne rien et ne déploie rien. Le résultat enrichi est enregistré dans PostgreSQL et une copie JSON locale reste dans `logs/architecture-analysis/`. La mise à jour versionnée des guides doit être revue dans le dépôt.

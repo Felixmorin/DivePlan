@@ -16,13 +16,18 @@ const statusSchema = z.union([
     })
   }),
   z.object({
+    status: z.literal("completed"), agentId: z.literal("architecture-cartographer"),
+    reportPath: z.string().regex(/^logs\/architecture-analysis\/analysis-[\w-]+\.json$/),
+    report: z.record(z.string(), z.unknown()).refine((report) => JSON.stringify(report).length <= 300_000)
+  }),
+  z.object({
     status: z.literal("completed"),
     agentId: z.enum(["nextjs-code-analyst", "sql-supabase-analyst"]),
     reportPath: z.string().regex(/^logs\/(?:nextjs-code-analysis|sql-supabase-analysis)\/analysis-[\w-]+\.md$/)
   }).refine((data) => data.agentId === "nextjs-code-analyst"
     ? data.reportPath.startsWith("logs/nextjs-code-analysis/")
     : data.reportPath.startsWith("logs/sql-supabase-analysis/")),
-  z.object({ status: z.literal("failed"), agentId: z.enum(["nextjs-code-analyst", "sql-supabase-analyst", "diveplan-observability"]), error: z.string().trim().min(1).max(1000) })
+  z.object({ status: z.literal("failed"), agentId: z.enum(["nextjs-code-analyst", "sql-supabase-analyst", "diveplan-observability", "architecture-cartographer"]), error: z.string().trim().min(1).max(1000) })
 ]);
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -36,7 +41,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const parsed = statusSchema.safeParse(body);
   if (!parsed.success) return Response.json({ error: "Invalid code analysis status update." }, { status: 400 });
 
-  const update = parsed.data.status === "completed" && parsed.data.agentId === "diveplan-observability"
+  const update = parsed.data.status === "completed" && (parsed.data.agentId === "diveplan-observability" || parsed.data.agentId === "architecture-cartographer")
     ? await query(
       `UPDATE "AiAgentRun" SET status='completed',result=$3,"finishedAt"=NOW(),error=NULL
        WHERE id=$1 AND "agentId"=$2 AND status='running'`,

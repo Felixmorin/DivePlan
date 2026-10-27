@@ -48,6 +48,7 @@ const agentWorkerIncludes = [
 nextConfig.outputFileTracingIncludes = {
   "/*": ["./certs/prod-ca-2021.crt"],
   "/api/cron/agent-runs": agentWorkerIncludes,
+  "/api/agent-code-analysis/queue/claim": agentWorkerIncludes,
   "/admin/agents": agentWorkerIncludes,
   "/admin/agents/context": ["./docs/architecture/**/*.md", "./docs/agents/**/*.md"]
 };

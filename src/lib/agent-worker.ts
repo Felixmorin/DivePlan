@@ -1,6 +1,5 @@
 import "server-only";
 import { query } from "@/lib/db";
-import { runArchitectureCartography, summarizePreviousCartography } from "@/lib/architecture-agent";
 import { consolidateAgentFindings } from "@/lib/pr-agent-consolidation";
 
 type RouteVolume = { route: string; requests: string; bytes: string };
@@ -14,7 +13,7 @@ export async function runNextAgentJobs(targetRunId?: string) {
     const claimed = await query<AgentJob>(
       `WITH candidate AS (
          SELECT r.id FROM "AiAgentRun" r
-         WHERE r.status = 'pending' AND r."agentId" <> ALL(ARRAY['nextjs-code-analyst','sql-supabase-analyst','diveplan-observability']) AND ($1::text IS NULL OR r.id = $1)
+         WHERE r.status = 'pending' AND r."agentId" <> ALL(ARRAY['nextjs-code-analyst','sql-supabase-analyst','diveplan-observability','architecture-cartographer']) AND ($1::text IS NULL OR r.id = $1)
            AND (r."workflowId" IS NULL OR NOT EXISTS (
              SELECT 1 FROM "AiAgentRun" previous
              WHERE previous."workflowId"=r."workflowId" AND previous.sequence<r.sequence
@@ -34,14 +33,6 @@ export async function runNextAgentJobs(targetRunId?: string) {
     try {
       if (!run.enabled || run.triggers?.onDemand?.enabled !== true) {
         await query(`UPDATE "AiAgentRun" SET status='failed', error=$2, "finishedAt"=NOW() WHERE id=$1`, [run.id, "L’agent ou son déclenchement à la demande a été désactivé avant le traitement."]);
-        continue;
-      }
-      if (run.agentId === "architecture-cartographer") {
-        const previousResult = await query<{ result: unknown }>(
-          `SELECT result FROM "AiAgentRun" WHERE "agentId"=$1 AND status='completed' AND id<>$2 ORDER BY "createdAt" DESC LIMIT 1`, [run.agentId, run.id]
-        );
-        const result = await runArchitectureCartography(summarizePreviousCartography(previousResult.rows[0]?.result));
-        await query(`UPDATE "AiAgentRun" SET status='completed', result=$2, "finishedAt"=NOW() WHERE id=$1`, [run.id, result]);
         continue;
       }
       if (run.agentId === "pr-consolidation") {
