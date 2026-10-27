@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDown, ArrowDownUp, ArrowRight, CircleHelp, FileText, Gauge, Network, Server, Smartphone, TriangleAlert } from "lucide-react";
+import { Activity, ArrowDown, ArrowDownUp, ArrowRight, CircleHelp, FileText, Gauge, Network, Server, Smartphone, TriangleAlert } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/current-user";
