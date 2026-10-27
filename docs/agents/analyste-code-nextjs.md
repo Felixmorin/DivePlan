@@ -1,5 +1,14 @@
 # Fiche agent — Analyste du code Next.js
 
+## Dernier rapport
+
+**26 octobre 2026** — [Rapport complet](../../logs/nextjs-code-analysis/analysis-20261026-154033-9d135542.md) (analyse statique sur Next.js 16.3.3).
+
+- Le chemin des Web Vitals est capturé au chargement du module; après navigation côté client, les mesures peuvent rester associées à la première page.
+- La mécanique d’envoi de télémétrie `sendBeacon` puis `fetch` est dupliquée dans deux modules; le rapport propose de partager uniquement le transport.
+- Aucun fichier ou package inutilisé n’a été confirmé. Trois grands fichiers sont des candidats à un découpage ciblé, après analyse de leurs responsabilités.
+- Aucun coût de production n’a été mesuré. L’analyse exclut `src/lib/athlete-session.ts`, qui était modifié localement au moment de l’audit.
+
 ## Rôle
 
 Utiliser Codex local, connecté au compte ChatGPT de l’utilisateur, pour analyser le code Next.js et TypeScript de DivePlan. L’agent cherche des pistes de coûts d’exécution, des fichiers et dépendances potentiellement inutilisés, du code dupliqué et des améliorations de lisibilité. Il rédige un rapport en français sans modifier le dépôt.

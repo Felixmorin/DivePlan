@@ -1,5 +1,14 @@
 # Fiche agent — Analyste SQL & Supabase
 
+## Dernier rapport
+
+**27 octobre 2026** — [Rapport complet](../../logs/sql-supabase-analysis/analysis-20261027-012412-0c23024b.md) (audit statique, statistiques `pg_stat_statements` fournies manuellement).
+
+- Priorités à vérifier : index effectif sur `PoolDive(poolSectionId, order)`; agrégations complètes de l’historique `AthleteDiveLog`; coût de reconstruction JSON et du hash ETag pour les séances live (Q77).
+- Le code observé regroupe les lectures par séance et ne montre pas de preuve solide de N+1 dans les parcours examinés.
+- Les requêtes `SELECT *` et listes `AiPrProposal` lentes des statistiques n’ont pas été attribuées avec certitude à du code actuel.
+- Les index de production, plans, RLS et coûts réels n’ont pas été observés; vérifier dans Supabase avant toute modification.
+
 > Mode actuel : Codex local, lancé par le runner DivePlan.
 
 ## Contexte pertinent
