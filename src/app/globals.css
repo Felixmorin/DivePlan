@@ -418,8 +418,8 @@ a {
 .athlete-head-actions { display:flex; align-items:center; gap:.45rem; }
 .athlete-tabs { grid-column:1/-1; display:flex; gap:1.5rem; margin-top:.15rem; border-top:1px solid #e9eff4; }
 .athlete-tabs a { position:relative; padding:.55rem .12rem; color:#516987; font-size:.65rem; }
-.athlete-tabs a:first-child { color:#087f9b; font-weight:800; }
-.athlete-tabs a:first-child:after { position:absolute; right:0; bottom:-1px; left:0; height:2px; background:#12bfd1; content:""; }
+.athlete-tabs a[aria-current="page"] { color:#087f9b; font-weight:800; }
+.athlete-tabs a[aria-current="page"]:after { position:absolute; right:0; bottom:-1px; left:0; height:2px; background:#12bfd1; content:""; }
 .athlete-dashboard-grid { display:grid; grid-template-columns:minmax(0,1.9fr) minmax(275px,.95fr); align-items:start; gap:.7rem; }
 .athlete-dashboard-main,.athlete-dashboard-side { display:flex; min-width:0; flex-direction:column; gap:.65rem; }
 .athlete-panel { min-width:0; padding:.72rem .82rem; border:1px solid #e4edf3; border-radius:.8rem; background:#fff; box-shadow:0 5px 17px rgba(17,47,78,.04); }
@@ -627,10 +627,10 @@ a {
 .athlete-competition-panel [class*="CardContent"] { padding:0; }
 .athlete-detail-sections { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .athlete-history-full { width:100%; margin-top:.7rem; }
-.athlete-tabs button { position:relative; flex:0 0 auto; border:0; background:transparent; padding:.55rem .12rem; color:#516987; font-size:.65rem; cursor:pointer; }
-.athlete-tabs button[aria-selected="true"] { color:#087f9b; font-weight:800; }
-.athlete-tabs button[aria-selected="true"]:after { position:absolute; right:0; bottom:-1px; left:0; height:2px; background:#12bfd1; content:""; }
-.athlete-tabs button:focus-visible { outline:2px solid #12bfd1; outline-offset:2px; }
+.athlete-tabs :is(button, a) { position:relative; flex:0 0 auto; border:0; background:transparent; padding:.55rem .12rem; color:#516987; font-size:.65rem; cursor:pointer; }
+.athlete-tabs :is(button, a):is([aria-selected="true"], [aria-current="page"]) { color:#087f9b; font-weight:800; }
+.athlete-tabs :is(button, a):is([aria-selected="true"], [aria-current="page"]):after { position:absolute; right:0; bottom:-1px; left:0; height:2px; background:#12bfd1; content:""; }
+.athlete-tabs :is(button, a):focus-visible { outline:2px solid #12bfd1; outline-offset:2px; }
 .athlete-tab-panel { min-width:0; }
 .coach-competition-tab { display:grid; gap:1rem; }
 .coach-competition-list-panel { overflow:hidden; padding:0; }

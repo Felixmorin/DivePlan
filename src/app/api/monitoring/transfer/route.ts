@@ -83,9 +83,9 @@ export async function POST(request: Request) {
   const writes: Promise<unknown>[] = [];
   if (observations.length) writes.push(query(
     `WITH inserted AS (
-      INSERT INTO "RequestObservation" (id, "clubId", "pageId", route, "resourcePath", "resourceType", trigger, "startedAt", "durationMs", "transferBytes", "cacheHit", status)
-      SELECT item.id, $1, item."pageId", item.route, item."resourcePath", item."resourceType", item.trigger, item."startedAt", item."durationMs", item."transferBytes", item."cacheHit", item.status
-      FROM jsonb_to_recordset($2::jsonb) AS item(id uuid, "pageId" uuid, route text, "resourcePath" text, "resourceType" text, trigger text, "startedAt" timestamptz, "durationMs" integer, "transferBytes" bigint, "cacheHit" boolean, status integer)
+      INSERT INTO "RequestObservation" (id, "clubId", "pageId", route, "resourcePath", "resourceType", trigger, "startedAt", "durationMs", "transferBytes", "cacheHit", status, "serverRequestId")
+      SELECT item.id, $1, item."pageId", item.route, item."resourcePath", item."resourceType", item.trigger, item."startedAt", item."durationMs", item."transferBytes", item."cacheHit", item.status, item."serverRequestId"
+      FROM jsonb_to_recordset($2::jsonb) AS item(id uuid, "pageId" uuid, route text, "resourcePath" text, "resourceType" text, trigger text, "startedAt" timestamptz, "durationMs" integer, "transferBytes" bigint, "cacheHit" boolean, status integer, "serverRequestId" uuid)
       ON CONFLICT (id) DO NOTHING RETURNING *
     )
     INSERT INTO "TransferTelemetryHour" ("clubId", hour, route, "resourceType", requests, "transferBytes", "cacheHits", "updatedAt")

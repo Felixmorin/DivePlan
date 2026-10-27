@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { notFound } from "next/navigation";
 import { liveSessionForClient } from "@/lib/live-session";
 import { getLiveSessionProgress } from "@/lib/live-session-progress";

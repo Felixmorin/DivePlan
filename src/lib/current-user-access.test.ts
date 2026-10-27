@@ -40,7 +40,7 @@ test("light polling authorization preserves the full-profile access decisions", 
       // Each invocation represents a fresh request; never memoize across sessions.
       react: { cache: (fn: unknown) => fn },
       "next/navigation": { redirect: () => { throw new Error("Unexpected redirect"); } },
-      "next/headers": { headers: async () => new Headers({ "x-diveplan-page-route": "/coach/sessions/:id" }) },
+      "next/headers": { headers: async () => new Headers({ "x-diveplan-route": "/coach/sessions/:id" }) },
       "@/auth": { auth: async () => session },
       "@/lib/db": {
         query: async (sql: string, values: unknown[]) => {

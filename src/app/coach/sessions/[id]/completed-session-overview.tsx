@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { Activity, ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, CircleCheck, ClipboardList, Download, Flag, MessageSquareText, NotebookText, Printer, Target, Trophy, UserCheck, Users, Waves, X } from "lucide-react";
 import { saveSessionAttendance, updateCompletedSessionSummary } from "@/app/coach/sessions/actions";
 import { formatMontrealDate } from "@/lib/timezone";

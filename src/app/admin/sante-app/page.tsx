@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { Activity, ArrowRight, Bell, Check, CircleHelp, Clock3, Database, HeartPulse, LockKeyhole, RotateCw, Server, ShieldAlert, TriangleAlert, Waves, Wifi } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Card, CardContent } from "@/components/ui/card";

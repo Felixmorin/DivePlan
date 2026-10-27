@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Activity, Bot, ChevronDown, ClipboardList, Database, Gauge, HeartPulse, LayoutDashboard, Menu, Route, Sparkles, TriangleAlert, UserRound, Wallet, X, ChartNoAxesCombined } from "lucide-react";

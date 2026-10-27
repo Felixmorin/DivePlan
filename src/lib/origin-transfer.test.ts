@@ -79,7 +79,7 @@ test("live polling pauses when hidden, prevents overlap and refreshes only on pl
     },
     "react/jsx-runtime": { jsx: () => null, jsxs: () => null },
     "next/navigation": { useRouter: () => ({ refresh: () => { refreshes += 1; } }) },
-    "next/link": {}, "lucide-react": {},
+    "@/components/ui/app-link": {}, "lucide-react": {},
     "@/app/coach/sessions/actions": {}, "@/lib/timezone": { formatMontrealDate: () => "" }
   }, {
     document, AbortController,

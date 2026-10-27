@@ -7,7 +7,7 @@ import { query } from "@/lib/db";
 import { MILESTONES } from "@/lib/milestones";
 import { getClubMilestones } from "@/lib/milestone-data";
 import { saveMilestoneText } from "./actions";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 export const dynamic = "force-dynamic";
 

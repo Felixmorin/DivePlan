@@ -1,8 +1,8 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { redirect } from "next/navigation";
 import { Activity, ArrowLeft, Award, Check, ListChecks, Medal, Star } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
-import { getAthleteGoldenReps, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
+import { getAthleteGoldenReps, getAthleteSummary, getCurrentAthlete } from "@/lib/athlete-session";
 import { query } from "@/lib/db";
 import { parseMontrealSessionDate, toMontrealDateInputValue } from "@/lib/timezone";
 
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function AthleteBadgesPage() {
   const athlete = await getCurrentAthlete();
   if (!athlete) redirect("/login");
-  const [totals, goldenReps] = await Promise.all([getAthleteProgressTotals(athlete.id), getAthleteGoldenReps(athlete.id)]);
+  const [totals, goldenReps] = await Promise.all([getAthleteSummary(athlete.id), getAthleteGoldenReps(athlete.id)]);
   const competitionDone = (await query<{ count: number }>(`SELECT COUNT(DISTINCT c.id)::int AS count FROM "CompetitionDive" c JOIN "AthleteDiveLog" l ON l."athleteId"=c."athleteId" AND l."poolDiveId" IN (SELECT d.id FROM "PoolDive" d JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE d."diveCode"=c."diveCode" AND s.height=c.height) WHERE c."athleteId"=$1 AND l."repetitionsCompleted">0`, [athlete.id])).rows[0]?.count ?? 0;
   const [year, month] = toMontrealDateInputValue().split("-").map(Number);
   const seasonStartYear = month >= 9 ? year : year - 1;

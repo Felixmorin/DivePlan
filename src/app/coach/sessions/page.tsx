@@ -1,42 +1,31 @@
 import { Plus } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Button } from "@/components/ui/button";
 import { demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
-import { query, withDatabaseEgressComponent } from "@/lib/db";
-import { completeExpiredTrainingSessions, startDueTrainingSessions } from "@/lib/session-status";
+import { withDatabaseEgressComponent } from "@/lib/db";
+import { getCoachSessionsPage, type SessionFilters, type CoachSessionsPage } from "@/lib/coach-sessions-list";
 import { SessionsList, type SessionListItem } from "./sessions-list";
 
 export const dynamic = "force-dynamic";
 
-export default async function SessionsPage() {
+export default async function SessionsPage({ searchParams }: { searchParams: Promise<SessionFilters> }) {
   const { clubId } = await withDatabaseEgressComponent("initial_session_load", () => requireCoach(), "/coach/sessions");
   if (clubId === "dev-club") return <DemoSessionsPage />;
 
-  const result = await withDatabaseEgressComponent("initial_session_load", async () => {
-    await completeExpiredTrainingSessions();
-    await startDueTrainingSessions();
-    return query<SessionListItem>(
-    `SELECT s.id, s.title, g.name AS "groupName", s.status, s.duration, s.date, pe.location,
-       COALESCE((SELECT sum(b."estimatedVolume")::int FROM "SessionBlock" b WHERE b."sessionId" = s.id), 0) AS volume,
-       (SELECT count(*)::int FROM "SessionBlock" b WHERE b."sessionId" = s.id) AS "blockCount",
-       (SELECT count(DISTINCT a."athleteId")::int FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id) AS "athleteCount"
-     FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id = s."weekId" JOIN "TrainingGroup" g ON g.id = w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id = s."planningEventId"
-     WHERE w."clubId" = $1 ORDER BY s.date DESC`, [clubId]
-    );
-  }, "/coach/sessions");
-
-  return <CoachShell active="Seances"><SessionsPageContent sessions={result.rows} /></CoachShell>;
+  const filters = await searchParams;
+  const data = await withDatabaseEgressComponent("initial_session_load", () => getCoachSessionsPage(clubId,filters), "/coach/sessions");
+  return <CoachShell active="Seances"><SessionsPageContent sessions={data.sessions} pagination={data} /></CoachShell>;
 }
 
-function SessionsPageContent({ sessions }: { sessions: SessionListItem[] }) {
+function SessionsPageContent({ sessions, pagination }: { sessions: SessionListItem[]; pagination?: CoachSessionsPage }) {
   return <>
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div><p className="mb-1 text-sm font-semibold text-slate-500">Entraîneur <span className="mx-2">/</span> Séances</p><h1 className="text-3xl font-black tracking-tight">Séances</h1><p className="mt-1 text-slate-600">Planifiez et consultez les entraînements de vos groupes.</p></div>
       <Button asChild><Link href="/coach/sessions/new"><Plus className="h-4 w-4" /> Nouvelle séance</Link></Button>
     </div>
-    <SessionsList sessions={sessions} />
+    <SessionsList sessions={sessions} pagination={pagination} />
   </>;
 }
 

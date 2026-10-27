@@ -12,5 +12,10 @@ export async function GET(request: Request) {
       SELECT id FROM "RequestObservation" WHERE "startedAt" < NOW() - INTERVAL '7 days' ORDER BY "startedAt" LIMIT 50000
     ) RETURNING id
   ) SELECT count(*)::text AS deleted FROM removed`);
-  return Response.json({ deleted: Number(result.rows[0]?.deleted ?? 0) }, { headers: { "cache-control": "no-store" } });
+  const server = await query<{deleted:string}>(`WITH removed AS (
+    DELETE FROM "ServerRequestMetric" WHERE id IN (
+      SELECT id FROM "ServerRequestMetric" WHERE "startedAt" < NOW()-INTERVAL '7 days' ORDER BY "startedAt" LIMIT 50000
+    ) RETURNING id
+  ) SELECT count(*)::text AS deleted FROM removed`);
+  return Response.json({ serverDeleted:Number(server.rows[0]?.deleted ?? 0), deleted: Number(result.rows[0]?.deleted ?? 0) }, { headers: { "cache-control": "no-store" } });
 }

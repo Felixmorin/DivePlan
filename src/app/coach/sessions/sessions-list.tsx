@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
+import Form from "next/form";
+import { useState } from "react";
+import Link from "@/components/ui/app-link";
 import { CalendarDays, ChartNoAxesColumnIncreasing, Clock3, Layers3, MapPin, MoreVertical, Search, Users } from "lucide-react";
+import type { CoachSessionsPage } from "@/lib/coach-sessions-list";
+import { PAGE_SIZE, pageHref } from "@/lib/pagination";
 import { deleteTrainingSession, markTrainingSessionNotDone } from "@/app/coach/sessions/actions";
 
 export type SessionListItem = {
@@ -12,7 +15,11 @@ export type SessionListItem = {
 
 type Tab = "all" | "completed" | "drafts";
 
-export function SessionsList({ sessions }: { sessions: SessionListItem[] }) {
+export function SessionsList({ sessions, pagination }: { sessions: SessionListItem[]; pagination?: CoachSessionsPage }) {
+  if (pagination) return <PaginatedSessions data={pagination} />;
+  return <DemoSessionsList sessions={sessions} />;
+}
+function DemoSessionsList({ sessions }: { sessions: SessionListItem[] }) {
   const [tab, setTab] = useState<Tab>("all");
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
@@ -25,12 +32,12 @@ export function SessionsList({ sessions }: { sessions: SessionListItem[] }) {
     completed: sessions.filter((s) => s.status === "COMPLETED" || s.status === "NOT_DONE" || s.status === "CANCELLED").length,
     drafts: sessions.filter((s) => s.status === "DRAFT").length,
   };
-  const filtered = useMemo(() => sessions.filter((s) => {
+  const filtered = sessions.filter((s) => {
     const date = new Date(s.date);
     const matchesSearch = `${s.title} ${s.groupName}`.toLocaleLowerCase("fr").includes(search.toLocaleLowerCase("fr"));
     const matchesPeriod = period === "all" || (period === "month" ? date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear() : date >= new Date(now.getTime() - Number(period) * 86400000));
     return matchesSearch && (group === "all" || s.groupName === group) && matchesPeriod;
-  }), [sessions, search, group, period]);
+  });
   const upcoming = filtered.filter((s) => s.status === "READY" || s.status === "IN_PROGRESS").sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const completed = filtered.filter((s) => s.status === "COMPLETED" || s.status === "NOT_DONE" || s.status === "CANCELLED").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const drafts = filtered.filter((s) => s.status === "DRAFT").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -84,5 +91,23 @@ function SessionRow({ session: s, featured = false, showMonth = false }: { sessi
         {!s.id.startsWith("demo-") && <details className="relative"><summary aria-label="Actions de la séance" className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"><MoreVertical className="h-4 w-4" /></summary><div className="absolute right-0 top-11 z-10 w-48 rounded-lg border border-slate-200 bg-white p-2 shadow-lg"><form action={markTrainingSessionNotDone}><input type="hidden" name="sessionId" value={s.id} /><button className="w-full rounded px-3 py-2 text-left text-sm hover:bg-slate-50">Marquer non faite</button></form><form action={deleteTrainingSession}><input type="hidden" name="sessionId" value={s.id} /><button className="w-full rounded px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50">Supprimer</button></form></div></details>}
       </div>
     </article>
+  </>;
+}
+
+function PaginatedSessions({ data }: { data: CoachSessionsPage }) {
+  const { filters, counts } = data;
+  const href = (page: number, tab = filters.tab) => pageHref("/coach/sessions", { ...filters, tab }, page);
+  return <>
+    <nav aria-label="Catégories de séances" className="mb-4 flex flex-wrap gap-3">{([["all","Toutes"],["completed","Terminées"],["drafts","Brouillons"]] as const).map(([tab,label]) => <Link className="rounded-lg border bg-white px-4 py-3 font-bold aria-[current=page]:border-cyan-600" key={tab} href={href(1,tab)} aria-current={filters.tab===tab?"page":undefined}>{label} ({counts[tab]})</Link>)}</nav>
+    <Form action="/coach/sessions" prefetch={false} className="mb-6 flex flex-wrap gap-3">
+      <input type="hidden" name="tab" value={filters.tab}/>
+      <input key={filters.q} name="q" aria-label="Rechercher une séance" defaultValue={filters.q} maxLength={150} placeholder="Rechercher une séance…" className="min-h-11 rounded-lg border px-3"/>
+      <select key={filters.group} name="group" aria-label="Filtrer par groupe" defaultValue={filters.group} className="rounded-lg border px-3"><option value="">Tous les groupes</option>{data.groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select>
+      <select key={filters.period} name="period" aria-label="Filtrer par période" defaultValue={filters.period} className="rounded-lg border px-3"><option value="">Toutes les dates</option><option value="month">Ce mois-ci</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select>
+      <button className="rounded-lg bg-sky-700 px-4 py-2 font-bold text-white">Appliquer</button>
+    </Form>
+    {data.next && <section className="mb-6"><h2 className="mb-3 text-xl font-bold">Prochaine séance</h2><SessionRow session={data.next} featured /></section>}
+    <div className="overflow-hidden rounded-xl border bg-white">{data.sessions.filter(s=>s.id!==data.next?.id).map(s=><SessionRow key={s.id} session={s}/>)}{!data.sessions.length&&<p className="p-6 text-slate-500">Aucune séance ne correspond aux filtres.</p>}</div>
+    <nav aria-label="Pagination des séances" className="mt-4 flex justify-between gap-3 text-sm font-semibold">{data.page>1?<Link href={href(data.page-1)}>Précédent</Link>:<span/>}<span>Page {data.page} / {Math.max(1,Math.ceil(data.total/PAGE_SIZE))} · {data.total} séances</span>{data.page*PAGE_SIZE<data.total?<Link href={href(data.page+1)}>Suivant</Link>:<span/>}</nav>
   </>;
 }

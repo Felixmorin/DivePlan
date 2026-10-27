@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { Activity, ArrowDownUp, ArrowRight, CalendarDays, Database, ShieldCheck, Users, Waves, Zap } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { RefreshDashboardButton } from "@/components/admin/refresh-dashboard-button";
