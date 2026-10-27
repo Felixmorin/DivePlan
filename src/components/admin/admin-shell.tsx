@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, Bot, Database, Gauge, HeartPulse, LayoutDashboard, LogOut, Sparkles, UserRound, ClipboardList, ChartNoAxesCombined, TriangleAlert } from "lucide-react";
+import { Activity, Bot, Database, Gauge, HeartPulse, LayoutDashboard, LogOut, Sparkles, UserRound, ClipboardList, ChartNoAxesCombined, TriangleAlert, Route } from "lucide-react";
 import { signOut } from "@/auth";
 import { requireAdmin } from "@/lib/current-user";
 import { AdminThemeToggle } from "@/components/admin/admin-theme-toggle";
@@ -11,6 +11,7 @@ const items = [
   { href: "/admin/performance", label: "Performance", icon: ChartNoAxesCombined },
   { href: "/admin/base-de-donnees", label: "Base de données", icon: Database },
   { href: "/admin/erreurs-stabilite", label: "Erreurs et stabilité", icon: TriangleAlert },
+  { href: "/admin/activite-parcours", label: "Activité et parcours", icon: Route },
   { href: "/admin/users", label: "Utilisateurs", icon: UserRound },
   { href: "/admin/coaches", label: "Fonctionnalités", icon: Sparkles },
   { href: "/admin/observability", label: "Observabilité", icon: Activity },
@@ -29,7 +30,7 @@ export async function AdminShell({ children, active }: { children: React.ReactNo
         <span className="flex flex-col leading-none"><span className="text-[25px] font-bold tracking-tight text-white">DivePlan</span><span className="mt-1.5 text-[8px] font-semibold uppercase tracking-[0.22em] text-white/55">Plonger plus loin</span></span>
       </Link>
       <p className="relative mb-3 px-2 text-xs font-bold uppercase tracking-[0.14em] text-white/45">Administration</p>
-      <nav aria-label="Navigation admin" className="relative space-y-1">{items.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={active === label ? "page" : undefined} className={`flex min-h-11 items-center gap-3 rounded-xl border-l-2 px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active === label ? "border-cyan-300 bg-gradient-to-r from-sky-700/90 to-sky-600/65 text-white shadow-sm" : "border-transparent text-white/70 hover:bg-white/8 hover:text-white"}`}><Icon className="h-[18px] w-[18px]" />{label}</Link>)}</nav>
+      <nav aria-label="Navigation admin" className="relative min-h-0 flex-1 space-y-1 overflow-y-auto pb-3">{items.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={active === label ? "page" : undefined} className={`flex min-h-11 items-center gap-3 rounded-xl border-l-2 px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active === label ? "border-cyan-300 bg-gradient-to-r from-sky-700/90 to-sky-600/65 text-white shadow-sm" : "border-transparent text-white/70 hover:bg-white/8 hover:text-white"}`}><Icon className="h-[18px] w-[18px]" />{label}</Link>)}</nav>
       <div className="relative mt-auto border-t border-white/10 pt-4">
         <AdminThemeToggle placement="sidebar" />
         <p className="text-xs font-bold text-white/85">Administrateur plateforme</p><p className="mt-1 truncate text-xs text-white/50">{user.firstName} {user.lastName}</p>
