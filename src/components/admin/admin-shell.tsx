@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, Bot, Database, Gauge, HeartPulse, LayoutDashboard, LogOut, Sparkles, UserRound, ClipboardList, ChartNoAxesCombined, TriangleAlert, Route } from "lucide-react";
+import { Activity, Bot, Database, Gauge, HeartPulse, LayoutDashboard, LogOut, Sparkles, UserRound, ClipboardList, ChartNoAxesCombined, TriangleAlert, Route, Wallet } from "lucide-react";
 import { signOut } from "@/auth";
 import { requireAdmin } from "@/lib/current-user";
 import { AdminThemeToggle } from "@/components/admin/admin-theme-toggle";
@@ -15,6 +15,7 @@ const items = [
   { href: "/admin/users", label: "Utilisateurs", icon: UserRound },
   { href: "/admin/coaches", label: "Fonctionnalités", icon: Sparkles },
   { href: "/admin/observability", label: "Observabilité", icon: Activity },
+  { href: "/admin/couts-quotas", label: "Coûts et quotas", icon: Wallet },
   { href: "/admin/monitoring", label: "Monitoring", icon: ClipboardList },
   { href: "/admin/optimisation", label: "Optimisation", icon: Gauge },
   { href: "/admin/agents", label: "Agents", icon: Bot }
@@ -45,3 +46,6 @@ export async function AdminShell({ children, active }: { children: React.ReactNo
     </div>
   </div>;
 }
+
+
+
