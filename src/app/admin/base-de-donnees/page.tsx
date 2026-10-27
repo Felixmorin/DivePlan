@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDown, ArrowDownUp, ArrowRight, BarChart3, CircleHelp, Database, FileText, Gauge, Layers3, Repeat2, ShieldAlert, Timer, Waves } from "lucide-react";
+import { ArrowDown, ArrowDownUp, ArrowRight, ArrowUp, BarChart3, CircleHelp, Database, FileText, Gauge, Layers3, Leaf, Repeat2, ShieldAlert, Timer, Waves } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/current-user";
@@ -9,8 +9,8 @@ import { DatabaseFilters } from "./database-filters";
 export const dynamic = "force-dynamic";
 
 const periods = [{ key: "6h", hours: 6, label: "6 dernières heures" }, { key: "24h", hours: 24, label: "24 dernières heures" }, { key: "7d", hours: 168, label: "7 derniers jours" }, { key: "30d", hours: 720, label: "30 derniers jours" }];
-type TotalsRow = { sqlCalls: string; resultBytes: string; duration: string; maxDuration: string; slow: string; updatedAt: Date | null };
-type TransferTotalsRow = { requests: string; bytes: string; updatedAt: Date | null };
+type TotalsRow = { sqlCalls: string; resultBytes: string; duration: string; maxDuration: string; slow: string; priorSqlCalls: string; priorDuration: string; priorSlow: string; updatedAt: Date | null };
+type TransferTotalsRow = { requests: string; bytes: string; priorBytes: string; updatedAt: Date | null };
 type RouteTransferRow = { route: string; requests: string; bytes: string; updatedAt: Date | null };
 type RouteSqlRow = { route: string; requests: string; bytes: string; duration: string; maxDuration: string; slow: string; updatedAt: Date | null };
 type ChartRow = { bucket: Date; bytes: string };
@@ -32,8 +32,21 @@ export default async function AdminDatabasePage({ searchParams }: { searchParams
   const usedPercent = poolMax ? Math.min(100, poolUsed / poolMax * 100) : null;
 
   const [sqlTotalsRead, transferTotalsRead, transferRoutesRead, sqlRoutesRead, chartRead, selectedSqlRead] = await Promise.all([
-    readQuery<TotalsRow>(`SELECT COALESCE(SUM(requests),0)::text AS "sqlCalls", COALESCE(SUM("resultBytes"),0)::text AS "resultBytes", COALESCE(SUM("durationMs"),0)::text AS duration, COALESCE(MAX("maxDurationMs"),0)::text AS "maxDuration", COALESCE(SUM("slowQueries"),0)::text AS slow, MAX("updatedAt") AS "updatedAt" FROM "DatabaseEgressTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour') AND component <> 'historical_unclassified'`, [selected.hours]),
-    readQuery<TransferTotalsRow>(`SELECT COALESCE(SUM(requests),0)::text AS requests, COALESCE(SUM("transferBytes"),0)::text AS bytes, MAX("updatedAt") AS "updatedAt" FROM "TransferTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')`, [selected.hours]),
+    readQuery<TotalsRow>(`SELECT
+      COALESCE(SUM(requests) FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')),0)::text AS "sqlCalls",
+      COALESCE(SUM("resultBytes") FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')),0)::text AS "resultBytes",
+      COALESCE(SUM("durationMs") FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')),0)::text AS duration,
+      COALESCE(MAX("maxDurationMs") FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')),0)::text AS "maxDuration",
+      COALESCE(SUM("slowQueries") FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')),0)::text AS slow,
+      COALESCE(SUM(requests) FILTER (WHERE hour < NOW() - ($1::int * INTERVAL '1 hour') AND hour >= NOW() - ($1::int * 2 * INTERVAL '1 hour')),0)::text AS "priorSqlCalls",
+      COALESCE(SUM("durationMs") FILTER (WHERE hour < NOW() - ($1::int * INTERVAL '1 hour') AND hour >= NOW() - ($1::int * 2 * INTERVAL '1 hour')),0)::text AS "priorDuration",
+      COALESCE(SUM("slowQueries") FILTER (WHERE hour < NOW() - ($1::int * INTERVAL '1 hour') AND hour >= NOW() - ($1::int * 2 * INTERVAL '1 hour')),0)::text AS "priorSlow",
+      MAX("updatedAt") AS "updatedAt"
+      FROM "DatabaseEgressTelemetryHour" WHERE hour >= NOW() - ($1::int * 2 * INTERVAL '1 hour') AND component <> 'historical_unclassified'`, [selected.hours]),
+    readQuery<TransferTotalsRow>(`SELECT COALESCE(SUM(requests) FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')),0)::text AS requests,
+      COALESCE(SUM("transferBytes") FILTER (WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour')),0)::text AS bytes,
+      COALESCE(SUM("transferBytes") FILTER (WHERE hour < NOW() - ($1::int * INTERVAL '1 hour') AND hour >= NOW() - ($1::int * 2 * INTERVAL '1 hour')),0)::text AS "priorBytes",
+      MAX("updatedAt") AS "updatedAt" FROM "TransferTelemetryHour" WHERE hour >= NOW() - ($1::int * 2 * INTERVAL '1 hour')`, [selected.hours]),
     readQuery<RouteTransferRow>(`SELECT route, SUM(requests)::text AS requests, SUM("transferBytes")::text AS bytes, MAX("updatedAt") AS "updatedAt" FROM "TransferTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour') GROUP BY route`, [selected.hours]),
     readQuery<RouteSqlRow>(`SELECT route, SUM(requests)::text AS requests, SUM("resultBytes")::text AS bytes, SUM("durationMs")::text AS duration, MAX("maxDurationMs")::text AS "maxDuration", SUM("slowQueries")::text AS slow, MAX("updatedAt") AS "updatedAt" FROM "DatabaseEgressTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour') AND component <> 'historical_unclassified' GROUP BY route`, [selected.hours]),
     readQuery<ChartRow>(`SELECT date_trunc($1, hour) AS bucket, SUM("transferBytes")::text AS bytes FROM "TransferTelemetryHour" WHERE hour >= NOW() - ($2::int * INTERVAL '1 hour') GROUP BY date_trunc($1, hour) ORDER BY bucket`, [aggregation, selected.hours]),
@@ -47,6 +60,12 @@ export default async function AdminDatabasePage({ searchParams }: { searchParams
   const resultBytes = Number(sqlTotals?.resultBytes ?? 0);
   const sqlDuration = Number(sqlTotals?.duration ?? 0);
   const averageSqlMs = sqlCalls ? sqlDuration / sqlCalls : null;
+  const previousSqlCalls = Number(sqlTotals?.priorSqlCalls ?? 0);
+  const previousSqlDuration = Number(sqlTotals?.priorDuration ?? 0);
+  const previousAverageSqlMs = previousSqlCalls ? previousSqlDuration / previousSqlCalls : null;
+  const transferChange = percentChange(estimatedBytes, Number(transferTotals?.priorBytes ?? 0));
+  const sqlCallChange = percentChange(sqlCalls, previousSqlCalls);
+  const sqlAverageChange = averageSqlMs !== null && previousAverageSqlMs !== null ? percentChange(averageSqlMs, previousAverageSqlMs) : null;
   const lastUpdated = [transferTotals?.updatedAt, sqlTotals?.updatedAt].filter((date): date is Date => date instanceof Date).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
   const transferRoutes = new Map(transferRoutesRead.rows.map((row) => [row.route, row]));
   const sqlRoutes = new Map(sqlRoutesRead.rows.map((row) => [row.route, row]));
@@ -71,10 +90,10 @@ export default async function AdminDatabasePage({ searchParams }: { searchParams
       {dataError && <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-sm font-bold text-amber-900">Certaines données sont indisponibles</p><p className="mt-1 text-xs text-amber-800">Une ou plusieurs requêtes de télémétrie ont échoué. Les sections concernées affichent les mesures qu’elles ont pu charger.</p></div>}
 
       <section aria-label="Indicateurs principaux" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Metric icon={Waves} title="Transfert estimé par DivePlan" value={transferTotalsRead.ok && transferTotals ? formatBytes(estimatedBytes) : "Données indisponibles"} detail={`${selected.label} · ressources navigateur agrégées`} source="TransferTelemetryHour · estimation application" tone="blue" freshness={formatDateTime(transferTotals?.updatedAt ?? null)} />
+        <Metric icon={Waves} title="Transfert estimé par DivePlan" value={transferTotalsRead.ok && transferTotals ? formatBytes(estimatedBytes) : "Données indisponibles"} detail={`${selected.label} · ressources navigateur agrégées`} source="TransferTelemetryHour · estimation application" tone="blue" freshness={formatDateTime(transferTotals?.updatedAt ?? null)} trend={transferChange} />
         <Metric icon={Database} title="Mesure fournisseur Supabase" value="Non mesurée" detail="Aucune API de facturation/egress connectée" source="Supabase · source fournisseur absente" tone="violet" freshness="Aucune mesure reçue" />
-        <Metric icon={FileText} title="Requêtes SQL" value={sqlTotalsRead.ok ? sqlCalls.toLocaleString("fr-CA") : "Données indisponibles"} detail={selected.label} source="DatabaseEgressTelemetryHour · appels côté application" tone="blue" freshness={formatDateTime(sqlTotals?.updatedAt ?? null)} />
-        <Metric icon={Timer} title="Durée SQL p95" value="Non mesurée" detail={averageSqlMs === null ? "Aucune durée SQL agrégée" : `Moyenne disponible : ${formatDuration(averageSqlMs)}`} source="La télémétrie stocke somme et maximum, pas p95" tone="amber" freshness={formatDateTime(sqlTotals?.updatedAt ?? null)} />
+        <Metric icon={FileText} title="Requêtes SQL" value={sqlTotalsRead.ok ? sqlCalls.toLocaleString("fr-CA") : "Données indisponibles"} detail={`${selected.label} · appels côté application`} source="DatabaseEgressTelemetryHour" tone="blue" freshness={formatDateTime(sqlTotals?.updatedAt ?? null)} trend={sqlCallChange} />
+        <Metric icon={Timer} title="Durée SQL p95" value="Non mesurée" detail={averageSqlMs === null ? "Aucune durée SQL agrégée" : `Moyenne ${formatDuration(averageSqlMs)}${sqlAverageChange === null ? "" : ` · ${sqlAverageChange > 0 ? "+" : ""}${sqlAverageChange}% vs période précédente`}`} source="Somme et maximum stockés; p95 absent" tone="amber" freshness={formatDateTime(sqlTotals?.updatedAt ?? null)} />
         <Metric icon={ShieldAlert} title="Erreurs et timeouts SQL" value="Non mesurés" detail={`${Number(sqlTotals?.slow ?? 0).toLocaleString("fr-CA")} requête(s) ≥ 200 ms`} source="Aucun compteur d’erreurs ou de timeouts" tone="rose" freshness={formatDateTime(sqlTotals?.updatedAt ?? null)} />
       </section>
 
@@ -143,7 +162,7 @@ export default async function AdminDatabasePage({ searchParams }: { searchParams
           <EfficiencyRow icon={Database} label="Résultats SQL sérialisés" value={sqlCalls ? formatBytes(resultBytes) : "Données indisponibles"} detail={sqlCalls ? `${formatBytes(resultBytes / sqlCalls)} en moyenne par appel · DatabaseEgressTelemetryHour` : "Aucune mesure sur la période"} />
           <EfficiencyRow icon={FileText} label="Réponses API moyennes / p95" value="Non mesurées" detail="La taille HTTP des réponses n’est pas collectée." />
           <EfficiencyRow icon={Repeat2} label="Lectures identiques et champs inutilisés" value="Non mesurés" detail="Aucune empreinte de requête ni analyse d’utilisation des champs." />
-          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] leading-4 text-slate-600">Économies potentielles : non estimées. Aucune méthode d’attribution des champs ou lectures inutilisés n’est instrumentée; aucun gain hypothétique n’est affiché comme économie réalisée.</div>
+          <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white text-emerald-700"><Leaf className="h-4 w-4" /></span><div><p className="text-[11px] font-black text-emerald-900">Économies potentielles · non estimées</p><p className="mt-0.5 text-[9px] leading-3.5 text-emerald-800">Aucune méthode d’attribution des champs ou lectures inutilisés n’est instrumentée; aucun gain hypothétique n’est affiché comme économie réalisée.</p></div></div>
         </CardContent></Card>
       </div>
 
@@ -154,9 +173,10 @@ export default async function AdminDatabasePage({ searchParams }: { searchParams
 
 async function readQuery<T extends import("pg").QueryResultRow>(sql: string, params: readonly unknown[] = []): Promise<ReadResult<T>> { try { return { rows: (await query<T>(sql, params)).rows, ok: true }; } catch { return { rows: [], ok: false }; } }
 
-function Metric({ icon: Icon, title, value, detail, source, tone, freshness }: { icon: typeof Waves; title: string; value: string; detail: string; source: string; tone: "blue" | "violet" | "amber" | "rose"; freshness: string }) {
+function Metric({ icon: Icon, title, value, detail, source, tone, freshness, trend }: { icon: typeof Waves; title: string; value: string; detail: string; source: string; tone: "blue" | "violet" | "amber" | "rose"; freshness: string; trend?: number | null }) {
   const tones = { blue: "bg-blue-50 text-blue-700", violet: "bg-violet-50 text-violet-700", amber: "bg-amber-50 text-amber-800", rose: "bg-rose-50 text-rose-700" };
-  return <Card className="min-w-0 overflow-hidden border-slate-200/80 shadow-sm"><CardContent className="p-3.5 sm:p-4"><div className="flex items-start gap-2.5"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${tones[tone]}`}><Icon className="h-4 w-4" /></span><div className="min-w-0"><h2 className="min-h-8 text-[11px] font-bold leading-4 text-slate-600">{title}</h2><p className="mt-1 break-words text-xl font-black leading-6 tabular-nums text-slate-950">{value}</p></div></div><p className="mt-2 min-h-8 text-[10px] leading-4 text-slate-600">{detail}</p><div className="mt-2 border-t border-slate-100 pt-2"><p className="truncate text-[9px] text-slate-500" title={source}>{source}</p><p className="mt-1 truncate text-[9px] text-slate-400" title={freshness}>Mesure : {freshness}</p></div></CardContent></Card>;
+  const TrendIcon = trend !== undefined && trend !== null && trend > 0 ? ArrowUp : ArrowDown;
+  return <Card className="min-w-0 overflow-hidden border-slate-200/80 shadow-sm"><CardContent className="p-3.5 sm:p-4"><div className="flex items-start gap-2.5"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${tones[tone]}`}><Icon className="h-4 w-4" /></span><div className="min-w-0 flex-1"><h2 className="min-h-8 text-[11px] font-bold leading-4 text-slate-600">{title}</h2><div className="flex flex-wrap items-center justify-between gap-x-1 gap-y-0.5"><p className="break-words text-xl font-black leading-6 tabular-nums text-slate-950">{value}</p>{trend !== undefined && trend !== null && <span className="inline-flex items-center gap-0.5 rounded-md bg-slate-100 px-1 py-0.5 text-[9px] font-bold tabular-nums text-slate-600" title="Variation comparée à la période précédente de même durée"><TrendIcon className="h-3 w-3" />{trend > 0 ? "+" : ""}{trend}%</span>}</div></div></div><p className="mt-2 min-h-8 text-[10px] leading-4 text-slate-600">{detail}</p><div className="mt-2 border-t border-slate-100 pt-2"><p className="truncate text-[9px] text-slate-500" title={source}>{source}</p><p className="mt-1 truncate text-[9px] text-slate-400" title={freshness}>Mesure : {freshness}</p></div></CardContent></Card>;
 }
 
 function SectionHeading({ icon: Icon, title, detail, href, hrefLabel }: { icon: typeof Database; title: string; detail: string; href?: string; hrefLabel?: string }) { return <div className="mb-3 flex items-center gap-2.5 border-b border-slate-100 pb-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-700"><Icon className="h-4 w-4" /></span><div className="min-w-0 flex-1"><h2 className="text-sm font-black text-slate-950">{title}</h2><p className="mt-1 text-[10px] text-slate-500">{detail}</p></div>{href && <Link href={href} className="inline-flex min-h-8 shrink-0 items-center gap-1 text-[10px] font-bold text-blue-700">{hrefLabel ?? "Détails"}<ArrowRight className="h-3 w-3" /></Link>}</div>; }
@@ -179,9 +199,18 @@ function TransferChart({ rows, aggregation }: { rows: ChartRow[]; aggregation: s
 }
 
 function PoolMetric({ title, value, percent, tone, detail }: { title: string; value: string; percent: number | null; tone: string; detail: string }) {
-  const colors: Record<string, string> = { blue: "bg-blue-600", amber: "bg-amber-500", rose: "bg-rose-500", green: "bg-emerald-500", slate: "bg-slate-300" };
+  const stroke: Record<string, string> = { blue: "#2563eb", amber: "#f59e0b", rose: "#ef4444", green: "#10b981", slate: "#cbd5e1" };
   const foreground: Record<string, string> = { blue: "text-blue-700", amber: "text-amber-800", rose: "text-rose-700", green: "text-emerald-700", slate: "text-slate-600" };
-  return <div className="rounded-xl border border-slate-200 p-3"><div className="flex items-center justify-between gap-2"><p className="text-[10px] font-bold text-slate-600">{title}</p>{percent !== null && <span className={`text-xs font-black tabular-nums ${foreground[tone]}`}>{Math.round(percent)} %</span>}</div><p className={`mt-1 text-lg font-black tabular-nums ${foreground[tone]}`}>{value}</p>{percent !== null ? <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label={`${title} du pool`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}><div className={`h-full rounded-full ${colors[tone]}`} style={{ width: `${percent}%` }} /></div> : <div className="mt-2 h-2 rounded-full bg-slate-100" />}<p className="mt-2 min-h-7 text-[9px] leading-3.5 text-slate-500">{detail}</p></div>;
+  const radius = 19;
+  const circumference = 2 * Math.PI * radius;
+  const dash = percent === null ? 0 : circumference * Math.max(0, Math.min(100, percent)) / 100;
+  return <div className="flex min-h-[88px] items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5">
+    <span role={percent === null ? undefined : "progressbar"} aria-label={percent === null ? undefined : `${title} du pool`} aria-valuemin={percent === null ? undefined : 0} aria-valuemax={percent === null ? undefined : 100} aria-valuenow={percent === null ? undefined : Math.round(percent)} className="relative grid h-12 w-12 shrink-0 place-items-center">
+      <svg viewBox="0 0 48 48" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true"><circle cx="24" cy="24" r={radius} fill="none" stroke="#e8eef5" strokeWidth="5" />{percent !== null && <circle cx="24" cy="24" r={radius} fill="none" stroke={stroke[tone]} strokeWidth="5" strokeLinecap="round" strokeDasharray={`${dash} ${circumference}`} />}</svg>
+      <span className={`relative text-[10px] font-black tabular-nums ${foreground[tone]}`}>{percent === null ? "—" : `${Math.round(percent)}%`}</span>
+    </span>
+    <div className="min-w-0"><p className="truncate text-[10px] font-bold text-slate-600">{title}</p><p className={`mt-0.5 break-words text-base font-black leading-5 tabular-nums ${foreground[tone]}`}>{value}</p><p className="mt-1 text-[9px] leading-3 text-slate-500">{detail}</p></div>
+  </div>;
 }
 
 function SortLink({ sort, selected, period, aggregation, route, children }: { sort: string; selected: string; period: string; aggregation: string; route: string | null; children: React.ReactNode }) {
@@ -195,6 +224,7 @@ function EfficiencyRow({ icon: Icon, label, value, detail }: { icon: typeof Data
 function Legend({ color, label }: { color: string; label: string }) { return <span className="inline-flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-full ${color}`} />{label}</span>; }
 function routeUrl({ route, period, aggregation, sort }: { route: string | null; period: string; aggregation: string; sort: string }) { const params = new URLSearchParams({ period, aggregation, sort }); if (route) params.set("route", route); return `/admin/base-de-donnees?${params.toString()}#analyse-route`; }
 function optimizerPeriod(period: string) { return period === "30d" ? "30d" : period === "7d" ? "7d" : "24h"; }
+function percentChange(current: number, previous: number) { return previous > 0 ? Math.round((current - previous) / previous * 100) : null; }
 function formatBytes(bytes: number) { if (bytes < 1024) return `${Math.round(bytes)} o`; const units = ["Ko", "Mo", "Go", "To"]; let value = bytes / 1024; let unit = 0; while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; } return `${value.toLocaleString("fr-CA", { maximumFractionDigits: 1 })} ${units[unit]}`; }
 function formatDuration(ms: number) { return `${ms.toLocaleString("fr-CA", { maximumFractionDigits: 1 })} ms`; }
 function formatDateTime(date: Date | null) { return date ? dateTime(date) : "aucune mesure"; }
