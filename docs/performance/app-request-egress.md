@@ -12,10 +12,22 @@ The library groups repeated dive tuples in SQL before transferring them. Profile
 
 ## Deployment prerequisites
 
-1. Apply `0027_server_request_metrics.sql` and `0028_session_read_indexes.sql` after migration 0026 and before deploying the code. Take the usual backup; the new indexes can briefly lock writes while created. No production migration is executed by this PR.
-2. Verify that the session scheduler can run every minute. This PR sets `/api/cron/complete-sessions` to `* * * * *` in `vercel.json`. Vercel Hobby does **not** support that frequency and can reject deployment. Use a plan that supports it, or replace that entry with an external trusted scheduler calling the same endpoint using `Authorization: Bearer <CRON_SECRET>`. Confirm the chosen scheduler before merging; do not silently restore daily scheduling after removing render-time updates. Platform documentation: https://vercel.com/docs/cron-jobs/usage-and-pricing . The connected API did not expose the team's plan; no billing settings were changed.
-3. Verify `CRON_SECRET` and a successful cron execution before enabling live use. Transitions can lag by a scheduling interval and are best effort, rather than exact-second guarantees. Explicit coach start actions still work. The cron completes only newly expired sessions in a transaction; repeated ticks no longer reload and upsert all past completed sessions. Existing completed data is preserved.
-4. Confirm the daily request-observation purge executes; it also removes server metrics older than seven days in bounded batches.
+1. Apply `0027_server_request_metrics.sql`, `0028_session_read_indexes.sql` and `0029_session_lifecycle_function.sql` after migration 0026 and before deploying the code. Take the usual backup; the new indexes can briefly lock writes while created. No production migration is executed by this PR.
+2. In the Supabase SQL Editor, as the migration owner (`postgres`), execute `db/operations/enable-session-cron.sql`. This enables `pg_cron` and installs a named job that runs the lifecycle function every minute, entirely inside PostgreSQL, plus a daily cleanup of only these jobs’ execution history. Re-running the script with the same owner updates the named jobs. Confirm the next successful run in Supabase → Integrations → Cron → History before merging the application change. The native function is not callable by PUBLIC, anon, authenticated or service_role; it uses invoker permissions. Supabase documentation: https://supabase.com/docs/guides/cron/quickstart .
+3. All schedules in `vercel.json` remain daily and compatible with Vercel Hobby. `/api/cron/complete-sessions` remains a daily fallback and health heartbeat, not the frequent scheduler. No Vercel upgrade is required by this change. Verify `CRON_SECRET` for the daily jobs. Do not deploy render-time mutation removal with only the daily fallback running.
+4. The native tick is atomic, skips overlapping ticks and only completes newly expired sessions. It preserves existing completed data and applies the same 30-minute grace and absence rules as the server fallback. Transitions can lag by a scheduling interval and are best effort rather than exact-second guarantees. Explicit coach start actions still work. Supabase project suspension/paused compute prevents cron execution until it resumes.
+5. Confirm the daily request-observation purge executes; it also removes server metrics older than seven days in bounded batches. The SQL setup separately retains seven days of the native jobs’ logs.
+
+To verify the native job after setup:
+
+```sql
+SELECT j.jobname, r.status, r.start_time, r.end_time, r.return_message
+FROM cron.job j JOIN cron.job_run_details r USING (jobid)
+WHERE j.jobname = 'diveplan-session-lifecycle'
+ORDER BY r.start_time DESC LIMIT 5;
+```
+
+To roll back the frequent schedule without touching other jobs, use `cron.unschedule('diveplan-session-lifecycle')` and `cron.unschedule('diveplan-session-cron-history-cleanup')`. Keep another frequent scheduler in place if the application still relies on automatic transitions; the daily Vercel job alone is insufficient for timely transitions.
 
 ## Measurement
 
