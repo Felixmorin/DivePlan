@@ -7,6 +7,7 @@ import ts from "typescript";
 import { PGlite } from "@electric-sql/pglite";
 import type { LiveProgressReply } from "./live-session-progress";
 import { normalizeTelemetryRoute } from "./telemetry-route";
+import { parseObservations } from "./request-observation";
 import { liveSessionForClient } from "./live-session";
 import type { CoachSession } from "./coach-session";
 import type { LiveProgress } from "./live-session";
@@ -156,7 +157,8 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
       "@/lib/current-user": { getCurrentUser: async () => user, getCurrentUserAccess: async () => user },
       "@/lib/db": { query: (sql: string, values: unknown[]) => db.query(sql, values) },
       "server-only": {},
-      "@/lib/telemetry-route": { normalizeTelemetryRoute }
+      "@/lib/telemetry-route": { normalizeTelemetryRoute },
+      "@/lib/request-observation": { parseObservations }
     };
     const { POST } = load<{ POST: (request: Request) => Promise<Response> }>("src/app/api/monitoring/transfer/route.ts", dependencies);
     const request = (body: unknown, origin = "https://diveplan.test") => new Request("https://diveplan.test/api/monitoring/transfer", {
@@ -359,3 +361,4 @@ test("synthetic unchanged polling benchmark counts JSON body bytes only", async 
   assert.equal(bytes, before / calls);
   t.diagnostic(`Synthetic: ${calls} unchanged polls, JSON body bytes ${before} -> ${bytes} (-95%). Excludes headers, compression, SQL, RSC/HTML, JS and platform billing.`);
 });
+
