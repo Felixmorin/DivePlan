@@ -153,7 +153,7 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
     }
     let user: { clubId: string; role: string; coach?: object } | null = { clubId: "club-a", role: "COACH", coach: {} };
     const dependencies = {
-      "@/lib/current-user": { getCurrentUser: async () => user },
+      "@/lib/current-user": { getCurrentUser: async () => user, getCurrentUserAccess: async () => user },
       "@/lib/db": { query: (sql: string, values: unknown[]) => db.query(sql, values) },
       "server-only": {},
       "@/lib/telemetry-route": { normalizeTelemetryRoute }
@@ -340,7 +340,7 @@ test("synthetic unchanged polling benchmark counts JSON body bytes only", async 
     }))
   };
   const { GET } = load<{ GET: (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response> }>("src/app/api/coach/sessions/[id]/progress/route.ts", {
-    "@/lib/current-user": { getCurrentUser: async () => ({ clubId: "synthetic-club", role: "COACH", coach: {} }) },
+    "@/lib/current-user": { getCurrentUserAccess: async () => ({ clubId: "synthetic-club", role: "COACH", coach: {} }) },
     "@/lib/live-session-progress": { getLiveSessionProgressReply: async (_id: string, _club: string, validators: string[]) => {
       const etag = '"synthetic-validator"';
       return { etag, progress: validators.includes(etag) ? null : progress };
