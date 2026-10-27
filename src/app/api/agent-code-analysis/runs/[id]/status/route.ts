@@ -5,7 +5,16 @@ import { query } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-const statusSchema = z.discriminatedUnion("status", [
+const statusSchema = z.union([
+  z.object({
+    status: z.literal("completed"), agentId: z.literal("diveplan-observability"),
+    reportPath: z.string().regex(/^logs\/observability\/analysis-[\w-]+\.json$/),
+    report: z.object({ title: z.string().max(200), period: z.object({ label: z.string().max(100), from: z.string(), to: z.string() }),
+      sources: z.array(z.object({ name: z.string().max(160), period: z.string().max(100), samples: z.number().int().nonnegative() })).max(10),
+      facts: z.array(z.object({ category: z.string().max(100), fact: z.string().max(1000), evidence: z.string().max(500) })).max(100),
+      assumptions: z.array(z.string().max(1000)).max(30), recommendations: z.array(z.string().max(1000)).max(30), missing: z.array(z.string().max(1000)).max(30)
+    })
+  }),
   z.object({
     status: z.literal("completed"),
     agentId: z.enum(["nextjs-code-analyst", "sql-supabase-analyst"]),
@@ -13,7 +22,7 @@ const statusSchema = z.discriminatedUnion("status", [
   }).refine((data) => data.agentId === "nextjs-code-analyst"
     ? data.reportPath.startsWith("logs/nextjs-code-analysis/")
     : data.reportPath.startsWith("logs/sql-supabase-analysis/")),
-  z.object({ status: z.literal("failed"), agentId: z.enum(["nextjs-code-analyst", "sql-supabase-analyst"]), error: z.string().trim().min(1).max(1000) })
+  z.object({ status: z.literal("failed"), agentId: z.enum(["nextjs-code-analyst", "sql-supabase-analyst", "diveplan-observability"]), error: z.string().trim().min(1).max(1000) })
 ]);
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -27,7 +36,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const parsed = statusSchema.safeParse(body);
   if (!parsed.success) return Response.json({ error: "Invalid code analysis status update." }, { status: 400 });
 
-  const update = parsed.data.status === "completed"
+  const update = parsed.data.status === "completed" && parsed.data.agentId === "diveplan-observability"
+    ? await query(
+      `UPDATE "AiAgentRun" SET status='completed',result=$3,"finishedAt"=NOW(),error=NULL
+       WHERE id=$1 AND "agentId"=$2 AND status='running'`,
+      [parsedId.data, parsed.data.agentId, JSON.stringify({ ...parsed.data.report, reportPath: parsed.data.reportPath })]
+    )
+    : parsed.data.status === "completed"
     ? await query(
       `UPDATE "AiAgentRun" SET status='completed',result=$3,"finishedAt"=NOW(),error=NULL
        WHERE id=$1 AND "agentId"=$2 AND status='running'`,

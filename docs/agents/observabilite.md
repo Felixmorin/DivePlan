@@ -4,7 +4,7 @@
 
 ## Contexte pertinent
 
-L’agent lit les agrégats disponibles pour relever volume, Web Vitals et événements applicatifs. Références : `src/lib/agent-worker.ts`, `src/lib/monitoring.ts`, `src/app/admin/observability/`, `src/app/coach/monitoring/`, migrations `0002` à `0005` et `docs/transfer-monitoring.md`.
+Le serveur sélectionne les agrégats de Web Vitals, volumes de transfert par route et décomptes de types d’événements, puis les transmet au runner Codex local. Codex produit une synthèse structurée conservée dans l’historique de l’agent; le runner en garde aussi une copie locale. Il n’accède pas au code ni aux journaux fournisseurs. Références : `src/app/api/agent-code-analysis/queue/claim/route.ts`, `scripts/analyze-observability.ps1`, `src/lib/monitoring.ts`, `src/app/admin/observability/`, migrations `0002` à `0005` et `docs/transfer-monitoring.md`.
 
 ## Contrôles et risques
 

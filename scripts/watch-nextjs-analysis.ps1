@@ -45,13 +45,20 @@ while ($true) {
     if ($response.task) {
       $task = $response.task
       $started = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-      $analysisDirectory = if ($task.agentId -eq "sql-supabase-analyst") { "sql-supabase-analysis" } else { "nextjs-code-analysis" }
+      $analysisDirectory = if ($task.agentId -eq "diveplan-observability") { "observability" } elseif ($task.agentId -eq "sql-supabase-analyst") { "sql-supabase-analysis" } else { "nextjs-code-analysis" }
       $taskLogDirectory = Join-Path $logsRoot $analysisDirectory
       New-Item -ItemType Directory -Path $taskLogDirectory -Force | Out-Null
       $runLogPath = Join-Path $taskLogDirectory "runner-$($task.id).log"
       Add-Content -LiteralPath $runLogPath -Value "$started Début de l’analyse $($task.id)"
       Write-Host "$started Analyse Codex prise en charge : $($task.agentId) / $($task.id)"
-      & $pwshPath -NoProfile -ExecutionPolicy Bypass -File $analyzerPath -AgentId $task.agentId -RunId ([guid]$task.id) -DivePlanUrl $baseUrl *>&1 | Tee-Object -FilePath $runLogPath -Append -Encoding utf8
+      if ($task.agentId -eq "diveplan-observability") {
+        $taskPath = Join-Path $taskLogDirectory "task-$($task.id).json"
+        $task | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $taskPath -Encoding utf8
+        & $pwshPath -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts\analyze-observability.ps1") -TaskPath $taskPath -DivePlanUrl $baseUrl *>&1 | Tee-Object -FilePath $runLogPath -Append -Encoding utf8
+        Remove-Item -LiteralPath $taskPath -Force -ErrorAction SilentlyContinue
+      } else {
+        & $pwshPath -NoProfile -ExecutionPolicy Bypass -File $analyzerPath -AgentId $task.agentId -RunId ([guid]$task.id) -DivePlanUrl $baseUrl *>&1 | Tee-Object -FilePath $runLogPath -Append -Encoding utf8
+      }
       $exitCode = $LASTEXITCODE
       if ($exitCode -ne 0) {
         $failureBody = @{ status = "failed"; agentId = $task.agentId; error = "L’analyse Codex locale a échoué. Consulte logs/$analysisDirectory/runner-$($task.id).log." } | ConvertTo-Json -Compress

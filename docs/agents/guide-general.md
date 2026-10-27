@@ -17,7 +17,8 @@
 
 - Les séances contiennent des blocs; les athlètes sont assignés aux blocs (`SessionBlockAssignment`). Les blocs piscine portent sections/records de plongeons; dryland référence la bibliothèque avec valeurs ajustables.
 - Les séances sont rattachées à une semaine et les événements du calendrier sont gérés séparément (`TrainingWeek`, `TrainingSession`, `PlanningEvent`).
-- L’agent Observabilité produit des synthèses déterministes des agrégats disponibles. Les agents Analyse du code Next.js et Analyste SQL & Supabase utilisent Codex local en lecture seule; leurs rapports complets restent sur le poste du runner.
+- L’agent Observabilité envoie à Codex local uniquement des agrégats non nominatifs de télémétrie. Codex produit une synthèse structurée enregistrée dans l’historique des exécutions; aucune source d’erreurs exhaustive ou de déploiements n’est connectée.
+- Les agents Analyse du code Next.js et Analyste SQL & Supabase utilisent Codex local en lecture seule; leurs rapports complets restent sur le poste du runner.
 - L’agent Architecte-cartographe scanne en lecture seule les sources déployées et persiste sa sortie dans l’exécution PostgreSQL. Les documents de référence versionnés sont dans `docs/architecture/` et `docs/agents/`.
 - L’Analyste du code Next.js utilise Codex local en lecture seule pour examiner le code applicatif, ses références et sa lisibilité. Il exclut explicitement toute analyse SQL et produit un rapport local sous `logs/`.
 
