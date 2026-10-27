@@ -1,51 +1,37 @@
-import Link from "next/link";
-import { Activity, Bot, Database, Gauge, HeartPulse, LayoutDashboard, LogOut, Sparkles, UserRound, ClipboardList, ChartNoAxesCombined, TriangleAlert, Route, Wallet } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { signOut } from "@/auth";
-import { requireAdmin } from "@/lib/current-user";
+import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { AdminThemeToggle } from "@/components/admin/admin-theme-toggle";
+import { requireAdmin } from "@/lib/current-user";
+import { query } from "@/lib/db";
 
-const items = [
-  { href: "/admin", label: "Vue d’ensemble", icon: LayoutDashboard },
-  { href: "/admin/sante-app", label: "Santé App", icon: HeartPulse },
-  { href: "/admin/sante-generale", label: "Santé générale", icon: HeartPulse },
-  { href: "/admin/performance", label: "Performance", icon: ChartNoAxesCombined },
-  { href: "/admin/base-de-donnees", label: "Base de données", icon: Database },
-  { href: "/admin/erreurs-stabilite", label: "Erreurs et stabilité", icon: TriangleAlert },
-  { href: "/admin/activite-parcours", label: "Activité et parcours", icon: Route },
-  { href: "/admin/users", label: "Utilisateurs", icon: UserRound },
-  { href: "/admin/coaches", label: "Fonctionnalités", icon: Sparkles },
-  { href: "/admin/observability", label: "Observabilité", icon: Activity },
-  { href: "/admin/couts-quotas", label: "Coûts et quotas", icon: Wallet },
-  { href: "/admin/monitoring", label: "Monitoring", icon: ClipboardList },
-  { href: "/admin/optimisation", label: "Optimisation", icon: Gauge },
-  { href: "/admin/agents", label: "Agents", icon: Bot }
-];
+type AdminStatus = { label: string; tone: "neutral" | "warning" | "unavailable"; detail: string };
 
-export async function AdminShell({ children, active }: { children: React.ReactNode; active: string }) {
+export async function AdminShell({ children }: { children: React.ReactNode; active?: string }) {
   const user = await requireAdmin();
+  let status: AdminStatus = { label: "État indisponible", tone: "unavailable", detail: "La sonde de statut ne peut pas confirmer l’état de la plateforme." };
+  try {
+    const result = await query<{ errors: string }>(`SELECT count(*)::text AS errors FROM "AppEvent" WHERE "createdAt" >= NOW() - INTERVAL '24 hours' AND (type ILIKE '%error%' OR type ILIKE '%exception%' OR type = 'system.failure')`);
+    const errors = Number(result.rows[0]?.errors ?? 0);
+    status = errors > 0
+      ? { label: "Signal à examiner", tone: "warning", detail: `${errors.toLocaleString("fr-CA")} événement(s) d’erreur consignés dans AppEvent au cours des dernières 24 heures. D’autres indicateurs de santé ne sont pas vérifiés ici.` }
+      : { label: "Surveillance partielle", tone: "neutral", detail: "AppEvent ne contient aucun événement d’erreur détecté sur 24 heures. Les parcours, services externes et incidents actifs ne sont pas vérifiés par cette sonde." };
+  } catch {
+    status = { label: "État indisponible", tone: "unavailable", detail: "La lecture des événements de santé est indisponible; le fonctionnement global ne peut pas être confirmé." };
+  }
   return <div className="admin-shell min-h-screen bg-[#f3f7fa] text-[var(--color-ink)]">
-    <aside className="fixed inset-y-0 left-0 z-20 hidden w-[252px] flex-col overflow-hidden bg-[#09233b] px-4 py-5 text-white lg:flex">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-56 bg-[radial-gradient(ellipse_at_bottom,_rgba(0,188,212,0.20),_transparent_68%)]" />
-      <Link href="/admin" aria-label="DivePlan, accueil administration" className="relative mb-9 flex w-fit items-center gap-3 px-2 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
-        <svg aria-hidden="true" viewBox="0 0 48 48" className="h-11 w-11 shrink-0" fill="none"><path d="M5 16.5c5.2-5.1 10.4-5.1 15.6 0s10.4 5.1 15.6 0c2.5-2.4 4.7-3.6 6.8-3.6v6.3c-2.1 0-4.3 1.2-6.8 3.6-5.2 5.1-10.4 5.1-15.6 0s-10.4-5.1-15.6 0" fill="#20a7f7"/><path d="M5 27c5.2-5.1 10.4-5.1 15.6 0s10.4 5.1 15.6 0c2.5-2.4 4.7-3.6 6.8-3.6v6.3c-2.1 0-4.3 1.2-6.8 3.6-5.2 5.1-10.4 5.1-15.6 0S10.2 28.2 5 33.3" fill="#20a7f7" opacity=".78"/></svg>
-        <span className="flex flex-col leading-none"><span className="text-[25px] font-bold tracking-tight text-white">DivePlan</span><span className="mt-1.5 text-[8px] font-semibold uppercase tracking-[0.22em] text-white/55">Plonger plus loin</span></span>
-      </Link>
-      <p className="relative mb-3 px-2 text-xs font-bold uppercase tracking-[0.14em] text-white/45">Administration</p>
-      <nav aria-label="Navigation admin" className="relative min-h-0 flex-1 space-y-1 overflow-y-auto pb-3">{items.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={active === label ? "page" : undefined} className={`flex min-h-11 items-center gap-3 rounded-xl border-l-2 px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active === label ? "border-cyan-300 bg-gradient-to-r from-sky-700/90 to-sky-600/65 text-white shadow-sm" : "border-transparent text-white/70 hover:bg-white/8 hover:text-white"}`}><Icon className="h-[18px] w-[18px]" />{label}</Link>)}</nav>
-      <div className="relative mt-auto border-t border-white/10 pt-4">
-        <AdminThemeToggle placement="sidebar" />
-        <p className="text-xs font-bold text-white/85">Administrateur plateforme</p><p className="mt-1 truncate text-xs text-white/50">{user.firstName} {user.lastName}</p>
-        <form className="mt-3" action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}><button className="flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-white/70 hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><LogOut className="h-4 w-4" /> Déconnexion</button></form>
+    <AdminNavigation status={status}/>
+    <div className="md:ml-[228px] lg:ml-[252px]">
+      <div className="fixed bottom-0 left-0 z-20 hidden w-[228px] border-t border-white/10 bg-[#09233b] px-3 pb-4 pt-3 text-white md:block lg:w-[252px] lg:px-4">
+        <AdminThemeToggle placement="sidebar"/>
+        <p className="mt-2 text-xs font-bold text-white/85">Administrateur plateforme</p><p className="mt-1 truncate text-xs text-white/60">{user.firstName} {user.lastName}</p>
+        <form className="mt-2" action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}><button className="flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-white/75 hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"><LogOut className="h-4 w-4"/>Déconnexion</button></form>
       </div>
-    </aside>
-    <div className="lg:ml-[252px]">
-      <header className="sticky top-0 z-10 min-h-[58px] border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur sm:px-6 lg:hidden">
-        <div className="flex items-center gap-2"><nav aria-label="Navigation admin mobile" className="flex min-w-0 flex-1 gap-1 overflow-x-auto py-2">{items.map(({ href, label, icon: Icon }) => <Link key={href} href={href} aria-current={active === label ? "page" : undefined} className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active === label ? "bg-[#0b3555] text-white" : "text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4" />{label}</Link>)}</nav><AdminThemeToggle placement="mobile" /></div>
+      <header className="fixed inset-x-0 top-14 z-20 flex items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 py-2 backdrop-blur md:hidden">
+        <span className="truncate text-xs font-semibold text-slate-600">{user.firstName} {user.lastName}</span><AdminThemeToggle placement="mobile"/>
       </header>
-      <main className="min-h-screen px-4 py-6 sm:px-6 lg:px-7 xl:px-8">{children}</main>
+      <main className="min-h-screen px-4 pb-8 pt-[108px] sm:px-6 md:px-6 md:py-6 lg:px-7 xl:px-8">{children}</main>
     </div>
   </div>;
 }
-
-
 
