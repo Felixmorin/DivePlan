@@ -4,14 +4,43 @@ import { headers } from "next/headers";
 import { auth } from "@/auth";
 import { query, setDatabaseEgressClub, setDatabaseEgressRoute, withDatabaseEgressComponent } from "@/lib/db";
 
-export const getCurrentUser = cache(async () => withDatabaseEgressComponent("authentication", async () => {
+// React cache is scoped to the request/render; no authorization is stored in a
+// shared cache. Both projections use the same authenticated session identity.
+const getSessionIdentity = cache(async () => {
   const requestHeaders = await headers();
   const pageRoute = requestHeaders.get("x-diveplan-page-route");
   if (pageRoute) setDatabaseEgressRoute(pageRoute);
   const session = await auth();
-  const sessionUserId = session?.user?.id;
-  const email = session?.user?.email?.toLowerCase();
+  return { sessionUserId: session?.user?.id, email: session?.user?.email?.toLowerCase() };
+});
 
+type CurrentUserAccess = {
+  id: string;
+  role: "ADMIN" | "COACH" | "ATHLETE";
+  clubId: string | null;
+  coach: { id: string } | null;
+};
+
+/** Authorization-only projection for polling. Profile views still use getCurrentUser. */
+export const getCurrentUserAccess = cache(async (): Promise<CurrentUserAccess | null> => withDatabaseEgressComponent("authentication", async () => {
+  const { sessionUserId, email } = await getSessionIdentity();
+  if (!sessionUserId && !email) return null;
+  if (process.env.NODE_ENV !== "production" && sessionUserId === "dev-coach") {
+    return { id: "dev-coach", role: "COACH", clubId: "dev-club", coach: { id: "dev-coach-profile" } };
+  }
+  const { rows } = await query<{ id: string; role: CurrentUserAccess["role"]; clubId: string | null; coachId: string | null }>(
+    `SELECT u.id, u.role, u."clubId", co.id AS "coachId"
+     FROM "User" u LEFT JOIN "Coach" co ON co."userId"=u.id
+     WHERE ${sessionUserId ? "u.id=$1" : "u.email=$1"} AND u."accessEnabled"=true
+     LIMIT 1`, [sessionUserId ?? email]
+  );
+  const row = rows[0];
+  setDatabaseEgressClub(row?.clubId ?? null);
+  return row ? { id: row.id, role: row.role, clubId: row.clubId, coach: row.coachId === null ? null : { id: row.coachId } } : null;
+}));
+
+export const getCurrentUser = cache(async () => withDatabaseEgressComponent("authentication", async () => {
+  const { sessionUserId, email } = await getSessionIdentity();
   if (!sessionUserId && !email) {
     return null;
   }
