@@ -23,11 +23,9 @@ export async function POST(request: Request) {
       );
       if (run.agentId !== "diveplan-observability") return run;
       const hours = run.analysisPeriod === "24h" ? 24 : 168;
-      const [vitals, routes, errors] = await Promise.all([
-        client.query(`SELECT route,metric,(SUM("ratedTotalValue") / NULLIF(SUM("ratedSamples"),0))::float8 AS average,SUM("ratedSamples")::int AS samples FROM "PerformanceTelemetryHour" WHERE hour >= NOW()-($1::int*INTERVAL '1 hour') GROUP BY route,metric ORDER BY SUM("ratedSamples") DESC LIMIT 100`, [hours]),
-        client.query(`SELECT route,SUM(requests)::int AS requests,SUM("transferBytes")::bigint AS bytes FROM "TransferTelemetryHour" WHERE hour >= NOW()-($1::int*INTERVAL '1 hour') GROUP BY route ORDER BY SUM("transferBytes") DESC LIMIT 20`, [hours]),
-        client.query(`SELECT type,count(*)::int AS count FROM "AppEvent" WHERE "createdAt">=NOW()-($1::int*INTERVAL '1 hour') AND type~*'(error|exception|failed)' GROUP BY type ORDER BY count(*) DESC LIMIT 50`, [hours])
-      ]);
+      const vitals = await client.query(`SELECT route,metric,(SUM("ratedTotalValue") / NULLIF(SUM("ratedSamples"),0))::float8 AS average,SUM("ratedSamples")::int AS samples FROM "PerformanceTelemetryHour" WHERE hour >= NOW()-($1::int*INTERVAL '1 hour') GROUP BY route,metric ORDER BY SUM("ratedSamples") DESC LIMIT 100`, [hours]);
+      const routes = await client.query(`SELECT route,SUM(requests)::int AS requests,SUM("transferBytes")::bigint AS bytes FROM "TransferTelemetryHour" WHERE hour >= NOW()-($1::int*INTERVAL '1 hour') GROUP BY route ORDER BY SUM("transferBytes") DESC LIMIT 20`, [hours]);
+      const errors = await client.query(`SELECT type,count(*)::int AS count FROM "AppEvent" WHERE "createdAt">=NOW()-($1::int*INTERVAL '1 hour') AND type~*'(error|exception|failed)' GROUP BY type ORDER BY count(*) DESC LIMIT 50`, [hours]);
       return { ...run, observability: { period: run.analysisPeriod, from: new Date(Date.now() - hours * 3600000).toISOString(), to: new Date().toISOString(), vitals: vitals.rows, routes: routes.rows, errors: errors.rows } };
     });
     return Response.json({ task }, { headers: { "Cache-Control": "no-store" } });

@@ -41,7 +41,7 @@ $metrics
 "@
 Set-Content -LiteralPath $promptPath -Value $prompt -Encoding utf8
 try {
-  Get-Content -LiteralPath $promptPath -Raw | & codex exec --sandbox read-only --ephemeral -C $codexWorkDirectory --output-last-message $answerPath -
+  Get-Content -LiteralPath $promptPath -Raw | & codex exec --sandbox read-only --ephemeral --skip-git-repo-check -C $codexWorkDirectory --output-last-message $answerPath -
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $answerPath)) { throw "Codex n’a pas produit de rapport." }
   $report = Get-Content -LiteralPath $answerPath -Raw | ConvertFrom-Json
   $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $reportPath -Encoding utf8
