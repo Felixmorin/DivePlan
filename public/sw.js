@@ -3,12 +3,22 @@ self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data?.text() ?? "" }; }
   const url = typeof data.url === "string" && data.url.startsWith("/") && !data.url.startsWith("//") ? data.url : "/";
-  event.waitUntil(self.registration.showNotification(data.title || "DivePlan", {
-    body: data.body || "",
-    icon: "/icons/diveplan-192.png",
-    badge: "/icons/diveplan-192.png",
-    data: { url }
-  }));
+  event.waitUntil((async () => {
+    await self.registration.showNotification(data.title || "DivePlan", {
+      body: data.body || "",
+      icon: "/icons/diveplan-192.png",
+      badge: "/icons/diveplan-192.png",
+      data: { url }
+    });
+    if (typeof data.healthCheckId === "string") {
+      await fetch("/api/admin/health/push/ack", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ checkId: data.healthCheckId })
+      }).catch(() => undefined);
+    }
+  })());
 });
 
 self.addEventListener("notificationclick", (event) => {

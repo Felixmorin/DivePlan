@@ -351,7 +351,7 @@ export async function dispatchPlanningEventPublication(eventIds: string[]) {
   }
 }
 
-export async function sendDeviceTest(userId: string, endpoint: string) {
+export async function sendDeviceTest(userId: string, endpoint: string, payload: object = { title: "DivePlan", body: "Les notifications sont activées sur cet appareil.", url: "/" }) {
   const result = await pool.connect();
   try {
     await result.query("BEGIN");
@@ -365,7 +365,7 @@ export async function sendDeviceTest(userId: string, endpoint: string) {
     }
     await result.query("COMMIT");
     try {
-      const result = await send(selected.rows[0], { title: "DivePlan", body: "Les notifications sont activées sur cet appareil.", url: "/" });
+      const result = await send(selected.rows[0], payload);
       return result === "sent" ? "accepted" as const : result === "expired" ? "expired" as const : "failed" as const;
     } catch (error) {
       const reason = error instanceof Error ? error.message : "push_provider_unknown";
@@ -375,5 +375,17 @@ export async function sendDeviceTest(userId: string, endpoint: string) {
     await result.query("ROLLBACK").catch(() => undefined);
     throw error;
   } finally { result.release(); }
+}
+
+export async function sendHealthDeviceTest(subscription: WebPushSubscription, payload: object) {
+  if (!validatePushEndpoint(subscription.endpoint)) return "invalid_endpoint" as const;
+  configurePush();
+  try {
+    await webpush.sendNotification(subscription, JSON.stringify(payload), { TTL: 60 });
+    return "accepted" as const;
+  } catch (error) {
+    const status = typeof error === "object" && error !== null && "statusCode" in error ? Number(error.statusCode) : 0;
+    return status ? `push_provider_${status}` as const : "failed" as const;
+  }
 }
 

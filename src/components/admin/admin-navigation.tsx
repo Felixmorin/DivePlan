@@ -25,7 +25,9 @@ const groups = [
   { id: "tools", title: "Outils", items: [
     { href: "/admin/observability", label: "Observabilité", icon: Activity },
     { href: "/admin/monitoring", label: "Monitoring", icon: ClipboardList },
-    { href: "/admin/optimisation", label: "Optimisation", icon: Gauge },
+    { href: "/admin/optimisation", label: "Optimisation", icon: Gauge }
+  ]},
+  { id: "agents", title: "Agents", items: [
     { href: "/admin/agents", label: "Agents", icon: Bot }
   ]}
 ];
@@ -87,4 +89,3 @@ export function AdminNavigation({ status }: { status: { label: string; tone: "ne
     </aside>
   </>;
 }
-

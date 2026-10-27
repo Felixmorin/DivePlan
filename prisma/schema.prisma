@@ -743,3 +743,17 @@ model AthleteExerciseLog {
 
   @@unique([athleteId, sessionId, exerciseId])
 }
+
+model AdminHealthCheckRun {
+  id          String   @id
+  checkType   String
+  status      String
+  detail      String
+  userId      String?
+  metadata    Json?
+  checkedAt   DateTime @default(now()) @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+
+  @@index([checkType, checkedAt(sort: Desc)])
+  @@index([checkedAt(sort: Desc)])
+}

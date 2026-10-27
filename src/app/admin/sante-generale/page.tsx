@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { Activity, ArrowRight, CalendarDays, Check, CircleHelp, Cloud, Database, FileText, KeyRound, Pencil, Server, ShieldAlert, Timer, Upload } from "lucide-react";
+import { Activity, ArrowRight, CalendarDays, CircleHelp, Cloud, Database, FileText, KeyRound, Pencil, Server, ShieldAlert, Timer, Upload } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/current-user";
 import { query } from "@/lib/db";
+import { getAdminHealth } from "@/lib/admin-health";
+import { HealthChecksPanel } from "@/components/admin/health-checks-panel";
+import type { HealthState } from "@/lib/admin-health";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +25,7 @@ type ReadResult<T> = { rows: T[]; ok: boolean };
 
 export default async function SanteGeneralePage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   await requireAdmin();
+  const health = await getAdminHealth();
   const { period } = await searchParams;
   const selected = periods.find((item) => item.key === period) ?? periods[2];
   let dbAvailable = false;
@@ -65,8 +69,12 @@ export default async function SanteGeneralePage({ searchParams }: { searchParams
   const lastMeasured = [freshness?.eventAt, freshness?.transferAt, freshness?.performanceAt, freshness?.databaseAt]
     .filter((value): value is Date => value instanceof Date)
     .sort((left, right) => right.getTime() - left.getTime())[0] ?? null;
-  const state = !dbAvailable ? "Indisponible" : errors > 0 || !eventsAvailable ? "Dégradé" : "Opérationnel";
-  const statusTone = !dbAvailable ? "red" : errors > 0 ? "amber" : "green";
+  const state = health.label;
+  const statusTone = health.state === "action_required" ? "red" : health.state === "degraded" ? "amber" : "blue";
+  const healthIssue = health.checks.find(check => check.state === "failed" || check.state === "warning");
+  const authCheck = health.checks.find(check => check.id === "auth-config")!;
+  const storageCheck = health.checks.find(check => check.id === "storage")!;
+  const sentryCheck = health.checks.find(check => check.id === "sentry")!;
 
   return <AdminShell active="Santé générale">
     <div className="mx-auto max-w-[1600px]">
@@ -86,27 +94,29 @@ export default async function SanteGeneralePage({ searchParams }: { searchParams
         </div>
       </header>
 
-      <Card className={`mb-4 border ${statusTone === "red" ? "border-rose-300 bg-rose-50/70" : statusTone === "amber" ? "border-amber-300 bg-amber-50/70" : "border-emerald-200 bg-emerald-50/50"}`}>
+      <Card className={`mb-4 border ${statusTone === "red" ? "border-rose-300 bg-rose-50/70" : statusTone === "amber" ? "border-amber-300 bg-amber-50/70" : "border-sky-200 bg-sky-50/60"}`}>
         <CardContent className="grid gap-4 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:p-5">
-          <span className={`grid h-14 w-14 place-items-center rounded-full ${statusTone === "red" ? "bg-rose-500 text-white" : statusTone === "amber" ? "bg-amber-500 text-white" : "bg-emerald-500 text-white"}`} aria-hidden="true">
-            {statusTone === "green" ? <Check className="h-7 w-7" /> : <ShieldAlert className="h-7 w-7" />}
+          <span className={`grid h-14 w-14 place-items-center rounded-full ${statusTone === "red" ? "bg-rose-500 text-white" : statusTone === "amber" ? "bg-amber-500 text-white" : "bg-sky-600 text-white"}`} aria-hidden="true">
+            {statusTone === "blue" ? <CircleHelp className="h-7 w-7" /> : <ShieldAlert className="h-7 w-7" />}
           </span>
           <div className="grid gap-3 md:grid-cols-[minmax(190px,0.45fr)_minmax(0,1fr)] md:items-center">
-            <div><p className="text-sm font-bold text-slate-800">État global de la plateforme</p><p className={`text-3xl font-black ${statusTone === "red" ? "text-rose-800" : statusTone === "amber" ? "text-amber-900" : "text-emerald-800"}`}>{state}</p></div>
+            <div><p className="text-sm font-bold text-slate-800">État des contrôles disponibles</p><p className={`text-3xl font-black ${statusTone === "red" ? "text-rose-800" : statusTone === "amber" ? "text-amber-900" : "text-sky-900"}`}>{state}</p></div>
             <div className="border-t border-slate-200 pt-3 md:border-l md:border-t-0 md:pl-5 md:pt-0">
-              <h2 className="text-sm font-black text-slate-900">{!dbAvailable ? "La sonde de base de données a échoué" : !eventsAvailable ? "Le journal d’événements est indisponible" : errors ? `${errors.toLocaleString("fr-CA")} erreur(s) journalisée(s) sur la période` : "Aucune erreur applicative détectée dans les événements disponibles"}</h2>
-              <p className="mt-1 text-sm leading-5 text-slate-600">{!dbAvailable ? "La base de données ne répond pas à SELECT 1." : !eventsAvailable ? "Impossible de consulter AppEvent; l’état applicatif ne peut pas être confirmé." : errors ? `${affectedUsers.toLocaleString("fr-CA")} compte(s) distinct(s) associés aux événements d’erreur. Les erreurs complètes ne sont pas toutes instrumentées.` : "La sonde PostgreSQL répond et aucun AppEvent de type error/exception n’a été trouvé. Les parcours ne sont pas vérifiés de bout en bout."}</p>
-              {(errors > 0 || !dbAvailable || !eventsAvailable) && <Link href={!dbAvailable ? "/admin/optimisation" : "/admin/monitoring"} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">Ouvrir le diagnostic <ArrowRight className="h-3.5 w-3.5" /></Link>}
+              <h2 className="text-sm font-black text-slate-900">{healthIssue ? healthIssue.name : "Les sondes configurées ont répondu"}</h2>
+              <p className="mt-1 text-sm leading-5 text-slate-600">{healthIssue?.detail ?? "Les contrôles de configuration et de connectivité disponibles ont répondu. Les parcours de connexion, publication et progression ne sont pas testés de bout en bout."}</p>
+              {healthIssue && <Link href={healthIssue.id === "database" ? "/admin/optimisation" : "/admin/monitoring"} className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">Ouvrir le diagnostic <ArrowRight className="h-3.5 w-3.5" /></Link>}
             </div>
           </div>
         </CardContent>
       </Card>
 
+      <HealthChecksPanel checks={health.checks} checkedAt={health.checkedAt}/>
+
       <section aria-label="État des dépendances" className="mb-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         <DependencyCard icon={Database} name="Base de données" status={dbAvailable ? "Opérationnelle" : "Indisponible"} detail={dbAvailable ? "Sonde SELECT 1 · vérifiée maintenant" : "Sonde SELECT 1 indisponible"} source="Latence non instrumentée · statut en direct" href="/admin/optimisation" tone={dbAvailable ? "green" : "red"} />
-        <DependencyCard icon={KeyRound} name="Authentification" status="Non mesurée" detail={`${Number(eventData?.logins ?? 0).toLocaleString("fr-CA")} connexion(s) et ${failedLogins.toLocaleString("fr-CA")} échec(s) journalisés${eventData?.latestAuthEvent ? ` · dernier ${relativeTime(eventData.latestAuthEvent)}` : ""}`} source={`AppEvent · ${selected.label}`} href="/admin/monitoring" tone="slate" />
-        <DependencyCard icon={Server} name="Stockage" status="Non mesuré" detail="Latence et disponibilité non vérifiées" source="Aucune sonde connectée" tone="slate" />
-        <DependencyCard icon={Cloud} name="Services externes" status="Non mesurés" detail="Latence et disponibilité non vérifiées" source="Aucune source de statut connectée" tone="slate" />
+        <DependencyCard icon={KeyRound} name="Authentification" status={healthLabel(authCheck.state)} detail={authCheck.detail} source={`Auth.js · ${Number(eventData?.logins ?? 0).toLocaleString("fr-CA")} réussite(s) et ${failedLogins} échec(s) journalisés sur ${selected.label}`} href="/admin/monitoring" tone={healthTone(authCheck.state)} />
+        <DependencyCard icon={Server} name="Supabase Storage · avatars" status={healthLabel(storageCheck.state)} detail={storageCheck.detail} source="Sonde bucket en lecture seule" tone={healthTone(storageCheck.state)} />
+        <DependencyCard icon={Cloud} name="Sentry · erreurs serveur" status={healthLabel(sentryCheck.state)} detail={sentryCheck.detail} source="La réception des événements Sentry n’est pas vérifiée" tone={healthTone(sentryCheck.state)} />
       </section>
 
       <div className="mb-4 grid items-start gap-4 2xl:grid-cols-[1.2fr_0.88fr]">
@@ -178,8 +188,15 @@ async function readQuery<T extends import("pg").QueryResultRow>(sql: string, par
   try { return { rows: (await query<T>(sql, params)).rows, ok: true }; } catch { return { rows: [], ok: false }; }
 }
 
-function DependencyCard({ icon: Icon, name, status, detail, source, href, tone }: { icon: typeof Database; name: string; status: string; detail: string; source: string; href?: string; tone: "green" | "red" | "slate" }) {
-  const content = <div className="flex min-h-[94px] items-start gap-3 p-3.5 sm:p-4"><span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${tone === "green" ? "bg-emerald-50 text-emerald-700" : tone === "red" ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-500"}`}><Icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><h2 className="truncate text-sm font-black text-slate-900">{name}</h2>{href && <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />}</div><p className={`mt-1 text-xs font-bold ${tone === "green" ? "text-emerald-700" : tone === "red" ? "text-rose-700" : "text-slate-500"}`}>{tone === "green" ? "● " : tone === "red" ? "● " : "○ "}{status}</p><p className="mt-1 truncate text-[10px] text-slate-600">{detail}</p><p className="mt-1 truncate text-[9px] text-slate-400">{source}</p></div></div>;
+function healthLabel(state: HealthState) {
+  return { ok: "Répond", warning: "Signal observé", failed: "Échec", unknown: "Non vérifié", not_configured: "Non configuré", disabled: "Désactivé · optionnel" }[state];
+}
+function healthTone(state: HealthState): "green" | "red" | "amber" | "slate" {
+  return state === "ok" ? "green" : state === "failed" ? "red" : state === "warning" ? "amber" : "slate";
+}
+
+function DependencyCard({ icon: Icon, name, status, detail, source, href, tone }: { icon: typeof Database; name: string; status: string; detail: string; source: string; href?: string; tone: "green" | "red" | "amber" | "slate" }) {
+  const content = <div className="flex min-h-[94px] items-start gap-3 p-3.5 sm:p-4"><span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${tone === "green" ? "bg-emerald-50 text-emerald-700" : tone === "red" ? "bg-rose-50 text-rose-700" : tone === "amber" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-500"}`}><Icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><h2 className="truncate text-sm font-black text-slate-900">{name}</h2>{href && <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />}</div><p className={`mt-1 text-xs font-bold ${tone === "green" ? "text-emerald-700" : tone === "red" ? "text-rose-700" : tone === "amber" ? "text-amber-800" : "text-slate-500"}`}>{tone === "green" || tone === "red" || tone === "amber" ? "● " : "○ "}{status}</p><p className="mt-1 truncate text-[10px] text-slate-600">{detail}</p><p className="mt-1 truncate text-[9px] text-slate-400">{source}</p></div></div>;
   return <Card className="overflow-hidden border-slate-200/80 shadow-sm">{href ? <Link href={href} aria-label={`${name} : ${status}. ${detail}`} className="block transition hover:bg-slate-50 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{content}</Link> : content}</Card>;
 }
 
