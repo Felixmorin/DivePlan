@@ -88,8 +88,9 @@ if ($AgentId -eq "sql-supabase-analyst") {
     Set-Content -LiteralPath $metricsInputPath -Value $metricsHeader -Encoding utf8
   }
   $metricsHeaderLine = Get-Content -LiteralPath $metricsInputPath -TotalCount 1
+  $quotedMetricsHeader = '"' + (($metricsHeader -split ',') -join '","') + '"'
   if ((Get-Item -LiteralPath $metricsInputPath).Length -gt 1MB) { throw "Le fichier de métriques dépasse 1 Mo : $metricsInputPath" }
-  if (-not $metricsHeaderLine -or $metricsHeaderLine.Trim() -ne $metricsHeader) {
+  if (-not $metricsHeaderLine -or $metricsHeaderLine.Trim() -notin @($metricsHeader, $quotedMetricsHeader)) {
     throw "En-tête CSV invalide. Utilise exactement : $metricsHeader"
   }
   $metricsRows = @(Import-Csv -LiteralPath $metricsInputPath)
