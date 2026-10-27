@@ -68,10 +68,10 @@ export default async function AdminOptimisationPage({ searchParams }: { searchPa
     </header>
 
     <section aria-label="Indicateurs de base de données" className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-      <Metric icon={Database} label="Egress SQL récent" value={formatBytes(dbBytes)} detail={`${dbRequests.toLocaleString("fr-CA")} requêtes · historique exclu`} />
-      <Metric icon={Timer} label="Latence SQL moyenne" value={dbRequests ? `${(dbMs / dbRequests).toLocaleString("fr-CA", { maximumFractionDigits: 1 })} ms` : "—"} detail="Temps observé par l’application" />
-      <Metric icon={Gauge} label="Requête la plus lente" value={`${Number(db?.maxDuration ?? 0).toLocaleString("fr-CA", { maximumFractionDigits: 0 })} ms`} detail="Maximum observé pendant une heure" />
-      <Metric icon={Activity} label="Requêtes lentes" value={Number(db?.slow ?? 0).toLocaleString("fr-CA")} detail="Durée SQL supérieure ou égale à 200 ms" />
+      <Metric icon={Database} label="Egress SQL récent" value={formatBytes(dbBytes)} detail={`${selected.label} · ${dbRequests.toLocaleString("fr-CA")} requêtes · historique exclu`} />
+      <Metric icon={Timer} label="Latence SQL moyenne" value={dbRequests ? `${(dbMs / dbRequests).toLocaleString("fr-CA", { maximumFractionDigits: 1 })} ms` : "—"} detail={`${selected.label} · temps observé par l’application`} />
+      <Metric icon={Gauge} label="Requête la plus lente" value={`${Number(db?.maxDuration ?? 0).toLocaleString("fr-CA", { maximumFractionDigits: 0 })} ms`} detail={`Maximum observé sur ${selected.label}`} />
+      <Metric icon={Activity} label="Requêtes lentes" value={Number(db?.slow ?? 0).toLocaleString("fr-CA")} detail={`${selected.label} · durée SQL supérieure ou égale à 200 ms`} />
     </section>
 
     <section className="mt-4 grid gap-4 xl:grid-cols-2">
