@@ -25,7 +25,7 @@ Apply the required migrations before deploying the code: the collector and repor
 - The collector cannot measure Fast Origin Transfer between Vercel's CDN and compute. That requires Vercel's platform metrics.
 - Only same-origin resources are included; cross-origin storage and third-party resources are excluded.
 - Browser cache hits are counted, while their transferred bytes remain zero.
-- The client batches measurements at most once per minute and when the page is hidden or closed. The telemetry endpoint requires an authenticated coach or athlete session.
+- The client batches measurements at most once per minute and when the page is hidden or closed. The telemetry endpoint stores data only for authenticated, club-associated users; expired or missing sessions are silently discarded because collection is best effort.
 - Web Vitals are reported once per page when it becomes hidden or closes. The INP value comes from Next.js Web Vitals. A browser that is closed abruptly may not send its final sample.
 - Performance ratings use the standard good boundaries (LCP 2.5 s, INP 200 ms, CLS 0.1, FCP 1.8 s, TTFB 800 ms); poor begins above 4 s, 500 ms, 0.25, 3 s, and 1.8 s respectively. Observabilité shows the share of rated visits in each band. At least 10 rated visits are required before it creates a performance recommendation; 75% good visits is the reference target.
 - Reports aggregate by club, hour, route, and resource type. No per-user history is retained.

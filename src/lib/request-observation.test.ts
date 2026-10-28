@@ -75,7 +75,7 @@ test("real ingestion and explorer SQL: auth, idempotency, attribution, paginatio
     });
     await t.test("authentication, cross-origin and malformed input cannot write", async () => {
       assert.equal((await POST(request({ observations: [observation()] }, "https://evil.test"))).status, 403);
-      user = null; assert.equal((await POST(request({ observations: [observation()] }))).status, 401);
+      user = null; assert.equal((await POST(request({ observations: [observation()] }))).status, 204);
       user = { clubId: "a", role: "COACH" };
       assert.equal((await POST(request({ observations: [observation({ resourcePath: "/api/data?token=secret" })] }))).status, 400);
       assert.equal((await POST(request({ observations: Array.from({ length: 41 }, () => observation()) }))).status, 400);

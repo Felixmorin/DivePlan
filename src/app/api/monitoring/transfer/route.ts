@@ -27,7 +27,11 @@ export async function POST(request: Request) {
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "invalid_origin" }, { status: 403 });
 
   const user = await getCurrentUserAccess();
-  if (!user?.clubId || !["COACH", "ATHLETE", "ADMIN"].includes(user.role)) return Response.json({ error: "unauthorized" }, { status: 401 });
+  // Browser telemetry is best effort and can flush during pagehide after a
+  // session expires. Silently discard it instead of logging a noisy 401.
+  if (!user?.clubId || !["COACH", "ATHLETE", "ADMIN"].includes(user.role)) {
+    return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
+  }
 
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > maxRequestBytes) return Response.json({ error: "payload_too_large" }, { status: 413 });
