@@ -37,6 +37,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     return <DraftSessionOverview session={session} published={session.status === "READY"} location={planningEventRows.rows[0]?.location ?? null} coachName={coach ? `${coach.firstName} ${coach.lastName}` : "À confirmer"} groupAthleteCount={Number(athleteCountRows.rows[0]?.count ?? 0)} />;
   }
   if (session.status === "COMPLETED") {
+    const coachNotes = (await query<{athleteId:string;note:string}>(`SELECT "athleteId",note FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [session.id])).rows;
     const completedSession = {
       id: session.id,
       date: session.date,
@@ -62,7 +63,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
           }))
         }
       })),
-      completions: session.completions.map(({ athleteId, status, note }) => ({ athleteId, status, note })),
+      completions: session.completions.map(({ athleteId, status, note, rating }) => ({ athleteId, status, note, rating })),
+      coachNotes,
       absences: session.absences.map(({ athleteId }) => ({ athleteId })),
       diveLogs: session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted }) => ({ athleteId, poolDiveId, repetitionsCompleted })),
       exerciseLogs: session.exerciseLogs.map(({ athleteId, exerciseId, completed }) => ({ athleteId, exerciseId, completed }))
@@ -77,7 +79,6 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     }] as const))).values());
     return <CoachShell active="Seances"><ActiveSessionOverview key={`${session.id}:${progress.planVersion}`} session={liveSessionForClient(session)} initialProgress={progress} athletes={athletes} /></CoachShell>;
   }
-  const coachNotes = (await query<{athleteId:string;note:string}>(`SELECT "athleteId",note FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [session.id])).rows;
   const rawAthletes = session.blocks.flatMap((block) =>
     block.assignments.map((assignment) => ({
       id: assignment.athlete.id,
