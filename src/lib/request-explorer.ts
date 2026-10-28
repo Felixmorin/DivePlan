@@ -14,6 +14,7 @@ export const observationListSql = `WITH observations AS (SELECT id::text, "clubI
   ORDER BY o."startedAt" DESC,o.id DESC`;
 export const observationSummarySql = `SELECT count(*)::text AS count, count(DISTINCT "pageId")::text AS pages,
   count(*) FILTER (WHERE status >= 400)::text AS errors,
+  count(*) FILTER (WHERE status = 200)::text AS successes,
   COALESCE(sum("transferBytes"),0)::text AS bytes, round(avg("durationMs"))::text AS duration,
   max("receivedAt") AS latest FROM "RequestObservation" WHERE ${observationWhere}`;
 export const observationBreakdownSql = `SELECT "resourceType", trigger, count(*)::text AS count FROM "RequestObservation"
@@ -29,7 +30,7 @@ export async function getRequestExplorer(filters: ExplorerFilters) {
   const args = [filters.from, filters.to, filters.route, filters.type, filters.trigger, filters.pageId];
   const [list, summary, breakdown, targets, totals, minutes] = await Promise.all([
     query<Omit<RequestObservation, "startedAt" | "transferBytes"> & { startedAt: Date; receivedAt: Date; transferBytes: string; serverTrigger: string|null; sqlQueries:number|null; sqlBytes:string|null; sqlMs:string|null }>(observationListSql, [...args, filters.before, filters.beforeId]),
-    query<{ count: string; pages: string; errors: string; bytes: string; duration: string | null; latest: Date | null }>(observationSummarySql, args),
+    query<{ count: string; pages: string; errors: string; successes: string; bytes: string; duration: string | null; latest: Date | null }>(observationSummarySql, args),
     query<{ resourceType: string; trigger: RequestObservation["trigger"]; count: string }>(observationBreakdownSql, args),
     query<{ resourcePath: string; count: string; bytes: string }>(observationTargetsSql, args),
     query<{ count: string; latest: Date | null }>(observationTotalsSql, args.slice(0, 3)),
