@@ -14,9 +14,10 @@ test("batched session hydration preserves rows and isolation with two detail que
     await db.exec(`
       CREATE TABLE "SyntheticSession" (id text, "clubId" text);
       CREATE TABLE "TrainingGroup" (id text, name text, "clubId" text, "coachId" text);
-      CREATE TABLE "TrainingWeek" (id text, "groupId" text);
+      CREATE TABLE "Coach" (id text, "clubId" text);
+      CREATE TABLE "TrainingWeek" (id text, "groupId" text, "clubId" text);
       CREATE TABLE "User" (id text, "firstName" text, "lastName" text, avatar text);
-      CREATE TABLE "Athlete" (id text, "userId" text);
+      CREATE TABLE "Athlete" (id text, "userId" text, "clubId" text);
       CREATE TABLE "SessionBlockAssignment" (id text, "sessionBlockId" text, "athleteId" text);
       CREATE TABLE "DrylandExercise" (id text, name text, category text, description text, equipment text,
         "defaultSets" integer, "defaultReps" integer, "defaultDuration" integer, "roundTrip" boolean, tags text[]);
@@ -29,9 +30,10 @@ test("batched session hydration preserves rows and isolation with two detail que
       CREATE TABLE "AthleteExerciseLog" (id text, "athleteId" text, "sessionId" text, "exerciseId" text, completed boolean, rating text, note text);
       INSERT INTO "SyntheticSession" VALUES ('session', 'club-a'), ('empty', 'club-a');
       INSERT INTO "TrainingGroup" VALUES ('group', 'Synthetic', 'club-a', 'coach');
-      INSERT INTO "TrainingWeek" VALUES ('week', 'group');
+      INSERT INTO "Coach" VALUES ('coach', 'club-a');
+      INSERT INTO "TrainingWeek" VALUES ('week', 'group', 'club-a');
       INSERT INTO "User" VALUES ('user-a', 'Alpha', 'Test', 'data:image/png;base64,SYNTHETIC'), ('user-b', 'Beta', 'Test', 'storage:synthetic-avatar');
-      INSERT INTO "Athlete" VALUES ('athlete-a', 'user-a'), ('athlete-b', 'user-b');
+      INSERT INTO "Athlete" VALUES ('athlete-a', 'user-a', 'club-a'), ('athlete-b', 'user-b', 'club-a');
       INSERT INTO "DrylandExercise" VALUES ('exercise-a', 'Gainage', 'Tronc', 'Synthetic description', NULL, 2, 5, NULL, false, ARRAY['test']),
         ('exercise-b', 'Sauts', 'Jambes', 'Synthetic description', NULL, 3, 4, NULL, true, ARRAY['test']);
       INSERT INTO "PoolDive" VALUES ('dive', '101A', 'Synthetic dive');
@@ -51,7 +53,8 @@ test("batched session hydration preserves rows and isolation with two detail que
     let clubId = "club-a";
     let authorized = true;
     const queries: Array<{ sql: string; values: unknown[] }> = [];
-    const snapshot = { id: "session", weekId: "week", notes: "Synthetic summary", status: "COMPLETED", week: {}, blocks };
+    const snapshot = { id: "session", weekId: "week", coachId: "coach", notes: "Synthetic summary", status: "COMPLETED", week: { clubId: "club-a" }, blocks };
+    let dbQueue = Promise.resolve();
     const dependencies: Record<string, unknown> = {
       "next/navigation": { notFound: () => { throw new Error("NOT_FOUND"); } },
       "@/lib/current-user": { requireCoach: async () => {
@@ -63,9 +66,11 @@ test("batched session hydration preserves rows and isolation with two detail que
         const { rows } = await db.query(`SELECT id FROM "SyntheticSession" WHERE id=$1 AND "clubId"=$2`, [id, club]);
         return rows.length ? { ...snapshot, id, blocks: id === "empty" ? [] : blocks } : null;
       } },
-      "@/lib/db": { query: async (sql: string, values: unknown[]) => {
+      "@/lib/db": { query: (sql: string, values: unknown[]) => {
         queries.push({ sql, values });
-        return db.query(sql, values);
+        const result = dbQueue.then(() => db.query(sql, values));
+        dbQueue = result.then(() => undefined, () => undefined);
+        return result;
       } }
     };
     const exports: { getCoachSession?: (id: string) => Promise<CoachSession> } = {};
@@ -88,7 +93,7 @@ test("batched session hydration preserves rows and isolation with two detail que
       // Recreate the previous two single-block reads with the same SQL and rows.
       for (const { sql } of detailQueries) {
         const legacySql = sql.replace("=ANY($1::text[])", "=$1");
-        const { rows } = await db.query<Record<string, Record<string, unknown>>>(legacySql, [block.id]);
+        const { rows } = await db.query<Record<string, Record<string, unknown>>>(legacySql, sql.includes('FROM "SessionBlockAssignment"') ? [block.id, "club-a"] : [block.id]);
         const expected = rows.map((r) => r.assignment
           ? { ...r.assignment, athlete: { ...r.athlete, user: r.user } }
           : { ...r.item, exercise: r.exercise });

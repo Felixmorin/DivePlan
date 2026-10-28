@@ -179,6 +179,7 @@ test("admin explorer checks authorization before queries, handles missing schema
   let missing = false;
   const denied = new Error("admin required");
   const Page = load<{ default: (props: { searchParams: Promise<object> }) => Promise<unknown> }>("src/app/admin/observability/requests/page.tsx", {
+    "lucide-react": new Proxy({}, { get: () => function Icon() {} }),
     "react/jsx-runtime": { jsx: (type: unknown, props: unknown) => ({ type, props }), jsxs: (type: unknown, props: unknown) => ({ type, props }) },
     "@/components/ui/app-link": {}, "@/components/admin/admin-shell": {},
     "@/lib/current-user": { requireAdmin: async () => { if (!authorized) throw denied; } },

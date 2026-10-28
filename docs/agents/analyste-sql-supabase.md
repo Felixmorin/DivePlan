@@ -15,6 +15,20 @@
 
 Codex analyse localement le SQL du dépôt, les accès de données dans `src/app` et `src/lib`, `prisma/schema.prisma` et les migrations SQL. Il repère les lectures répétées, les volumes potentiellement excessifs, les risques N+1, les pistes d’index déclarées et les duplications. Depuis Admin → Agents, le bouton « Démarrer l’analyse Codex » met la demande en file pour le runner local.
 
+### Connecter un audit PostgreSQL en lecture seule
+
+Sur le compte Windows qui exécute le runner, lancer :
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\set-sql-audit-connection.ps1
+```
+
+Fournir une chaîne PostgreSQL pour un rôle dédié sans privilèges d’écriture. Le secret est saisi sans affichage et stocké par DPAPI dans `%LOCALAPPDATA%\DivePlan\sql-audit-connection.dpapi`. Le runner appelle `scripts/audit-postgres.mjs` avant Codex. Le script exécute seulement des `SELECT` dans une transaction `READ ONLY`, limite chaque requête de catalogue à 12 secondes et ferme la connexion avant de lancer Codex.
+
+Le relevé contient les clés étrangères sans index BTREE couvrant les colonnes dans leur ordre, les index publics à zéro scan avec leur taille et le compteur de remise à zéro des statistiques, les tables publiques avec RLS sans politique, les métadonnées des politiques, et la définition/privilèges/event triggers de `public.rls_auto_enable()`. Il ne lit aucune ligne de table métier, ne consulte pas le texte des requêtes `pg_stat_statements`, ne lit pas `.env` et n’envoie jamais l’URL de connexion. Codex reçoit ces métadonnées seulement si la connexion DPAPI existe. Sans celle-ci, il fait l’analyse statique habituelle.
+
+Le rôle est à créer dans la base cible avec la politique d’accès minimale de votre fournisseur. Ne réutilise pas le compte administrateur ou le compte de production de l’application. Si la chaîne doit être remplacée, relancer le script de configuration; pour désactiver la source, supprimer le fichier DPAPI sous le compte Windows du runner.
+
 Installer le runner une fois, depuis la racine du dépôt :
 
 ```powershell
@@ -42,4 +56,4 @@ Séparer les faits lisibles dans le code et les hypothèses de coût. Vérifier 
 
 ## Limites
 
-L’analyse du code reste statique et locale. Aucun SQL n’est exécuté et aucune base Supabase/PostgreSQL n’est contactée. Codex reçoit les nombres et le SQL normalisé saisis dans le fichier de métriques; les commentaires SQL sont retirés avant transmission pour écarter notamment des identifiants de session. Vérifie le contenu avant l’envoi, car les requêtes peuvent révéler des détails internes. L’agent ne consulte pas les politiques RLS effectives, factures ou plans d’exécution. Codex tourne avec `--sandbox read-only --ephemeral`; le runner ne modifie pas le dépôt et n’applique pas de migrations. Le rapport n’avance aucun montant d’économie. Aucune clé API ni rapport complet n’est envoyé à DivePlan.
+L’analyse du code reste locale. Sans connexion DPAPI, aucune base n’est contactée; avec celle-ci, seul le script d’audit dédié exécute les lectures de catalogues dans une transaction `READ ONLY`. Les données envoyées à Codex peuvent révéler les noms d’objets et la définition de `rls_auto_enable()`, mais excluent les lignes métier, les textes de requête enregistrés, les secrets et les valeurs de `.env`. Les statistiques d’index peuvent avoir été réinitialisées et ne prouvent pas qu’un index est inutile. L’agent ne consulte pas les factures ou plans d’exécution. Codex tourne avec `--sandbox read-only --ephemeral`; le runner ne modifie pas le dépôt et n’applique pas de migrations. Le rapport n’avance aucun montant d’économie. Aucune clé API ni rapport complet n’est envoyé à DivePlan.
