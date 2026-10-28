@@ -12,6 +12,8 @@ export const observationListSql = `WITH observations AS (SELECT id::text, "clubI
   ORDER BY "startedAt" DESC, id DESC LIMIT 51 ) SELECT o.*, m.trigger AS "serverTrigger", m."queryCount" AS "sqlQueries", m."resultBytes"::text AS "sqlBytes", m."sqlDurationMs"::text AS "sqlMs"
   FROM observations o LEFT JOIN "ServerRequestMetric" m ON m.id=o."serverRequestId" AND m."clubId" IS NOT DISTINCT FROM o."clubId" AND m.route=o."resourcePath"
   ORDER BY o."startedAt" DESC,o.id DESC`;
+export const observationExportSql = `SELECT id::text, "clubId", "serverRequestId", "pageId"::text, route, "resourcePath", "resourceType", trigger, "startedAt", "receivedAt", "durationMs", "transferBytes"::text, "cacheHit", status
+  FROM "RequestObservation" WHERE ${observationWhere} ORDER BY "startedAt" DESC, id DESC`;
 export const observationSummarySql = `SELECT count(*)::text AS count, count(DISTINCT "pageId")::text AS pages,
   count(*) FILTER (WHERE status >= 400)::text AS errors,
   count(*) FILTER (WHERE status = 200)::text AS successes,
@@ -38,4 +40,10 @@ export async function getRequestExplorer(filters: ExplorerFilters) {
       ? query<{ minute: Date; count: string }>(observationMinuteSql, args) : Promise.resolve({ rows: [] })
   ]);
   return { list: list.rows.slice(0, 50), hasMore: list.rows.length > 50, summary: summary.rows[0], breakdown: breakdown.rows, targets: targets.rows, total: totals.rows[0], minutes: minutes.rows };
+}
+
+export async function getRequestExport(filters: Omit<ExplorerFilters, "before" | "beforeId">) {
+  const args = [filters.from, filters.to, filters.route, filters.type, filters.trigger, filters.pageId];
+  const result = await query<RequestObservation & { startedAt: Date; receivedAt: Date; transferBytes: string }>(observationExportSql, args);
+  return result.rows;
 }

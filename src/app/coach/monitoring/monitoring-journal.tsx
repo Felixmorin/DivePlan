@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Activity, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, FileText, Pencil, RefreshCw, Search, Settings, Shield, UserRound, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-type EventRow = { id: string; type: string; message: string; source: string; date: string };
+type EventRow = { id: string; type: string; message: string; source: string; date: string; actions?: Array<{ action: string; path: string; at: string }> };
 type Category = "Séances" | "Aperçus" | "Authentification" | "Athlètes" | "Système";
 type Range = "24h" | "7d" | "30d" | "all";
 const categories: Category[] = ["Séances", "Aperçus", "Authentification", "Athlètes", "Système"];
@@ -69,10 +69,11 @@ function EventItem({ event }: { event: EventRow }) {
   const category = categoryFor(event.type); const style = categoryStyle[category];
   const date = new Date(event.date);
   const time = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date);
-  return <article className="flex items-center gap-3 border-b border-[var(--color-border)] py-3 last:border-b-0 sm:gap-4"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${style.bg} ${style.fg}`}><EventIcon type={event.type} className="h-5 w-5" /></span><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold">{event.message}</h3><p className="mt-1 truncate text-xs text-[var(--color-ink-muted)]">{time && `${time}  ·  `}{event.source} <span className="px-1">·</span> {event.type}</p></div><span className={`hidden shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold sm:inline-flex ${style.bg} ${style.fg}`}>{category}</span></article>;
+  return <article className="border-b border-[var(--color-border)] py-3 last:border-b-0"><div className="flex items-center gap-3 sm:gap-4"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${style.bg} ${style.fg}`}><EventIcon type={event.type} className="h-5 w-5" /></span><div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold">{event.message}</h3><p className="mt-1 truncate text-xs text-[var(--color-ink-muted)]">{time && `${time}  ·  `}{event.source} <span className="px-1">·</span> {event.type}</p></div><span className={`hidden shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold sm:inline-flex ${style.bg} ${style.fg}`}>{category}</span></div>{event.type === "athlete.visit" && <details className="ml-14 mt-2"><summary className="w-fit cursor-pointer text-xs font-bold text-sky-700">Voir les actions ({event.actions?.length ?? 0})</summary><ol className="mt-2 space-y-1 border-l-2 border-sky-100 pl-3">{event.actions?.map((action, index) => <li key={`${event.id}-${index}`} className="text-xs text-[var(--color-ink-muted)]"><span className="font-semibold text-[var(--color-ink)]">{action.action}</span><span className="ml-2">{action.path}</span></li>)}{!event.actions?.length && <li className="text-xs text-[var(--color-ink-muted)]">Aucune action enregistrée.</li>}</ol></details>}</article>;
 }
 
 function categoryFor(type: string): Category {
+  if (type === "athlete.visit") return "Athlètes";
   if (type === "session.previewed" || type.includes("preview")) return "Aperçus";
   if (type.startsWith("auth.")) return "Authentification";
   if (type.startsWith("session.") || type.includes("training")) return "Séances";

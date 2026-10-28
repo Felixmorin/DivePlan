@@ -15,8 +15,8 @@ export default async function MonitoringPage() {
 
   const since = sinceHours(24);
   const [eventsResult, failedResult, completedResult] = await Promise.all([
-    query<{ id: string; type: string; message: string; email: string | null; createdAt: Date }>(
-      `SELECT e.id, e.type, e.message, u.email, e."createdAt" FROM "AppEvent" e
+    query<{ id: string; type: string; message: string; email: string | null; firstName: string | null; lastName: string | null; metadata: unknown; createdAt: Date }>(
+      `SELECT e.id, e.type, e.message, e.metadata, u.email, u."firstName", u."lastName", e."createdAt" FROM "AppEvent" e
        LEFT JOIN "User" u ON u.id = e."userId" WHERE e."clubId" = $1
        ORDER BY e."createdAt" DESC LIMIT 500`, [clubId]),
     query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE "clubId" = $1 AND type = 'auth.failed' AND "createdAt" >= $2`, [clubId, since]),
@@ -26,10 +26,15 @@ export default async function MonitoringPage() {
        WHERE w."clubId" = $1 AND c.status = 'COMPLETED' AND c."completedAt" >= $2`, [clubId, since])
   ]);
   return <MonitoringContent
-    events={eventsResult.rows.map((e) => ({ id: e.id, type: e.type, message: e.message, source: e.email ?? "Système", date: e.createdAt.toISOString() }))}
+    events={eventsResult.rows.map((e) => ({ id: e.id, type: e.type, message: e.message, source: e.type === "athlete.visit" ? [e.firstName, e.lastName].filter(Boolean).join(" ") || e.email || "Athlète" : e.email ?? "Système", date: e.createdAt.toISOString(), actions: readVisitActions(e.metadata) }))}
     failedLogins={Number(failedResult.rows[0]?.count ?? 0)}
     completedSessions={Number(completedResult.rows[0]?.count ?? 0)}
   />;
+}
+
+function readVisitActions(metadata: unknown): Array<{ action: string; path: string; at: string }> {
+  if (!metadata || typeof metadata !== "object" || !("actions" in metadata) || !Array.isArray(metadata.actions)) return [];
+  return metadata.actions.flatMap((item) => item && typeof item === "object" && "action" in item && typeof item.action === "string" && "path" in item && typeof item.path === "string" && "at" in item && typeof item.at === "string" ? [{ action: item.action, path: item.path, at: item.at }] : []);
 }
 
 function createDemoEvents() {

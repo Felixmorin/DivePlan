@@ -15,8 +15,12 @@ export async function AdminShell({ children }: { children: React.ReactNode; acti
     <AdminNavigation status={status}/>
     <div className="md:ml-[228px] lg:ml-[252px]">
       <div className="fixed bottom-0 left-0 z-20 hidden w-[228px] border-t border-white/10 bg-[#09233b] px-3 pb-4 pt-3 text-white md:block lg:w-[252px] lg:px-4">
-        <AdminThemeToggle placement="sidebar"/>
-        <form className="mt-2" action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}><button className="flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-white/75 hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"><LogOut className="h-4 w-4"/>Déconnexion</button></form>
+        <div className="flex items-center justify-between gap-2">
+          <AdminThemeToggle placement="sidebar"/>
+          <form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}>
+            <button aria-label="Déconnexion" title="Déconnexion" className="flex h-8 w-8 items-center justify-center rounded-lg text-white/75 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"><LogOut className="h-4 w-4"/></button>
+          </form>
+        </div>
       </div>
       <header className="fixed inset-x-0 top-14 z-20 flex items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 py-2 backdrop-blur md:hidden">
         <span className="ml-auto"><AdminThemeToggle placement="mobile"/></span>
