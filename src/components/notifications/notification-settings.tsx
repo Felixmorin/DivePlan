@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Bell, Settings2 } from "lucide-react";
 
 type State = "checking" | "unsupported" | "disabled" | "enabled" | "denied" | "configuration" | "storage" | "error";
 type PushSubscriptionJSON = { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
@@ -146,15 +147,15 @@ export function NotificationSettings() {
     error: "État des notifications indisponible"
   }[state];
 
-  return <section className="rounded-2xl border border-white/10 bg-[#0b1e30] p-4" aria-labelledby="notification-settings-title">
-    <h3 id="notification-settings-title" className="text-lg font-black text-white">Notifications</h3>
-    <p className="mt-1 text-sm text-white/55">État : <span role="status" className="font-bold text-white/80">{status}</span></p>
+  return <section className="rounded-xl border border-[#071827] bg-[#071827] p-5 shadow-[0_6px_20px_rgba(14,52,83,.08)]" aria-labelledby="notification-settings-title">
+    <div className="flex items-start gap-3"><Bell className="mt-0.5 h-6 w-6 text-white" /><div><h3 id="notification-settings-title" className="text-[17px] font-extrabold text-white">Notifications</h3>
+    <p className="mt-0.5 text-[12px] text-white/75">État : <span role="status" className={`font-bold ${state === "enabled" ? "text-emerald-300" : "text-white/85"}`}>{status}</span></p></div></div>
     {state === "denied" && <p className="mt-3 text-sm text-white/65">Pour les réactiver, autorise les notifications de DivePlan dans les réglages du navigateur ou de l’appareil, puis reviens ici. DivePlan ne redemandera pas la permission automatiquement.</p>}
     {state === "configuration" && <p className="mt-3 text-sm text-white/65">L’administrateur doit configurer les clés VAPID de DivePlan avant l’activation. Recharge la page après la configuration.</p>}
     {state === "storage" && <p className="mt-3 text-sm text-white/65">La migration SQL Web Push doit être appliquée à la base de données avant l’enregistrement de cet appareil.</p>}
     {appleMobile && !standalone && <p className="mt-3 rounded-xl bg-cyan-50 p-3 text-sm text-slate-700">Sur iPhone ou iPad, ajoute d’abord DivePlan à l’écran d’accueil : ouvre le menu Partager, choisis « Sur l’écran d’accueil », puis ouvre DivePlan depuis son icône.</p>}
     {state === "unsupported" && appleMobile && !standalone && <p className="mt-2 text-sm text-white/65">Les notifications seront disponibles après l’ouverture de l’app installée, si ta version d’iOS/iPadOS les prend en charge.</p>}
-    <div className="mt-4 flex min-h-11 items-center justify-between gap-4">
+    <div className="mt-3 flex min-h-11 items-center justify-between gap-4 border-t border-white/15 pt-3">
       <span id="notification-toggle-label" className="text-sm font-bold text-white/85">Activer les notifications</span>
       <button
         type="button"
@@ -168,7 +169,7 @@ export function NotificationSettings() {
         <span className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${state === "enabled" ? "translate-x-5" : "translate-x-0"}`} />
       </button>
     </div>
-    {state === "enabled" && <button type="button" onClick={() => void test()} className="mt-3 min-h-10 rounded-xl border border-white/10 px-4 text-sm font-bold text-white/75 hover:bg-white/[0.04]">Envoyer une notification de test</button>}
+    <button type="button" onClick={() => state === "enabled" ? void test() : void refresh()} className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/[0.03] px-4 text-[13px] font-bold text-white hover:bg-white/[0.08]"><Settings2 className="h-4 w-4" />{state === "enabled" ? "Envoyer une notification de test" : "Actualiser l’état des notifications"}</button>
     {message && <p className="mt-3 text-sm text-white/65" role="status">{message}</p>}
   </section>;
 }

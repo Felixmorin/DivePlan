@@ -17,12 +17,13 @@ export default async function MonitoringPage() {
   const [eventsResult, failedResult, completedResult] = await Promise.all([
     query<{ id: string; type: string; message: string; email: string | null; createdAt: Date }>(
       `SELECT e.id, e.type, e.message, u.email, e."createdAt" FROM "AppEvent" e
-       LEFT JOIN "User" u ON u.id = e."userId" ORDER BY e."createdAt" DESC LIMIT 500`),
-    query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE type = 'auth.failed' AND "createdAt" >= $1`, [since]),
+       LEFT JOIN "User" u ON u.id = e."userId" WHERE e."clubId" = $1
+       ORDER BY e."createdAt" DESC LIMIT 500`, [clubId]),
+    query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE "clubId" = $1 AND type = 'auth.failed' AND "createdAt" >= $2`, [clubId, since]),
     query<{ count: string }>(
       `SELECT count(*)::text AS count FROM "AthleteSessionCompletion" c
        JOIN "TrainingSession" s ON s.id = c."sessionId" JOIN "TrainingWeek" w ON w.id = s."weekId"
-       WHERE c.status = 'COMPLETED' AND c."completedAt" >= $1`, [since])
+       WHERE w."clubId" = $1 AND c.status = 'COMPLETED' AND c."completedAt" >= $2`, [clubId, since])
   ]);
   return <MonitoringContent
     events={eventsResult.rows.map((e) => ({ id: e.id, type: e.type, message: e.message, source: e.email ?? "Système", date: e.createdAt.toISOString() }))}
@@ -43,7 +44,7 @@ function createDemoEvents() {
 function MonitoringContent({ events, failedLogins, completedSessions }: { events: Array<{ id: string; type: string; message: string; source: string; date: string }>; failedLogins: number; completedSessions: number }) {
   return <CoachShell active="Monitoring">
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div><h1 className="text-3xl font-black tracking-tight">Monitoring</h1><p className="mt-1 max-w-lg text-sm text-[var(--color-ink-muted)]">Suivez l’activité de l’application et les événements système en temps réel.</p></div>
+      <div><h1 className="text-3xl font-black tracking-tight">Monitoring</h1><p className="mt-1 max-w-lg text-sm text-[var(--color-ink-muted)]">Suivez les événements et l’activité de votre club en temps réel.</p></div>
     </header>
     <section aria-label="Statistiques de monitoring" className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard icon={FileText} color="blue" value={events.length} label="Événements" />
