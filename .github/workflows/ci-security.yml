@@ -1,0 +1,77 @@
+name: CI / Sécurité
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Qualité et dépendances
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Configurer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances verrouillées
+        run: npm ci
+
+      - name: Vérifier les vulnérabilités des dépendances
+        run: npm audit --audit-level=high
+
+      - name: Vérifier le lint
+        run: npm run lint
+
+      - name: Exécuter les tests
+        run: npm test
+
+      - name: Construire l’application
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/diveplan
+          AUTH_SECRET: ci-build-only-placeholder
+          AUTH_URL: http://localhost:3000
+
+  codeql:
+    name: Analyse CodeQL
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Initialiser CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: Analyser le code
+        uses: github/codeql-action/analyze@v3
+
+  secrets:
+    name: Détection de secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer l’historique Git
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rechercher des secrets exposés
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
