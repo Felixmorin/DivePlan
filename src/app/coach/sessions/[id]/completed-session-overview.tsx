@@ -21,7 +21,8 @@ type Session = {
     drylandExercises: Array<{ exerciseId: string; sets: number | null; reps: number | null; exercise: { name: string } }>;
     poolTraining: { sections: Array<{ id: string; label: string | null; height: string; dives: Array<{ id: string; diveCode: string; repetitions: number }> }> } | null;
   }>;
-  completions: Array<{ athleteId: string; status: string; note: string | null }>;
+  completions: Array<{ athleteId: string; status: string; note: string | null; rating: string | null }>;
+  coachNotes: Array<{ athleteId: string; note: string }>;
   absences: Array<{ athleteId: string }>;
   diveLogs: Array<{ athleteId: string; poolDiveId: string; repetitionsCompleted: number }>;
   exerciseLogs: Array<{ athleteId: string; exerciseId: string; completed: boolean }>;
@@ -48,8 +49,9 @@ function pct(actual: number, planned: number) {
 }
 
 export function CompletedSessionOverview({ session }: { session: Session }) {
-  const [allOpen, setAllOpen] = useState<boolean | null>(null);
+  const [allOpen, setAllOpen] = useState<boolean | null>(false);
   const [editingSummary, setEditingSummary] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const [presenceOpen, setPresenceOpen] = useState(false);
   const [absentAthleteIds, setAbsentAthleteIds] = useState<Set<string>>(() => new Set(session.absences.map(({ athleteId }) => athleteId)));
   const blocks = [...session.blocks].sort((a, b) => a.position - b.position);
@@ -97,8 +99,11 @@ export function CompletedSessionOverview({ session }: { session: Session }) {
   const actualDry = activeAthletes.reduce((sum, athlete) => sum + athlete.actualDryland, 0);
   const plannedPoolReps = activeAthletes.reduce((sum, athlete) => sum + athlete.plannedPool, 0);
   const actualPoolReps = activeAthletes.reduce((sum, athlete) => sum + athlete.actualPool, 0);
-  const plannedReps = plannedDry + plannedPoolReps;
-  const actualReps = actualDry + actualPoolReps;
+  const ratingScale = ["Pas bien", "Difficile", "Moyen", "Bien", "Très bien"];
+  const ratings = session.completions.map(({ rating }) => ratingScale.indexOf(rating ?? "") + 1).filter((rating) => rating > 0);
+  const averageRating = ratings.length ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1) : "—";
+  const plannedExercises = blocks.filter((block) => block.type === "DRYLAND").reduce((sum, block) => sum + block.drylandExercises.length * block.assignments.filter(({ athleteId }) => !absentAthleteIds.has(athleteId)).length, 0);
+  const actualExercises = session.exerciseLogs.filter((log) => log.completed && !absentAthleteIds.has(log.athleteId)).length;
   const athleteCompletedBlock = (block: Session["blocks"][number], athleteId: string) => {
     if (block.type === "POOL") {
       const ids = new Set(block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.id)) ?? []);
@@ -112,8 +117,6 @@ export function CompletedSessionOverview({ session }: { session: Session }) {
     const participating = block.assignments.filter(({ athleteId }) => athleteMap.get(athleteId)?.status !== "SKIPPED");
     return participating.length > 0 && participating.every(({ athleteId }) => athleteCompletedBlock(block, athleteId));
   }).map((block) => block.id));
-  const completedBlocks = completedBlockIds.size;
-  const eligibleBlocks = blocks.filter((block) => block.assignments.some(({ athleteId }) => athleteMap.get(athleteId)?.status !== "SKIPPED")).length;
   const attention = activeAthletes.filter((athlete) => athlete.plannedPool > 0 && athlete.percent < 80);
   const categories = kindOrder.map((type) => {
     const categoryBlocks = blocks.filter((block) => block.type === type);
@@ -138,24 +141,17 @@ export function CompletedSessionOverview({ session }: { session: Session }) {
   }).filter((item): item is NonNullable<typeof item> => item !== null);
   return <>
     <div className="completed-overview">
-      <header className="completed-head"><div><h1>Séance terminée</h1><p>{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}<span>·</span>{session.week.group.name}</p></div><span className="completed-status"><CircleCheck /> Terminée</span><div className="completed-actions"><button type="button" onClick={() => setPresenceOpen(true)}><UserCheck /> Présence</button><button type="button" onClick={() => { setEditingSummary(true); setTimeout(() => document.getElementById("completed-summary-editor")?.scrollIntoView({ behavior: "smooth" }), 0); }}><NotebookText /> Modifier le résumé</button><details><summary><Download /> Exporter <ChevronDown /></summary><div><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Exporter en PDF</Link></div></details></div></header>
+      <div className="completed-breadcrumb"><Link href="/coach/sessions">Séances</Link><span>›</span><span>Séance du {formatMontrealDate(session.date, { day: "numeric", month: "long", year: "numeric" })}</span></div>
+      <header className="completed-head"><div className="completed-title"><span className="completed-title-check"><Check /></span><div><h1>Séance terminée</h1><p>{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}<span>·</span>{session.week.group.name}</p></div></div><div className="completed-actions"><details className="completed-more"><summary aria-label="Plus d’actions"><MoreHorizontal /></summary><div><button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); setPresenceOpen(true); }}><UserCheck /> Gérer les présences</button><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Exporter en PDF</Link></div></details><Link href="#session-content"><Eye /> Voir la séance</Link><Link className="completed-primary" href="/coach/sessions/new"><Plus /> Nouvelle séance</Link></div></header>
       <section className="completed-stats">
-        <CompletedStat icon={<Users />} label="Présence" value={attendanceLabel} detail="athlètes présents" />
-        <CompletedStat icon={<Target />} label="Répétitions complétées" value={`${actualReps}/${plannedReps}`} detail={`${pct(actualReps, plannedReps)}% du volume prévu`} />
-        <CompletedStat icon={<Waves />} label="Plongeons réalisés" value={`${actualPoolReps}/${plannedPoolReps}`} detail={`${pct(actualPoolReps, plannedPoolReps)}% du nombre prévu`} />
-        <CompletedStat icon={<ClipboardList />} label="Blocs complétés" value={`${completedBlocks}/${eligibleBlocks}`} detail={`${pct(completedBlocks, eligibleBlocks)}% des blocs`} />
-        <CompletedStat icon={<Flag />} label="Points à suivre" value={attention.length} detail="à reprendre à la prochaine séance" warning />
+        <CompletedStat icon={<Users />} label="Athlètes" value={attendanceLabel} detail={`${assigned ? Math.round(present / assigned * 100) : 0}% présents`} />
+        <CompletedStat icon={<CircleCheck />} label="Exercices complétés" value={`${actualExercises} / ${plannedExercises}`} detail={`${pct(actualExercises, plannedExercises)}% réalisés`} />
+        <CompletedStat icon={<Waves />} label="Volume de la séance" value={`${actualPoolReps} / ${plannedPoolReps} plongeons`} detail={`${pct(actualPoolReps, plannedPoolReps)}% réalisé`} />
+        <CompletedStat icon={<Smile />} label="Ressenti moyen" value={averageRating === "—" ? "—" : `${averageRating} / 5`} detail={ratings.length ? "Évaluation des athlètes" : "Aucun ressenti enregistré"} />
       </section>
-      <section className="completed-panel" id="group-summary"><h2><Activity /> Bilan du groupe</h2><div className="completed-insights">
-        <article className="positive"><Trophy /><div><strong>Point positif</strong><p>{pct(actualReps, plannedReps)}% du volume prévu a été réalisé par le groupe.</p></div></article>
-        <article className="improve"><Target /><div><strong>Point à travailler</strong><p>{attention.length ? `${attention.length} athlète${attention.length > 1 ? "s" : ""} à accompagner à la prochaine séance selon les répétitions réalisées.` : "Le groupe a atteint les objectifs de répétition prévus."}</p></div></article>
-        <article className="engagement"><BarChart3 /><div><strong>Présence / engagement</strong><p>{present} athlète{present > 1 ? "s" : ""} présent{present > 1 ? "s" : ""} sur {assigned}{absentCount ? ` (${absentCount} absent${absentCount === 1 ? "" : "s"})` : ""}. {completedBlocks} bloc{completedBlocks > 1 ? "s" : ""} terminé{completedBlocks > 1 ? "s" : ""} sur {eligibleBlocks}.</p></div></article>
-      </div></section>
-      <section className="completed-panel"><header className="completed-panel-head"><h2><MessageSquareText /> Messages des athlètes</h2></header>{athleteMessages.length ? <div className="grid gap-2 sm:grid-cols-2">{athleteMessages.map(({ athlete, message }) => <article className="rounded-lg border border-slate-200 bg-slate-50 p-3" key={athlete.id}><strong className="text-sm">{athlete.firstName} {athlete.lastName}</strong><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{message}</p></article>)}</div> : <p className="completed-empty">Aucun message laissé par les athlètes pour cette séance.</p>}</section>
-      <section className="completed-panel"><header className="completed-panel-head"><h2><Users /> Athlètes à suivre</h2><Link href="/coach/athletes">Voir tous les athlètes <ArrowRight /></Link></header>
-        <div className="completed-table-scroll"><table className="completed-athlete-table"><thead><tr><th>Athlète</th><th>Données de la séance</th><th>À reprendre</th><th /></tr></thead><tbody>{attention.map((athlete) => <tr key={athlete.id}><td><b className="completed-avatar">{athlete.firstName[0]}{athlete.lastName[0]}</b><strong>{athlete.firstName} {athlete.lastName}</strong></td><td><strong>{athlete.actualPool}/{athlete.plannedPool} répétitions</strong><small>{athlete.actualPool} plongeons</small></td><td>{athlete.nextStep}</td><td><Link aria-label={`Voir ${athlete.firstName} ${athlete.lastName}`} href={`/coach/athletes/${athlete.id}`}>•••</Link></td></tr>)}{attention.length === 0 && <tr><td colSpan={4} className="completed-empty">Tous les athlètes ont atteint 80 % des plongeons prévus.</td></tr>}</tbody></table></div>
-      </section>
-      <section className="completed-panel completed-content"><header className="completed-panel-head"><h2><ClipboardList /> Contenu de la séance</h2><button type="button" onClick={() => setAllOpen((open) => open === true ? false : true)}>{allOpen ? "Tout replier" : "Tout déplier"}</button></header>
+      <div className="completed-split-panels"><section className="completed-panel completed-plan" id="group-summary"><header className="completed-panel-head"><h2><FileText /> Plan du groupe</h2><div><span>Réalisé</span><button type="button" aria-label="Modifier le plan du groupe" onClick={() => { setEditingSummary(true); setTimeout(() => document.getElementById("completed-summary-editor")?.scrollIntoView({ behavior: "smooth" }), 0); }}><NotebookText /></button></div></header><p>{session.notes?.trim() || "Plan orienté travail technique et préparation aux prochaines compétitions."}</p></section>
+      <section className="completed-panel completed-messages"><header className="completed-panel-head"><h2><MessageSquareText /> Messages des athlètes</h2><span>{athleteMessages.length} nouveau{athleteMessages.length === 1 ? "" : "x"}</span></header>{athleteMessages.length ? <div className="completed-message-list">{athleteMessages.map(({ athlete, message }) => <article key={athlete.id}><b className="completed-avatar">{athlete.firstName[0]}{athlete.lastName[0]}</b><strong>{athlete.firstName} {athlete.lastName}</strong><p>{message}</p><time>—</time></article>)}</div> : <p className="completed-empty">Aucun message laissé par les athlètes pour cette séance.</p>}</section></div>
+      <section className="completed-panel completed-content" id="session-content"><header className="completed-panel-head"><h2><ClipboardList /> Contenu de la séance</h2><button type="button" onClick={() => setAllOpen((open) => open === true ? false : true)}>{allOpen ? "Tout replier" : "Tout déplier"}</button></header>
         {categories.map((category) => <details className="completed-category" key={category.type} open={allOpen ?? false}><summary><span className={`completed-dot ${category.type.toLowerCase()}`} /><strong>{category.label}</strong><span>{category.blocks.length} bloc{category.blocks.length > 1 ? "s" : ""}</span><span className="completed-category-status"><CircleCheck /> {category.doneCount}/{category.eligibleCount} complétés</span><b>{category.actual}/{category.planned}</b> répétitions <ChevronDown /></summary>
           <div className="completed-block-list">{category.blocks.map((block) => {
             const blockPoolPlan = plannedPool(block);
@@ -170,7 +166,32 @@ export function CompletedSessionOverview({ session }: { session: Session }) {
                 : 0;
             const complete = completedBlockIds.has(block.id);
             const allAbsent = block.assignments.length > 0 && participatingAssignments.length === 0;
-            return <details className="completed-block" key={block.id} open={allOpen ?? false}><summary><span className="completed-block-marker">▸</span><strong>{block.title}</strong><span className={allAbsent ? "completed-absent-status" : complete ? "completed-mini-status" : "incomplete-mini-status"}>{allAbsent ? "Absent" : complete ? "Terminé" : "Non complété"}</span><b>{actual}/{planned}</b> répétitions <ChevronDown /></summary>
+            if (block.type === "POOL") return <div className="completed-pool-athletes" key={block.id}>{block.assignments.map(({ athlete, athleteId }) => {
+              const absent = athleteMap.get(athleteId)?.status === "SKIPPED";
+              const athleteLogs = session.diveLogs.filter((log) => log.athleteId === athleteId);
+              const dives = (block.poolTraining?.sections ?? []).flatMap((section) => section.dives.map((dive) => {
+                const repetitionsPlanned = dive.repetitions * Math.max(1, countPoolContexts(section.label ?? section.height));
+                const repetitionsCompleted = athleteLogs.filter((log) => log.poolDiveId === dive.id).reduce((sum, log) => sum + log.repetitionsCompleted, 0);
+                const progress = repetitionsPlanned ? Math.min(100, Math.round(repetitionsCompleted / repetitionsPlanned * 100)) : 0;
+                const height = section.label ?? (section.height === "ONE_METER" ? "1m" : section.height === "THREE_METER" ? "3m" : section.height);
+                return { id: dive.id, code: dive.diveCode, height, repetitionsPlanned, repetitionsCompleted, progress };
+              }));
+              const athletePlanned = dives.reduce((sum, dive) => sum + dive.repetitionsPlanned, 0);
+              const athleteCompleted = dives.reduce((sum, dive) => sum + dive.repetitionsCompleted, 0);
+              const athleteComplete = athletePlanned > 0 && athleteCompleted >= athletePlanned;
+              return <details className="completed-block completed-pool-athlete" key={athleteId} open={allOpen ?? false}><summary><span className="completed-block-marker">▸</span><strong>Piscine - {athlete.user.firstName} {athlete.user.lastName}</strong><span className={absent ? "completed-absent-status" : athleteComplete ? "completed-mini-status" : "incomplete-mini-status"}>{absent ? "Absent" : athleteComplete ? "Terminé" : "Non complété"}</span><b>{absent ? 0 : athleteCompleted}/{athletePlanned}</b> répétitions <ChevronDown /></summary><div className="completed-pool-dive-grid">{dives.map((dive) => <article className="completed-pool-dive-card" key={dive.id}><div className="completed-pool-dive-heading"><span>{dive.height}</span><strong>{dive.code}</strong></div><span className="completed-pool-dive-label">Répétitions (fait / prévu)</span><strong className="completed-pool-dive-count">{absent ? 0 : dive.repetitionsCompleted} / {dive.repetitionsPlanned}</strong><span className={`completed-pool-dive-indicator${!absent && dive.progress >= 100 ? " is-complete" : ""}`} aria-label={absent ? "Athlète absent" : `${dive.progress}% complété`}>{!absent && dive.progress >= 100 ? <CircleCheck /> : `${absent ? 0 : dive.progress}%`}</span><span className="completed-pool-dive-progress"><span style={{ width: `${absent ? 0 : dive.progress}%` }} /></span></article>)}</div></details>;
+            })}</div>;
+            if (block.type === "DRYLAND" && block.drylandExercises.length > 0) {
+              return <details className="completed-block completed-dryland-block" key={block.id} open={allOpen ?? false}><summary><span className="completed-block-marker">▸</span><strong>{block.title}</strong><span className={allAbsent ? "completed-absent-status" : complete ? "completed-mini-status" : "incomplete-mini-status"}>{allAbsent ? "Absent" : complete ? "Terminé" : "Non complété"}</span><span className="completed-block-athletes" aria-label={`Athlètes assignés : ${block.assignments.map(({ athlete }) => `${athlete.user.firstName} ${athlete.user.lastName}`).join(", ")}`}>{block.assignments.map(({ athlete }) => <span key={athlete.id} title={`${athlete.user.firstName} ${athlete.user.lastName}`}>{athlete.user.firstName.slice(0, 1)}{athlete.user.lastName.slice(0, 1)}</span>)}</span><b>{actual}/{planned}</b> répétitions <ChevronDown /></summary><div className="completed-dryland-body"><div className="completed-dryland-exercise-grid">{block.drylandExercises.map((exercise) => {
+                const exerciseRepetitions = (exercise.reps ?? 0) * (exercise.sets ?? 1);
+                const plannedForExercise = exerciseRepetitions * participatingAssignments.length;
+                const completedAthletes = participatingAssignments.filter(({ athleteId }) => session.exerciseLogs.some((log) => log.athleteId === athleteId && log.exerciseId === exercise.exerciseId && log.completed)).length;
+                const actualForExercise = exerciseRepetitions * completedAthletes;
+                const exerciseComplete = participatingAssignments.length > 0 && plannedForExercise > 0 && completedAthletes === participatingAssignments.length;
+                return <article className="completed-dryland-exercise-card" key={exercise.exerciseId}><strong>{exercise.exercise.name}</strong><span>Répétitions (fait / prévu)</span><b>{actualForExercise} / {plannedForExercise}</b><span className={`completed-dryland-check${exerciseComplete ? " is-complete" : ""}`} aria-label={exerciseComplete ? "Exercice complété" : "Exercice non complété"}><Check /></span></article>;
+              })}</div></div></details>;
+            }
+            return <details className="completed-block" key={block.id} open={allOpen ?? false}><summary><span className="completed-block-marker">▸</span><strong>{block.title}</strong><span className={allAbsent ? "completed-absent-status" : complete ? "completed-mini-status" : "incomplete-mini-status"}>{allAbsent ? "Absent" : complete ? "Terminé" : "Non complété"}</span><span className="completed-block-athletes" aria-label={`Athlètes assignés : ${block.assignments.map(({ athlete }) => `${athlete.user.firstName} ${athlete.user.lastName}`).join(", ")}`}>{block.assignments.map(({ athlete }) => <span key={athlete.id} title={`${athlete.user.firstName} ${athlete.user.lastName}`}>{athlete.user.firstName.slice(0, 1)}{athlete.user.lastName.slice(0, 1)}</span>)}</span><b>{actual}/{planned}</b> répétitions <ChevronDown /></summary>
               <div className="completed-block-body"><div className="completed-table-scroll"><table><thead><tr><th>Plongeons travaillés</th><th><span>Répétitions (fait / prévu)</span><small className="completed-total-repetitions">{actual} / {planned}</small></th></tr></thead><tbody>{block.assignments.map(({ athlete }) => {
                 const absent = athleteMap.get(athlete.id)?.status === "SKIPPED";
                 const athleteDiveLogs = session.diveLogs.filter((log) => log.athleteId === athlete.id && poolIds.has(log.poolDiveId));
@@ -182,19 +203,27 @@ export function CompletedSessionOverview({ session }: { session: Session }) {
                   const completion = plannedRepetitions > 0 ? Math.min(100, Math.round(completedRepetitions / plannedRepetitions * 100)) : 0;
                   return <div className="completed-dive-row" key={dive.id}>
                     <span className="completed-dive-height">{heightLabel}</span><strong className="completed-dive-code">{dive.diveCode}</strong>
-                    <span className="completed-dive-repetitions"><small>Répétitions</small><b>{absent ? "—" : `${completedRepetitions} / ${plannedRepetitions}`}</b></span>
+                    <span className="completed-dive-repetitions"><small>Répétitions (fait / prévu)</small><b>{absent ? `0 / ${plannedRepetitions}` : `${completedRepetitions} / ${plannedRepetitions}`}</b></span>
                     <span className={`completed-dive-indicator${completion >= 100 ? " is-complete" : ""}`} aria-label={absent ? "Athlète absent" : `${completion}% complété`}>{!absent && completion >= 100 ? <CircleCheck /> : absent ? "—" : `${completion}%`}</span>
                     <span className="completed-dive-progress" aria-hidden="true"><span style={{ width: `${absent ? 0 : completion}%` }} /></span>
                   </div>;
-                }))}</div> : block.type === "DRYLAND" ? block.drylandExercises.map((item) => item.exercise.name).join(", ") : "—"}</td></tr>;
+                }))}</div> : block.type === "DRYLAND" ? <div className="completed-dive-rows">{block.drylandExercises.map((item) => {
+                  const plannedRepetitions = (item.sets ?? 1) * (item.reps ?? 0);
+                  const completed = session.exerciseLogs.some((log) => log.athleteId === athlete.id && log.exerciseId === item.exerciseId && log.completed);
+                  return <div className="completed-dive-row" key={item.exerciseId}>
+                    <strong className="completed-dive-code">{item.exercise.name}</strong>
+                    <span className="completed-dive-repetitions"><small>Répétitions (fait / prévu)</small><b>{absent ? `0 / ${plannedRepetitions}` : `${completed ? plannedRepetitions : 0} / ${plannedRepetitions}`}</b></span>
+                    {absent && <span className="completed-absent-status">Absent</span>}
+                  </div>;
+                })}</div> : "—"}</td></tr>;
               })}</tbody></table></div></div>
             </details>;
           })}</div>
         </details>)}
       </section>
-      <section className="completed-panel completed-followup" id="follow-up"><header className="completed-panel-head"><h2><Flag /> À reprendre à la prochaine séance</h2><button type="button" onClick={() => { setEditingSummary(true); setTimeout(() => document.getElementById("completed-summary-editor")?.scrollIntoView({ behavior: "smooth" }), 0); }}>＋ Ajouter un point</button></header>{attention.map((athlete) => <div className="completed-followup-row" key={athlete.id}><span className="completed-checkbox" /><span><strong>{athlete.nextStep}</strong><small>Pour {athlete.firstName} {athlete.lastName}</small></span></div>)}{attention.length === 0 && <p className="completed-empty">Aucun point à reprendre pour le moment.</p>}</section>
-      <section className="completed-panel completed-summary-editor" id="completed-summary-editor" hidden={!editingSummary}><h2><NotebookText /> Résumé et points à reprendre</h2><form id="completed-summary-form" action={updateCompletedSessionSummary}><input type="hidden" name="sessionId" value={session.id} /><textarea name="summary" defaultValue={session.notes ?? ""} maxLength={5000} placeholder="Ajoutez le bilan du groupe et les points à reprendre à la prochaine séance." /></form></section>
-      <footer className="completed-footer"><Link href="/coach/sessions"><ArrowLeft /> Retour aux séances</Link><button className="completed-save" type="submit" form="completed-summary-form"><Check /> Enregistrer le résumé</button></footer>
+      <section className="completed-panel completed-followup" id="follow-up"><header className="completed-panel-head"><h2><Users /> Athlètes à suivre</h2></header><div className="completed-followup-grid">{(attention.length ? attention : activeAthletes.slice(0, 2)).map((athlete) => <div className="completed-followup-row" key={athlete.id}><b className="completed-avatar">{athlete.firstName[0]}{athlete.lastName[0]}</b><span><strong>{athlete.firstName} {athlete.lastName}</strong><small>{attention.includes(athlete) ? athlete.nextStep : "Bonne progression, à encourager sur la régularité."}</small></span><ChevronDown /></div>)}</div>{attention.length === 0 && activeAthletes.length === 0 && <p className="completed-empty">Aucun athlète à suivre.</p>}</section>
+      <section className="completed-panel completed-private-notes"><header className="completed-panel-head"><h2><LockKeyhole /> Notes privées du coach</h2><button type="button" onClick={() => setNoteOpen((open) => !open)}><Plus /> Ajouter une note</button></header>{noteOpen && <form className="completed-note-form" action={saveCompletedSessionCoachNote}><input type="hidden" name="sessionId" value={session.id} /><label>Athlète<select name="athleteId" required defaultValue=""><option value="" disabled>Choisir un athlète</option>{athletes.map((athlete) => <option key={athlete.id} value={athlete.id}>{athlete.firstName} {athlete.lastName}</option>)}</select></label><label>Note privée<textarea name="note" required maxLength={2000} placeholder="Ajouter un point de suivi pour cet athlète…" /></label><button type="submit"><Check /> Enregistrer la note</button></form>}{session.coachNotes.length ? session.coachNotes.map(({ athleteId, note }) => { const athlete = athleteMap.get(athleteId); return <article className="completed-private-note" key={athleteId}><b className="completed-avatar">{athlete ? `${athlete.firstName[0]}${athlete.lastName[0]}` : "C"}</b><strong>{athlete ? `${athlete.firstName} ${athlete.lastName}` : "Coach"}</strong><p>{note}</p><span>Note privée</span><Link aria-label={`Voir la fiche de ${athlete ? `${athlete.firstName} ${athlete.lastName}` : "l’athlète"}`} href={athlete ? `/coach/athletes/${athleteId}` : "/coach/athletes"}><MoreHorizontal /></Link></article>; }) : <p className="completed-empty">Aucune note privée pour cette séance.</p>}</section>
+      <section className="completed-panel completed-summary-editor" id="completed-summary-editor" hidden={!editingSummary}><h2><NotebookText /> Résumé et points à reprendre</h2><form id="completed-summary-form" action={updateCompletedSessionSummary}><input type="hidden" name="sessionId" value={session.id} /><textarea name="summary" defaultValue={session.notes ?? ""} maxLength={5000} placeholder="Ajoutez le bilan du groupe et les points à reprendre à la prochaine séance." /><button className="completed-save" type="submit"><Check /> Enregistrer le résumé</button></form></section>
     </div>
     {presenceOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPresenceOpen(false); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="presence-dialog-title" className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl">

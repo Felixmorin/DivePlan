@@ -387,6 +387,10 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
   revalidatePath("/coach/planning");
   revalidatePath("/coach/sessions");
   revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/calendar");
+  revalidatePath("/athlete/week");
+  revalidatePath(`/athlete/session/${sessionId}`);
   redirect(`/coach/sessions/${sessionId}`);
 }
 
@@ -719,6 +723,22 @@ export async function updateCompletedSessionSummary(formData: FormData) {
   await trackEvent({ type: "session.summary_updated", message: `Résumé de séance mis à jour: ${session.title}`, clubId, userId: user.id, metadata: { sessionId: session.id } });
   revalidatePath(`/coach/sessions/${session.id}`);
   revalidatePath(`/coach/sessions/${session.id}/edit`);
+}
+
+export async function saveCompletedSessionCoachNote(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const athleteId = String(formData.get("athleteId") ?? "");
+  const note = String(formData.get("note") ?? "").trim().slice(0, 2000);
+  if (!note) throw new Error("La note ne peut pas être vide.");
+  const session = (await query<{ id: string; title: string }>(
+    `SELECT DISTINCT s.id,s.title FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "SessionBlock" b ON b."sessionId"=s.id JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE s.id=$1 AND w."clubId"=$2 AND s.status='COMPLETED' AND a."athleteId"=$3`,
+    [sessionId, clubId, athleteId]
+  )).rows[0];
+  if (!session) throw new Error("Séance ou athlète introuvable pour ce club.");
+  await query(`INSERT INTO "CoachAthleteSessionNote" ("sessionId","athleteId",note,"updatedAt") VALUES ($1,$2,$3,NOW()) ON CONFLICT ("sessionId","athleteId") DO UPDATE SET note=EXCLUDED.note,"updatedAt"=NOW()`, [session.id, athleteId, note]);
+  await trackEvent({ type: "session.coach_note_saved", message: `Note coach mise à jour: ${session.title}`, clubId, userId: user.id, metadata: { sessionId, athleteId } });
+  revalidatePath(`/coach/sessions/${session.id}`);
 }
 
 export async function markAthleteSessionCompleted(formData: FormData) {
@@ -1126,7 +1146,10 @@ export async function updateTrainingSession(formData: FormData) {
   revalidatePath("/coach/planning");
   revalidatePath("/coach/sessions");
   revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath("/athlete");
   revalidatePath("/athlete/calendar");
+  revalidatePath("/athlete/week");
+  revalidatePath(`/athlete/session/${sessionId}`);
   redirect(`/coach/sessions/${sessionId}`);
 }
 
