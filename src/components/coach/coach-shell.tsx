@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import Image from "next/image";
 import { Activity, Award, CalendarDays, Computer, Dumbbell, FileText, LayoutDashboard, Library, LogOut, Settings, Users, Waves } from "lucide-react";
 import { signOutCoach } from "@/app/coach/settings/actions";

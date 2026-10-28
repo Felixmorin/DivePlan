@@ -10,7 +10,7 @@ import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { buildSessionTemplatePayload, getSessionSnapshots, parseSessionTemplatePayload } from "@/lib/session-template";
 import type { SessionPoolHeight } from "@/lib/session-template";
 import { getCoachPoolInsights } from "@/lib/coach-pool-insights";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 
 export const dynamic = "force-dynamic";
 

@@ -1,3 +1,6 @@
 import "server-only";
 
-export { resolveAvatarUrls, uploadAvatarDataUrl } from "@/lib/avatar-storage-core";
+/** Profile images have been removed; keep callers rendering their initials fallback. */
+export async function resolveAvatarUrls(values: Array<string | null | undefined>): Promise<Array<null>> {
+  return values.map(() => null);
+}

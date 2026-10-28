@@ -1,22 +1,23 @@
-import Link from "next/link";
+import { PAGE_SIZE } from "@/lib/pagination";
+import Link from "@/components/ui/app-link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, Clock3, History } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
+import { getAthleteCompletionPage, getCurrentAthlete } from "@/lib/athlete-session";
 import { formatMontrealDate } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
-export default async function AthleteWeekPage() {
+export default async function AthleteWeekPage({ searchParams }: { searchParams: Promise<{page?:string}> }) {
   const athlete = await getCurrentAthlete();
   if (!athlete) {
     redirect("/login");
   }
 
-  const completions = await getAthleteRecentCompletions(athlete.id);
+  const { completions, total, page } = await getAthleteCompletionPage(athlete.id,(await searchParams).page);
 
   return (
     <AthleteShell>
@@ -52,6 +53,7 @@ export default async function AthleteWeekPage() {
           />
         )}
       </div>
+      <nav className="mt-5 flex justify-between gap-2 text-sm" aria-label="Pagination de mes séances">{page>1?<Link href={`/athlete/week?page=${page-1}`}>Précédent</Link>:<span/>}<span>Page {page} / {Math.max(1,Math.ceil(total/PAGE_SIZE))}</span>{page*PAGE_SIZE<total?<Link href={`/athlete/week?page=${page+1}`}>Suivant</Link>:<span/>}</nav>
     </AthleteShell>
   );
 }

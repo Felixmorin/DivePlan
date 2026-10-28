@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { redirect } from "next/navigation";
 import { ArrowRight, CalendarDays, CalendarPlus, Check, ChevronRight, Clock3, ListChecks, Plus, Printer, Timer, Trophy, Users } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
@@ -12,7 +12,6 @@ import { athletes, demoSession, weekSessions } from "@/lib/data";
 import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
-import { startDueTrainingSessions } from "@/lib/session-status";
 import { addMontrealDays, formatMontrealCountdown, formatMontrealDate, formatMontrealTime, sameMontrealDay, startOfMontrealDay, startOfMontrealWeek } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +43,6 @@ export default async function CoachDashboard() {
     return <DemoCoachDashboard userName={`${user.firstName} ${user.lastName}`} />;
   }
 
-  await startDueTrainingSessions();
 
   const today = new Date();
   const weekStart = startOfMontrealWeek(today);

@@ -1,9 +1,9 @@
+import { PAGE_SIZE, pageNumber } from "./pagination";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { countPoolContexts } from "@/lib/pool-list";
 import { addMontrealDays, startOfMontrealDay, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
-import { startDueTrainingSessions } from "@/lib/session-status";
 
 const PoolHeight = { ONE_METER: "ONE_METER", THREE_METER: "THREE_METER", PLATFORM: "PLATFORM", CUSTOM: "CUSTOM" } as const;
 type PoolHeight = typeof PoolHeight[keyof typeof PoolHeight];
@@ -149,8 +149,15 @@ export async function getAssignedReadySession(athleteId: string): Promise<{id:st
   return {...session,completions:completions.rows,blocks:blocks.rows};
 }
 
-export async function getAthleteRecentCompletions(athleteId: string): Promise<AthleteRecentCompletion[]> {
-  const {rows:completions}=await query<{sessionId:string;title:string;duration:number;completedAt:Date|null;startedAt:Date|null;status:string}>(`SELECT c."sessionId",s.title,COALESCE(pe.duration,s.duration) AS duration,c."completedAt",c."startedAt",c.status FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE c."athleteId"=$1 ORDER BY c."completedAt" DESC NULLS LAST,c."startedAt" DESC NULLS LAST`,[athleteId]);
+export async function getAthleteCompletionPage(athleteId: string, requestedPage: unknown) {
+  const count = await query<{total:number}>(`SELECT COUNT(*)::int AS total FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" WHERE c."athleteId"=$1`,[athleteId]);
+  const total = count.rows[0]?.total ?? 0;
+  const page = Math.min(pageNumber(requestedPage),Math.max(1,Math.ceil(total/PAGE_SIZE)));
+  return {total,page,completions:await getAthleteRecentCompletions(athleteId,page)};
+}
+
+export async function getAthleteRecentCompletions(athleteId: string, page = 1): Promise<AthleteRecentCompletion[]> {
+  const {rows:completions}=await query<{sessionId:string;title:string;duration:number;completedAt:Date|null;startedAt:Date|null;status:string}>(`SELECT c."sessionId",s.title,COALESCE(pe.duration,s.duration) AS duration,c."completedAt",c."startedAt",c.status FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE c."athleteId"=$1 ORDER BY c."completedAt" DESC NULLS LAST,c."startedAt" DESC NULLS LAST,c."sessionId" DESC LIMIT $2 OFFSET $3`,[athleteId,PAGE_SIZE,(page-1)*PAGE_SIZE]);
 
   return completions.map((completion) => ({
     sessionId: completion.sessionId,
@@ -162,7 +169,6 @@ export async function getAthleteRecentCompletions(athleteId: string): Promise<At
 }
 
 export async function getAthleteSession(sessionId: string, athleteId: string): Promise<AthleteSessionView | null> {
-  await startDueTrainingSessions();
   const session=(await query<{id:string;title:string;date:Date;duration:number;notes:string|null;competitionEvaluationAtStart:boolean;groupName:string;sessionStatus:string;completionStatus:string|null;rating:string|null;note:string|null}>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.notes,s."competitionEvaluationAtStart",g.name AS "groupName",s.status AS "sessionStatus",c.status AS "completionStatus",c.rating,c.note FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$2 WHERE s.id=$1 AND (s.status IN ('READY','IN_PROGRESS') OR (s.status='COMPLETED' AND c.status IN ('IN_PROGRESS','COMPLETED'))) AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$2)`,[sessionId,athleteId])).rows[0];
   if (!session) return null;
   const blocks=(await query<{id:string;title:string;description:string|null;type:AthleteSessionBlock["type"];duration:number;estimatedVolume:number;competitionEvaluation:boolean}>(`SELECT b.id,b.title,b.description,b.type,b.duration,b."estimatedVolume",b."competitionEvaluation" FROM "SessionBlock" b WHERE b."sessionId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlockAssignment" a WHERE a."sessionBlockId"=b.id AND a."athleteId"=$2) ORDER BY b.position`,[sessionId,athleteId])).rows;
@@ -215,20 +221,35 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
   };
 }
 
-export async function getAthleteProgressTotals(athleteId: string): Promise<AthleteProgressTotals> {
+/** Small projection for profile counters and badges; no chart/history hydration. */
+export async function getAthleteSummary(athleteId: string) {
+  const { rows } = await query<{ completedSessions: number; totalDiveRepetitions: number; completedMinutes: number }>(`
+    SELECT
+      (SELECT COUNT(*)::int FROM "AthleteSessionCompletion" WHERE "athleteId"=$1 AND status='COMPLETED') AS "completedSessions",
+      (SELECT COALESCE(SUM("repetitionsCompleted"),0)::int FROM "AthleteDiveLog" WHERE "athleteId"=$1) AS "totalDiveRepetitions",
+      (SELECT COALESCE(SUM(COALESCE(pe.duration,s.duration)),0)::int FROM "TrainingSession" s
+       LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId"
+       WHERE s.status IN ('READY','IN_PROGRESS','COMPLETED') AND s.date<=NOW()
+       AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1)
+       AND NOT EXISTS (SELECT 1 FROM "AthleteSessionAbsence" a WHERE a."sessionId"=s.id AND a."athleteId"=$1)) AS "completedMinutes"`, [athleteId]);
+  return rows[0];
+}
+
+export async function getAthleteProgressTotals(athleteId: string, chartsOnly = false): Promise<AthleteProgressTotals> {
+  const summaryQuery = <Row extends import("pg").QueryResultRow>(sql: string, values: unknown[]) => chartsOnly ? Promise.resolve({rows: [] as Row[]}) : query<Row>(sql,values);
   const weekStart = startOfMontrealWeek();
   const weekEnd = addMontrealDays(weekStart, 7);
   const [completionCountResult, recentCompletionRows, assignedResult, attendanceResult, diveTotalsResult, dailyDiveRows, dailyFamilyRows, skillDiveRows, exerciseResult, skillRows] = await Promise.all([
-    query<{count:number;thisWeek:number}>(`SELECT COUNT(*)::int AS count,COUNT(*) FILTER (WHERE "completedAt">=$2 AND "completedAt"<$3)::int AS "thisWeek" FROM "AthleteSessionCompletion" WHERE "athleteId"=$1 AND status='COMPLETED'`,[athleteId,weekStart,weekEnd]),
+    summaryQuery<{count:number;thisWeek:number}>(`SELECT COUNT(*)::int AS count,COUNT(*) FILTER (WHERE "completedAt">=$2 AND "completedAt"<$3)::int AS "thisWeek" FROM "AthleteSessionCompletion" WHERE "athleteId"=$1 AND status='COMPLETED'`,[athleteId,weekStart,weekEnd]),
     query<{sessionId:string;completedAt:Date|null;rating:string|null;duration:number}>(`SELECT c."sessionId",c."completedAt",c.rating,COALESCE(pe.duration,s.duration) AS duration FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE c."athleteId"=$1 AND c.status='COMPLETED' ORDER BY c."completedAt" DESC NULLS LAST LIMIT 8`,[athleteId]),
-    query<{count:number}>(`SELECT COUNT(DISTINCT s.id)::int AS count FROM "TrainingSession" s WHERE EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1)`,[athleteId]),
-    query<{completedMinutes:number;thisWeekMinutes:number}>(`SELECT COALESCE(SUM(COALESCE(pe.duration,s.duration)) FILTER (WHERE s.date <= NOW()),0)::int AS "completedMinutes",COALESCE(SUM(COALESCE(pe.duration,s.duration)) FILTER (WHERE s.date >= $2 AND s.date < $3 AND s.date <= NOW()),0)::int AS "thisWeekMinutes" FROM "TrainingSession" s LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE s.status IN ('READY','IN_PROGRESS','COMPLETED') AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1) AND NOT EXISTS (SELECT 1 FROM "AthleteSessionAbsence" absence WHERE absence."athleteId"=$1 AND absence."sessionId"=s.id)`,[athleteId,weekStart,weekEnd]),
-    query<{total:number;thisWeek:number}>(`SELECT COALESCE(SUM("repetitionsCompleted"),0)::int AS total,COALESCE(SUM("repetitionsCompleted") FILTER (WHERE timestamp >= $2 AND timestamp < $3),0)::int AS "thisWeek" FROM "AthleteDiveLog" WHERE "athleteId"=$1`,[athleteId,weekStart,weekEnd]),
+    summaryQuery<{count:number}>(`SELECT COUNT(DISTINCT s.id)::int AS count FROM "TrainingSession" s WHERE EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1)`,[athleteId]),
+    summaryQuery<{completedMinutes:number;thisWeekMinutes:number}>(`SELECT COALESCE(SUM(COALESCE(pe.duration,s.duration)) FILTER (WHERE s.date <= NOW()),0)::int AS "completedMinutes",COALESCE(SUM(COALESCE(pe.duration,s.duration)) FILTER (WHERE s.date >= $2 AND s.date < $3 AND s.date <= NOW()),0)::int AS "thisWeekMinutes" FROM "TrainingSession" s LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE s.status IN ('READY','IN_PROGRESS','COMPLETED') AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$1) AND NOT EXISTS (SELECT 1 FROM "AthleteSessionAbsence" absence WHERE absence."athleteId"=$1 AND absence."sessionId"=s.id)`,[athleteId,weekStart,weekEnd]),
+    summaryQuery<{total:number;thisWeek:number}>(`SELECT COALESCE(SUM("repetitionsCompleted"),0)::int AS total,COALESCE(SUM("repetitionsCompleted") FILTER (WHERE timestamp >= $2 AND timestamp < $3),0)::int AS "thisWeek" FROM "AthleteDiveLog" WHERE "athleteId"=$1`,[athleteId,weekStart,weekEnd]),
     query<{date:Date;volume:number}>(`SELECT MIN(timestamp) AS date,SUM("repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" WHERE "athleteId"=$1 GROUP BY (timestamp AT TIME ZONE 'America/Toronto')::date ORDER BY (timestamp AT TIME ZONE 'America/Toronto')::date`,[athleteId]),
     query<{date:Date;category:string;volume:number}>(`SELECT MIN(l.timestamp) AS date,COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS category,SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" WHERE l."athleteId"=$1 GROUP BY (l.timestamp AT TIME ZONE 'America/Toronto')::date,category ORDER BY (l.timestamp AT TIME ZONE 'America/Toronto')::date`,[athleteId]),
     query<{category:string;code:string;name:string;height:PoolHeight;heightLabel:string|null;volume:number}>(`SELECT COALESCE(l."familyOverride",CASE left(d."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS category,d."diveCode" AS code,COALESCE(l."actualDiveName",d."diveName") AS name,s.height,s.label AS "heightLabel",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE l."athleteId"=$1 GROUP BY category,d."diveCode",name,s.height,s.label`,[athleteId]),
-    query<{count:number}>(`SELECT COUNT(*)::int AS count FROM "AthleteExerciseLog" WHERE "athleteId"=$1 AND completed=true`,[athleteId]),
-    query<{category:string}>(`SELECT DISTINCT s.category FROM "AthleteSkill" a JOIN "Skill" s ON s.id=a."skillId" WHERE a."athleteId"=$1`,[athleteId])
+    summaryQuery<{count:number}>(`SELECT COUNT(*)::int AS count FROM "AthleteExerciseLog" WHERE "athleteId"=$1 AND completed=true`,[athleteId]),
+    summaryQuery<{category:string}>(`SELECT DISTINCT s.category FROM "AthleteSkill" a JOIN "Skill" s ON s.id=a."skillId" WHERE a."athleteId"=$1`,[athleteId])
   ]);
   const completedSessions=recentCompletionRows.rows.map(row=>({...row,session:{duration:row.duration}}));
   const assignedSessions=assignedResult.rows[0]?.count??0;

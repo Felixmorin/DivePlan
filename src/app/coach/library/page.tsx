@@ -19,7 +19,7 @@ export default async function LibraryPage() {
       `SELECT d."diveCode", d."diveName", d.position, s.height FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId"
        JOIN "PoolTraining" p ON p."blockId" = s."poolTrainingId" JOIN "SessionBlock" b ON b.id = p."blockId"
        JOIN "TrainingSession" ts ON ts.id = b."sessionId" JOIN "TrainingWeek" w ON w.id = ts."weekId"
-       WHERE w."clubId" = $1 ORDER BY d."diveCode" ASC, d."order" ASC`, [clubId]
+       WHERE w."clubId" = $1 GROUP BY d."diveCode", d."diveName", d.position, s.height ORDER BY d."diveCode" ASC, MIN(d."order") ASC, d."diveName", d.position, s.height`, [clubId]
     ),
     query<{ id: string; name: string; category: string; favorite: boolean; payload: unknown }>(`SELECT id, name, category, favorite, payload FROM "SessionTemplate" WHERE "clubId" = $1 ORDER BY favorite DESC, name ASC LIMIT 200`, [clubId])
   ]);

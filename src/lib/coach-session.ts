@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { query } from "@/lib/db";
 import { requireCoach } from "@/lib/current-user";
 import { getSessionSnapshot, type SessionSnapshot } from "@/lib/session-template";
-import { startDueTrainingSessions } from "@/lib/session-status";
 
 type RelationalRow = Record<string, unknown>;
 type CoachUser = { id:string;firstName:string;lastName:string;email?:string;avatar:string|null };
@@ -22,7 +21,6 @@ export type CoachSession = Omit<SessionSnapshot,"week"|"blocks"> & {
 
 export async function getCoachSession(sessionId: string): Promise<CoachSession> {
   const { clubId } = await requireCoach();
-  await startDueTrainingSessions();
   const session = await getSessionSnapshot(sessionId, clubId);
   if (!session) notFound();
 

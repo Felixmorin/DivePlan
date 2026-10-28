@@ -63,12 +63,7 @@ export async function completeExpiredTrainingSessions(now = new Date()) {
       [now, SESSION_COMPLETION_GRACE_MINUTES]
     );
     const closedCount = result.rowCount ?? 0;
-    const sessions = (await tx.query<{ id: string; date: Date }>(
-      `SELECT id, date FROM "TrainingSession"
-       WHERE status = 'COMPLETED' AND date <= $1
-         AND date + (duration + $2) * INTERVAL '1 minute' <= $1`,
-      [now, SESSION_COMPLETION_GRACE_MINUTES]
-    )).rows;
+    const sessions = result.rows;
     if (sessions.length === 0) return 0;
 
     await tx.query(

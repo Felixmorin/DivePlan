@@ -1,5 +1,5 @@
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, List, MapPin, TentTree, Trophy, Users, Waves, X, XCircle } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAthletePlanningEvents, type AthletePlanningEvent } from "@/lib/athlete-planning";

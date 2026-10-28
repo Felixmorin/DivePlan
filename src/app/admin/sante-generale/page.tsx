@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { Activity, ArrowRight, CalendarDays, CircleHelp, Cloud, Database, FileText, KeyRound, Pencil, Server, ShieldAlert, Timer, Upload } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -73,7 +73,6 @@ export default async function SanteGeneralePage({ searchParams }: { searchParams
   const statusTone = health.state === "action_required" ? "red" : health.state === "degraded" ? "amber" : "blue";
   const healthIssue = health.checks.find(check => check.state === "failed" || check.state === "warning");
   const authCheck = health.checks.find(check => check.id === "auth-config")!;
-  const storageCheck = health.checks.find(check => check.id === "storage")!;
   const sentryCheck = health.checks.find(check => check.id === "sentry")!;
 
   return <AdminShell active="Santé générale">
@@ -115,7 +114,6 @@ export default async function SanteGeneralePage({ searchParams }: { searchParams
       <section aria-label="État des dépendances" className="mb-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         <DependencyCard icon={Database} name="Base de données" status={dbAvailable ? "Opérationnelle" : "Indisponible"} detail={dbAvailable ? "Sonde SELECT 1 · vérifiée maintenant" : "Sonde SELECT 1 indisponible"} source="Latence non instrumentée · statut en direct" href="/admin/optimisation" tone={dbAvailable ? "green" : "red"} />
         <DependencyCard icon={KeyRound} name="Authentification" status={healthLabel(authCheck.state)} detail={authCheck.detail} source={`Auth.js · ${Number(eventData?.logins ?? 0).toLocaleString("fr-CA")} réussite(s) et ${failedLogins} échec(s) journalisés sur ${selected.label}`} href="/admin/monitoring" tone={healthTone(authCheck.state)} />
-        <DependencyCard icon={Server} name="Supabase Storage · avatars" status={healthLabel(storageCheck.state)} detail={storageCheck.detail} source="Sonde bucket en lecture seule" tone={healthTone(storageCheck.state)} />
         <DependencyCard icon={Cloud} name="Sentry · erreurs serveur" status={healthLabel(sentryCheck.state)} detail={sentryCheck.detail} source="La réception des événements Sentry n’est pas vérifiée" tone={healthTone(sentryCheck.state)} />
       </section>
 

@@ -8,7 +8,7 @@ import { query, setDatabaseEgressClub, setDatabaseEgressRoute, withDatabaseEgres
 // shared cache. Both projections use the same authenticated session identity.
 const getSessionIdentity = cache(async () => {
   const requestHeaders = await headers();
-  const pageRoute = requestHeaders.get("x-diveplan-page-route");
+  const pageRoute = requestHeaders.get("x-diveplan-route");
   if (pageRoute) setDatabaseEgressRoute(pageRoute);
   const session = await auth();
   return { sessionUserId: session?.user?.id, email: session?.user?.email?.toLowerCase() };

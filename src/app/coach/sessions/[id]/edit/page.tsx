@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { AlertTriangle, Copy, Clock3, Eye, Save, Users, CalendarDays } from "lucide-react";
 import { createDrylandExercise, duplicateTrainingSession, updateDraftSessionFromBuilder, updateTrainingSession } from "@/app/coach/sessions/actions";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";

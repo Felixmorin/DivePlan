@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { ArrowDown, ArrowUp, Bell, CalendarDays, ChevronDown, Pencil } from "lucide-react";
 
 export type ChartPoint = { day: string; transfer: number; sql: number; transferAt: string | null; sqlAt: string | null };

@@ -39,11 +39,50 @@ export function AgentsConsole({ agents: initialAgents, runs: initialRuns }: { ag
     setRuns(initialRuns);
   }
 
+  const pollingIds = selectedRuns.filter(run => run.status === "pending" || run.status === "running").slice(0,20).map(run => run.id).sort().join(",");
   useEffect(() => {
-    if (!["nextjs-code-analyst", "sql-supabase-analyst", "diveplan-observability", "architecture-cartographer"].includes(selected?.id ?? "") || !selectedRuns.some((run) => run.status === "pending" || run.status === "running")) return;
-    const timer = window.setInterval(() => router.refresh(), 5000);
-    return () => window.clearInterval(timer);
-  }, [router, selected?.id, selectedRuns]);
+    if (!pollingIds) return;
+    let disposed = false;
+    let completed = false;
+    let failures = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let controller: AbortController | undefined;
+    const ids = pollingIds.split(",");
+    async function poll() {
+      if (disposed || completed || controller || document.visibilityState !== "visible") return;
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller?.abort(),10_000);
+      try {
+        const params = new URLSearchParams();
+        ids.forEach(id => params.append("id",id));
+        const response = await fetch(`/api/admin/agents/status?${params}`,{cache:"no-store",signal:controller.signal});
+        if ([401,403].includes(response.status)) { completed = true; return; }
+        if (!response.ok) throw new Error("Status unavailable");
+        const body: {runs:Pick<RunRow,"id"|"status"|"startedAt"|"finishedAt"|"error">[]} = await response.json();
+        if (disposed) return;
+        failures = 0;
+        const byId = new Map(body.runs.map(run=>[run.id,run]));
+        const terminal = body.runs.some(run=>!["pending","running"].includes(run.status)) || body.runs.length !== ids.length;
+        if (terminal) {
+          // Fetch reports once when a run finishes; polling never transfers report JSON.
+          completed = true;
+          router.refresh();
+        } else setRuns(current=>current.map(run=>byId.has(run.id)?{...run,...byId.get(run.id)!}:run));
+      } catch { failures = Math.min(3,failures+1); }
+      finally {
+        clearTimeout(timeout); controller = undefined;
+        if (!disposed && !completed && document.visibilityState === "visible") timer = setTimeout(poll,Math.min(60_000,5000*2**failures));
+      }
+    }
+    function onVisibility() {
+      clearTimeout(timer);
+      if (document.visibilityState === "visible") void poll();
+      else controller?.abort();
+    }
+    timer = setTimeout(poll,5000);
+    document.addEventListener("visibilitychange",onVisibility);
+    return ()=>{disposed=true;clearTimeout(timer);controller?.abort();document.removeEventListener("visibilitychange",onVisibility);};
+  }, [router,pollingIds]);
 
   function act(action: () => Promise<unknown>, success?: (value: unknown) => void) {
     setError("");

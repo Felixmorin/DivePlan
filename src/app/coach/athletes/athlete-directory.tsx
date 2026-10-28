@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties } from "react";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { AthleteActionsMenu } from "@/app/coach/athletes/athlete-actions-menu";
 import type { AthleteRow } from "@/app/coach/athletes/page";
 import { StatusPill } from "@/components/training/status-pill";

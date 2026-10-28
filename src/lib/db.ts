@@ -1,7 +1,6 @@
 import "server-only";
+import { getSqlRequestSpan } from "@/lib/server-request-metrics";
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { performance } from "node:perf_hooks";
@@ -13,8 +12,6 @@ function createPool(connectionString = process.env.DATABASE_URL, max = 3) {
   const databaseUrl = new URL(connectionString);
   const sslMode = databaseUrl.searchParams.get("sslmode")?.toLowerCase();
   const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(databaseUrl.hostname);
-  const isSupabase = databaseUrl.hostname.endsWith(".supabase.co")
-    || databaseUrl.hostname.endsWith(".pooler.supabase.com");
   const ssl = sslMode === "require"
     ? { rejectUnauthorized: false }
     : sslMode === "verify-ca" || sslMode === "verify-full"
@@ -22,12 +19,7 @@ function createPool(connectionString = process.env.DATABASE_URL, max = 3) {
       : isLocalhost
         ? undefined
         : { rejectUnauthorized: true };
-  const sslConfig = isSupabase
-    ? {
-        ca: readFileSync(join(process.cwd(), "certs", "prod-ca-2021.crt"), "utf8"),
-        rejectUnauthorized: true
-      }
-    : ssl;
+  const sslConfig = ssl;
 
   // node-postgres parses SSL query parameters from connectionString after reading
   // the pool options, which can replace the explicit `ssl` object above. Strip
@@ -67,7 +59,10 @@ function getEgressScope() {
 }
 
 export function setDatabaseEgressClub(clubId: string | null) {
-  if (clubId) getEgressScope().clubId = clubId;
+  if (clubId) {
+    getEgressScope().clubId = clubId;
+    void getSqlRequestSpan((sql,args)=>pool.query(sql,args)).then(span=>{if(span)span.clubId=clubId;});
+  }
 }
 
 export function setDatabaseEgressRoute(route: string | null) {
@@ -118,22 +113,35 @@ export async function query<Row extends QueryResultRow = QueryResultRow>(
   values: readonly unknown[] = []
 ): Promise<QueryResult<Row>> {
   getEgressScope();
+  const span = await getSqlRequestSpan((sql,args)=>pool.query(sql,args));
   const startedAt = performance.now();
-  const result = await pool.query<Row>(text, [...values]);
-  recordDatabaseResult(result, performance.now() - startedAt);
-  return result;
+  try {
+    const result = await pool.query<Row>(text, [...values]);
+    const duration = performance.now()-startedAt;
+    recordDatabaseResult(result,duration);
+    if (span && !["BEGIN","COMMIT","ROLLBACK"].includes(result.command)) {span.queries++;span.bytes+=Buffer.byteLength(JSON.stringify(result.rows));span.durationMs+=duration;}
+    return result;
+  } catch(error) {
+    if(span){span.queries++;span.errors++;span.durationMs+=performance.now()-startedAt;}
+    throw error;
+  }
 }
 
 export async function withTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
   getEgressScope();
+  const span = await getSqlRequestSpan((sql,args)=>pool.query(sql,args));
   const client = await pool.connect();
   const instrumentedClient = new Proxy(client, {
-    get(target, property, receiver) {
+    get(target, property) {
       if (property === "query") return async (...args: unknown[]) => {
         const startedAt = performance.now();
-        const result = await Reflect.apply(target.query, target, args) as unknown as QueryResult<QueryResultRow>;
-        recordDatabaseResult(result, performance.now() - startedAt);
-        return result;
+        try {
+          const result = await Reflect.apply(target.query, target, args) as unknown as QueryResult<QueryResultRow>;
+          const duration = performance.now()-startedAt;
+          recordDatabaseResult(result,duration);
+          if(span && !["BEGIN","COMMIT","ROLLBACK"].includes(result.command)){span.queries++;span.bytes+=Buffer.byteLength(JSON.stringify(result.rows));span.durationMs+=duration;}
+          return result;
+        } catch(error) {if(span){span.queries++;span.errors++;span.durationMs+=performance.now()-startedAt;}throw error;}
       };
       const value = Reflect.get(target, property, target) as unknown;
       return typeof value === "function" ? value.bind(target) : value;

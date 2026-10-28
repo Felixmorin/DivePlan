@@ -25,7 +25,7 @@ test("observation validation redacts short IDs, rejects secrets, bounds batches 
   const parsed = parseObservations([sample, sample])!;
   assert.equal(parsed.length, 1);
   assert.equal(parsed[0].resourcePath, "/api/coach/sessions/:id/progress");
-  for (const patch of [{ resourcePath: "/api/data?token=secret" }, { route: "/coach#private" }, { id: "not-a-uuid" }, { durationMs: Infinity }, { transferBytes: -1 }, { status: 0 }, { trigger: "polling" }, { startedAt: "2000-01-01" }, { resourceType: "constructor" }, { trigger: "__proto__" }]) {
+  for (const patch of [{ resourcePath: "/api/data?token=secret" }, { route: "/coach#private" }, { id: "not-a-uuid" }, { durationMs: Infinity }, { transferBytes: -1 }, { status: 0 }, { trigger: "polling" }, { serverRequestId: "invalid" }, { startedAt: "2000-01-01" }, { resourceType: "constructor" }, { trigger: "__proto__" }]) {
     assert.equal(parseObservations([{ ...sample, ...patch }]), null, JSON.stringify(patch));
   }
   assert.equal(parseObservations(Array.from({ length: 41 }, () => sample)), null);
@@ -54,7 +54,7 @@ test("real ingestion and explorer SQL: auth, idempotency, attribution, paginatio
   const db = new PGlite();
   try {
     await db.exec(`CREATE TABLE "Club" (id text PRIMARY KEY); INSERT INTO "Club" VALUES ('a'),('b');`);
-    for (const file of ["0002_transfer_telemetry.sql", "0003_performance_telemetry.sql", "0004_performance_ratings.sql", "0026_request_observations.sql"]) await db.exec(readFileSync(`db/migrations/${file}`, "utf8"));
+    for (const file of ["0002_transfer_telemetry.sql", "0003_performance_telemetry.sql", "0004_performance_ratings.sql", "0026_request_observations.sql", "0027_server_request_metrics.sql"]) await db.exec(readFileSync(`db/migrations/${file}`, "utf8"));
     let user: { clubId: string; role: string } | null = { clubId: "a", role: "COACH" };
     const query = (sql: string, args: unknown[]) => db.query(sql, args);
     const { POST } = load<{ POST: (r: Request) => Promise<Response> }>("src/app/api/monitoring/transfer/route.ts", {
@@ -96,12 +96,28 @@ test("real ingestion and explorer SQL: auth, idempotency, attribution, paginatio
       assert.equal(new Set([...first.list, ...second.list].map(item => item.id)).size, 56);
       const empty = await explorer.getRequestExplorer({ ...filters, route: "/athlete" }); assert.equal(empty.summary.count, "0");
     });
+    await t.test("SQL correlation requires matching club and destination; unknown never becomes zero", async () => {
+      const traceId = randomUUID();
+      await db.query(`UPDATE "RequestObservation" SET "serverRequestId"=$1,"startedAt"=$3 WHERE id=$2`,[traceId,sample.id,new Date(previousHour.getTime()+59*60_000+1000)]);
+      await db.query(`INSERT INTO "ServerRequestMetric" VALUES ($1,'b','/api/coach/sessions/:id/progress','prefetch',NOW(),3,2400,45,0)`,[traceId]);
+      const explorer = load<typeof import("./request-explorer")>("src/lib/request-explorer.ts", { "server-only": {}, "@/lib/db": { query } });
+      const filters = { from:previousHour,to:new Date(previousHour.getTime()+2*3_600_000),route:"/coach",type:null,trigger:null,pageId:null,before:null,beforeId:null };
+      const observed = async () => (await explorer.getRequestExplorer(filters)).list.find(row=>row.id===sample.id)!;
+      assert.equal((await observed()).sqlQueries,null,"another club cannot be correlated by a supplied UUID");
+      await db.query(`UPDATE "ServerRequestMetric" SET "clubId"='a',route='/wrong' WHERE id=$1`,[traceId]);
+      assert.equal((await observed()).sqlQueries,null,"the destination must match");
+      await db.query(`UPDATE "ServerRequestMetric" SET route='/api/coach/sessions/:id/progress' WHERE id=$1`,[traceId]);
+      const matched = await observed();assert.equal(matched.sqlQueries,3);assert.equal(matched.serverTrigger,"prefetch");assert.equal(matched.sqlBytes,"2400");
+    });
     await t.test("daily cleanup requires the cron secret, deletes old detail and keeps aggregates", async () => {
       await db.exec(`UPDATE "RequestObservation" SET "startedAt" = NOW() - INTERVAL '8 days' WHERE id = '${sample.id}';`);
+      await db.query(`INSERT INTO "ServerRequestMetric" VALUES ($1,'a','/coach','navigation',NOW()-INTERVAL '8 days',1,100,20,0)`,[randomUUID()]);
       const { GET } = load<{ GET: (r: Request) => Promise<Response> }>("src/app/api/cron/request-observations/route.ts", { "@/lib/db": { query } }, { process: { env: { CRON_SECRET: "test-secret" } } });
       assert.equal((await GET(new Request("https://app.test/api/cron/request-observations"))).status, 401);
       const response = await GET(new Request("https://app.test/api/cron/request-observations", { headers: { authorization: "Bearer test-secret" } }));
-      assert.equal((await response.json()).deleted, 1);
+      const purged = await response.json();
+      assert.equal(purged.deleted,1);assert.equal(purged.serverDeleted,1);
+      assert.equal((await db.query(`SELECT * FROM "ServerRequestMetric"`)).rows.length,1);
       const totals = await db.query<{ count: number }>(`SELECT sum(requests)::int AS count FROM "TransferTelemetryHour"`);
       assert.equal(totals.rows[0].count, 59);
     });
@@ -164,7 +180,7 @@ test("admin explorer checks authorization before queries, handles missing schema
   const denied = new Error("admin required");
   const Page = load<{ default: (props: { searchParams: Promise<object> }) => Promise<unknown> }>("src/app/admin/observability/requests/page.tsx", {
     "react/jsx-runtime": { jsx: (type: unknown, props: unknown) => ({ type, props }), jsxs: (type: unknown, props: unknown) => ({ type, props }) },
-    "next/link": {}, "@/components/admin/admin-shell": {},
+    "@/components/ui/app-link": {}, "@/components/admin/admin-shell": {},
     "@/lib/current-user": { requireAdmin: async () => { if (!authorized) throw denied; } },
     "@/lib/request-explorer": { getRequestExplorer: async () => { reads++; if (missing) throw Object.assign(new Error("missing"), { code: "42P01" }); throw new Error("unexpected read"); } },
     "@/lib/request-observation": { observationWindow, resourcePath, resourceLabels: {}, requestTriggers: {} },
@@ -177,5 +193,5 @@ test("admin explorer checks authorization before queries, handles missing schema
   assert.match(JSON.stringify(repeated), /Filtres invalides/); assert.equal(reads, 0);
   missing = true;
   const unavailable = await Page({ searchParams: Promise.resolve({}) });
-  assert.match(JSON.stringify(unavailable), /migration 0026/); assert.equal(reads, 1);
+  assert.match(JSON.stringify(unavailable), /migrations 0026 et 0027/); assert.equal(reads, 1);
 });

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { FileText, Star, Trash2 } from "lucide-react";
 import { deleteSessionTemplate, toggleSessionTemplateFavorite } from "@/app/coach/sessions/actions";
 import { CoachShell } from "@/components/coach/coach-shell";

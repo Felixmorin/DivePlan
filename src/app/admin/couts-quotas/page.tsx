@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { Activity, ArrowDownUp, Bell, Database, Gauge, Info, TrendingUp } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,7 +54,7 @@ export default async function AdminObservabilityPage({ searchParams }: { searchP
     <p className="mt-3 text-xs text-slate-500">Source: TransferTelemetryHour et DatabaseEgressTelemetryHour. Agrégats stockés par heure; l’historique est limité à la période de collecte.</p>
   </AdminShell>;
 }
-function Metric({ icon: Icon, title, value, source, freshness }: { icon: typeof Activity; title: string; value: string; source: string; freshness: Date | null }) { return <Card><CardContent className="p-4"><div className="flex items-start gap-3"><span className="rounded-lg bg-blue-50 p-2 text-blue-600"><Icon className="h-5 w-5"/></span><div className="min-w-0"><h2 className="text-sm font-bold text-slate-800">{title}</h2><p className="mt-2 text-2xl font-black tabular-nums text-slate-950">{value}</p><p className="mt-1 text-xs text-slate-600">Période sélectionnée</p><p className="mt-2 text-xs text-slate-500">{source}</p><p className="mt-1 text-xs text-slate-500">{freshness ? `Mis à jour ${new Intl.RelativeTimeFormat("fr-CA", {numeric:"auto"}).format(-Math.max(0, Math.round((Date.now()-freshness.getTime())/60000)), "minute")}` : "Fraîcheur : non disponible"}</p></div></div></CardContent></Card>; }
+function Metric({ icon: Icon, title, value, source, freshness }: { icon: typeof Activity; title: string; value: string; source: string; freshness: Date | null }) { return <Card><CardContent className="p-4"><div className="flex items-start gap-3"><span className="rounded-lg bg-blue-50 p-2 text-blue-600"><Icon className="h-5 w-5"/></span><div className="min-w-0"><h2 className="text-sm font-bold text-slate-800">{title}</h2><p className="mt-2 text-2xl font-black tabular-nums text-slate-950">{value}</p><p className="mt-1 text-xs text-slate-600">Période sélectionnée</p><p className="mt-2 text-xs text-slate-500">{source}</p><p className="mt-1 text-xs text-slate-500">{freshness ? `Mis à jour ${new Intl.DateTimeFormat("fr-CA", {dateStyle:"short", timeStyle:"short", timeZone:"America/Toronto"}).format(freshness)}` : "Fraîcheur : non disponible"}</p></div></div></CardContent></Card>; }
 function formatBytes(bytes: number) { if (!bytes) return "0 octet"; const units = ["octets", "Ko", "Mo", "Go", "To"]; const i = Math.min(units.length-1, Math.floor(Math.log(bytes)/Math.log(1024))); return `${(bytes/1024**i).toLocaleString("fr-CA", {maximumFractionDigits:1})} ${units[i]}`; }
 
 

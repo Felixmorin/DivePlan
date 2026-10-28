@@ -33,7 +33,7 @@ function overview(openPresence: boolean, expanded: string | null) {
     react: { ...React, useState: (initial: unknown) => React.useState(initial === false && openPresence ? true : initial === null ? expanded : initial === "POOL" && expanded === "dryland" ? "DRYLAND" : initial) },
     "react/jsx-runtime": jsx,
     "next/navigation": { useRouter: () => ({ refresh() {} }) },
-    "next/link": { default: ({ children, ...props }: React.PropsWithChildren<{ href: string }>) => React.createElement("a", props, children) },
+    "@/components/ui/app-link": { default: ({ children, ...props }: React.PropsWithChildren<{ href: string }>) => React.createElement("a", props, children) },
     "lucide-react": icons,
     "@/app/coach/sessions/actions": { saveSessionAttendance: async () => {} },
     "@/lib/timezone": { formatMontrealDate }

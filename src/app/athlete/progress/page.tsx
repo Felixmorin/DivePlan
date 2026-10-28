@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { Clock3, Dumbbell, History, Waves } from "lucide-react";
 import { ProgressChart } from "@/components/athlete/progress-chart";
 import { TechniqueDetails } from "@/components/athlete/technique-details";

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { ChevronDown, ChevronRight, Dumbbell, RefreshCw, UserRound, Waves, X } from "lucide-react";
 import { saveSessionAttendance } from "@/app/coach/sessions/actions";
 import type { LivePlan, LiveProgress, LiveSession } from "@/lib/live-session";

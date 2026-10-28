@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { requireAdmin } from "@/lib/current-user";
 
