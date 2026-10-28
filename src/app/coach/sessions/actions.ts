@@ -387,6 +387,10 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
   revalidatePath("/coach/planning");
   revalidatePath("/coach/sessions");
   revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/calendar");
+  revalidatePath("/athlete/week");
+  revalidatePath(`/athlete/session/${sessionId}`);
   redirect(`/coach/sessions/${sessionId}`);
 }
 
@@ -1126,7 +1130,10 @@ export async function updateTrainingSession(formData: FormData) {
   revalidatePath("/coach/planning");
   revalidatePath("/coach/sessions");
   revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath("/athlete");
   revalidatePath("/athlete/calendar");
+  revalidatePath("/athlete/week");
+  revalidatePath(`/athlete/session/${sessionId}`);
   redirect(`/coach/sessions/${sessionId}`);
 }
 

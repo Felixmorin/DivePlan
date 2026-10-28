@@ -182,11 +182,19 @@ export function CompletedSessionOverview({ session }: { session: Session }) {
                   const completion = plannedRepetitions > 0 ? Math.min(100, Math.round(completedRepetitions / plannedRepetitions * 100)) : 0;
                   return <div className="completed-dive-row" key={dive.id}>
                     <span className="completed-dive-height">{heightLabel}</span><strong className="completed-dive-code">{dive.diveCode}</strong>
-                    <span className="completed-dive-repetitions"><small>Répétitions</small><b>{absent ? "—" : `${completedRepetitions} / ${plannedRepetitions}`}</b></span>
+                    <span className="completed-dive-repetitions"><small>Répétitions (fait / prévu)</small><b>{absent ? `0 / ${plannedRepetitions}` : `${completedRepetitions} / ${plannedRepetitions}`}</b></span>
                     <span className={`completed-dive-indicator${completion >= 100 ? " is-complete" : ""}`} aria-label={absent ? "Athlète absent" : `${completion}% complété`}>{!absent && completion >= 100 ? <CircleCheck /> : absent ? "—" : `${completion}%`}</span>
                     <span className="completed-dive-progress" aria-hidden="true"><span style={{ width: `${absent ? 0 : completion}%` }} /></span>
                   </div>;
-                }))}</div> : block.type === "DRYLAND" ? block.drylandExercises.map((item) => item.exercise.name).join(", ") : "—"}</td></tr>;
+                }))}</div> : block.type === "DRYLAND" ? <div className="completed-dive-rows">{block.drylandExercises.map((item) => {
+                  const plannedRepetitions = (item.sets ?? 1) * (item.reps ?? 0);
+                  const completed = session.exerciseLogs.some((log) => log.athleteId === athlete.id && log.exerciseId === item.exerciseId && log.completed);
+                  return <div className="completed-dive-row" key={item.exerciseId}>
+                    <strong className="completed-dive-code">{item.exercise.name}</strong>
+                    <span className="completed-dive-repetitions"><small>Répétitions (fait / prévu)</small><b>{absent ? `0 / ${plannedRepetitions}` : `${completed ? plannedRepetitions : 0} / ${plannedRepetitions}`}</b></span>
+                    {absent && <span className="completed-absent-status">Absent</span>}
+                  </div>;
+                })}</div> : "—"}</td></tr>;
               })}</tbody></table></div></div>
             </details>;
           })}</div>
