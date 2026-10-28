@@ -77,7 +77,7 @@ export function parseObservations(raw: unknown, now = Date.now()): RequestObserv
 }
 
 export function observationWindow(params: { hour?: string; period?: string }, now = new Date()) {
-  const hours = ({ "6h": 6, "12h": 12, "24h": 24, "72h": 72, "7d": 168 } as Record<string, number>)[params.period ?? ""] ?? 24;
+  const hours = ({ "1h": 1, "3h": 3, "6h": 6, "12h": 12, "24h": 24, "72h": 72, "7d": 168 } as Record<string, number>)[params.period ?? ""] ?? 24;
   const hour = params.hour ? new Date(params.hour) : null;
   if (hour && (!Number.isFinite(hour.getTime()) || hour.getUTCMinutes() !== 0 || hour.getUTCSeconds() !== 0 || hour.getUTCMilliseconds() !== 0
     || hour.getTime() < now.getTime() - 168 * 3_600_000 || hour.getTime() > now.getTime())) return null;

@@ -16,7 +16,7 @@ type EventRow = { type: string; message: string; clubName: string | null; create
 export default async function AdminObservabilityPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   await requireAdmin();
   const { period } = await searchParams;
-  const hours = period === "6h" ? 6 : period === "12h" ? 12 : period === "72h" ? 72 : period === "7d" ? 168 : 24;
+  const hours = period === "1h" ? 1 : period === "3h" ? 3 : period === "6h" ? 6 : period === "12h" ? 12 : period === "72h" ? 72 : period === "7d" ? 168 : 24;
   const [transfer, hourly, database, vitals, eventCounts, recentEvents] = await Promise.all([
     query<RouteRow>(`SELECT route, SUM(requests)::text AS requests, SUM("transferBytes")::text AS bytes, SUM(SUM(requests)) OVER ()::text AS "totalRequests", SUM(SUM("transferBytes")) OVER ()::text AS "totalBytes" FROM "TransferTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour') GROUP BY route ORDER BY SUM(requests) DESC LIMIT 30`, [hours]),
     query<HourRow>(`SELECT hour, SUM(requests)::text AS requests, SUM("transferBytes")::text AS bytes FROM "TransferTelemetryHour" WHERE hour >= NOW() - ($1::int * INTERVAL '1 hour') GROUP BY hour ORDER BY hour`, [hours]),
@@ -36,8 +36,8 @@ export default async function AdminObservabilityPage({ searchParams }: { searchP
   return <AdminShell active="Observabilité">
     <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div><h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Observabilité</h1><p className="mt-1 text-sm leading-6 text-slate-600">Surveillez les performances et la santé de la plateforme DivePlan.</p></div>
-      <nav aria-label="Période d’observation" className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">{[["6h", "6 h"], ["12h", "12 h"], ["24h", "24 h"], ["72h", "3 jours"], ["7d", "7 jours"]].map(([key, label]) => {
-        const active = (key === "6h" && hours === 6) || (key === "12h" && hours === 12) || (key === "24h" && hours === 24) || (key === "72h" && hours === 72) || (key === "7d" && hours === 168);
+      <nav aria-label="Période d’observation" className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">{[["1h", "1 h"], ["3h", "3 h"], ["6h", "6 h"], ["12h", "12 h"], ["24h", "24 h"], ["72h", "3 jours"], ["7d", "7 jours"]].map(([key, label]) => {
+        const active = (key === "1h" && hours === 1) || (key === "3h" && hours === 3) || (key === "6h" && hours === 6) || (key === "12h" && hours === 12) || (key === "24h" && hours === 24) || (key === "72h" && hours === 72) || (key === "7d" && hours === 168);
         return <Link key={key} href={`/admin/observability?period=${key}`} aria-current={active ? "page" : undefined} className={`inline-flex min-h-9 items-center rounded-lg px-3.5 text-sm font-bold transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}>{label}</Link>;
       })}</nav>
     </header>
