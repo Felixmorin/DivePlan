@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/request-observations",
+      "schedule": "0 1 * * *"
+    },
+    {
       "path": "/api/cron/complete-sessions",
       "schedule": "0 0 * * *"
     },
@@ -10,3 +14,4 @@
     }
   ]
 }
+

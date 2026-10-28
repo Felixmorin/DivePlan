@@ -1,6 +1,7 @@
-import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentUserAccess } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { normalizeTelemetryRoute } from "@/lib/telemetry-route";
+import { parseObservations } from "@/lib/request-observation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "invalid_origin" }, { status: 403 });
 
-  const user = await getCurrentUser();
+  const user = await getCurrentUserAccess();
   if (!user?.clubId || !["COACH", "ATHLETE", "ADMIN"].includes(user.role)) return Response.json({ error: "unauthorized" }, { status: 401 });
 
   const contentLength = Number(request.headers.get("content-length") || 0);
@@ -42,7 +43,9 @@ export async function POST(request: Request) {
 
   const rawEntries = (body as { entries?: unknown } | null)?.entries;
   const rawVitals = (body as { vitals?: unknown } | null)?.vitals;
-  if ((!Array.isArray(rawEntries) && !Array.isArray(rawVitals))
+  const rawObservations = (body as { observations?: unknown } | null)?.observations;
+  const observations = rawObservations === undefined ? [] : parseObservations(rawObservations);
+  if (observations === null || (!Array.isArray(rawEntries) && !Array.isArray(rawVitals) && !observations.length)
     || (Array.isArray(rawEntries) && rawEntries.length > maxEntries)
     || (Array.isArray(rawVitals) && rawVitals.length > 10)) {
     return Response.json({ error: "invalid_entries" }, { status: 400 });
@@ -75,9 +78,25 @@ export async function POST(request: Request) {
       || (name === "CLS" && numericValue > 10)) continue;
     vitals.push({ route, metric: name, value: numericValue, ...ratingThresholds(name, numericValue) });
   }
-  if (entries.length === 0 && vitals.length === 0) return Response.json({ error: "invalid_entries" }, { status: 400 });
+  if (entries.length === 0 && vitals.length === 0 && observations.length === 0) return Response.json({ error: "invalid_entries" }, { status: 400 });
 
   const writes: Promise<unknown>[] = [];
+  if (observations.length) writes.push(query(
+    `WITH inserted AS (
+      INSERT INTO "RequestObservation" (id, "clubId", "pageId", route, "resourcePath", "resourceType", trigger, "startedAt", "durationMs", "transferBytes", "cacheHit", status)
+      SELECT item.id, $1, item."pageId", item.route, item."resourcePath", item."resourceType", item.trigger, item."startedAt", item."durationMs", item."transferBytes", item."cacheHit", item.status
+      FROM jsonb_to_recordset($2::jsonb) AS item(id uuid, "pageId" uuid, route text, "resourcePath" text, "resourceType" text, trigger text, "startedAt" timestamptz, "durationMs" integer, "transferBytes" bigint, "cacheHit" boolean, status integer)
+      ON CONFLICT (id) DO NOTHING RETURNING *
+    )
+    INSERT INTO "TransferTelemetryHour" ("clubId", hour, route, "resourceType", requests, "transferBytes", "cacheHits", "updatedAt")
+    SELECT "clubId", date_trunc('hour', "startedAt"), route, "resourceType", count(*)::int, sum("transferBytes"), count(*) FILTER (WHERE "cacheHit")::int, NOW()
+    FROM inserted GROUP BY "clubId", date_trunc('hour', "startedAt"), route, "resourceType"
+    ON CONFLICT ("clubId", hour, route, "resourceType") DO UPDATE SET
+      requests = "TransferTelemetryHour".requests + EXCLUDED.requests,
+      "transferBytes" = "TransferTelemetryHour"."transferBytes" + EXCLUDED."transferBytes",
+      "cacheHits" = "TransferTelemetryHour"."cacheHits" + EXCLUDED."cacheHits",
+      "updatedAt" = NOW()`, [user.clubId, JSON.stringify(observations)]
+  ));
   if (entries.length > 0) writes.push(query(
       `INSERT INTO "TransferTelemetryHour" ("clubId", hour, route, "resourceType", requests, "transferBytes", "cacheHits", "updatedAt")
        SELECT $1, date_trunc('hour', NOW()), item.route, item."resourceType", item.requests, item."transferBytes", item."cacheHits", NOW()
@@ -109,3 +128,4 @@ export async function POST(request: Request) {
 
   return Response.json({ ok: true }, { headers: { "cache-control": "no-store" } });
 }
+

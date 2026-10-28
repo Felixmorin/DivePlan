@@ -1,11 +1,11 @@
-import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentUserAccess } from "@/lib/current-user";
 import { getLiveSessionProgressReply } from "@/lib/live-session-progress";
 
 export const dynamic = "force-dynamic";
 const headers = { "cache-control": "private, no-store" };
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser();
+  const user = await getCurrentUserAccess();
   if (!user) return Response.json({ error: "unauthorized" }, { status: 401, headers });
   if (user.role !== "COACH" || !user.coach || !user.clubId) {
     return Response.json({ error: "forbidden" }, { status: 403, headers });
