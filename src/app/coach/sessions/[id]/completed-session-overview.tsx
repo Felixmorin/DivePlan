@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Check, ChevronDown, CircleCheck, ClipboardList, MessageSquareText, NotebookText, Printer, UserCheck, Users, Waves, X, Plus, Eye, MoreHorizontal, LockKeyhole, FileText, Smile } from "lucide-react";
-import { saveCompletedSessionCoachNote, saveSessionAttendance, updateCompletedSessionSummary } from "@/app/coach/sessions/actions";
+import Link from "@/components/ui/app-link";
+import { Activity, ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, CircleCheck, ClipboardList, Download, Flag, MessageSquareText, NotebookText, Printer, Target, Trophy, UserCheck, Users, Waves, X } from "lucide-react";
+import { saveSessionAttendance, updateCompletedSessionSummary } from "@/app/coach/sessions/actions";
 import { formatMontrealDate } from "@/lib/timezone";
 import { countPoolContexts } from "@/lib/pool-list";
 

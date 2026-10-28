@@ -1,31 +1,15 @@
-"use client";
-
-import { useState, type ReactNode } from "react";
-
+import type { ReactNode } from "react";
+import Link from "@/components/ui/app-link";
 const tabs = [
-  { id: "overview", label: "Aperçu" },
-  { id: "evaluations", label: "Évaluations" },
-  { id: "competition", label: "Liste de compétitions" },
-  { id: "history", label: "Historique des séances" }
-] as const;
-
-type TabId = (typeof tabs)[number]["id"];
-
-export function AthleteProfileTabs({ overview, evaluations, competition, history }: {
-  overview: ReactNode;
-  evaluations: ReactNode;
-  competition: ReactNode;
-  history: ReactNode;
-}) {
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
-  const content: Record<TabId, ReactNode> = { overview, evaluations, competition, history };
-
+  { id: "overview", label: "Aperçu" }, { id: "evaluations", label: "Évaluations" },
+  { id: "competition", label: "Liste de compétitions" }, { id: "history", label: "Historique des séances" }
+];
+/** Route-backed sections: only the selected section is loaded and serialized. */
+export function AthleteProfileTabs({ activeTab, athleteId, children }: { activeTab: string; athleteId: string; children: ReactNode }) {
   return <>
-    <nav className="athlete-tabs" aria-label="Sections du profil" role="tablist">
-      {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls={`athlete-tab-${tab.id}`} id={`athlete-tab-trigger-${tab.id}`} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
+    <nav className="athlete-tabs" aria-label="Sections du profil">
+      {tabs.map(tab => <Link key={tab.id} scroll={false} href={`/coach/athletes/${encodeURIComponent(athleteId)}?tab=${tab.id}`} aria-current={activeTab === tab.id ? "page" : undefined} className={activeTab === tab.id ? "is-active" : ""}>{tab.label}</Link>)}
     </nav>
-    <section role="tabpanel" id={`athlete-tab-${activeTab}`} aria-labelledby={`athlete-tab-trigger-${activeTab}`} className="athlete-tab-panel">
-      {content[activeTab]}
-    </section>
+    <section className="athlete-tab-panel" aria-label={tabs.find(tab => tab.id === activeTab)?.label}>{children}</section>
   </>;
 }

@@ -1,4 +1,5 @@
 import "server-only";
+import { getSqlRequestSpan } from "@/lib/server-request-metrics";
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -67,7 +68,10 @@ function getEgressScope() {
 }
 
 export function setDatabaseEgressClub(clubId: string | null) {
-  if (clubId) getEgressScope().clubId = clubId;
+  if (clubId) {
+    getEgressScope().clubId = clubId;
+    void getSqlRequestSpan((sql,args)=>pool.query(sql,args)).then(span=>{if(span)span.clubId=clubId;});
+  }
 }
 
 export function setDatabaseEgressRoute(route: string | null) {
@@ -118,22 +122,35 @@ export async function query<Row extends QueryResultRow = QueryResultRow>(
   values: readonly unknown[] = []
 ): Promise<QueryResult<Row>> {
   getEgressScope();
+  const span = await getSqlRequestSpan((sql,args)=>pool.query(sql,args));
   const startedAt = performance.now();
-  const result = await pool.query<Row>(text, [...values]);
-  recordDatabaseResult(result, performance.now() - startedAt);
-  return result;
+  try {
+    const result = await pool.query<Row>(text, [...values]);
+    const duration = performance.now()-startedAt;
+    recordDatabaseResult(result,duration);
+    if (span && !["BEGIN","COMMIT","ROLLBACK"].includes(result.command)) {span.queries++;span.bytes+=Buffer.byteLength(JSON.stringify(result.rows));span.durationMs+=duration;}
+    return result;
+  } catch(error) {
+    if(span){span.queries++;span.errors++;span.durationMs+=performance.now()-startedAt;}
+    throw error;
+  }
 }
 
 export async function withTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
   getEgressScope();
+  const span = await getSqlRequestSpan((sql,args)=>pool.query(sql,args));
   const client = await pool.connect();
   const instrumentedClient = new Proxy(client, {
-    get(target, property, receiver) {
+    get(target, property) {
       if (property === "query") return async (...args: unknown[]) => {
         const startedAt = performance.now();
-        const result = await Reflect.apply(target.query, target, args) as unknown as QueryResult<QueryResultRow>;
-        recordDatabaseResult(result, performance.now() - startedAt);
-        return result;
+        try {
+          const result = await Reflect.apply(target.query, target, args) as unknown as QueryResult<QueryResultRow>;
+          const duration = performance.now()-startedAt;
+          recordDatabaseResult(result,duration);
+          if(span && !["BEGIN","COMMIT","ROLLBACK"].includes(result.command)){span.queries++;span.bytes+=Buffer.byteLength(JSON.stringify(result.rows));span.durationMs+=duration;}
+          return result;
+        } catch(error) {if(span){span.queries++;span.errors++;span.durationMs+=performance.now()-startedAt;}throw error;}
       };
       const value = Reflect.get(target, property, target) as unknown;
       return typeof value === "function" ? value.bind(target) : value;

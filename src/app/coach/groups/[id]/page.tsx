@@ -1,5 +1,5 @@
 import type * as React from "react";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { notFound } from "next/navigation";
 import { Activity, CheckSquare, Dumbbell, Plus } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";

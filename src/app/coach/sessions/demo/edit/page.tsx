@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarPlus, Printer } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";

@@ -44,7 +44,7 @@ function record(entry: PerformanceResourceTiming | PerformanceNavigationTiming) 
     if (observations.length < maxPendingObservations && typeof crypto.randomUUID === "function") {
       pageId ??= crypto.randomUUID();
       const status = (entry as PerformanceResourceTiming & { responseStatus?: number }).responseStatus;
-      observations.push({ id: crypto.randomUUID(), pageId, route, resourcePath: path, resourceType: type,
+      observations.push({ serverRequestId: entry.serverTiming?.find(timing=>timing.name === "dp")?.description ?? null, id: crypto.randomUUID(), pageId, route, resourcePath: path, resourceType: type,
         trigger: observationTrigger(entry, url, type), startedAt: new Date(performance.timeOrigin + entry.startTime).toISOString(),
         durationMs: Math.round(entry.duration), transferBytes: bytes, cacheHit,
         status: status && status >= 100 && status <= 599 ? status : null });

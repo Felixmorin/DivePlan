@@ -1,5 +1,5 @@
 import type * as React from "react";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { CalendarClock, Plus, Save, Users, Waves } from "lucide-react";
 import { createTrainingGroup, assignAthletesToGroup } from "@/app/coach/groups/actions";
 import { CoachShell } from "@/components/coach/coach-shell";

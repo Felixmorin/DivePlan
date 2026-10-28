@@ -1,10 +1,10 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { redirect } from "next/navigation";
 import { Building2, ChevronRight, Clock3, ListChecks, LogOut, Medal, Pencil, Settings, Star, UserRound, Waves } from "lucide-react";
 import { signOutAthlete } from "@/app/athlete/profile/actions";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAthleteGoldenReps, getAthleteProgressTotals, getCurrentAthlete } from "@/lib/athlete-session";
+import { getAthleteGoldenReps, getAthleteSummary, getCurrentAthlete } from "@/lib/athlete-session";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
 import { AthletePageHeader } from "@/components/athlete/page-header";
@@ -18,7 +18,7 @@ export default async function ProfilePage() {
   }
 
   const [totals, goldenReps] = await Promise.all([
-    getAthleteProgressTotals(athlete.id),
+    getAthleteSummary(athlete.id),
     getAthleteGoldenReps(athlete.id)
   ]);
   const [avatarUrl] = await resolveAvatarUrls([athlete.user.avatar]);

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { Activity, ArrowDown, ArrowDownUp, ArrowRight, CircleHelp, FileText, Gauge, Network, Server, Smartphone, TriangleAlert } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Card, CardContent } from "@/components/ui/card";

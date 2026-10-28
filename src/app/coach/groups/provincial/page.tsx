@@ -1,5 +1,5 @@
 import type * as React from "react";
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { Activity, CheckSquare, Dumbbell, Plus } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { requireCoach } from "@/lib/current-user";
 

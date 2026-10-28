@@ -8,6 +8,7 @@ export const resourceLabels: Record<string, string> = {
   document: "Document", script: "Script", style: "Style", image: "Image", font: "Police", fetch: "Appel de données", other: "Autre"
 };
 export type RequestObservation = {
+  serverRequestId?: string | null;
   id: string; pageId: string; route: string; resourcePath: string; resourceType: string;
   trigger: keyof typeof requestTriggers; startedAt: string; durationMs: number;
   transferBytes: number; cacheHit: boolean; status: number | null;
@@ -65,9 +66,10 @@ export function parseObservations(raw: unknown, now = Date.now()): RequestObserv
       || !Number.isFinite(time) || time < now - 86_400_000 || time > now + 300_000
       || typeof v.durationMs !== "number" || !Number.isFinite(v.durationMs) || v.durationMs < 0 || v.durationMs > 86_400_000
       || typeof v.transferBytes !== "number" || !Number.isSafeInteger(v.transferBytes) || v.transferBytes < 0 || v.transferBytes > 100_000_000
+      || !(v.serverRequestId === undefined || v.serverRequestId === null || (typeof v.serverRequestId === "string" && uuid.test(v.serverRequestId)))
       || typeof v.cacheHit !== "boolean"
       || !(v.status === null || (typeof v.status === "number" && Number.isInteger(v.status) && v.status >= 100 && v.status <= 599))) return null;
-    result.set(v.id, { id: v.id, pageId: v.pageId, route, resourcePath: path, resourceType: v.resourceType,
+    result.set(v.id, { serverRequestId: typeof v.serverRequestId === "string" ? v.serverRequestId : null, id: v.id, pageId: v.pageId, route, resourcePath: path, resourceType: v.resourceType,
       trigger: v.trigger as RequestObservation["trigger"], startedAt: new Date(time).toISOString(),
       durationMs: Math.round(v.durationMs), transferBytes: v.transferBytes, cacheHit: v.cacheHit, status: v.status as number | null });
   }

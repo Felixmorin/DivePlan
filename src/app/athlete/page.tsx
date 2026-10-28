@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/ui/app-link";
 import { redirect } from "next/navigation";
 import { ArrowRight, Check, ChevronRight, Clock3, History, ListChecks, Play, TentTree, Trophy, Waves } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
@@ -10,7 +10,6 @@ import { getAthletePlanningEvents, getAthleteWeekPlanningEvents } from "@/lib/at
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
 import { AthletePageHeader } from "@/components/athlete/page-header";
-import { startDueTrainingSessions } from "@/lib/session-status";
 import { withDatabaseEgressComponent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +18,6 @@ export default async function AthleteTodayPage() {
   const athlete = await withDatabaseEgressComponent("initial_session_load", () => getCurrentAthlete(), "/athlete");
   if (!athlete) redirect("/login");
 
-  await withDatabaseEgressComponent("initial_session_load", () => startDueTrainingSessions(), "/athlete");
 
   const [readySession, weekEvents, weekSummary, upcomingEvents] = await withDatabaseEgressComponent("initial_session_load", () => Promise.all([
     getAssignedReadySession(athlete.id),
