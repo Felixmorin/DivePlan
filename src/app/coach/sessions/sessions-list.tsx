@@ -43,14 +43,14 @@ function DemoSessionsList({ sessions }: { sessions: SessionListItem[] }) {
   const drafts = filtered.filter((s) => s.status === "DRAFT").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const next = tab === "all" ? upcoming[0] : undefined;
   const historySource = tab === "all"
-    ? filtered.filter((s) => s.id !== next?.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    ? filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     : tab === "completed" ? completed : drafts;
   const history = !expanded ? historySource.slice(0, 7) : historySource;
   const planned = filtered.reduce((sum, s) => sum + s.volume, 0);
-  const hours = Math.round(filtered.reduce((sum, s) => sum + s.duration, 0) / 60);
+  const hours = Math.round(filtered.filter(s=>{const d=new Date(s.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()}).reduce((sum, s) => sum + s.duration, 0) / 60);
 
   return <>
-    <div className="mb-5 grid grid-cols-2 gap-2 lg:grid-cols-4">{[[CalendarDays,"Séances ce mois-ci",filtered.filter(s=>{const d=new Date(s.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()}).length,"bg-sky-100 text-sky-600"],[Clock3,"À venir",upcoming.length,"bg-emerald-100 text-emerald-600"],[ChartNoAxesColumnIncreasing,"Plongeons planifiés",planned.toLocaleString("fr-CA"),"bg-violet-100 text-violet-600"],[Timer,"Temps d’entraînement",`${hours} heures`,`bg-orange-100 text-orange-600`]].map(([Icon,label,value,tone])=>{const I=Icon as typeof CalendarDays;return <div key={String(label)} className="flex min-h-[60px] items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 shadow-sm"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${String(tone)}`}><I className="h-4 w-4"/></span><span><small className="block text-[10px] text-slate-500">{String(label)}</small><b className="text-lg leading-none">{String(value)}</b></span></div>})}</div>
+    <DashboardStats monthCount={filtered.filter(s=>{const d=new Date(s.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()}).length} upcoming={upcoming.length} volume={planned} hours={hours}/>
     <div className="mb-4 flex flex-wrap items-center gap-1.5">
       <div className="flex flex-1 flex-wrap gap-1" role="tablist" aria-label="Filtrer les séances">
         {([["all", `Toutes (${counts.all})`], ["completed", `Terminées (${counts.completed})`], ["drafts", `Brouillons (${counts.drafts})`]] as [Tab, string][]).map(([value, label]) => <button key={value} role="tab" aria-selected={tab === value} onClick={() => { setTab(value); setExpanded(false); }} className={`min-h-11 border-b-2 px-4 text-sm font-bold transition ${tab === value ? "border-cyan-500 text-sky-700" : "border-transparent text-slate-600 hover:bg-slate-50"}`}>{label}</button>)}
@@ -68,17 +68,21 @@ function DemoSessionsList({ sessions }: { sessions: SessionListItem[] }) {
   </>;
 }
 
-function monthKey(value: Date | string) { const d = new Date(value); return `${d.getFullYear()}-${d.getMonth()}`; }
+function DashboardStats({monthCount,upcoming,volume,hours}:{monthCount:number;upcoming:number;volume:number;hours:number}) {
+  const items: {icon: typeof CalendarDays;label:string;value:string|number;tone:"sky"|"teal"|"violet"|"orange"}[] = [{icon:CalendarDays,label:"Séances ce mois-ci",value:monthCount,tone:"sky"},{icon:Clock3,label:"À venir",value:upcoming,tone:"teal"},{icon:ChartNoAxesColumnIncreasing,label:"Plongeons planifiés",value:volume.toLocaleString("fr-CA"),tone:"violet"},{icon:Timer,label:"Temps d’entraînement",value:`${hours} heures`,tone:"orange"}];
+  const tones: Record<"sky"|"teal"|"violet"|"orange",string> = {sky:"bg-sky-100 text-sky-600",teal:"bg-emerald-100 text-emerald-600",violet:"bg-violet-100 text-violet-600",orange:"bg-orange-100 text-orange-600"};
+  return <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">{items.map(({icon:Icon,label,value,tone})=><div key={label} className="flex h-[60px] items-center gap-3 rounded-lg border border-slate-200/80 bg-white px-3 shadow-sm"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tones[tone]}`}><Icon className="h-[18px] w-[18px]"/></span><span className="min-w-0"><small className="block truncate text-[9px] leading-4 text-slate-500">{label}</small><b className="block text-[18px] leading-5 text-slate-950">{value}</b></span></div>)}</div>;
+}
 
 function SessionRow({ session: s, featured = false, showMonth = false }: { session: SessionListItem; featured?: boolean; showMonth?: boolean }) {
   const date = new Date(s.date);
   const completed = s.status === "COMPLETED";
   const draft = s.status === "DRAFT";
   const label = completed ? "Terminée" : draft ? "Brouillon" : s.status === "NOT_DONE" ? "Non faite" : s.status === "CANCELLED" ? "Annulée" : s.status === "IN_PROGRESS" ? "En cours" : "Publiée";
-  const fmtDate = new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(date);
+  const fmtDate = new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", day: "numeric", month: "short", year: "numeric" }).format(date);
   return <>
     {showMonth && <div className="border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-sm font-extrabold capitalize text-slate-700">{new Intl.DateTimeFormat("fr-CA", { month: "long", year: "numeric", timeZone: "America/Toronto" }).format(date)}</div>}
-    <article className="relative flex min-h-[148px] min-w-0 flex-col gap-1.5 rounded-xl border border-slate-200/80 bg-white p-2.5 pb-9 shadow-sm">
+    <article className="relative flex min-h-[145px] min-w-0 flex-col gap-1 rounded-lg border border-slate-200/80 bg-white p-2.5 pb-8 shadow-[0_2px_8px_rgba(23,53,89,.05)]">
       <div className="flex items-center justify-between"><span className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold ${completed || s.status === "IN_PROGRESS" ? "bg-emerald-100 text-emerald-800" : draft ? "bg-slate-100 text-slate-700" : "bg-sky-100 text-sky-800"}`}><CheckCircle2 className="h-3 w-3"/>{label}</span><span className="text-xs font-black text-slate-500">···</span></div>
       <div className="min-w-0"><h3 className="truncate text-[11px] font-extrabold leading-tight">{s.title}</h3><p className="text-[9px] text-slate-500">{s.groupName}</p></div>
       <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] leading-tight text-slate-600">
@@ -100,17 +104,20 @@ function SessionRow({ session: s, featured = false, showMonth = false }: { sessi
 function PaginatedSessions({ data }: { data: CoachSessionsPage }) {
   const { filters, counts } = data;
   const href = (page: number, tab = filters.tab) => pageHref("/coach/sessions", { ...filters, tab }, page);
+  const metrics = data.dashboard;
   return <>
-    <nav aria-label="Catégories de séances" className="mb-4 flex flex-wrap gap-3">{([["all","Toutes"],["completed","Terminées"],["drafts","Brouillons"]] as const).map(([tab,label]) => <Link className="rounded-lg border bg-white px-4 py-3 font-bold aria-[current=page]:border-cyan-600" key={tab} href={href(1,tab)} aria-current={filters.tab===tab?"page":undefined}>{label} ({counts[tab]})</Link>)}</nav>
-    <Form action="/coach/sessions" prefetch={false} className="mb-6 flex flex-wrap gap-3">
+    <DashboardStats monthCount={metrics?.monthCount??0} upcoming={metrics?.upcoming??0} volume={metrics?.volume??0} hours={Math.round((metrics?.minutes??0)/60)}/>
+    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+    <nav aria-label="Catégories de séances" className="flex w-fit flex-wrap gap-1">{([["all","Toutes"],["completed","Terminées"],["drafts","Brouillons"]] as const).map(([tab,label]) => <Link className="rounded-md border bg-white px-3 py-2 text-[10px] font-bold aria-[current=page]:border-sky-300 aria-[current=page]:bg-sky-100 aria-[current=page]:text-sky-800" key={tab} href={href(1,tab)} aria-current={filters.tab===tab?"page":undefined}>{label} ({counts[tab]})</Link>)}</nav>
+    <Form action="/coach/sessions" prefetch={false} className="ml-auto flex flex-wrap items-center gap-1.5">
       <input type="hidden" name="tab" value={filters.tab}/>
-      <input key={filters.q} name="q" aria-label="Rechercher une séance" defaultValue={filters.q} maxLength={150} placeholder="Rechercher une séance…" className="min-h-11 rounded-lg border px-3"/>
-      <select key={filters.group} name="group" aria-label="Filtrer par groupe" defaultValue={filters.group} className="rounded-lg border px-3"><option value="">Tous les groupes</option>{data.groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select>
-      <select key={filters.period} name="period" aria-label="Filtrer par période" defaultValue={filters.period} className="rounded-lg border px-3"><option value="">Toutes les dates</option><option value="month">Ce mois-ci</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select>
-      <button className="rounded-lg bg-sky-700 px-4 py-2 font-bold text-white">Appliquer</button>
+      <input key={filters.q} name="q" aria-label="Rechercher une séance" defaultValue={filters.q} maxLength={150} placeholder="Rechercher une séance…" className="min-h-8 w-44 rounded-md border border-slate-200 px-2 text-[10px]"/>
+      <select key={filters.group} name="group" aria-label="Filtrer par groupe" defaultValue={filters.group} className="min-h-8 rounded-md border border-slate-200 px-2 text-[10px]"><option value="">Tous les groupes</option>{data.groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select>
+      <select key={filters.period} name="period" aria-label="Filtrer par période" defaultValue={filters.period} className="min-h-8 rounded-md border border-slate-200 px-2 text-[10px]"><option value="">Toutes les dates</option><option value="month">Ce mois-ci</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select>
+      <button className="hidden" aria-label="Appliquer les filtres">Appliquer</button><span className="grid h-8 w-8 place-items-center rounded-md bg-cyan-500 text-white"><LayoutGrid className="h-4 w-4"/></span><span className="grid h-8 w-8 place-items-center rounded-md border bg-white text-slate-500"><List className="h-4 w-4"/></span>
     </Form>
-    {data.next && <section className="mb-6"><h2 className="mb-3 text-xl font-bold">Prochaine séance</h2><SessionRow session={data.next} featured /></section>}
-    <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">{data.sessions.filter(s=>s.id!==data.next?.id).map(s=><SessionRow key={s.id} session={s}/>)}{!data.sessions.length&&<p className="col-span-full rounded-xl border border-dashed bg-white p-6 text-slate-500">Aucune séance ne correspond aux filtres.</p>}</div>
+    </div>
+    {(() => {const visible=data.sessions.filter(s=>s.id!==data.next?.id); if(data.next&&visible.length>1) visible.splice(1,0,data.next); else if(data.next) visible.unshift(data.next); return <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">{visible.map(s=><SessionRow key={s.id} session={s}/>)}{!visible.length&&<p className="col-span-full rounded-xl border border-dashed bg-white p-6 text-slate-500">Aucune séance ne correspond aux filtres.</p>}</div>;})()}
     <nav aria-label="Pagination des séances" className="mt-4 flex justify-between gap-3 text-sm font-semibold">{data.page>1?<Link href={href(data.page-1)}>Précédent</Link>:<span/>}<span>Page {data.page} / {Math.max(1,Math.ceil(data.total/PAGE_SIZE))} · {data.total} séances</span>{data.page*PAGE_SIZE<data.total?<Link href={href(data.page+1)}>Suivant</Link>:<span/>}</nav>
   </>;
 }

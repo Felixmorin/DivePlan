@@ -10,9 +10,15 @@ export async function getCoachSessionsPage(clubId: string, input: SessionFilters
   const where = `w."clubId"=$1 AND (s.title ILIKE $2 OR g.name ILIKE $2) AND ($3='' OR g.id=$3)
     AND ($4='0' OR s.date>=${from}) ${filters.period === "month" ? `AND s.date < date_trunc('month',NOW() AT TIME ZONE 'America/Toronto') + INTERVAL '1 month'` : ""}`;
   const args = [clubId,likeSearch(filters.q),filters.group, /^\d+$/.test(filters.period) ? filters.period : filters.period === "month" ? "1" : "0"];
-  const [stats, groups] = await Promise.all([
+  const [stats, groups, dashboard] = await Promise.all([
     query<{all:number;completed:number;drafts:number}>(`SELECT COUNT(*)::int AS "all",COUNT(*) FILTER (WHERE s.status IN ('COMPLETED','NOT_DONE','CANCELLED'))::int AS completed,COUNT(*) FILTER (WHERE s.status='DRAFT')::int AS drafts ${base} WHERE ${where}`,args),
-    query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name,id`,[clubId])
+    query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name,id`,[clubId]),
+    query<{monthCount:number;upcoming:number;volume:number;minutes:number}>(`SELECT
+      COUNT(*) FILTER (WHERE date_trunc('month',s.date AT TIME ZONE 'America/Toronto')=date_trunc('month',NOW() AT TIME ZONE 'America/Toronto'))::int AS "monthCount",
+      COUNT(*) FILTER (WHERE s.status IN ('READY','IN_PROGRESS') AND s.date>=NOW())::int AS upcoming,
+      COALESCE(SUM((SELECT COALESCE(SUM(b."estimatedVolume"),0) FROM "SessionBlock" b WHERE b."sessionId"=s.id)) FILTER (WHERE s.date>=date_trunc('month',NOW() AT TIME ZONE 'America/Toronto') AT TIME ZONE 'America/Toronto' AND s.date<date_trunc('month',NOW() AT TIME ZONE 'America/Toronto') AT TIME ZONE 'America/Toronto'+INTERVAL '1 month'),0)::int AS volume,
+      COALESCE(SUM(COALESCE(pe.duration,s.duration)) FILTER (WHERE s.date>=date_trunc('month',NOW() AT TIME ZONE 'America/Toronto') AT TIME ZONE 'America/Toronto' AND s.date<date_trunc('month',NOW() AT TIME ZONE 'America/Toronto') AT TIME ZONE 'America/Toronto'+INTERVAL '1 month'),0)::int AS minutes
+      ${base} WHERE w."clubId"=$1`,[clubId])
   ]);
   const counts = stats.rows[0];
   const total = counts[filters.tab as keyof typeof counts];
@@ -27,6 +33,6 @@ export async function getCoachSessionsPage(clubId: string, input: SessionFilters
     query<SessionListItem>(`${projection} ${base} WHERE ${where} ${status} ORDER BY s.date DESC,s.id DESC LIMIT $5 OFFSET $6`,[...args,PAGE_SIZE,(page-1)*PAGE_SIZE]),
     filters.tab === "all" ? query<SessionListItem>(`${projection} ${base} WHERE ${where} AND s.status IN ('READY','IN_PROGRESS') ORDER BY s.date ASC,s.id ASC LIMIT 1`,args) : Promise.resolve({rows: [] as SessionListItem[]})
   ]);
-  return { sessions:list.rows, next:upcoming.rows[0] ?? null, counts, groups:groups.rows, filters, page, total };
+  return { sessions:list.rows, next:upcoming.rows[0] ?? null, counts, groups:groups.rows, filters, page, total, dashboard:dashboard.rows[0] };
 }
 export type CoachSessionsPage = Awaited<ReturnType<typeof getCoachSessionsPage>>;
