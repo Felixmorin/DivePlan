@@ -52,7 +52,7 @@ function DemoSessionsList({ sessions }: { sessions: SessionListItem[] }) {
   const hours = Math.round(filtered.filter(s=>{const d=new Date(s.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()}).reduce((sum, s) => sum + s.duration, 0) / 60);
 
   return <>
-    <DashboardStats monthCount={filtered.filter(s=>{const d=new Date(s.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()}).length} upcoming={upcoming.length} volume={planned} hours={hours}/>
+    <DashboardStats upcoming={upcoming.length} drafts={counts.drafts} monthCount={filtered.filter(s=>{const d=new Date(s.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()}).length} volume={planned} hours={hours}/>
     <div className="mb-4 flex flex-wrap items-center gap-1.5">
       <div className="flex flex-1 flex-wrap gap-1" role="tablist" aria-label="Filtrer les séances">
         {([["all", `Toutes (${counts.all})`], ["completed", `Terminées (${counts.completed})`], ["drafts", `Brouillons (${counts.drafts})`]] as [Tab, string][]).map(([value, label]) => <button key={value} role="tab" aria-selected={tab === value} onClick={() => { setTab(value); setExpanded(false); }} className={`min-h-11 border-b-2 px-4 text-sm font-bold transition ${tab === value ? "border-cyan-500 text-sky-700" : "border-transparent text-slate-600 hover:bg-slate-50"}`}>{label}</button>)}
@@ -70,10 +70,10 @@ function DemoSessionsList({ sessions }: { sessions: SessionListItem[] }) {
   </>;
 }
 
-function DashboardStats({monthCount,upcoming,volume,hours}:{monthCount:number;upcoming:number;volume:number;hours:number}) {
-  const items: {icon: typeof CalendarDays;label:string;value:string|number;tone:"sky"|"teal"|"violet"|"orange"}[] = [{icon:CalendarDays,label:"Séances ce mois-ci",value:monthCount,tone:"sky"},{icon:Clock3,label:"À venir",value:upcoming,tone:"teal"},{icon:ChartNoAxesColumnIncreasing,label:"Plongeons planifiés",value:volume.toLocaleString("fr-CA"),tone:"violet"},{icon:Timer,label:"Temps d’entraînement",value:`${hours} heures`,tone:"orange"}];
-  const tones: Record<"sky"|"teal"|"violet"|"orange",string> = {sky:"bg-sky-100 text-sky-600",teal:"bg-emerald-100 text-emerald-600",violet:"bg-violet-100 text-violet-600",orange:"bg-orange-100 text-orange-600"};
-  return <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">{items.map(({icon:Icon,label,value,tone})=><div key={label} className="flex h-[92px] w-full max-w-[300px] items-center gap-4 rounded-lg border border-slate-200/80 bg-white px-4 shadow-sm"><span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${tones[tone]}`}><Icon className="h-5 w-5"/></span><span className="min-w-0"><small className="block truncate text-[14px] leading-5 text-slate-500">{label}</small><b className="block text-[26px] leading-7 text-slate-950">{value}</b></span></div>)}</div>;
+function DashboardStats({upcoming,drafts,monthCount,volume,hours}:{upcoming:number;drafts:number;monthCount:number;volume:number;hours:number}) {
+  const items: {icon: typeof CalendarDays;label:string;value:string|number;tone:"sky"|"teal"|"violet"|"orange"|"slate"}[] = [{icon:Clock3,label:"À venir",value:upcoming,tone:"teal"},{icon:FileText,label:"Brouillons",value:drafts,tone:"slate"},{icon:CalendarDays,label:"Séances ce mois-ci",value:monthCount,tone:"sky"},{icon:ChartNoAxesColumnIncreasing,label:"Plongeons planifiés",value:volume.toLocaleString("fr-CA"),tone:"violet"},{icon:Timer,label:"Temps d’entraînement",value:`${hours} heures`,tone:"orange"}];
+  const tones: Record<"sky"|"teal"|"violet"|"orange"|"slate",string> = {sky:"bg-sky-100 text-sky-600",teal:"bg-emerald-100 text-emerald-600",violet:"bg-violet-100 text-violet-600",orange:"bg-orange-100 text-orange-600",slate:"bg-slate-100 text-slate-600"};
+  return <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">{items.map(({icon:Icon,label,value,tone})=><div key={label} className="flex h-[92px] w-full min-w-0 max-w-[300px] items-center gap-4 rounded-lg border border-slate-200/80 bg-white px-4 shadow-sm"><span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${tones[tone]}`}><Icon className="h-5 w-5"/></span><span className="min-w-0"><small className="block truncate text-[14px] leading-5 text-slate-500">{label}</small><b className="block text-[26px] leading-7 text-slate-950">{value}</b></span></div>)}</div>;
 }
 
 function ViewToggle({view,onChange}:{view:"tiles"|"list";onChange:(view:"tiles"|"list")=>void}) {
@@ -120,7 +120,7 @@ function PaginatedSessions({ data }: { data: CoachSessionsPage }) {
   const href = (page: number, tab = filters.tab) => pageHref("/coach/sessions", { ...filters, tab }, page);
   const metrics = data.dashboard;
   return <>
-    <DashboardStats monthCount={metrics?.monthCount??0} upcoming={metrics?.upcoming??0} volume={metrics?.volume??0} hours={Math.round((metrics?.minutes??0)/60)}/>
+    <DashboardStats upcoming={metrics?.upcoming??0} drafts={counts.drafts} monthCount={metrics?.monthCount??0} volume={metrics?.volume??0} hours={Math.round((metrics?.minutes??0)/60)}/>
     <div className="mb-3 flex flex-wrap items-center gap-1.5">
     <nav aria-label="Catégories de séances" className="flex w-fit flex-wrap gap-1">{([["all","Toutes"],["completed","Terminées"],["drafts","Brouillons"]] as const).map(([tab,label]) => <Link className="rounded-md border bg-white px-3 py-2 text-[10px] font-bold aria-[current=page]:border-sky-300 aria-[current=page]:bg-sky-100 aria-[current=page]:text-sky-800" key={tab} href={href(1,tab)} aria-current={filters.tab===tab?"page":undefined}>{label} ({counts[tab]})</Link>)}</nav>
     <Form action="/coach/sessions" prefetch={false} className="ml-auto flex flex-wrap items-center gap-1.5">
