@@ -1060,7 +1060,7 @@ export async function updateTrainingSession(formData: FormData) {
     throw new Error("Details de seance invalides.");
   }
 
-  const validAthletes = await query<{id:string}>(`SELECT id FROM "Athlete" WHERE "clubId"=$1 AND active=true`,[clubId]);
+  const validAthletes = await query<{id:string}>(`SELECT id FROM "Athlete" WHERE "clubId"=$1 AND "groupId"=$2 AND active=true`,[clubId,existing.week.groupId]);
   const validAthleteIds = new Set(validAthletes.rows.map((athlete) => athlete.id));
   const includedBlockIds = new Set(formData.getAll("includedBlocks").map(String));
   if (includedBlockIds.size === 0) {
