@@ -128,7 +128,7 @@ export default async function CoachDashboard() {
           <Link href="/coach/planning" className="inline-flex items-center gap-1 text-xs font-black text-[var(--color-brand-strong)] hover:underline">Voir le planning complet <ArrowRight className="h-3.5 w-3.5"/></Link>
         </div>
         <div className="rounded-2xl border border-white/80 bg-white/70 p-2 shadow-[var(--shadow-card)]"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
-          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date))} schedules={schedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date))} activeSessionIds={activeSessionIds} />)}
+          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date))} schedules={schedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date))} />)}
         </div></div>
       </section>
 
@@ -217,7 +217,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
           <Link href="/coach/planning" className="inline-flex items-center gap-1 text-xs font-black text-[var(--color-brand-strong)] hover:underline">Voir le planning complet <ArrowRight className="h-3.5 w-3.5"/></Link>
         </div>
         <div className="rounded-2xl border border-white/80 bg-white/70 p-2 shadow-[var(--shadow-card)]"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
-          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))} schedules={[]} activeSessionIds={activeSessionIds} demo />)}
+          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))} schedules={[]} demo />)}
         </div></div>
       </section>
 

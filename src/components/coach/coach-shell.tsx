@@ -17,7 +17,6 @@ const navFeature: Record<string, string> = {
   "/coach/groups": "groups",
   "/coach/library": "library",
   "/coach/templates": "templates",
-  "/coach/observability": "observability",
   "/coach/monitoring": "monitoring",
   "/coach/settings": "settings",
 };
@@ -35,7 +34,6 @@ const nav = [
 ];
 
 const utilityNav = [
-  { href: "/coach/observability", label: "Observabilité", icon: Activity },
   { href: "/coach/monitoring", label: "Monitoring", icon: Computer },
   { href: "/coach/settings", label: "Réglages", match: "Reglages", icon: Settings }
 ];

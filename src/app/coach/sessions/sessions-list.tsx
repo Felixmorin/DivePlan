@@ -3,7 +3,7 @@
 import Form from "next/form";
 import { useState } from "react";
 import Link from "@/components/ui/app-link";
-import { CalendarDays, ChartNoAxesColumnIncreasing, Clock3, Layers3, MapPin, MoreVertical, Search, Users, Timer, LayoutGrid, List, CheckCircle2 } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumnIncreasing, Clock3, Layers3, MapPin, Search, Users, Timer, LayoutGrid, List, CheckCircle2, FileText } from "lucide-react";
 import type { CoachSessionsPage } from "@/lib/coach-sessions-list";
 import { PAGE_SIZE, pageHref } from "@/lib/pagination";
 import { deleteTrainingSession, markTrainingSessionNotDone } from "@/app/coach/sessions/actions";
@@ -43,9 +43,10 @@ function DemoSessionsList({ sessions }: { sessions: SessionListItem[] }) {
   const drafts = filtered.filter((s) => s.status === "DRAFT").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const next = tab === "all" ? upcoming[0] : undefined;
   const historySource = tab === "all"
-    ? filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    ? filtered.filter((s) => s.id !== next?.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     : tab === "completed" ? completed : drafts;
-  const history = !expanded ? historySource.slice(0, 7) : historySource;
+  const orderedSessions = tab === "all" && next && historySource.length > 1 ? [...historySource.slice(0, 1), next, ...historySource.slice(1)] : tab === "all" && next ? [next, ...historySource] : historySource;
+  const history = !expanded ? orderedSessions.slice(0, 9) : orderedSessions;
   const planned = filtered.reduce((sum, s) => sum + s.volume, 0);
   const hours = Math.round(filtered.filter(s=>{const d=new Date(s.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()}).reduce((sum, s) => sum + s.duration, 0) / 60);
 
@@ -62,7 +63,7 @@ function DemoSessionsList({ sessions }: { sessions: SessionListItem[] }) {
 
     <section>
       {history.length ? <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">{history.map((s) => <SessionRow key={s.id} session={s} />)}
-        {historySource.length > 7 && <button onClick={() => setExpanded(!expanded)} className="m-2 w-[calc(100%-1rem)] rounded-lg bg-slate-100 py-3 text-sm font-bold text-sky-800 hover:bg-slate-200">⌄　{expanded ? "Réduire l’historique" : "Afficher les séances précédentes"}</button>}
+        {orderedSessions.length > 9 && <button onClick={() => setExpanded(!expanded)} className="m-2 w-[calc(100%-1rem)] rounded-lg bg-slate-100 py-3 text-sm font-bold text-sky-800 hover:bg-slate-200">⌄　{expanded ? "Réduire l’historique" : "Afficher les séances précédentes"}</button>}
       </div> : !(tab === "all" && next) && <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 px-5 py-12 text-center"><p className="font-bold">Aucune séance trouvée</p><p className="mt-1 text-sm text-slate-500">Modifiez les filtres ou créez une nouvelle séance.</p></div>}
     </section>
   </>;
@@ -78,12 +79,13 @@ function SessionRow({ session: s, showMonth = false }: { session: SessionListIte
   const date = new Date(s.date);
   const completed = s.status === "COMPLETED";
   const draft = s.status === "DRAFT";
-  const label = completed ? "Terminée" : draft ? "Brouillon" : s.status === "NOT_DONE" ? "Non faite" : s.status === "CANCELLED" ? "Annulée" : s.status === "IN_PROGRESS" ? "En cours" : "Publiée";
+  const upcoming = s.status === "READY";
+  const label = completed ? "Terminée" : draft ? "Brouillon" : s.status === "NOT_DONE" ? "Non faite" : s.status === "CANCELLED" ? "Annulée" : s.status === "IN_PROGRESS" ? "En cours" : "À venir";
   const fmtDate = new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", day: "numeric", month: "short", year: "numeric" }).format(date);
   return <>
     {showMonth && <div className="border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-sm font-extrabold capitalize text-slate-700">{new Intl.DateTimeFormat("fr-CA", { month: "long", year: "numeric", timeZone: "America/Toronto" }).format(date)}</div>}
     <article className="relative flex min-h-[145px] min-w-0 flex-col gap-1 rounded-lg border border-slate-200/80 bg-white p-2.5 pb-8 shadow-[0_2px_8px_rgba(23,53,89,.05)]">
-      <div className="flex items-center justify-between"><span className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold ${completed || s.status === "IN_PROGRESS" ? "bg-emerald-100 text-emerald-800" : draft ? "bg-slate-100 text-slate-700" : "bg-sky-100 text-sky-800"}`}><CheckCircle2 className="h-3 w-3"/>{label}</span><span className="text-xs font-black text-slate-500">···</span></div>
+      <div className="flex items-center justify-between"><span className={`inline-flex w-fit items-center gap-1 rounded-full px-1.5 py-[3px] text-[9px] font-bold ${completed || s.status === "IN_PROGRESS" ? "bg-emerald-100 text-emerald-800" : draft ? "bg-slate-100 text-slate-700" : "bg-sky-100 text-sky-800"}`}>{completed || s.status === "IN_PROGRESS" ? <CheckCircle2 className="h-3 w-3"/> : draft ? <FileText className="h-3 w-3"/> : <Clock3 className="h-3 w-3"/>}{label}</span>{!s.id.startsWith("demo-")?<details className="relative"><summary aria-label="Actions de la séance" className="cursor-pointer list-none text-[11px] font-black leading-none text-slate-500">•••</summary><div className="absolute right-0 top-5 z-20 w-40 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"><form action={markTrainingSessionNotDone}><input type="hidden" name="sessionId" value={s.id}/><button className="w-full rounded px-2 py-1.5 text-left text-[10px] hover:bg-slate-50">Marquer non faite</button></form><form action={deleteTrainingSession}><input type="hidden" name="sessionId" value={s.id}/><button className="w-full rounded px-2 py-1.5 text-left text-[10px] text-red-700 hover:bg-red-50">Supprimer</button></form></div></details>:<span className="text-[11px] font-black leading-none text-slate-500">•••</span>}</div>
       <div className="min-w-0"><h3 className="truncate text-[11px] font-extrabold leading-tight">{s.title}</h3><p className="text-[9px] text-slate-500">{s.groupName}</p></div>
       <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] leading-tight text-slate-600">
         <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3 shrink-0" /><span className="capitalize">{fmtDate}</span></span>
@@ -94,9 +96,7 @@ function SessionRow({ session: s, showMonth = false }: { session: SessionListIte
         <span className="flex items-center gap-1"><Layers3 className="h-3 w-3 shrink-0" />{s.blockCount} blocs</span>
         <span className="col-span-2 flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{s.location || "Centre aquatique MTL"}</span></span>
       </div>
-      <div className="absolute bottom-2 right-2 flex shrink-0 items-center gap-2"><Link href={s.id.startsWith("demo-") ? "/coach/sessions/demo" : `/coach/sessions/${s.id}`} className="inline-flex min-h-7 items-center justify-center rounded-lg border border-sky-300 bg-white px-3 text-[9px] font-bold text-sky-700 hover:bg-sky-50">Ouvrir →</Link>
-        {!s.id.startsWith("demo-") && <details className="relative"><summary aria-label="Actions de la séance" className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"><MoreVertical className="h-4 w-4" /></summary><div className="absolute right-0 top-11 z-10 w-48 rounded-lg border border-slate-200 bg-white p-2 shadow-lg"><form action={markTrainingSessionNotDone}><input type="hidden" name="sessionId" value={s.id} /><button className="w-full rounded px-3 py-2 text-left text-sm hover:bg-slate-50">Marquer non faite</button></form><form action={deleteTrainingSession}><input type="hidden" name="sessionId" value={s.id} /><button className="w-full rounded px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50">Supprimer</button></form></div></details>}
-      </div>
+      <div className="absolute bottom-1.5 right-2"><Link href={s.id.startsWith("demo-") ? "/coach/sessions/demo" : `/coach/sessions/${s.id}`} className="inline-flex min-h-6 items-center justify-center rounded-md border border-sky-300 bg-white px-3 text-[9px] font-bold text-sky-600 hover:bg-sky-50">Ouvrir&nbsp; →</Link></div>
     </article>
   </>;
 }
