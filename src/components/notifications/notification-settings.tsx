@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, Settings2 } from "lucide-react";
+import { Bell, CalendarDays, CalendarSync, Check, FileText, Flag, Info, Mail, Send, Settings2, ShieldAlert, Smartphone } from "lucide-react";
 
 type State = "checking" | "unsupported" | "disabled" | "enabled" | "denied" | "configuration" | "storage" | "error";
 type PushSubscriptionJSON = { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
@@ -37,7 +37,7 @@ export async function clearDevicePushSubscription() {
   await subscription.unsubscribe().catch(() => false);
 }
 
-export function NotificationSettings() {
+export function NotificationSettings({ variant = "compact", clubName = "DivePlan" }: { variant?: "compact" | "page"; clubName?: string }) {
   const [state, setState] = useState<State>("checking");
   const [message, setMessage] = useState("");
   const [appleMobile, setAppleMobile] = useState(false);
@@ -147,6 +147,69 @@ export function NotificationSettings() {
     error: "État des notifications indisponible"
   }[state];
 
+  if (variant === "page") {
+    const canTest = state === "enabled";
+    return <div className="space-y-4 text-[#0b1943]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(370px,.9fr)]">
+        <section className="rounded-xl border border-[#dce7f1] bg-white p-5 shadow-[0_6px_20px_rgba(14,52,83,.05)]" aria-labelledby="coach-notifications-title">
+          <div className="flex items-start gap-3"><Bell className="mt-0.5 h-6 w-6 shrink-0" /><div><h2 id="coach-notifications-title" className="text-[17px] font-extrabold">Notifications</h2><p className="mt-0.5 text-[12px] text-[#61718e]">Choisissez comment et quand vous souhaitez être informé.</p></div></div>
+          <div className="mt-4 flex min-h-[88px] items-center justify-between gap-4 rounded-lg border border-[#dce7f1] px-4 py-3">
+            <div><p className="text-[14px] font-extrabold">Activer les notifications</p><p className="mt-1 text-[12px] leading-5 text-[#61718e]">Recevez les notifications DivePlan sur cet appareil.</p><p className="mt-1 text-[11px] font-semibold text-[#61718e]" role="status">{status}</p></div>
+            <Switch checked={state === "enabled"} disabled={state === "checking" || state === "unsupported" || state === "denied" || state === "configuration" || state === "storage" || state === "error"} label="Activer les notifications" onClick={() => { if (state === "enabled") void disable(); else void enable(); }} />
+          </div>
+          {appleMobile && !standalone && <p className="mt-3 rounded-lg bg-[#eef5ff] p-3 text-[12px] leading-5 text-[#425a7c]">Sur iPhone ou iPad, ajoutez d’abord DivePlan à l’écran d’accueil, puis ouvrez l’application depuis son icône pour activer les notifications.</p>}
+          {state === "denied" && <p className="mt-3 text-[12px] text-[#9d2b2b]">Autorisez les notifications de DivePlan dans les réglages de votre navigateur ou appareil, puis réessayez.</p>}
+          {(state === "configuration" || state === "storage" || state === "error" || state === "unsupported") && <p className="mt-3 text-[12px] text-[#9d2b2b]">{state === "configuration" ? "Les notifications ne sont pas configurées sur ce serveur." : state === "storage" ? "Le stockage des abonnements aux notifications est indisponible." : state === "unsupported" ? "Les notifications ne sont pas prises en charge par ce navigateur." : message}</p>}
+        </section>
+
+        <section className="rounded-xl border border-[#071827] bg-[#071827] p-5 text-white shadow-[0_6px_20px_rgba(14,52,83,.08)]">
+          <div className="flex items-start gap-3"><Bell className="mt-0.5 h-6 w-6 shrink-0" /><div><h2 className="text-[17px] font-extrabold">Aperçu d’une notification</h2><p className="mt-0.5 text-[12px] text-white/75">Voici un exemple de notification de rappel de séance.</p></div></div>
+          <div className="mt-4 flex gap-3 rounded-xl border border-white/10 bg-white/[0.07] p-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white text-[#ed163d]"><Bell className="h-6 w-6" /></div>
+            <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><span className="text-[13px] font-extrabold">{clubName}</span><span className="text-[11px] text-white/70">maintenant</span></div><p className="mt-1 text-[14px] font-bold">Rappel de séance</p><p className="mt-1 text-[13px] leading-5 text-white/90">Séance « Entraînement du dimanche » dans 30 minutes au Centre aquatique.</p></div>
+          </div>
+        </section>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section className="rounded-xl border border-[#dce7f1] bg-white p-5 shadow-[0_6px_20px_rgba(14,52,83,.05)]">
+          <ChannelHeading icon={<Smartphone />} title="Dans l’application" description="Choisissez les types de notifications que vous souhaitez recevoir dans DivePlan." />
+          <div className="mt-4 overflow-hidden rounded-lg border border-[#dce7f1]">
+            <PreferenceRow icon={<CalendarDays />} title="Rappels de séance" description="Soyez notifié avant le début de vos séances." />
+            <PreferenceRow icon={<CalendarSync />} title="Modifications au calendrier" description="Recevez une notification lorsqu’une séance ou un événement est modifié." />
+            <PreferenceRow icon={<Flag />} title="Nouveaux jalons" description="Les notifications de jalons ne sont pas disponibles pour les coachs." last disabled />
+          </div>
+        </section>
+        <section className="rounded-xl border border-[#dce7f1] bg-white p-5 shadow-[0_6px_20px_rgba(14,52,83,.05)]">
+          <ChannelHeading icon={<Mail />} title="Courriel" description="Choisissez les types de courriels que vous souhaitez recevoir." />
+          <div className="mt-4 overflow-hidden rounded-lg border border-[#dce7f1]">
+            <PreferenceRow icon={<FileText />} title="Résumé hebdomadaire" description="Le résumé hebdomadaire par courriel n’est pas disponible actuellement." disabled />
+            <PreferenceRow icon={<ShieldAlert />} title="Alertes importantes" description="Les alertes par courriel ne sont pas disponibles actuellement." last disabled />
+          </div>
+        </section>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section className="rounded-xl border border-[#dce7f1] bg-white p-5 shadow-[0_6px_20px_rgba(14,52,83,.05)]">
+          <ChannelHeading icon={<CalendarDays />} title="Rappel de séance" description="Choisissez quand vous souhaitez recevoir une notification de rappel." />
+          <label className="mt-4 grid gap-1 text-[12px] font-bold">Délai d’envoi du rappel<select disabled value="30" className="h-10 w-full rounded-lg border border-[#d5e1ee] bg-[#f8fafc] px-3 text-[13px] font-semibold text-[#61718e]"><option value="30">30 minutes avant</option></select></label>
+          <p className="mt-2 text-[11px] text-[#61718e]">Les rappels automatiques ne sont pas encore pris en charge.</p>
+        </section>
+        <section className="rounded-xl border border-[#dce7f1] bg-white p-5 shadow-[0_6px_20px_rgba(14,52,83,.05)]">
+          <ChannelHeading icon={<Send />} title="Tester vos notifications" description="Envoyez une notification de test pour vérifier vos paramètres." />
+          <button type="button" disabled={!canTest} onClick={() => void test()} className="mt-4 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-500 bg-[#eef5ff] px-4 text-[13px] font-extrabold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4" />{canTest ? "Envoyer une notification de test" : "Activez les notifications pour envoyer un test"}</button>
+          {message && <p role="status" className="mt-2 text-[12px] text-[#425a7c]">{message}</p>}
+          <div className="mt-3 flex gap-2 rounded-lg bg-[#eef5ff] p-3"><Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" /><p className="text-[11px] leading-4 text-[#425a7c]">Assurez-vous d’autoriser les notifications dans votre navigateur. Leur affichage dépend également des réglages de votre appareil.</p></div>
+        </section>
+      </div>
+
+      <div className="fixed inset-x-3 bottom-3 z-30 mx-auto flex max-w-[1570px] flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d9f2e5] bg-[#f5fff9]/95 px-4 py-2.5 shadow-[0_8px_28px_rgba(8,70,45,.12)] backdrop-blur sm:inset-x-[calc(17rem+1.5rem)]">
+        <div className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#13a568] text-white"><Check className="h-5 w-5" /></span><div><p className="text-[13px] font-extrabold text-[#07864e]">{state === "enabled" ? "Notifications activées sur cet appareil" : "Préférences de notification"}</p><p className="text-[11px] text-[#61718e]">Le bouton ci-dessous envoie un test sur cet appareil.</p></div></div>
+        <button type="button" disabled={!canTest} onClick={() => void test()} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#ff604c] px-5 text-[13px] font-extrabold text-white shadow-sm hover:bg-[#e64f3d] disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4" /> Envoyer une notification de test</button>
+      </div>
+    </div>;
+  }
+
   return <section className="rounded-xl border border-[#071827] bg-[#071827] p-5 shadow-[0_6px_20px_rgba(14,52,83,.08)]" aria-labelledby="notification-settings-title">
     <div className="flex items-start gap-3"><Bell className="mt-0.5 h-6 w-6 text-white" /><div><h3 id="notification-settings-title" className="text-[17px] font-extrabold text-white">Notifications</h3>
     <p className="mt-0.5 text-[12px] text-white/75">État : <span role="status" className={`font-bold ${state === "enabled" ? "text-emerald-300" : "text-white/85"}`}>{status}</span></p></div></div>
@@ -172,4 +235,16 @@ export function NotificationSettings() {
     <button type="button" onClick={() => state === "enabled" ? void test() : void refresh()} className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/[0.03] px-4 text-[13px] font-bold text-white hover:bg-white/[0.08]"><Settings2 className="h-4 w-4" />{state === "enabled" ? "Envoyer une notification de test" : "Actualiser l’état des notifications"}</button>
     {message && <p className="mt-3 text-sm text-white/65" role="status">{message}</p>}
   </section>;
+}
+
+function Switch({ checked, disabled = false, label, onClick }: { checked: boolean; disabled?: boolean; label: string; onClick?: () => void }) {
+  return <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={onClick} className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition-colors focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-50 ${checked ? "bg-[var(--color-club-red)]" : "bg-[#cbd5e1]"}`}><span className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-5" : "translate-x-0"}`} /></button>;
+}
+
+function ChannelHeading({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+  return <div className="flex items-start gap-3"><span className="mt-0.5">{icon}</span><div><h2 className="text-[17px] font-extrabold leading-tight">{title}</h2><p className="mt-0.5 text-[12px] leading-5 text-[#61718e]">{description}</p></div></div>;
+}
+
+function PreferenceRow({ icon, title, description, disabled = true, last = false }: { icon: React.ReactNode; title: string; description: string; disabled?: boolean; last?: boolean }) {
+  return <div className={`flex min-h-[64px] items-center gap-3 px-3 py-2.5 ${!last ? "border-b border-[#dce7f1]" : ""} ${disabled ? "opacity-80" : ""}`}><span className="shrink-0">{icon}</span><div className="min-w-0 flex-1"><p className="text-[12px] font-extrabold">{title}</p><p className="mt-0.5 text-[11px] leading-4 text-[#61718e]">{description}</p></div><Switch checked={false} disabled label={title} /></div>;
 }

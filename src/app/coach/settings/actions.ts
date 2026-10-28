@@ -6,6 +6,7 @@ import { signOut } from "@/auth";
 import { requireFullAccessCoach } from "@/lib/current-user";
 import { trackEvent } from "@/lib/monitoring";
 import { query } from "@/lib/db";
+import { hashPassword, verifyPassword } from "@/lib/password";
 
 function cleanText(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
@@ -97,6 +98,31 @@ export async function updateCoachAccount(formData: FormData) {
   });
 
   revalidatePath("/coach/settings");
+}
+
+export type CoachPasswordState = { error?: string; success?: string };
+
+export async function updateCoachPassword(_: CoachPasswordState, formData: FormData): Promise<CoachPasswordState> {
+  const { user } = await requireFullAccessCoach();
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!await verifyPassword(currentPassword, user.passwordHash)) {
+    return { error: "Le mot de passe actuel est incorrect." };
+  }
+  if (password.length < 10 || password.length > 128 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+    return { error: "Le nouveau mot de passe doit contenir de 10 à 128 caractères, dont une lettre et un chiffre." };
+  }
+  if (password !== confirmPassword) {
+    return { error: "La confirmation ne correspond pas au nouveau mot de passe." };
+  }
+
+  const passwordHash = await hashPassword(password);
+  await query(`UPDATE "User" SET "passwordHash" = $1, "passwordSetAt" = $2 WHERE id = $3`, [passwordHash, new Date(), user.id]);
+  await trackEvent({ type: "coach.password_changed", message: "Mot de passe du coach modifié", clubId: user.clubId, userId: user.id });
+  revalidatePath("/coach/settings/account");
+  return { success: "Votre mot de passe a été modifié." };
 }
 
 export async function updateCoachPreferences(formData: FormData) {
