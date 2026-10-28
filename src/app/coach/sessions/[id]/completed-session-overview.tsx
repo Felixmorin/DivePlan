@@ -146,7 +146,7 @@ export function CompletedSessionOverview({ session }: { session: Session }) {
       <section className="completed-stats">
         <CompletedStat icon={<Users />} label="Athlètes" value={attendanceLabel} detail={`${assigned ? Math.round(present / assigned * 100) : 0}% présents`} />
         <CompletedStat icon={<CircleCheck />} label="Exercices complétés" value={`${actualExercises} / ${plannedExercises}`} detail={`${pct(actualExercises, plannedExercises)}% réalisés`} />
-        <CompletedStat icon={<Waves />} label="Volume de la séance" value={`${actualPoolReps} / ${plannedPoolReps} plongeons`} detail={`Volume total : ${plannedPoolReps} · Moy. par athlète : ${assigned ? Math.round(plannedPoolReps / assigned) : 0}`} />
+        <CompletedStat icon={<Waves />} label="Volume de la séance" value={`${actualPoolReps} / ${plannedPoolReps} plongeons`} detail={`${pct(actualPoolReps, plannedPoolReps)}% réalisé`} />
         <CompletedStat icon={<Smile />} label="Ressenti moyen" value={averageRating === "—" ? "—" : `${averageRating} / 5`} detail={ratings.length ? "Évaluation des athlètes" : "Aucun ressenti enregistré"} />
       </section>
       <div className="completed-split-panels"><section className="completed-panel completed-plan" id="group-summary"><header className="completed-panel-head"><h2><FileText /> Plan du groupe</h2><div><span>Réalisé</span><button type="button" aria-label="Modifier le plan du groupe" onClick={() => { setEditingSummary(true); setTimeout(() => document.getElementById("completed-summary-editor")?.scrollIntoView({ behavior: "smooth" }), 0); }}><NotebookText /></button></div></header><p>{session.notes?.trim() || "Plan orienté travail technique et préparation aux prochaines compétitions."}</p></section>
