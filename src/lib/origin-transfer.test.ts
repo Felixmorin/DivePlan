@@ -181,6 +181,25 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
       const { rows } = await db.query<{ transferBytes: number }>(`SELECT "transferBytes" FROM "TransferTelemetryHour"`);
       assert.equal(Number(rows[0].transferBytes), 300);
     });
+    await t.test("colliding normalized batch keys preserve every transfer and vital sample", async () => {
+      const batch = {
+        entries: [
+          { route: "/coach/sessions/101", resourceType: "fetch", requests: 2, transferBytes: 300, cacheHits: 1 },
+          { route: "/coach/sessions/102", resourceType: "fetch", requests: 3, transferBytes: 500, cacheHits: 2 }
+        ],
+        vitals: [100, 300, 700].map(value => ({ route: "/coach/sessions/101", name: "INP", value }))
+      };
+      // Two batches per club exercise both INSERT and conflict UPDATE, without sharing totals.
+      for (const clubId of ["club-a", "club-b"]) {
+        user = { clubId, role: "COACH", coach: {} };
+        for (let i = 0; i < 2; i++) assert.equal((await POST(request(batch))).status, 200);
+        const transfer = (await db.query(`SELECT requests, "transferBytes", "cacheHits" FROM "TransferTelemetryHour" WHERE "clubId" = $1 AND route = '/coach/sessions/:id'`, [clubId])).rows[0];
+        assert.deepEqual(transfer, { requests: 10, transferBytes: 1600, cacheHits: 6 });
+        const vital = (await db.query(`SELECT samples, "totalValue", "maxValue", "ratedSamples", "ratedTotalValue", "ratedMaxValue", "goodSamples", "needsImprovementSamples" FROM "PerformanceTelemetryHour" WHERE "clubId" = $1 AND route = '/coach/sessions/:id'`, [clubId])).rows[0];
+        assert.deepEqual(vital, { samples: 6, totalValue: 2200, maxValue: 700, ratedSamples: 6, ratedTotalValue: 2200, ratedMaxValue: 700, goodSamples: 2, needsImprovementSamples: 2 });
+      }
+      user = { clubId: "club-a", role: "COACH", coach: {} };
+    });
     await t.test("invalid origins, missing auth and unsupported metrics are rejected", async () => {
       assert.equal((await POST(request({}, "https://elsewhere.test"))).status, 403);
       user = null;

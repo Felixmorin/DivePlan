@@ -80,6 +80,8 @@ export async function POST(request: Request) {
   }
   if (entries.length === 0 && vitals.length === 0 && observations.length === 0) return Response.json({ error: "invalid_entries" }, { status: 400 });
 
+  // Normalization can merge distinct input routes. Group each batch by the conflict
+  // key so PostgreSQL updates each aggregate once while retaining every sample.
   const writes: Promise<unknown>[] = [];
   if (observations.length) writes.push(query(
     `WITH inserted AS (
@@ -99,8 +101,9 @@ export async function POST(request: Request) {
   ));
   if (entries.length > 0) writes.push(query(
       `INSERT INTO "TransferTelemetryHour" ("clubId", hour, route, "resourceType", requests, "transferBytes", "cacheHits", "updatedAt")
-       SELECT $1, date_trunc('hour', NOW()), item.route, item."resourceType", item.requests, item."transferBytes", item."cacheHits", NOW()
+       SELECT $1, date_trunc('hour', NOW()), item.route, item."resourceType", SUM(item.requests)::int, SUM(item."transferBytes"), SUM(item."cacheHits")::int, NOW()
        FROM jsonb_to_recordset($2::jsonb) AS item(route text, "resourceType" text, requests integer, "transferBytes" bigint, "cacheHits" integer)
+       GROUP BY item.route, item."resourceType"
        ON CONFLICT ("clubId", hour, route, "resourceType") DO UPDATE SET
          requests = "TransferTelemetryHour".requests + EXCLUDED.requests,
          "transferBytes" = "TransferTelemetryHour"."transferBytes" + EXCLUDED."transferBytes",
@@ -110,13 +113,14 @@ export async function POST(request: Request) {
     ));
   if (vitals.length > 0) writes.push(query(
       `INSERT INTO "PerformanceTelemetryHour" ("clubId", hour, route, metric, samples, "totalValue", "maxValue", "ratedSamples", "ratedTotalValue", "ratedMaxValue", "goodSamples", "needsImprovementSamples", "updatedAt")
-       SELECT $1, date_trunc('hour', NOW()), item.route, item.metric, 1, item.value, item.value, 1, item.value, item.value, item."goodSamples", item."needsImprovementSamples", NOW()
+       SELECT $1, date_trunc('hour', NOW()), item.route, item.metric, COUNT(*)::int, SUM(item.value), MAX(item.value), COUNT(*)::int, SUM(item.value), MAX(item.value), SUM(item."goodSamples")::int, SUM(item."needsImprovementSamples")::int, NOW()
        FROM jsonb_to_recordset($2::jsonb) AS item(route text, metric text, value double precision, "goodSamples" integer, "needsImprovementSamples" integer)
+       GROUP BY item.route, item.metric
        ON CONFLICT ("clubId", hour, route, metric) DO UPDATE SET
-         samples = "PerformanceTelemetryHour".samples + 1,
+         samples = "PerformanceTelemetryHour".samples + EXCLUDED.samples,
          "totalValue" = "PerformanceTelemetryHour"."totalValue" + EXCLUDED."totalValue",
          "maxValue" = GREATEST("PerformanceTelemetryHour"."maxValue", EXCLUDED."maxValue"),
-         "ratedSamples" = "PerformanceTelemetryHour"."ratedSamples" + 1,
+         "ratedSamples" = "PerformanceTelemetryHour"."ratedSamples" + EXCLUDED."ratedSamples",
          "ratedTotalValue" = "PerformanceTelemetryHour"."ratedTotalValue" + EXCLUDED."ratedTotalValue",
          "ratedMaxValue" = GREATEST("PerformanceTelemetryHour"."ratedMaxValue", EXCLUDED."ratedMaxValue"),
          "goodSamples" = "PerformanceTelemetryHour"."goodSamples" + EXCLUDED."goodSamples",
