@@ -10,7 +10,7 @@ export function AdminThemeToggle({ placement }: { placement: "sidebar" | "mobile
 
   useEffect(() => {
     const saved = window.localStorage.getItem(storageKey) === "dark";
-    setDark(saved);
+    window.setTimeout(() => setDark(saved), 0);
     document.documentElement.classList.toggle("admin-dark", saved);
     const syncTheme = () => setDark(document.documentElement.classList.contains("admin-dark"));
     window.addEventListener("admin-theme-change", syncTheme);

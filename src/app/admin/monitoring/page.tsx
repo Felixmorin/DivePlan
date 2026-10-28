@@ -9,16 +9,15 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminMonitoringPage() {
   await requireAdmin();
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const [eventsResult, failedResult, completedResult] = await Promise.all([
     query<{ id: string; type: string; message: string; email: string | null; createdAt: Date }>(
       `SELECT e.id, e.type, e.message, u.email, e."createdAt" FROM "AppEvent" e
        LEFT JOIN "User" u ON u.id = e."userId" ORDER BY e."createdAt" DESC LIMIT 500`),
-    query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE type = 'auth.failed' AND "createdAt" >= $1`, [since]),
+    query<{ count: string }>(`SELECT count(*)::text AS count FROM "AppEvent" WHERE type = 'auth.failed' AND "createdAt" >= NOW() - INTERVAL '24 hours'`),
     query<{ count: string }>(
       `SELECT count(*)::text AS count FROM "AthleteSessionCompletion" c
        JOIN "TrainingSession" s ON s.id = c."sessionId" JOIN "TrainingWeek" w ON w.id = s."weekId"
-       WHERE c.status = 'COMPLETED' AND c."completedAt" >= $1`, [since])
+       WHERE c.status = 'COMPLETED' AND c."completedAt" >= NOW() - INTERVAL '24 hours'`)
   ]);
   const events = eventsResult.rows.map((event) => ({ id: event.id, type: event.type, message: event.message, source: event.email ?? "Système", date: event.createdAt.toISOString() }));
 

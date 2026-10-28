@@ -25,14 +25,14 @@ export default async function SanteAppPage({ searchParams }: { searchParams: Pro
   await requireAdmin();
   const { period } = await searchParams;
   const selected = periods.find((item) => item.key === period) ?? periods[0];
-  const from = new Date(Date.now() - selected.hours * 60 * 60 * 1000);
-  const dbStarted = performance.now();
+  const from = getPeriodStart(selected.hours);
+  const dbStarted = startTimer();
   let databaseAvailable = false;
   let databaseLatency: number | null = null;
   try {
     await query<{ ok: number }>("SELECT 1 AS ok");
     databaseAvailable = true;
-    databaseLatency = Math.round(performance.now() - dbStarted);
+    databaseLatency = Math.round(elapsedMilliseconds(dbStarted));
   } catch {
     databaseAvailable = false;
   }
@@ -217,6 +217,10 @@ export default async function SanteAppPage({ searchParams }: { searchParams: Pro
     </div>
   </AdminShell>;
 }
+
+function getPeriodStart(hours: number) { return new Date(Date.now() - hours * 60 * 60 * 1000); }
+function startTimer() { return performance.now(); }
+function elapsedMilliseconds(startedAt: number) { return performance.now() - startedAt; }
 
 async function safeQuery<T extends import("pg").QueryResultRow>(sql: string, params: unknown[] = []): Promise<T[]> {
   try { return (await query<T>(sql, params)).rows; } catch { return []; }
