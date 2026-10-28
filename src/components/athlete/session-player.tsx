@@ -38,7 +38,9 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
   const [current, setCurrent] = useState(() => getResumeBlockIndex(session));
   const [stepIndex, setStepIndex] = useState(() => getResumeStepIndex(session, getResumeBlockIndex(session)));
   const [started, setStarted] = useState(session.completionStatus === "IN_PROGRESS" || session.completionStatus === "COMPLETED");
-  const [now, setNow] = useState(() => Date.now());
+  // Keep the server render and the browser's first render identical. The
+  // session may cross its start window between those two renders.
+  const [now, setNow] = useState(0);
   const [reviewing, setReviewing] = useState(session.completionStatus === "COMPLETED");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +107,10 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
   const canStart = session.sessionStatus === "IN_PROGRESS" || isSessionStartAvailable(session.date, new Date(now));
   const evaluationComplete = session.competitionDives.length > 0 && session.competitionDives.every((dive) => evaluationRatings[dive.id] !== undefined);
   const evaluationRequired = session.competitionEvaluationAtStart || session.competitionEvaluationBlockIds.length > 0;
+
+  useEffect(() => {
+    setNow(Date.now());
+  }, []);
 
   useEffect(() => {
     if (!started || evaluationComplete || evaluationPrompted.current) return;

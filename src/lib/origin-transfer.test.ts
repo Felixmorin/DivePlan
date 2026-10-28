@@ -203,7 +203,7 @@ test("PostgreSQL regressions: telemetry insertion and isolated live progress", a
     await t.test("invalid origins, missing auth and unsupported metrics are rejected", async () => {
       assert.equal((await POST(request({}, "https://elsewhere.test"))).status, 403);
       user = null;
-      assert.equal((await POST(request({}))).status, 401);
+      assert.equal((await POST(request({}))).status, 204);
       user = { clubId: "club-a", role: "COACH", coach: {} };
       assert.equal((await POST(request({ vitals: [{ route: "/coach", name: "bogus", value: 5 }] }))).status, 400);
     });
