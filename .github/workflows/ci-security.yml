@@ -30,9 +30,6 @@ jobs:
       - name: Installer les dépendances verrouillées
         run: npm ci
 
-      - name: Vérifier les vulnérabilités des dépendances
-        run: npm audit --audit-level=high
-
       - name: Vérifier le lint
         run: npm run lint
 
@@ -45,6 +42,9 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/diveplan
           AUTH_SECRET: ci-build-only-placeholder
           AUTH_URL: http://localhost:3000
+
+      - name: Vérifier les vulnérabilités des dépendances
+        run: npm audit --audit-level=high
 
   codeql:
     name: Analyse CodeQL
