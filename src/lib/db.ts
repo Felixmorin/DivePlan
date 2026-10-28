@@ -4,6 +4,8 @@ import { getSqlRequestSpan } from "@/lib/server-request-metrics";
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { performance } from "node:perf_hooks";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const globalForPool = globalThis as typeof globalThis & { divePlanPool?: Pool };
 
@@ -12,14 +14,15 @@ function createPool(connectionString = process.env.DATABASE_URL, max = 3) {
   const databaseUrl = new URL(connectionString);
   const sslMode = databaseUrl.searchParams.get("sslmode")?.toLowerCase();
   const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(databaseUrl.hostname);
-  const ssl = sslMode === "require"
-    ? { rejectUnauthorized: false }
-    : sslMode === "verify-ca" || sslMode === "verify-full"
-      ? { rejectUnauthorized: true }
-      : isLocalhost
-        ? undefined
-        : { rejectUnauthorized: true };
-  const sslConfig = ssl;
+  const sslConfig = isLocalhost && sslMode !== "require" && sslMode !== "verify-ca" && sslMode !== "verify-full"
+    ? undefined
+    : {
+        // Supabase's database certificate chains to this CA, which is not in
+        // every Node.js runtime's system trust store. Keep hostname and chain
+        // verification enabled while adding the provider CA to the trust set.
+        ca: readFileSync(join(process.cwd(), "certs", "prod-ca-2021.crt"), "utf8"),
+        rejectUnauthorized: true
+      };
 
   // node-postgres parses SSL query parameters from connectionString after reading
   // the pool options, which can replace the explicit `ssl` object above. Strip
