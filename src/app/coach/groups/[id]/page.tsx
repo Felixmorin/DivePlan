@@ -25,12 +25,14 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
          JOIN "TrainingSession" s ON s.id = l."sessionId" JOIN "TrainingWeek" w ON w.id = s."weekId"
          WHERE l."athleteId" = a.id AND w."clubId" = $2), 0) AS "recentVolume"
      FROM "TrainingGroup" g
-     LEFT JOIN "Athlete" a ON a."groupId" = g.id AND a.active = true
+     LEFT JOIN "Athlete" a ON a."groupId" = g.id AND a."clubId" = g."clubId" AND a.active = true
      LEFT JOIN "User" u ON u.id = a."userId"
      LEFT JOIN LATERAL (
        SELECT c.status, s.title AS "sessionTitle", s.date AS "sessionDate"
        FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id = c."sessionId"
-       WHERE c."athleteId" = a.id ORDER BY c."completedAt" DESC, c."startedAt" DESC LIMIT 1
+         WHERE c."athleteId" = a.id
+           AND EXISTS (SELECT 1 FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id = s."weekId" WHERE s.id = c."sessionId" AND w."clubId" = g."clubId")
+         ORDER BY c."completedAt" DESC, c."startedAt" DESC LIMIT 1
      ) latest ON true
      WHERE g.id = $1 AND g."clubId" = $2 ORDER BY u."firstName" ASC`, [id, clubId]
   );

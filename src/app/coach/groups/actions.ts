@@ -82,7 +82,7 @@ export async function deleteTrainingGroup(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const groupId = String(formData.get("groupId") ?? "");
   const groupResult = await query<{ id: string; name: string; weeks: number }>(
-    `SELECT g.id, g.name, (SELECT count(*)::int FROM "TrainingWeek" w WHERE w."groupId" = g.id) AS weeks
+    `SELECT g.id, g.name, (SELECT count(*)::int FROM "TrainingWeek" w WHERE w."groupId" = g.id AND w."clubId" = g."clubId") AS weeks
      FROM "TrainingGroup" g WHERE g.id = $1 AND g."clubId" = $2 LIMIT 1`, [groupId, clubId]
   );
   const group = groupResult.rows[0];
@@ -93,8 +93,8 @@ export async function deleteTrainingGroup(formData: FormData) {
   }
 
   await withTransaction(async (tx) => {
-    await tx.query(`UPDATE "Athlete" SET "groupId" = NULL WHERE "groupId" = $1`, [group.id]);
-    await tx.query(`UPDATE "PlanningEvent" SET "groupId" = NULL WHERE "groupId" = $1`, [group.id]);
+    await tx.query(`UPDATE "Athlete" SET "groupId" = NULL WHERE "groupId" = $1 AND "clubId" = $2`, [group.id, clubId]);
+    await tx.query(`UPDATE "PlanningEvent" SET "groupId" = NULL WHERE "groupId" = $1 AND "clubId" = $2`, [group.id, clubId]);
     await tx.query(`DELETE FROM "TrainingGroup" WHERE id = $1 AND "clubId" = $2`, [group.id, clubId]);
   });
 

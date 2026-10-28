@@ -194,7 +194,7 @@ export async function createCoachOnlyAthlete(formData: FormData) {
 
   if (groupId) {
     const group = await query(`SELECT id FROM "TrainingGroup" WHERE id = $1 AND "clubId" = $2 LIMIT 1`, [groupId, clubId]);
-    if (!group) {
+    if (!group.rows[0]) {
       throw new Error("Groupe invalide pour ce club.");
     }
   }
@@ -253,7 +253,7 @@ export async function createAthleteAccount(_: CreateAthleteAccountState, formDat
 
   if (groupId) {
     const group = await query(`SELECT id FROM "TrainingGroup" WHERE id = $1 AND "clubId" = $2 LIMIT 1`, [groupId, clubId]);
-    if (!group) {
+    if (!group.rows[0]) {
       return { error: "Ce groupe n'appartient pas à ton club." };
     }
   }

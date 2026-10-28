@@ -3,7 +3,7 @@
 import Form from "next/form";
 import { useState } from "react";
 import Link from "@/components/ui/app-link";
-import { CalendarDays, ChartNoAxesColumnIncreasing, Clock3, Layers3, MapPin, MoreVertical, Search, Users } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumnIncreasing, Clock3, Layers3, MapPin, MoreVertical, Search, Users, Timer, LayoutGrid, List, CheckCircle2 } from "lucide-react";
 import type { CoachSessionsPage } from "@/lib/coach-sessions-list";
 import { PAGE_SIZE, pageHref } from "@/lib/pagination";
 import { deleteTrainingSession, markTrainingSessionNotDone } from "@/app/coach/sessions/actions";
@@ -46,20 +46,22 @@ function DemoSessionsList({ sessions }: { sessions: SessionListItem[] }) {
     ? filtered.filter((s) => s.id !== next?.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     : tab === "completed" ? completed : drafts;
   const history = !expanded ? historySource.slice(0, 7) : historySource;
+  const planned = filtered.reduce((sum, s) => sum + s.volume, 0);
+  const hours = Math.round(filtered.reduce((sum, s) => sum + s.duration, 0) / 60);
 
   return <>
-    <div className="mb-7 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+    <div className="mb-5 grid grid-cols-2 gap-2 lg:grid-cols-4">{[[CalendarDays,"Séances ce mois-ci",filtered.filter(s=>{const d=new Date(s.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()}).length,"bg-sky-100 text-sky-600"],[Clock3,"À venir",upcoming.length,"bg-emerald-100 text-emerald-600"],[ChartNoAxesColumnIncreasing,"Plongeons planifiés",planned.toLocaleString("fr-CA"),"bg-violet-100 text-violet-600"],[Timer,"Temps d’entraînement",`${hours} heures`,`bg-orange-100 text-orange-600`]].map(([Icon,label,value,tone])=>{const I=Icon as typeof CalendarDays;return <div key={String(label)} className="flex min-h-[60px] items-center gap-3 rounded-xl border border-slate-200/80 bg-white px-3 shadow-sm"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${String(tone)}`}><I className="h-4 w-4"/></span><span><small className="block text-[10px] text-slate-500">{String(label)}</small><b className="text-lg leading-none">{String(value)}</b></span></div>})}</div>
+    <div className="mb-4 flex flex-wrap items-center gap-1.5">
       <div className="flex flex-1 flex-wrap gap-1" role="tablist" aria-label="Filtrer les séances">
         {([["all", `Toutes (${counts.all})`], ["completed", `Terminées (${counts.completed})`], ["drafts", `Brouillons (${counts.drafts})`]] as [Tab, string][]).map(([value, label]) => <button key={value} role="tab" aria-selected={tab === value} onClick={() => { setTab(value); setExpanded(false); }} className={`min-h-11 border-b-2 px-4 text-sm font-bold transition ${tab === value ? "border-cyan-500 text-sky-700" : "border-transparent text-slate-600 hover:bg-slate-50"}`}>{label}</button>)}
       </div>
-      <label className="flex min-h-10 min-w-52 flex-1 items-center gap-2 rounded-lg border border-slate-200 px-3 text-slate-500"><Search className="h-4 w-4 shrink-0" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher une séance…" className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none" /></label>
-      <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Filtrer par groupe" className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"><option value="all">Tous les groupes</option>{groups.map((g) => <option key={g}>{g}</option>)}</select>
-      <select value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Filtrer par période" className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700"><option value="all">Toutes les dates</option><option value="month">Ce mois-ci</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select>
+      <label className="ml-auto flex min-h-8 min-w-44 items-center gap-2 rounded-md border border-slate-200 bg-white px-2 text-slate-500"><Search className="h-3.5 w-3.5 shrink-0" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher une séance…" className="min-w-0 flex-1 bg-transparent text-[10px] text-slate-800 outline-none" /></label>
+      <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Filtrer par groupe" className="min-h-8 rounded-md border border-slate-200 bg-white px-2 text-[10px] text-slate-700"><option value="all">Tous les groupes</option>{groups.map((g) => <option key={g}>{g}</option>)}</select>
+      <select value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Filtrer par période" className="min-h-8 rounded-md border border-slate-200 bg-white px-2 text-[10px] text-slate-700"><option value="all">Toutes les dates</option><option value="month">Ce mois-ci</option><option value="30">30 derniers jours</option><option value="90">90 derniers jours</option></select><span className="grid h-8 w-8 place-items-center rounded-md bg-cyan-500 text-white"><LayoutGrid className="h-4 w-4"/></span><span className="grid h-8 w-8 place-items-center rounded-md border bg-white text-slate-500"><List className="h-4 w-4"/></span>
     </div>
 
-    {next && <section className="mb-7"><h2 className="mb-3 text-xl font-extrabold">Prochaine séance</h2><SessionRow session={next} featured /></section>}
-    <section><h2 className="mb-3 text-xl font-extrabold">{tab === "drafts" ? "Brouillons" : "Historique"}</h2>
-      {history.length ? <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">{history.map((s, i) => <SessionRow key={s.id} session={s} showMonth={i === 0 || monthKey(history[i - 1].date) !== monthKey(s.date)} />)}
+    <section>
+      {history.length ? <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">{history.map((s) => <SessionRow key={s.id} session={s} />)}
         {historySource.length > 7 && <button onClick={() => setExpanded(!expanded)} className="m-2 w-[calc(100%-1rem)] rounded-lg bg-slate-100 py-3 text-sm font-bold text-sky-800 hover:bg-slate-200">⌄　{expanded ? "Réduire l’historique" : "Afficher les séances précédentes"}</button>}
       </div> : !(tab === "all" && next) && <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 px-5 py-12 text-center"><p className="font-bold">Aucune séance trouvée</p><p className="mt-1 text-sm text-slate-500">Modifiez les filtres ou créez une nouvelle séance.</p></div>}
     </section>
@@ -76,18 +78,19 @@ function SessionRow({ session: s, featured = false, showMonth = false }: { sessi
   const fmtDate = new Intl.DateTimeFormat("fr-CA", { timeZone: "America/Toronto", weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(date);
   return <>
     {showMonth && <div className="border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-sm font-extrabold capitalize text-slate-700">{new Intl.DateTimeFormat("fr-CA", { month: "long", year: "numeric", timeZone: "America/Toronto" }).format(date)}</div>}
-    <article className={`flex flex-col gap-3 border-b border-slate-100 px-4 py-3 last:border-0 md:flex-row md:items-center md:gap-4 ${featured ? "rounded-xl border border-sky-200 bg-sky-50/40 px-5 py-4" : ""}`}>
-      <span className={`inline-flex w-fit shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${completed || s.status === "IN_PROGRESS" ? "bg-emerald-100 text-emerald-800" : draft ? "bg-amber-100 text-amber-800" : "bg-violet-100 text-violet-800"}`}><span className="h-2 w-2 rounded-full bg-current" />{label}</span>
-      <div className="min-w-0 flex-1"><h3 className="truncate font-extrabold">{s.title}</h3><p className="text-sm text-slate-500">{s.groupName}</p></div>
-      <div className="grid flex-1 grid-cols-2 gap-y-2 text-xs text-slate-600 sm:grid-cols-3 md:grid-cols-6 md:max-w-[850px]">
-        <span className="flex items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><CalendarDays className="h-4 w-4 shrink-0" /><span className="capitalize">{fmtDate}</span></span>
-        <span className="flex items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><Clock3 className="h-4 w-4 shrink-0" />{s.duration} min</span>
-        <span className="flex items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><ChartNoAxesColumnIncreasing className="h-4 w-4 shrink-0" />{s.volume} plongeons</span>
-        <span className="flex items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><Users className="h-4 w-4 shrink-0" />{s.athleteCount} athlète{s.athleteCount > 1 ? "s" : ""}</span>
-        <span className="flex items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><Layers3 className="h-4 w-4 shrink-0" />{s.blockCount} bloc{s.blockCount > 1 ? "s" : ""}</span>
-        <span className="flex min-w-0 items-center gap-2 border-slate-200 sm:border-l sm:pl-3"><MapPin className="h-4 w-4 shrink-0" /><span className="truncate">{s.location || "Lieu à confirmer"}</span></span>
+    <article className="relative flex min-h-[148px] min-w-0 flex-col gap-1.5 rounded-xl border border-slate-200/80 bg-white p-2.5 pb-9 shadow-sm">
+      <div className="flex items-center justify-between"><span className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-1 text-[9px] font-bold ${completed || s.status === "IN_PROGRESS" ? "bg-emerald-100 text-emerald-800" : draft ? "bg-slate-100 text-slate-700" : "bg-sky-100 text-sky-800"}`}><CheckCircle2 className="h-3 w-3"/>{label}</span><span className="text-xs font-black text-slate-500">···</span></div>
+      <div className="min-w-0"><h3 className="truncate text-[11px] font-extrabold leading-tight">{s.title}</h3><p className="text-[9px] text-slate-500">{s.groupName}</p></div>
+      <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] leading-tight text-slate-600">
+        <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3 shrink-0" /><span className="capitalize">{fmtDate}</span></span>
+        <span className="flex items-center gap-1"><Users className="h-3 w-3 shrink-0" />{s.groupName}</span>
+        <span className="flex items-center gap-1"><Clock3 className="h-3 w-3 shrink-0" />{Math.floor(s.duration/60)} h {String(s.duration%60).padStart(2,"0")}</span>
+        <span className="flex items-center gap-1"><Users className="h-3 w-3 shrink-0" />{s.athleteCount} athlètes</span>
+        <span className="flex items-center gap-1"><ChartNoAxesColumnIncreasing className="h-3 w-3 shrink-0" />{s.volume.toLocaleString("fr-CA")} plongeons</span>
+        <span className="flex items-center gap-1"><Layers3 className="h-3 w-3 shrink-0" />{s.blockCount} blocs</span>
+        <span className="col-span-2 flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{s.location || "Centre aquatique MTL"}</span></span>
       </div>
-      <div className="flex shrink-0 items-center gap-2"><Link href={s.id.startsWith("demo-") ? "/coach/sessions/demo" : `/coach/sessions/${s.id}`} className={`inline-flex min-h-10 items-center justify-center rounded-lg px-5 text-sm font-bold ${featured ? "bg-cyan-500 text-white hover:bg-cyan-600" : "border border-slate-200 bg-white text-sky-900 hover:bg-slate-50"}`}>Ouvrir</Link>
+      <div className="absolute bottom-2 right-2 flex shrink-0 items-center gap-2"><Link href={s.id.startsWith("demo-") ? "/coach/sessions/demo" : `/coach/sessions/${s.id}`} className="inline-flex min-h-7 items-center justify-center rounded-lg border border-sky-300 bg-white px-3 text-[9px] font-bold text-sky-700 hover:bg-sky-50">Ouvrir →</Link>
         {!s.id.startsWith("demo-") && <details className="relative"><summary aria-label="Actions de la séance" className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"><MoreVertical className="h-4 w-4" /></summary><div className="absolute right-0 top-11 z-10 w-48 rounded-lg border border-slate-200 bg-white p-2 shadow-lg"><form action={markTrainingSessionNotDone}><input type="hidden" name="sessionId" value={s.id} /><button className="w-full rounded px-3 py-2 text-left text-sm hover:bg-slate-50">Marquer non faite</button></form><form action={deleteTrainingSession}><input type="hidden" name="sessionId" value={s.id} /><button className="w-full rounded px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50">Supprimer</button></form></div></details>}
       </div>
     </article>
@@ -107,7 +110,7 @@ function PaginatedSessions({ data }: { data: CoachSessionsPage }) {
       <button className="rounded-lg bg-sky-700 px-4 py-2 font-bold text-white">Appliquer</button>
     </Form>
     {data.next && <section className="mb-6"><h2 className="mb-3 text-xl font-bold">Prochaine séance</h2><SessionRow session={data.next} featured /></section>}
-    <div className="overflow-hidden rounded-xl border bg-white">{data.sessions.filter(s=>s.id!==data.next?.id).map(s=><SessionRow key={s.id} session={s}/>)}{!data.sessions.length&&<p className="p-6 text-slate-500">Aucune séance ne correspond aux filtres.</p>}</div>
+    <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">{data.sessions.filter(s=>s.id!==data.next?.id).map(s=><SessionRow key={s.id} session={s}/>)}{!data.sessions.length&&<p className="col-span-full rounded-xl border border-dashed bg-white p-6 text-slate-500">Aucune séance ne correspond aux filtres.</p>}</div>
     <nav aria-label="Pagination des séances" className="mt-4 flex justify-between gap-3 text-sm font-semibold">{data.page>1?<Link href={href(data.page-1)}>Précédent</Link>:<span/>}<span>Page {data.page} / {Math.max(1,Math.ceil(data.total/PAGE_SIZE))} · {data.total} séances</span>{data.page*PAGE_SIZE<data.total?<Link href={href(data.page+1)}>Suivant</Link>:<span/>}</nav>
   </>;
 }

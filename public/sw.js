@@ -8,6 +8,7 @@ self.addEventListener("push", (event) => {
       body: data.body || "",
       icon: "/icons/diveplan-192.png",
       badge: "/icons/diveplan-192.png",
+      tag: typeof data.tag === "string" ? data.tag : undefined,
       data: { url }
     });
     if (typeof data.healthCheckId === "string") {

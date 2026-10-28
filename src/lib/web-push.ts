@@ -41,6 +41,28 @@ async function send(row: SubscriptionRow, payload: object) {
   }
 }
 
+const MAX_TRANSIENT_SEND_ATTEMPTS = 3;
+
+async function sendWithRetry(row: SubscriptionRow, payload: object) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await send(row, payload);
+    } catch (error) {
+      const message = typeof error === "object" && error !== null && "message" in error
+        ? String(error.message)
+        : "";
+      const status = message.match(/^push_provider_(\d+)$/)?.[1];
+      // Retry network/unknown failures, HTTP 429 and provider 5xx responses.
+      // Permanent 4xx responses and local VAPID configuration errors fail fast.
+      const transient = message.startsWith("push_provider_")
+        ? status === undefined || status === "429" || Number(status) >= 500
+        : !(error instanceof Error && error.message.includes("VAPID keys are not configured"));
+      if (!transient || attempt >= MAX_TRANSIENT_SEND_ATTEMPTS) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** (attempt - 1)));
+    }
+  }
+}
+
 export async function saveSessionPublicationTargets(tx: PoolClient, sessionId: string) {
   await tx.query("SAVEPOINT web_push_targets");
   try {
@@ -177,9 +199,9 @@ async function dispatchSessionNotice(sessionId: string, kind: "PUBLISHED" | "CAN
       for (const subscription of subscriptions) {
         try {
           const payload = kind === "CANCELLED"
-            ? { title: "Entraînement annulé", body: `La séance du ${formatMontrealDate(delivery.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} a été annulée.`, url: "/athlete/calendar" }
-            : { title: "Nouvelle séance disponible", body: `L’aperçu de la séance « ${delivery.title} » est prêt.`, url: `/athlete/session/${encodeURIComponent(sessionId)}` };
-          if (await send(subscription, payload) === "sent") accepted++;
+            ? { title: "Entraînement annulé", body: `La séance du ${formatMontrealDate(delivery.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} a été annulée.`, url: "/athlete/calendar", tag: delivery.id }
+            : { title: "Nouvelle séance disponible", body: `L’aperçu de la séance « ${delivery.title} » est prêt.`, url: `/athlete/session/${encodeURIComponent(sessionId)}`, tag: delivery.id };
+          if (await sendWithRetry(subscription, payload) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back publishing. */ }
       }
       outcomes.push({ id: delivery.id, status: accepted ? "SENT" : "FAILED", lastError: accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription" });
@@ -238,7 +260,7 @@ export async function dispatchSessionUpdate(sessionId: string, updateId: string)
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
-          if (await send(subscription, { title: "Entraînement modifié", body: `La séance « ${delivery.title} » a été mise à jour.`, url: `/athlete/session/${encodeURIComponent(sessionId)}` }) === "sent") accepted++;
+          if (await sendWithRetry(subscription, { title: "Entraînement modifié", body: `La séance « ${delivery.title} » a été mise à jour.`, url: `/athlete/session/${encodeURIComponent(sessionId)}`, tag: delivery.id }) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back updating the session. */ }
       }
       outcomes.push({ id: delivery.id, status: accepted ? "SENT" : "FAILED", lastError: accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription" });
@@ -298,7 +320,7 @@ export async function dispatchPlanningEventCancellation(eventId: string) {
       let accepted = 0;
       for (const subscription of subscriptions) {
         try {
-          if (await send(subscription, { title: "Entraînement annulé", body: `L’entraînement du ${formatMontrealDate(delivery.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} a été annulé.`, url: "/athlete/calendar" }) === "sent") accepted++;
+          if (await sendWithRetry(subscription, { title: "Entraînement annulé", body: `L’entraînement du ${formatMontrealDate(delivery.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} a été annulé.`, url: "/athlete/calendar", tag: delivery.id }) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back cancelling the schedule. */ }
       }
       await query(`UPDATE "PlanningEventCancellationPushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);
@@ -341,7 +363,7 @@ export async function dispatchPlanningEventPublication(eventIds: string[]) {
       const kind = delivery.type === "COMPETITION" ? "Nouvelle compétition" : delivery.type === "CAMP" ? "Nouveau camp" : "Nouvel événement au calendrier";
       for (const subscription of subscriptions) {
         try {
-          if (await send(subscription, { title: kind, body: `${delivery.title} · ${formatMontrealDate(delivery.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`, url: "/athlete/calendar" }) === "sent") accepted++;
+          if (await sendWithRetry(subscription, { title: kind, body: `${delivery.title} · ${formatMontrealDate(delivery.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}`, url: "/athlete/calendar", tag: delivery.id }) === "sent") accepted++;
         } catch { /* A push provider failure must not roll back adding the event. */ }
       }
       await query(`UPDATE "PlanningEventPushDelivery" SET status=$1, attempts=attempts+1, "sentAt"=CASE WHEN $1='SENT' THEN NOW() ELSE "sentAt" END, "lastError"=$2 WHERE id=$3 AND status='PENDING'`, [accepted ? "SENT" : "FAILED", accepted ? null : subscriptions.length ? "Push provider delivery failed" : "No active device subscription", delivery.id]);

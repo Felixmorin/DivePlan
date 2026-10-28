@@ -68,7 +68,9 @@ erDiagram
   AiAgent ||--o{ AiAgentRun : execute
 ```
 
-Le schéma est défini dans `prisma/schema.prisma`; des tables additionnelles/évolutions se trouvent dans `db/migrations/*.sql` et `prisma/migrations/*/migration.sql`. La base effective peut contenir des migrations non appliquées ou des objets créés hors dépôt.
+Le modèle applicatif est défini dans `prisma/schema.prisma`. Depuis le handoff, `db/migrations/*.sql` est l'historique canonique des changements de schéma futurs; `prisma/migrations/*/migration.sql` est conservé comme historique antérieur, dont le statut d'application doit être confirmé pour chaque environnement. Les deux répertoires ne sont pas des flux concurrents à prolonger. La base effective peut contenir des migrations non appliquées ou des objets créés hors dépôt. Voir [`db/migrations/README.md`](../../db/migrations/README.md).
+
+L'isolation multi-club repose aussi sur les contrôles applicatifs : une semaine et son groupe doivent appartenir au même club, et chaque athlète assigné doit appartenir au club et au groupe de la semaine. Les contraintes FK simples du schéma ne codent pas toutes ces égalités; vérifier les contrôles d'autorisation et de propriété dans chaque Server Action, Route Handler et service concerné. Les actions de séances de coach observées dérivent le club de `requireCoach()` et filtrent groupe/athlètes par club avant l'écriture; cela ne valide pas tous les autres parcours ni l'état RLS déployé.
 
 ## Composants, authentification et permissions
 
