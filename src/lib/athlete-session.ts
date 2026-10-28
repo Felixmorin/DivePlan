@@ -276,7 +276,6 @@ export async function getAthleteProgressTotals(athleteId: string, chartsOnly = f
   const completionRate = assignedSessions > 0 ? Math.round((completedSessionCount / assignedSessions) * 100) : 0;
   const readyScore = Math.min(100, Math.round(completionRate * 0.6 + Math.min(totalDiveRepetitions, 120) * 0.25 + Math.min(completedExercises, 20) * 0.5));
   const dailyData = dailyDiveRows.rows;
-  const familyNames = ["Avant", "Arriere", "Renverse", "Retourne", "Vrille", "Equilibre"];
   const dailyByKey = new Map<string, Record<string, number>>();
   for (const row of dailyFamilyRows.rows) {
     const key = toMontrealDateInputValue(row.date);

@@ -107,7 +107,6 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
           athletePoolAverageById={Object.fromEntries(averagesR.rows.map((row) => [row.athleteId, Number(row.average)]))}
           athletePoolInsightsById={athletePoolInsightsById}
           planningEvents={eventsR.rows}
-          poolBlocks={[]}
           initialTemplate={{ id: session.id, name: session.title, category: "Brouillon", payload }}
           templates={[]}
           recentSessions={[]}

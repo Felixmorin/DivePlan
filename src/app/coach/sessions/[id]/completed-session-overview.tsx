@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "@/components/ui/app-link";
-import { Activity, ArrowLeft, ArrowRight, BarChart3, Check, ChevronDown, CircleCheck, ClipboardList, Download, Eye, FileText, Flag, LockKeyhole, MessageSquareText, MoreHorizontal, NotebookText, Plus, Printer, Smile, Target, Trophy, UserCheck, Users, Waves, X } from "lucide-react";
+import { Check, ChevronDown, CircleCheck, ClipboardList, Eye, FileText, LockKeyhole, MessageSquareText, MoreHorizontal, NotebookText, Plus, Printer, Smile, UserCheck, Users, Waves, X } from "lucide-react";
 import { saveCompletedSessionCoachNote, saveSessionAttendance, updateCompletedSessionSummary } from "@/app/coach/sessions/actions";
 import { formatMontrealDate } from "@/lib/timezone";
 import { countPoolContexts } from "@/lib/pool-list";
@@ -95,8 +95,6 @@ export function CompletedSessionOverview({ session }: { session: Session }) {
   const absentCount = athletes.filter((athlete) => absentAthleteIds.has(athlete.id)).length;
   const present = assigned - absentCount;
   const attendanceLabel = absentCount ? `${present}/${assigned} (${absentCount} absent${absentCount === 1 ? "" : "s"})` : `${present}/${assigned}`;
-  const plannedDry = activeAthletes.reduce((sum, athlete) => sum + athlete.plannedDryland, 0);
-  const actualDry = activeAthletes.reduce((sum, athlete) => sum + athlete.actualDryland, 0);
   const plannedPoolReps = activeAthletes.reduce((sum, athlete) => sum + athlete.plannedPool, 0);
   const actualPoolReps = activeAthletes.reduce((sum, athlete) => sum + athlete.actualPool, 0);
   const ratingScale = ["Pas bien", "Difficile", "Moyen", "Bien", "Très bien"];

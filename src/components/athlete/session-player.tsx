@@ -109,7 +109,8 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
   const evaluationRequired = session.competitionEvaluationAtStart || session.competitionEvaluationBlockIds.length > 0;
 
   useEffect(() => {
-    setNow(Date.now());
+    const timeout = window.setTimeout(() => setNow(Date.now()), 0);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   useEffect(() => {

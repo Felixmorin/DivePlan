@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "@/components/ui/app-link";
-import { Activity, ArrowRight, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Dumbbell, FileText, Flag, Info, Pencil, Target, Users, Zap } from "lucide-react";
+import { Activity, ArrowRight, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, FileText, Info, Pencil, Target, Users, Zap } from "lucide-react";
 
 const months = ["Sept.", "Oct.", "Nov.", "Déc.", "Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août"];
 const phases = [
@@ -27,7 +27,6 @@ export function AnnualPlan() {
   const [help, setHelp] = useState(false);
   const activePhase = phases.find((phase) => week >= phase.start && week <= phase.end) ?? phases[0];
   const seasonWeeks = Array.from({ length: 52 }, (_, i) => i + 1);
-  const points = (values: number[]) => values.map((value, i) => `${(i / 51) * 100},${100 - value}`).join(" ");
   const selectedMonth = months[Math.floor((week - 1) / 4.34)] ?? "Janv.";
 
   return <div className="annual-shell">

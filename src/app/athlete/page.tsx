@@ -5,7 +5,7 @@ import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { getAssignedReadySession, getAthleteCurrentWeekSummary, getAthleteRecentCompletions, getCurrentAthlete } from "@/lib/athlete-session";
+import { getAssignedReadySession, getAthleteCurrentWeekSummary, getCurrentAthlete } from "@/lib/athlete-session";
 import { getAthletePlanningEvents, getAthleteWeekPlanningEvents } from "@/lib/athlete-planning";
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
@@ -40,7 +40,6 @@ export default async function AthleteTodayPage() {
   const blocks = readySession?.blocks ?? [];
   const blockTypes = Array.from(new Set(blocks.map((block) => block.type)));
   const sessionTime = sessionDate ? formatMontrealTime(sessionDate) : "--:--";
-  const sessionDateLabel = sessionDate ? formatMontrealDate(sessionDate, { weekday: "short", day: "numeric", month: "short" }) : "À venir";
   const nextHighlights = upcomingEvents
     .filter((event) => (event.type === "COMPETITION" || event.type === "CAMP") && !event.cancelledAt && event.startsAt >= new Date())
     .slice(0, 2);

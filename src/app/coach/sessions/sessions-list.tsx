@@ -74,7 +74,7 @@ function DashboardStats({monthCount,upcoming,volume,hours}:{monthCount:number;up
   return <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">{items.map(({icon:Icon,label,value,tone})=><div key={label} className="flex h-[60px] items-center gap-3 rounded-lg border border-slate-200/80 bg-white px-3 shadow-sm"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tones[tone]}`}><Icon className="h-[18px] w-[18px]"/></span><span className="min-w-0"><small className="block truncate text-[9px] leading-4 text-slate-500">{label}</small><b className="block text-[18px] leading-5 text-slate-950">{value}</b></span></div>)}</div>;
 }
 
-function SessionRow({ session: s, featured = false, showMonth = false }: { session: SessionListItem; featured?: boolean; showMonth?: boolean }) {
+function SessionRow({ session: s, showMonth = false }: { session: SessionListItem; showMonth?: boolean }) {
   const date = new Date(s.date);
   const completed = s.status === "COMPLETED";
   const draft = s.status === "DRAFT";

@@ -1,5 +1,5 @@
 import Link from "@/components/ui/app-link";
-import { Activity, ArrowRight, CalendarDays, CircleHelp, Cloud, Database, FileText, KeyRound, Pencil, Server, ShieldAlert, Timer, Upload } from "lucide-react";
+import { Activity, ArrowRight, CalendarDays, CircleHelp, Cloud, Database, FileText, KeyRound, Pencil, ShieldAlert, Timer, Upload } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/current-user";
@@ -59,7 +59,6 @@ export default async function SanteGeneralePage({ searchParams }: { searchParams
 
   const eventData = eventResult.rows[0];
   const errors = Number(eventData?.errors ?? 0);
-  const affectedUsers = Number(eventData?.affectedUsers ?? 0);
   const failedLogins = Number(eventData?.failedLogins ?? 0);
   const eventsAvailable = eventResult.ok;
   const ttfb = ttfbResult.rows[0];

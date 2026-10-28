@@ -8,7 +8,6 @@ import { requireCoach } from "@/lib/current-user";
 import { query, setDatabaseEgressRoute } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { buildSessionTemplatePayload, getSessionSnapshots, parseSessionTemplatePayload } from "@/lib/session-template";
-import type { SessionPoolHeight } from "@/lib/session-template";
 import { getCoachPoolInsights } from "@/lib/coach-pool-insights";
 import Link from "@/components/ui/app-link";
 
@@ -37,13 +36,12 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     );
   }
 
-  const [groupsR, athletesR, drylandR, templateR, eventsR, recentR, templatesR, recentSessionIdsR] = await Promise.all([
+  const [groupsR, athletesR, drylandR, templateR, eventsR, templatesR, recentSessionIdsR] = await Promise.all([
     query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`,[clubId]),
     query<{id:string;groupId:string;level:string;firstName:string;lastName:string;avatar:string|null}>(`SELECT a.id,a."groupId",a.level,u."firstName",u."lastName",u.avatar FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
     query<{id:string;name:string;category:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean;equipment:string|null;tags:string[]}>(`SELECT id,name,category,"defaultSets","defaultReps","defaultDuration","roundTrip",equipment,tags FROM "DrylandExercise" WHERE "archivedAt" IS NULL ORDER BY name`),
     templateId ? query<{id:string;name:string;category:string;payload:unknown}>(`SELECT id,name,category,payload FROM "SessionTemplate" WHERE id=$1 AND "clubId"=$2`,[templateId,clubId]) : Promise.resolve(null),
     query<{id:string;title:string;startsAt:Date;duration:number|null;groupId:string;location:string|null}>(`SELECT id,title,"startsAt",duration,"groupId",location FROM "PlanningEvent" WHERE "clubId"=$1 AND type='TRAINING_SCHEDULE' ORDER BY "startsAt"`,[clubId]),
-    query<{sessionId:string;sessionTitle:string;blockId:string;title:string;duration:number;position:number}>(`WITH recent AS (SELECT s.id,s.title,s.date FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "PoolTraining" p ON p."blockId"=b.id WHERE b."sessionId"=s.id) ORDER BY s.date DESC LIMIT 8) SELECT r.id AS "sessionId",r.title AS "sessionTitle",b.id AS "blockId",b.title,b.duration,b.position FROM recent r JOIN "SessionBlock" b ON b."sessionId"=r.id JOIN "PoolTraining" p ON p."blockId"=b.id ORDER BY r.date DESC,b.position ASC`,[clubId]),
     query<{id:string;name:string;category:string;payload:unknown}>(`SELECT id,name,category,payload FROM "SessionTemplate" WHERE "clubId"=$1 ORDER BY favorite DESC,name ASC LIMIT 100`,[clubId]),
     query<{id:string;title:string;date:Date;groupId:string}>(`SELECT s.id,s.title,s.date,w."groupId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 ORDER BY s.date DESC LIMIT 8`,[clubId])
   ]);
@@ -67,62 +65,6 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
   const drylandLibrary=drylandR.rows;
   const template=templateR?.rows[0]??null;
   const planningEvents=eventsR.rows;
-  type PoolSectionRow = { id: string; poolTrainingId: string; height: SessionPoolHeight; label: string | null };
-  type PoolDiveRow = { poolSectionId: string; diveCode: string; diveName: string; position: string; repetitions: number; notes: string | null; order: number };
-  const blockIds = [...new Set(recentR.rows.map((row) => row.blockId))];
-  const [assignmentsR, sectionsR] = blockIds.length > 0 ? await Promise.all([
-    query<{ sessionBlockId: string; athleteId: string }>(`SELECT "sessionBlockId", "athleteId" FROM "SessionBlockAssignment" WHERE "sessionBlockId" = ANY($1::text[])`, [blockIds]),
-    query<PoolSectionRow>(`SELECT id, "poolTrainingId", height, label FROM "PoolSection" WHERE "poolTrainingId" = ANY($1::text[]) ORDER BY "order"`, [blockIds])
-  ]) : [{ rows: [] }, { rows: [] }];
-  const sectionIds = sectionsR.rows.map((section) => section.id);
-  const divesR = sectionIds.length > 0
-    ? await query<PoolDiveRow>(`SELECT "poolSectionId", "diveCode", "diveName", position, repetitions, notes, "order" FROM "PoolDive" WHERE "poolSectionId" = ANY($1::text[]) ORDER BY "order"`, [sectionIds])
-    : { rows: [] };
-  const assignmentsByBlock = new Map<string, { athleteId: string }[]>();
-  for (const assignment of assignmentsR.rows) {
-    const blockAssignments = assignmentsByBlock.get(assignment.sessionBlockId) ?? [];
-    blockAssignments.push({ athleteId: assignment.athleteId });
-    assignmentsByBlock.set(assignment.sessionBlockId, blockAssignments);
-  }
-  const divesBySection = new Map<string, PoolDiveRow[]>();
-  for (const dive of divesR.rows) {
-    const sectionDives = divesBySection.get(dive.poolSectionId) ?? [];
-    sectionDives.push(dive);
-    divesBySection.set(dive.poolSectionId, sectionDives);
-  }
-  const sectionsByBlock = new Map<string, PoolSectionRow[]>();
-  for (const section of sectionsR.rows) {
-    const blockSections = sectionsByBlock.get(section.poolTrainingId) ?? [];
-    blockSections.push(section);
-    sectionsByBlock.set(section.poolTrainingId, blockSections);
-  }
-  const sessionsById = new Map<string, { id: string; blocks: { id: string; title: string; duration: number; assignments: { athleteId: string }[]; poolTraining: { sections: { height: SessionPoolHeight; label: string | null; dives: Omit<PoolDiveRow, "poolSectionId">[] }[] } | null }[] }>();
-  for (const row of recentR.rows) {
-    const session = sessionsById.get(row.sessionId) ?? { id: row.sessionId, blocks: [] };
-    session.blocks.push({
-      id: row.blockId,
-      title: row.title,
-      duration: row.duration,
-      assignments: assignmentsByBlock.get(row.blockId) ?? [],
-      poolTraining: {
-        sections: (sectionsByBlock.get(row.blockId) ?? []).map((section) => ({
-          height: section.height,
-          label: section.label,
-          dives: (divesBySection.get(section.id) ?? []).map((dive) => ({
-            diveCode: dive.diveCode,
-            diveName: dive.diveName,
-            position: dive.position,
-            repetitions: dive.repetitions,
-            notes: dive.notes,
-            order: dive.order
-          }))
-        }))
-      }
-    });
-    sessionsById.set(row.sessionId, session);
-  }
-  const recentPoolSessions = [...sessionsById.values()];
-  const poolBlocks = recentPoolSessions.flatMap((session) => session.blocks).filter((block) => block.poolTraining).slice(0, 3);
   const initialTemplate = template && !["Dryland", "Piscine"].includes(template.category)
     ? {
         id: template.id,
@@ -174,24 +116,6 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
           athletePoolAverageById={athletePoolAverageById}
           athletePoolInsightsById={athletePoolInsightsById}
           planningEvents={planningEvents.map((event) => ({ id: event.id, title: event.title, startsAt: event.startsAt, duration: event.duration, groupId: event.groupId, location: event.location }))}
-          poolBlocks={poolBlocks.map((block) => ({
-            id: block.id,
-            title: block.title,
-            duration: block.duration,
-            athleteIds: block.assignments.map((assignment) => assignment.athleteId),
-            sections: block.poolTraining?.sections.map((section) => ({
-              height: section.height,
-              label: section.label,
-              dives: section.dives.map((dive) => ({
-                diveCode: dive.diveCode,
-                diveName: dive.diveName,
-                position: dive.position,
-                repetitions: dive.repetitions,
-                notes: dive.notes,
-                order: dive.order
-              }))
-            })) ?? []
-          }))}
           initialTemplate={initialTemplate}
           templates={templates}
           recentSessions={recentSessions}

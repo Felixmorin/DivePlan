@@ -1,14 +1,16 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "@/components/ui/app-link";
 import { ArrowDown, ArrowUp, Bell, CalendarDays, ChevronDown, Pencil } from "lucide-react";
 
 export type ChartPoint = { day: string; transfer: number; sql: number; transferAt: string | null; sqlAt: string | null };
 export type RouteMetric = { route: string; requests: string; bytes: string; updated: Date };
 export function CostsDashboard({ period, aggregation }: { period: string; aggregation: string }) {
+  const router = useRouter();
   const updateFilter = (next: { period?: string; aggregation?: string }) => {
     const params = new URLSearchParams({ period, aggregation, ...next });
-    location.href = `/admin/couts-quotas?${params.toString()}`;
+    router.push(`/admin/couts-quotas?${params.toString()}`);
   };
   return <div className="flex flex-wrap items-center gap-2">
     <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2"><CalendarDays className="h-4 w-4 text-slate-600"/><label className="sr-only" htmlFor="cost-period">Période</label><select id="cost-period" value={period} onChange={e=>updateFilter({ period: e.target.value })} className="min-h-9 bg-transparent text-sm font-semibold text-slate-800"><option value="7d">7 derniers jours</option><option value="30d">30 derniers jours</option><option value="90d">90 derniers jours</option></select><ChevronDown className="h-4 w-4"/></span>

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock3, Copy, Dumbbell, FileText, GripVertical, Leaf, MoreHorizontal, NotebookPen, Plus, Search, Send, Trash2, UserRound, Users, Waves, X } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronRight, Clock3, Dumbbell, FileText, GripVertical, Leaf, MoreHorizontal, NotebookPen, Plus, Search, Send, Trash2, UserRound, Users, Waves, X } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -12,7 +12,6 @@ import { AssignmentSelector } from "@/components/coach/assignment-selector";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolListTable } from "@/components/coach/pool-list-table";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
-import { StatusPill } from "@/components/training/status-pill";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -105,7 +104,6 @@ type SessionBuilderProps = {
   athletePoolAverageById: Record<string, number>;
   athletePoolInsightsById?: Record<string, AthletePoolInsight>;
   planningEvents: BuilderPlanningEvent[];
-  poolBlocks: BuilderPoolBlock[];
   initialTemplate?: {
     id: string;
     name: string;
@@ -127,7 +125,7 @@ type SessionBuilderProps = {
 
 const steps = ["Démarrer", "Contenu", "Dryland", "Piscine", "Publier"];
 
-export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAverageById, athletePoolInsightsById = {}, planningEvents, poolBlocks, initialTemplate, templates, recentSessions, initialPlanningEventId, initialGroupId: providedGroupId, initialDate, initialTime, initialCoachAthleteNotes, editingSession = false, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
+export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAverageById, athletePoolInsightsById = {}, planningEvents, initialTemplate, templates, recentSessions, initialPlanningEventId, initialGroupId: providedGroupId, initialDate, initialTime, initialCoachAthleteNotes, editingSession = false, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [assignmentOpenBlockId, setAssignmentOpenBlockId] = useState<string | null>(null);
@@ -424,10 +422,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     pulse(block.id);
   }
 
-  function reusePoolBlock(block: BuilderPoolBlock) {
-    addPoolBlock({ ...block, id: `pool-reuse-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, athleteIds });
-  }
-
   function removePoolBlock(blockId: string) {
     setActivePoolBlocks((current) => current.filter((block) => block.id !== blockId));
     setContentOrder((current) => current.filter((id) => id !== blockId));
@@ -436,23 +430,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       delete next[blockId];
       return next;
     });
-  }
-
-  function updatePoolRows(blockId: string, rows: PoolListRow[]) {
-    setActivePoolBlocks((current) => current.map((block) => block.id === blockId ? {
-      ...block,
-      sections: poolRowsToSections(rows, block.sections)
-    } : block));
-    setPoolRowsByAthleteBlock((current) => ({
-      ...current,
-      ...Object.fromEntries((effectivePoolAssignments[blockId] ?? []).map((athleteId) => [poolAthleteBlockKey(athleteId, blockId), rows]))
-    }));
-    pulse(blockId);
-  }
-
-  function updatePoolBlock(blockId: string, update: Partial<Pick<BuilderPoolBlock, "title" | "duration">>) {
-    setActivePoolBlocks((current) => current.map((block) => block.id === blockId ? { ...block, ...update } : block));
-    pulse(blockId);
   }
 
   function updateDrylandBlock(blockId: string, update: Partial<Omit<BuilderDrylandBlock, "id">>) {
@@ -548,16 +525,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
         }
       });
     })();
-  }
-
-  function movePoolBlock(blockId: string, direction: -1 | 1) {
-    setActivePoolBlocks((current) => moveItem(current, current.findIndex((block) => block.id === blockId), direction));
-    pulse(blockId);
-  }
-
-  function moveDrylandBlock(blockId: string, direction: -1 | 1) {
-    setDrylandBlocks((current) => moveItem(current, current.findIndex((block) => block.id === blockId), direction));
-    pulse(blockId);
   }
 
   function saveDrylandTemplate(blockId: string) {
@@ -1034,124 +1001,6 @@ function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: Qui
   );
 }
 
-function QuickPoolBlockForm({ onAdd }: { onAdd: (block: BuilderPoolBlock) => void }) {
-  const [error, setError] = useState<string | null>(null);
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    const title = String(data.get("title") ?? "").trim();
-    if (title.length < 2) {
-      setError("Complète le nom du bloc.");
-      return;
-    }
-
-    onAdd({
-      id: `custom-pool-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      title,
-      duration: 30,
-      athleteIds: [],
-      sections: []
-    });
-    setError(null);
-    form.reset();
-  }
-
-  return (
-    <form onSubmit={submit} className="rounded-[var(--radius-panel)] border border-[var(--block-pool-fg)]/25 bg-[var(--block-pool-bg)]/50 p-4">
-      <div className="mb-1 flex items-center gap-2 text-lg font-black text-[var(--block-pool-fg)]"><Plus className="h-5 w-5" /> Creer un bloc piscine personnalise</div>
-      <p className="mb-4 text-sm font-semibold text-[var(--color-ink-muted)]">Le bloc est créé vide. Tu pourras ajouter ses lignes de plongeons ensuite.</p>
-      <Input name="title" placeholder="Nom du bloc" required />
-      <Button type="submit" variant="action" className="mt-3"><Plus className="h-4 w-4" /> Ajouter le bloc vide</Button>
-      {error && <div className="mt-3 rounded-xl bg-[var(--color-danger)]/10 p-3 text-sm font-semibold text-[var(--color-danger)]">{error}</div>}
-    </form>
-  );
-}
-
-function PoolStep({ poolBlocks, recentBlocks, flashBlock, onAddPoolBlock, onReusePoolBlock, onRemovePoolBlock, onMoveBlock, onUpdatePoolBlock, onUpdatePoolRows }: {
-  poolBlocks: BuilderPoolBlock[];
-  recentBlocks: BuilderPoolBlock[];
-  flashBlock: string | null;
-  onAddPoolBlock: (block: BuilderPoolBlock) => void;
-  onReusePoolBlock: (block: BuilderPoolBlock) => void;
-  onRemovePoolBlock: (blockId: string) => void;
-  onMoveBlock: (blockId: string, direction: -1 | 1) => void;
-  onUpdatePoolBlock: (blockId: string, update: Partial<Pick<BuilderPoolBlock, "title" | "duration">>) => void;
-  onUpdatePoolRows: (blockId: string, rows: PoolListRow[]) => void;
-}) {
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-panel)] border border-[var(--block-pool-fg)]/20 bg-[var(--block-pool-bg)]/45 p-4">
-        <div><h2 className="text-xl font-black">Blocs piscine</h2><p className="mt-1 text-sm font-semibold text-[var(--color-ink-muted)]">Ajoute et organise les listes de plongeons prévues pour le bassin.</p></div>
-        <QuickPoolBlockForm onAdd={onAddPoolBlock} />
-      </div>
-      {recentBlocks.length > 0 && <details className="rounded-2xl border border-[var(--color-border)] bg-white p-4"><summary className="cursor-pointer font-black">Reprendre une liste récente <span className="ml-1 text-sm font-semibold text-[var(--color-ink-muted)]">({recentBlocks.length})</span></summary><div className="mt-3 grid gap-2 md:grid-cols-2">{recentBlocks.map((block) => <div key={block.id} className="flex items-center justify-between gap-3 rounded-xl bg-[var(--color-surface-raised)] p-3"><div className="min-w-0"><div className="truncate font-bold">{block.title}</div><div className="text-xs text-[var(--color-ink-muted)]">{block.sections.reduce((sum, section) => sum + section.dives.length, 0)} plongeons</div></div><Button type="button" size="sm" variant="outline" onClick={() => onReusePoolBlock(block)}>Ajouter</Button></div>)}</div></details>}
-      {poolBlocks.map((block) => (
-        <PoolBlock key={block.id} block={block} blockIndex={poolBlocks.indexOf(block)} blockCount={poolBlocks.length} flash={flashBlock === block.id} onRemove={() => onRemovePoolBlock(block.id)} onMove={(direction) => onMoveBlock(block.id, direction)} onUpdate={(update) => onUpdatePoolBlock(block.id, update)} onRowsChange={(rows) => onUpdatePoolRows(block.id, rows)} />
-      ))}
-      {poolBlocks.length === 0 && (
-        <Card>
-          <CardContent className="p-5">
-            <WarningText>Aucun bloc piscine pour le moment. Utilise le formulaire ci-dessus pour creer ton premier bloc personnalise.</WarningText>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-function PoolBlock({ block, blockIndex, blockCount, flash, onRemove, onMove, onUpdate, onRowsChange }: { block: BuilderPoolBlock; blockIndex: number; blockCount: number; flash: boolean; onRemove: () => void; onMove: (direction: -1 | 1) => void; onUpdate: (update: Partial<Pick<BuilderPoolBlock, "title" | "duration">>) => void; onRowsChange: (rows: PoolListRow[]) => void }) {
-  return (
-    <div>
-      <BlockCard type="pool" title={block.title || "Piscine"} assigned={[]} athletes={[]} state={poolBlockIsValid(block) ? "Liste prête" : "À compléter"} flash={flash} canMoveUp={blockIndex > 0} canMoveDown={blockIndex < blockCount - 1} onMoveUp={() => onMove(-1)} onMoveDown={() => onMove(1)}>
-        <div className="mb-4">
-          <Input aria-label={`Nom du bloc piscine ${block.title}`} value={block.title} placeholder="Nom du bloc piscine" onChange={(event) => onUpdate({ title: event.target.value })} />
-        </div>
-        <label className="mb-4 flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-white p-3 font-black">
-          <input type="checkbox" defaultChecked onChange={(event) => { if (!event.target.checked) onRemove(); }} /> Inclure ce bloc dans l&apos;entraînement
-        </label>
-        <PoolListTable rows={poolSectionsToRows(block.sections)} onChange={onRowsChange} />
-      </BlockCard>
-    </div>
-  );
-}
-
-function AssignmentsStep(props: { athletes: BuilderAthlete[]; drylandBlocks: BuilderDrylandBlock[]; poolBlocks: BuilderPoolBlock[]; poolAssignments: Record<string, string[]>; flashBlock: string | null; onAssignDry: (blockId: string, ids: string[]) => void; onAssignPoolBlock: (blockId: string) => (ids: string[]) => void }) {
-  const assignmentBlocks = [
-    ...props.drylandBlocks.map((block) => ({ id: block.id, title: block.title, assigned: block.athleteIds, onAssign: (ids: string[]) => props.onAssignDry(block.id, ids), type: "dryland" as const })),
-    ...props.poolBlocks.map((block) => ({
-      id: block.id,
-      title: block.title,
-      assigned: props.poolAssignments[block.id] ?? [],
-      onAssign: props.onAssignPoolBlock(block.id),
-      type: "pool" as const
-    }))
-  ];
-
-  return (
-    <div className="space-y-5">
-      <div className="rounded-[var(--radius-panel)] bg-[var(--color-navy)] p-5 text-white">
-        <p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand)]">Étape 3 · Dryland</p>
-        <h2 className="mt-2 text-2xl font-black">Organiser le dryland</h2>
-        <p className="mt-2 text-sm leading-6 text-white/70">Le groupe entier est sélectionné par défaut. Garde ce choix ou adapte les athlètes bloc par bloc.</p>
-      </div>
-      {assignmentBlocks.length === 0 && <Card><CardContent className="p-5"><WarningText>Ajoute d’abord un bloc dryland ou piscine à l’étape Composer.</WarningText></CardContent></Card>}
-      {assignmentBlocks.map((block) => (
-        <div key={block.id} className={cn("grid gap-5 rounded-[var(--radius-panel)] border border-[var(--color-border)] bg-white p-4 lg:grid-cols-[1fr_1.1fr]", props.flashBlock === block.id && "builder-pulse")}>
-          <div>
-            <BlockTypeBadge type={block.type} />
-            <h3 className="mt-3 text-xl font-black">{block.title}</h3>
-            <p className="mt-2 text-sm leading-6 text-[var(--color-ink-muted)]">{block.assigned.length > 1 ? "Plusieurs athletes partagent ce bloc." : block.assigned.length === 1 ? "Bloc individuel." : "Aucune assignation."}</p>
-            <div className="mt-4"><AthleteAvatarGroup ids={block.assigned} athletes={props.athletes} limit={8} /></div>
-          </div>
-          <AssignmentSelector selected={block.assigned} onChange={block.onAssign} athletes={props.athletes} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function PoolAthletesStep({ athletes, groupName, averagePoolVolumeByAthlete, insightsByAthlete, blocks, assignments, rowsByAthleteBlock, coachAthleteNotes, onCoachAthleteNoteChange, totalDuration, onRowsChange, onBack, onContinue }: { athletes: BuilderAthlete[]; groupName: string; averagePoolVolumeByAthlete: Record<string, number>; insightsByAthlete: Record<string, AthletePoolInsight>; blocks: BuilderPoolBlock[]; assignments: Record<string, string[]>; rowsByAthleteBlock: Record<string, PoolListRow[]>; coachAthleteNotes: Record<string, string>; onCoachAthleteNoteChange: (athleteId: string, note: string) => void; totalDuration: number; onRowsChange: (athleteId: string, blockId: string, rows: PoolListRow[]) => void; onBack: () => void; onContinue: () => void }) {
   const orderedAthletes = [...athletes].sort((a, b) => {
     const aHasBlock = blocks.some((block) => (assignments[block.id] ?? []).includes(a.id));
@@ -1174,7 +1023,6 @@ function PoolAthletesStep({ athletes, groupName, averagePoolVolumeByAthlete, ins
     return sum + rows.reduce((rowSum, row) => rowSum + validatePoolListRow(row).total, 0);
   }, 0), 0);
   const selectedVolume = athleteBlocks.reduce((sum, block) => sum + (rowsByAthleteBlock[poolAthleteBlockKey(selectedAthlete?.id ?? "", block.id)] ?? poolSectionsToRows(block.sections)).reduce((rowSum, row) => rowSum + validatePoolListRow(row).total, 0), 0);
-  const selectedIndex = athletes.findIndex((athlete) => athlete.id === selectedAthlete?.id);
 
   const readyForSelected = athleteBlocks.length > 0 && athleteBlocks.every((block) => {
     const rows = rowsByAthleteBlock[poolAthleteBlockKey(selectedAthlete?.id ?? "", block.id)] ?? poolSectionsToRows(block.sections);
@@ -1221,38 +1069,6 @@ function PoolAthletesStep({ athletes, groupName, averagePoolVolumeByAthlete, ins
     </div>
     <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-white p-3"><Button type="button" variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4"/>Retour</Button><div className="hidden text-sm font-semibold text-[var(--color-ink-muted)] sm:block">Étape 4 sur 5 · Listes piscine</div><Button type="button" variant="action" onClick={onContinue}>Vérifier<ArrowRight className="h-4 w-4"/></Button></div>
   </div>;
-}
-
-function PublicationStep({ title, groupName, scheduleName, date, time, totalVolume, unassignedBlocks, selectedExercises, athleteCount, validationIssues, blocks, athletes }: { title: string; groupName: string; scheduleName: string; date: string; time: string; totalVolume: number; unassignedBlocks: number; selectedExercises: number; athleteCount: number; validationIssues: string[]; blocks: Array<{ id: string; title: string; type: "warmup" | "dryland" | "pool" | "cooldown"; assigned: string[]; content: string }>; athletes: BuilderAthlete[] }) {
-  return (
-    <Card>
-      <CardHeader><p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand-strong)]">Étape 4 · Piscine</p><CardTitle>Organiser la piscine</CardTitle><p className="text-sm text-[var(--color-ink-muted)]">Vérifie les listes et le volume avant de publier.</p></CardHeader>
-      <CardContent className="space-y-5">
-        <div className="rounded-[var(--radius-panel)] border border-[var(--color-navy)] bg-[var(--color-navy)] p-5 text-white">
-          <StatusPill status="READY" />
-          <h2 className="mt-4 text-3xl font-black leading-none text-white">{title || "Nouvelle seance"}</h2>
-          <p className="mt-3 text-sm leading-6 text-white/68">{groupName} · {formatSessionDate(date)}{time ? ` · ${time}` : ""}</p>
-          <p className="mt-1 text-sm text-white/55">{scheduleName}</p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <DarkMetric label="Athlètes assignés" value={athleteCount} />
-            <DarkMetric label="Volume" value={totalVolume} />
-            <DarkMetric label="Exercices" value={selectedExercises} />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <h3 className="font-black">Contenu de la séance</h3>
-          {blocks.map((block) => <div key={block.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] p-3"><div className="flex min-w-0 items-center gap-2"><BlockTypeBadge type={block.type} /><span className="truncate font-bold">{block.title}</span></div><div className="flex items-center gap-3"><span className="text-sm text-[var(--color-ink-muted)]">{block.content}</span><AthleteAvatarGroup ids={block.assigned} athletes={athletes} limit={8} /></div></div>)}
-          {blocks.length === 0 && <p className="rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm text-[var(--color-ink-muted)]">Aucun bloc ajouté.</p>}
-        </div>
-        {unassignedBlocks > 0 && <WarningText>{unassignedBlocks} bloc{unassignedBlocks > 1 ? "s" : ""} sans athlète assigné. Retourne à l’étape Assigner pour les corriger.</WarningText>}
-        {blocks.length > 0 && unassignedBlocks === 0 && <div className="rounded-2xl border border-[var(--color-success)]/25 bg-[var(--color-success-soft)] p-4 text-sm font-bold text-[var(--color-success)]">Tous les blocs ont des athlètes assignés.</div>}
-        {validationIssues.length > 0 && <div className="rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-action)]/10 p-4"><p className="font-black text-[var(--color-action-strong)]">À corriger avant la publication</p><ul className="mt-2 list-inside list-disc space-y-1 text-sm font-semibold text-[var(--color-action-strong)]">{validationIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div>}
-        <div className="rounded-2xl bg-[var(--color-surface-raised)] p-4 text-sm font-semibold text-[var(--color-ink-muted)]">
-          La séance peut être publiée maintenant ou enregistrée comme brouillon privé. Un brouillon reste invisible aux athlètes jusqu’à sa publication.
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
 function PublishStep(props: { title: string; groupName: string; date: string; time: string; duration: number; athleteCount: number; athletes: BuilderAthlete[]; blocks: Array<{ id: string; title: string; type: "warmup" | "dryland" | "pool" | "cooldown"; assigned: string[]; content: string; ready: boolean }>; issues: string[]; poolReady: boolean; assignmentsReady: boolean; canPublish: boolean; onSaveTemplate: () => void; onEditBlock: (block: { type: "warmup" | "dryland" | "pool" | "cooldown" }) => void }) {
@@ -1319,53 +1135,6 @@ function SummaryPanel(props: { title: string; date: string; time: string; blockC
   );
 }
 
-function BlockCard({ type, title, assigned, athletes, state, flash, canMoveUp, canMoveDown, onMoveUp, onMoveDown, onSaveTemplate, children }: { type: "dryland" | "pool"; title: string; assigned: string[]; athletes: BuilderAthlete[]; state: string; flash?: boolean; canMoveUp?: boolean; canMoveDown?: boolean; onMoveUp?: () => void; onMoveDown?: () => void; onSaveTemplate?: () => void; children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const contentId = useId();
-
-  return (
-    <Card className={cn("block-card overflow-hidden", flash && "builder-pulse")}>
-      <div className={cn("h-2", type === "dryland" ? "bg-[var(--block-dryland-fg)]" : "bg-[var(--block-pool-fg)]")} />
-      <CardHeader>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <BlockTypeBadge type={type} />
-            <CardTitle className="mt-3 text-2xl">{title}</CardTitle>
-            <div className="mt-2 flex flex-wrap gap-3 text-sm font-bold text-[var(--color-ink-muted)]">
-              <span>{assigned.length} athlete{assigned.length > 1 ? "s" : ""}</span>
-              <span>{state}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <AthleteAvatarGroup ids={assigned} athletes={athletes} limit={5} />
-            {(onMoveUp || onMoveDown) && <div className="flex items-center gap-1">
-              <button type="button" aria-label={`Monter le bloc ${title}`} disabled={!canMoveUp} onClick={onMoveUp} className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand-strong)] disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowUp className="h-5 w-5" /></button>
-              <button type="button" aria-label={`Descendre le bloc ${title}`} disabled={!canMoveDown} onClick={onMoveDown} className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand-strong)] disabled:cursor-not-allowed disabled:opacity-35 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><ArrowDown className="h-5 w-5" /></button>
-            </div>}
-            <button
-              type="button"
-              aria-expanded={!collapsed}
-              aria-controls={contentId}
-              aria-label={`${collapsed ? "Ouvrir" : "Réduire"} le bloc ${title}`}
-              onClick={() => setCollapsed((value) => !value)}
-              className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"
-            >
-              {collapsed ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
-            </button>
-            {onSaveTemplate && <button type="button" aria-label={`Enregistrer ${title} comme template`} title="Enregistrer comme template" onClick={onSaveTemplate} className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><BookmarkPlus className="h-4 w-4" /></button>}
-            <details className="relative">
-              <summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-[var(--color-border)] bg-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><MoreHorizontal className="h-4 w-4" /></summary>
-              <div className="absolute right-0 z-10 mt-2 w-52 rounded-2xl border border-[var(--color-border)] bg-white p-3 text-sm font-semibold text-[var(--color-ink-muted)] shadow-[var(--shadow-soft)]">Les actions de duplication et suppression ne sont pas connectees au backend actuel.</div>
-            </details>
-          </div>
-        </div>
-        {assigned.length === 0 && <WarningText>Ce bloc n&apos;est assigne a personne.</WarningText>}
-      </CardHeader>
-      <CardContent id={contentId} className={collapsed ? "hidden" : undefined}>{children}</CardContent>
-    </Card>
-  );
-}
-
 function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return <label className={cn("grid gap-2 text-sm font-black text-[var(--color-ink-muted)]", className)}><span>{label}</span>{children}</label>;
 }
@@ -1411,10 +1180,6 @@ function getPublicationIssues({ drylandBlocks, poolBlocks, hasOptionalBlock }: {
   return issues;
 }
 
-function DarkMetric({ label, value }: { label: string; value: string | number }) {
-  return <div className="rounded-2xl bg-white/8 p-4"><div className="text-xs font-bold uppercase text-white/45">{label}</div><div className="mt-1 text-2xl font-black">{value}</div></div>;
-}
-
 function WarningText({ children }: { children: React.ReactNode }) {
   return <div className="mt-3 flex items-start gap-2 rounded-2xl border border-[var(--color-action)]/30 bg-[var(--color-action)]/10 p-3 text-sm font-semibold text-[var(--color-action-strong)]"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {children}</div>;
 }
@@ -1454,14 +1219,6 @@ function getInitialEvaluationPlacement(payload?: SessionTemplatePayload) {
     }
   }
   return "none";
-}
-
-function moveItem<T>(items: T[], index: number, direction: -1 | 1) {
-  const nextIndex = index + direction;
-  if (index < 0 || nextIndex < 0 || nextIndex >= items.length) return items;
-  const next = [...items];
-  [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-  return next;
 }
 
 function heightLabel(height: BuilderPoolSection["height"]) {

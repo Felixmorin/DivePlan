@@ -10,7 +10,7 @@ export const Avatar = React.forwardRef<React.ElementRef<typeof AvatarPrimitive.R
 Avatar.displayName = "Avatar";
 
 export const AvatarImage = React.forwardRef<React.ElementRef<typeof AvatarPrimitive.Image>, React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>>(
-  (_props, _ref) => null
+  () => null
 );
 AvatarImage.displayName = "AvatarImage";
 

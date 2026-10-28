@@ -1,6 +1,6 @@
 import Link from "@/components/ui/app-link";
 import { redirect } from "next/navigation";
-import { Activity, ArrowLeft, Award, Check, ListChecks, Medal, Star } from "lucide-react";
+import { Activity, ArrowLeft, Award, Check, ListChecks, Medal } from "lucide-react";
 import { AthleteShell } from "@/components/athlete/athlete-shell";
 import { getAthleteGoldenReps, getAthleteSummary, getCurrentAthlete } from "@/lib/athlete-session";
 import { query } from "@/lib/db";

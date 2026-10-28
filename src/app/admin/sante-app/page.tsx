@@ -37,7 +37,7 @@ export default async function SanteAppPage({ searchParams }: { searchParams: Pro
     databaseAvailable = false;
   }
 
-  const [overviewRows, transferRows, ttfbRows, databaseRows, recentRows, hourlyRows, flowRows] = await Promise.all([
+  const [overviewRows, transferRows, ttfbRows, databaseRows, recentRows, , flowRows] = await Promise.all([
     safeQuery<OverviewRow>(`SELECT
       count(*) FILTER (WHERE (type ILIKE '%error%' OR type ILIKE '%exception%' OR type = 'system.failure') AND "createdAt" >= NOW() - ($1::int * INTERVAL '1 hour'))::text AS errors,
       count(DISTINCT "userId") FILTER (WHERE (type ILIKE '%error%' OR type ILIKE '%exception%' OR type = 'system.failure') AND "userId" IS NOT NULL)::text AS "affectedUsers",

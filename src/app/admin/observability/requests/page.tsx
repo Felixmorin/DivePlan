@@ -37,7 +37,7 @@ export default async function RequestExplorerPage({ searchParams }: { searchPara
     for (const [key, value] of Object.entries({ ...params, before: undefined, beforeId: undefined, ...patch })) if (value) next.set(key, value);
     return `/admin/observability/requests?${next}`;
   };
-  const count = Number(data.summary.count), total = Number(data.total.count), filtered = Boolean(type || trigger || pageId), last = data.list.at(-1);
+  const count = Number(data.summary.count), total = Number(data.total.count), last = data.list.at(-1);
   const periodWindow = observationWindow({ period: params.period })!;
   const hourChoices = Array.from({ length: Math.min(168, window.hours) }, (_, i) => new Date(periodWindow.to.getTime() - (i + 1) * 3_600_000));
   const typeCounts = Object.entries(data.breakdown.reduce<Record<string, number>>((all, row) => { all[row.resourceType] = (all[row.resourceType] ?? 0) + Number(row.count); return all; }, {})).sort((a,b) => b[1] - a[1]);

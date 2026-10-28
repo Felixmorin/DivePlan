@@ -289,7 +289,7 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false }: { sess
   );
 }
 
-function WeekDayCard({ day, sessions, schedules, activeSessionIds, demo = false }: { day: { key: number; label: string; date: Date }; sessions: DashboardSession[]; schedules: DashboardSchedule[]; activeSessionIds: Set<string>; demo?: boolean }) {
+function WeekDayCard({ day, sessions, schedules, demo = false }: { day: { key: number; label: string; date: Date }; sessions: DashboardSession[]; schedules: DashboardSchedule[]; demo?: boolean }) {
   const isToday = sameMontrealDay(day.date, new Date());
   return (
     <Card id={`day-${day.key}`} className={`min-h-36 scroll-mt-28 rounded-xl ${isToday ? "border-[var(--color-action)] bg-[#fff9f7] shadow-[0_0_0_1px_var(--color-action)]" : "bg-white"}`}>
