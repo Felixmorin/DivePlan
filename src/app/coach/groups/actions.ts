@@ -22,7 +22,7 @@ export async function createTrainingGroup(formData: FormData) {
   const name = parsed.data.name;
   const existingGroup = await query(`SELECT id FROM "TrainingGroup" WHERE "clubId" = $1 AND lower(name) = lower($2) LIMIT 1`, [clubId, name]);
 
-  if (existingGroup) {
+  if (existingGroup.rows.length > 0) {
     throw new Error("Un groupe avec ce nom existe deja.");
   }
 
