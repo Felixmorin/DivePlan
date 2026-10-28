@@ -13,7 +13,7 @@ type Recommendation = { title: string; evidence: string; priority: "Élevée" | 
 
 export default async function ObservabilityPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const { period } = await searchParams;
-  const hours = period === "6h" ? 6 : period === "12h" ? 12 : period === "72h" ? 72 : period === "7d" ? 168 : 24;
+  const hours = period === "1h" ? 1 : period === "3h" ? 3 : period === "6h" ? 6 : period === "12h" ? 12 : period === "72h" ? 72 : period === "7d" ? 168 : 24;
   const { clubId } = await requireFullAccessCoach();
   let transferRows: TransferRow[] = [];
   let performanceRows: PerformanceRow[] = [];
@@ -57,7 +57,7 @@ export default async function ObservabilityPage({ searchParams }: { searchParams
   return <CoachShell active="Observabilité">
     <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
       <div><h1 className="text-3xl font-black tracking-tight text-[var(--color-ink)]">Observabilité</h1><p className="mt-1 text-sm text-[var(--color-ink-muted)]">Surveillez la performance et l’utilisation des ressources de DivePlan.</p></div>
-      <nav aria-label="Période d’observation" className="flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-white p-1 text-sm font-semibold shadow-sm"><CalendarDays className="ml-2 h-4 w-4" />{[["6h", "6 h"], ["12h", "12 h"], ["24h", "24 h"], ["72h", "3 jours"], ["7d", "7 jours"]].map(([value, label]) => <a key={value} href={`?period=${value}`} aria-current={(value === "24h" && hours === 24) || value === period ? "page" : undefined} className={`rounded-lg px-3 py-2 ${((value === "24h" && hours === 24) || value === period) ? "bg-sky-100 text-sky-800" : "hover:bg-slate-50"}`}>{label}</a>)}</nav>
+      <nav aria-label="Période d’observation" className="flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-white p-1 text-sm font-semibold shadow-sm"><CalendarDays className="ml-2 h-4 w-4" />{[["1h", "1 h"], ["3h", "3 h"], ["6h", "6 h"], ["12h", "12 h"], ["24h", "24 h"], ["72h", "3 jours"], ["7d", "7 jours"]].map(([value, label]) => <a key={value} href={`?period=${value}`} aria-current={(value === "24h" && hours === 24) || value === period ? "page" : undefined} className={`rounded-lg px-3 py-2 ${((value === "24h" && hours === 24) || value === period) ? "bg-sky-100 text-sky-800" : "hover:bg-slate-50"}`}>{label}</a>)}</nav>
     </header>
 
     <p className="mb-4 rounded-xl border border-sky-100 bg-sky-50 p-3 text-sm text-sky-900">Les transferts ci-dessous sont ceux observés par les navigateurs du club, sur la même origine. Ils ne représentent pas le Fast Origin Transfer facturé par Vercel. Les ressources externes, dont les photos Supabase, et les visites sans collecte ne sont pas incluses.</p>
