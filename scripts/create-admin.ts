@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { Pool } from "pg";
 import { hashPassword } from "../src/lib/password";
 
@@ -8,8 +6,6 @@ function createAdminPool(connectionString: string) {
   const databaseUrl = new URL(connectionString);
   const sslMode = databaseUrl.searchParams.get("sslmode")?.toLowerCase();
   const isLocalhost = ["localhost", "127.0.0.1", "::1"].includes(databaseUrl.hostname);
-  const isSupabase = databaseUrl.hostname.endsWith(".supabase.co")
-    || databaseUrl.hostname.endsWith(".pooler.supabase.com");
   const ssl = sslMode === "require"
     ? { rejectUnauthorized: false }
     : sslMode === "verify-ca" || sslMode === "verify-full"
@@ -17,9 +13,7 @@ function createAdminPool(connectionString: string) {
       : isLocalhost
         ? undefined
         : { rejectUnauthorized: true };
-  const sslConfig = isSupabase
-    ? { ca: readFileSync(join(process.cwd(), "certs", "prod-ca-2021.crt"), "utf8"), rejectUnauthorized: true }
-    : ssl;
+  const sslConfig = ssl;
 
   // Keep pg-connection-string from replacing the explicit TLS policy.
   for (const key of [...databaseUrl.searchParams.keys()]) {

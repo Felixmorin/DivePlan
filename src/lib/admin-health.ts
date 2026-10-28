@@ -45,24 +45,6 @@ async function buildAdminHealth(): Promise<AdminHealth> {
     ? process.env.NODE_ENV === "production" ? "La clé de session de production est présente." : "Auth.js utilise la configuration locale; cette sonde ne valide pas la clé de production."
     : "AUTH_SECRET est absent en production.");
 
-  const storageUrl = process.env.SUPABASE_URL;
-  const storageKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!storageUrl && !storageKey) {
-    add("storage", "Supabase Storage · avatars", "not_configured", "SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont requis pour les avatars Supabase.");
-  } else if (!storageUrl || !storageKey) {
-    add("storage", "Supabase Storage · avatars", "failed", "La configuration Storage est incomplète.");
-  } else {
-    try {
-      const url = new URL(storageUrl);
-      if (!("https:" === url.protocol || (url.protocol === "http:" && ["localhost", "127.0.0.1", "::1"].includes(url.hostname)))) throw new Error("invalid protocol");
-      const bucket = process.env.SUPABASE_AVATAR_BUCKET || "avatars";
-      const response = await fetch(`${url.origin}/storage/v1/bucket/${encodeURIComponent(bucket)}`, { method: "GET", headers: { apikey: storageKey, authorization: `Bearer ${storageKey}` }, cache: "no-store", signal: AbortSignal.timeout(1500) });
-      add("storage", "Supabase Storage · avatars", response.ok ? "ok" : "failed", response.ok ? `Le bucket « ${bucket} » répond à la sonde en lecture seule.` : `Le bucket « ${bucket} » a répondu HTTP ${response.status}; vérifiez sa configuration et ses accès.`);
-    } catch {
-      add("storage", "Supabase Storage · avatars", "failed", "La sonde Storage a échoué ou expiré; les détails réseau et les secrets sont masqués.");
-    }
-  }
-
   let runs: HealthRun[] = [];
   let historyReady = true;
   try { runs = await getLatestAdminHealthRuns(["auth", "flows", "sentry", "push", "cron:complete-sessions", "cron:agent-runs"]); }

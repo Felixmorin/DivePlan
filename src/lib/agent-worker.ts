@@ -100,7 +100,7 @@ export async function runNextAgentJobs(targetRunId?: string) {
 }
 
 function redactSecrets(message: string) {
-  return [process.env.DATABASE_URL, process.env.SUPABASE_READONLY_DATABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, process.env.CRON_SECRET]
+  return [process.env.DATABASE_URL, process.env.CRON_SECRET]
     .filter((secret): secret is string => Boolean(secret))
     .reduce((safe, secret) => safe.replaceAll(secret, "[secret masqué]"), message);
 }

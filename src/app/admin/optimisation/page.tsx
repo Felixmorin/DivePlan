@@ -12,7 +12,7 @@ type TransferRow = { route: string; requests: string; bytes: string; priorReques
 type ComponentRow = { component: string; requests: string; bytes: string; averageMs: string; lastObserved: Date | null };
 type PageSqlRow = { route: string; requests: string; bytes: string; averageMs: string; maxMs: string; slow: string };
 
-const periods = [{ key: "24h", hours: 24, label: "24 h" }, { key: "7d", hours: 168, label: "7 jours" }, { key: "30d", hours: 720, label: "30 jours" }];
+const periods = [{ key: "1h", hours: 1, label: "1 h" }, { key: "3h", hours: 3, label: "3 h" }, { key: "6h", hours: 6, label: "6 h" }, { key: "24h", hours: 24, label: "24 h" }, { key: "7d", hours: 168, label: "7 jours" }, { key: "30d", hours: 720, label: "30 jours" }];
 
 export default async function AdminOptimisationPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   await requireAdmin();
