@@ -28,15 +28,18 @@ jobs:
           cache: npm
 
       - name: Installer les dépendances verrouillées
+        id: install
         run: npm ci
 
       - name: Vérifier le lint
         run: npm run lint
 
       - name: Exécuter les tests
+        if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm test
 
       - name: Construire l’application
+        if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run build
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/diveplan
@@ -44,6 +47,7 @@ jobs:
           AUTH_URL: http://localhost:3000
 
       - name: Vérifier les vulnérabilités des dépendances
+        if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm audit --audit-level=high
 
   codeql:
