@@ -41,12 +41,15 @@ export function AdminNavigation({ status }: { status: { label: string; tone: "ne
   useEffect(() => {
     try {
       const saved = localStorage.getItem("diveplan-admin-nav-groups");
-      if (saved) setOpenGroups({ ...defaultOpen, ...JSON.parse(saved) as Record<string, boolean> });
+      if (saved) {
+        const savedGroups = JSON.parse(saved) as Record<string, boolean>;
+        window.setTimeout(() => setOpenGroups({ ...defaultOpen, ...savedGroups }), 0);
+      }
     } catch { /* Le menu reste utilisable si le stockage local est bloqué. */ }
   }, []);
   useEffect(() => {
     const activeGroup = groups.find(group => group.items.some(item => item.href === pathname || (item.href !== "/admin" && pathname.startsWith(`${item.href}/`))));
-    if (activeGroup) setOpenGroups(current => current[activeGroup.id] ? current : { ...current, [activeGroup.id]: true });
+    if (activeGroup) window.setTimeout(() => setOpenGroups(current => current[activeGroup.id] ? current : { ...current, [activeGroup.id]: true }), 0);
   }, [pathname]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setMobileOpen(false); };

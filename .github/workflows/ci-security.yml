@@ -1,0 +1,87 @@
+name: CI / Sécurité
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Qualité et dépendances
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Configurer Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances verrouillées
+        id: install
+        run: npm ci
+
+      - name: Vérifier le lint
+        run: npm run lint
+
+      - name: Exécuter les tests
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: npm test
+
+      - name: Construire l’application
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: npm run build
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/diveplan
+          AUTH_SECRET: ci-build-only-placeholder
+          AUTH_URL: http://localhost:3000
+
+      - name: Vérifier les vulnérabilités des dépendances
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: npm audit --audit-level=high
+
+  codeql:
+    name: Analyse CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Initialiser CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          languages: javascript-typescript
+
+      - name: Analyser le code
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+
+  secrets:
+    name: Détection de secrets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Récupérer l’historique Git
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Rechercher des secrets exposés
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"
