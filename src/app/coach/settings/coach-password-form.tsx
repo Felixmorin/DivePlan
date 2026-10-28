@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { KeyRound, Save } from "lucide-react";
 import { updateCoachPassword, type CoachPasswordState } from "@/app/coach/settings/actions";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,9 @@ const fieldClass = "h-10 rounded-lg border-[#d5e1ee] bg-white px-3 text-[13px] f
 
 export function CoachPasswordForm() {
   const [state, action, pending] = useActionState(updateCoachPassword, initialState);
-  return <form action={action} className="mt-4 grid gap-3">
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => { if (state.success) formRef.current?.reset(); }, [state.success]);
+  return <form ref={formRef} id="coach-password-form" action={action} className="mt-4 grid gap-3">
     <label className="grid gap-1 text-[12px] font-bold">Mot de passe actuel<Input className={fieldClass} name="currentPassword" type="password" autoComplete="current-password" required /></label>
     <label className="grid gap-1 text-[12px] font-bold">Nouveau mot de passe<Input className={fieldClass} name="password" type="password" autoComplete="new-password" minLength={10} maxLength={128} required /></label>
     <label className="grid gap-1 text-[12px] font-bold">Confirmer le nouveau mot de passe<Input className={fieldClass} name="confirmPassword" type="password" autoComplete="new-password" minLength={10} maxLength={128} required /></label>

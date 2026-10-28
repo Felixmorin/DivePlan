@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { CalendarDays, Check, Globe2, Save, Settings2, Upload, Waves } from "lucide-react";
+import { CalendarDays, Globe2, Save, Upload, Waves } from "lucide-react";
 import { updateClubSettings, updateCoachPreferences } from "@/app/coach/settings/actions";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { requireFullAccessCoach } from "@/lib/current-user";
 import { SettingsTabs } from "@/app/coach/settings/settings-tabs";
+import { UnsavedChangesBar } from "@/components/ui/unsaved-changes-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -81,10 +82,7 @@ export default async function CoachSettingsPage() {
           </CardContent></Card>
         </div>
 
-        <div className="fixed inset-x-3 bottom-3 z-30 mx-auto flex max-w-[1570px] flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d9f2e5] bg-[#f5fff9]/95 px-4 py-2.5 shadow-[0_8px_28px_rgba(8,70,45,.12)] backdrop-blur sm:inset-x-[calc(17rem+1.5rem)]">
-          <div className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#13a568] text-white"><Check className="h-5 w-5" /></span><div><p className="text-[13px] font-extrabold text-[#07864e]">Réglages de votre club</p><p className="text-[11px] text-[#61718e]">Enregistrez chaque section avec son bouton.</p></div></div>
-          <button type="submit" form="club-settings-form" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#ff604c] px-5 text-[13px] font-extrabold text-white shadow-sm hover:bg-[#e64f3d]"><Settings2 className="h-4 w-4" /> Enregistrer le club</button>
-        </div>
+        <UnsavedChangesBar formIds={["club-settings-form"]} resetKey={`${clubName}:${logo}`} />
       </div>
     </CoachShell>
   );

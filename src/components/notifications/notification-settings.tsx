@@ -42,6 +42,7 @@ export function NotificationSettings({ variant = "compact", clubName = "DivePlan
   const [message, setMessage] = useState("");
   const [appleMobile, setAppleMobile] = useState(false);
   const [standalone, setStandalone] = useState(false);
+  const [showSavedBanner, setShowSavedBanner] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window) || !window.isSecureContext) {
@@ -96,6 +97,7 @@ export function NotificationSettings({ variant = "compact", clubName = "DivePlan
       await syncSubscription(subscription);
       setState("enabled");
       setMessage("Notifications activées sur cet appareil.");
+      setShowSavedBanner(true);
     } catch (error) {
       if (error instanceof Error && error.message === "storage_unavailable") {
         setState("storage");
@@ -126,6 +128,7 @@ export function NotificationSettings({ variant = "compact", clubName = "DivePlan
       }
       setState(Notification.permission === "denied" ? "denied" : "disabled");
       setMessage("Notifications désactivées sur cet appareil.");
+      setShowSavedBanner(true);
     } catch { setMessage("Impossible de désactiver les notifications. Réessaie."); }
   }
 
@@ -203,10 +206,7 @@ export function NotificationSettings({ variant = "compact", clubName = "DivePlan
         </section>
       </div>
 
-      <div className="fixed inset-x-3 bottom-3 z-30 mx-auto flex max-w-[1570px] flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d9f2e5] bg-[#f5fff9]/95 px-4 py-2.5 shadow-[0_8px_28px_rgba(8,70,45,.12)] backdrop-blur sm:inset-x-[calc(17rem+1.5rem)]">
-        <div className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#13a568] text-white"><Check className="h-5 w-5" /></span><div><p className="text-[13px] font-extrabold text-[#07864e]">{state === "enabled" ? "Notifications activées sur cet appareil" : "Préférences de notification"}</p><p className="text-[11px] text-[#61718e]">Le bouton ci-dessous envoie un test sur cet appareil.</p></div></div>
-        <button type="button" disabled={!canTest} onClick={() => void test()} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#ff604c] px-5 text-[13px] font-extrabold text-white shadow-sm hover:bg-[#e64f3d] disabled:cursor-not-allowed disabled:opacity-50"><Send className="h-4 w-4" /> Envoyer une notification de test</button>
-      </div>
+      {showSavedBanner && <div role="status" className="fixed inset-x-3 bottom-3 z-30 mx-auto flex max-w-[1570px] items-center gap-3 rounded-xl border border-[#d9f2e5] bg-[#f5fff9]/95 px-4 py-3 shadow-[0_8px_28px_rgba(8,70,45,.12)] backdrop-blur sm:inset-x-[calc(17rem+1.5rem)]"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#13a568] text-white"><Check className="h-5 w-5" /></span><div><p className="text-[13px] font-extrabold text-[#07864e]">Préférences enregistrées</p><p className="text-[11px] text-[#61718e]">{state === "enabled" ? "Les notifications sont activées sur cet appareil." : "Les notifications sont désactivées sur cet appareil."}</p></div></div>}
     </div>;
   }
 

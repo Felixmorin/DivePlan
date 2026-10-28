@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { requireFullAccessCoach } from "@/lib/current-user";
+import { UnsavedChangesBar } from "@/components/ui/unsaved-changes-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -84,10 +85,7 @@ export default async function CoachAccountSettingsPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-3 bottom-3 z-30 mx-auto flex max-w-[1570px] flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d9f2e5] bg-[#f5fff9]/95 px-4 py-2.5 shadow-[0_8px_28px_rgba(8,70,45,.12)] backdrop-blur sm:inset-x-[calc(17rem+1.5rem)]">
-        <div className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#13a568] text-white"><ShieldCheck className="h-5 w-5" /></span><div><p className="text-[13px] font-extrabold text-[#07864e]">Profil du coach</p><p className="text-[11px] text-[#61718e]">Enregistrez le nom d’utilisateur et le courriel.</p></div></div>
-        <Button type="submit" form="account-settings-form" variant="action" className="h-10 min-h-10 rounded-lg px-5"><Pencil className="h-4 w-4" /> Enregistrer les modifications</Button>
-      </div>
+      <UnsavedChangesBar formIds={["account-settings-form", "coach-password-form"]} resetKey={`${user.email}:${user.username ?? ""}:${user.passwordSetAt?.toISOString() ?? "temporary"}`} />
     </div>
   </CoachShell>;
 }

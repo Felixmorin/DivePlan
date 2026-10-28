@@ -1,12 +1,12 @@
 import Image from "next/image";
-import { CalendarDays, Check, Eye, FileText, Waves } from "lucide-react";
+import { CalendarDays, Eye, FileText, Waves } from "lucide-react";
 import { updateCoachPreferences } from "@/app/coach/settings/actions";
 import { SettingsTabs } from "@/app/coach/settings/settings-tabs";
 import { CoachShell } from "@/components/coach/coach-shell";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireFullAccessCoach } from "@/lib/current-user";
 import { formatMontrealDate } from "@/lib/timezone";
+import { UnsavedChangesBar } from "@/components/ui/unsaved-changes-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -94,10 +94,7 @@ export default async function CoachPrintSettingsPage() {
         </CardContent></Card>
       </div>
 
-      <div className="fixed inset-x-3 bottom-3 z-30 mx-auto flex max-w-[1570px] flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d9f2e5] bg-[#f5fff9]/95 px-4 py-2.5 shadow-[0_8px_28px_rgba(8,70,45,.12)] backdrop-blur sm:inset-x-[calc(17rem+1.5rem)]">
-        <div className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#13a568] text-white"><Check className="h-5 w-5" /></span><div><p className="text-[13px] font-extrabold text-[#07864e]">Préférences d’impression</p><p className="text-[11px] text-[#61718e]">Les options choisies s’appliquent aux prochaines impressions.</p></div></div>
-        <Button type="submit" form="print-settings-form" variant="action" className="h-10 min-h-10 rounded-lg px-5"><FileText className="h-4 w-4" /> Enregistrer les modifications</Button>
-      </div>
+      <UnsavedChangesBar formIds={["print-settings-form"]} resetKey={`${preferences?.printShowAthleteNames}:${preferences?.printShowCoachNotes}:${preferences?.printRepetitionChecks}`} />
     </div>
   </CoachShell>;
 }

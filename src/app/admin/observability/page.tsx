@@ -36,7 +36,7 @@ export default async function AdminObservabilityPage({ searchParams }: { searchP
   return <AdminShell active="Observabilité">
     <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div><h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Observabilité</h1><p className="mt-1 text-sm leading-6 text-slate-600">Surveillez les performances et la santé de la plateforme DivePlan.</p></div>
-      <nav aria-label="Période d’observation" className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">{[["6h", "6 h"], ["12h", "12 h"], ["24h", "24 h"], ["72h", "3 jours"], ["7d", "7 jours"]].map(([key, label]) => {
+      <nav aria-label="Période d’observation" className="inline-flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">{[["1h", "1 h"], ["3h", "3 h"], ["6h", "6 h"], ["12h", "12 h"], ["24h", "24 h"], ["72h", "3 jours"], ["7d", "7 jours"]].map(([key, label]) => {
         const active = (key === "1h" && hours === 1) || (key === "3h" && hours === 3) || (key === "6h" && hours === 6) || (key === "12h" && hours === 12) || (key === "24h" && hours === 24) || (key === "72h" && hours === 72) || (key === "7d" && hours === 168);
         return <Link key={key} href={`/admin/observability?period=${key}`} aria-current={active ? "page" : undefined} className={`inline-flex min-h-9 items-center border-r border-slate-200 px-4 text-xs font-bold transition last:border-r-0 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}>{label}</Link>;
       })}</nav>
