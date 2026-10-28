@@ -6,9 +6,13 @@ import { ArrowDown, ArrowUp, Bell, CalendarDays, ChevronDown, Pencil } from "luc
 export type ChartPoint = { day: string; transfer: number; sql: number; transferAt: string | null; sqlAt: string | null };
 export type RouteMetric = { route: string; requests: string; bytes: string; updated: Date };
 export function CostsDashboard({ period, aggregation }: { period: string; aggregation: string }) {
+  const updateFilter = (next: { period?: string; aggregation?: string }) => {
+    const params = new URLSearchParams({ period, aggregation, ...next });
+    location.href = `/admin/couts-quotas?${params.toString()}`;
+  };
   return <div className="flex flex-wrap items-center gap-2">
-    <label className="sr-only" htmlFor="cost-period">Période</label><span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2"><CalendarDays className="h-4 w-4 text-slate-600"/><select id="cost-period" value={period} onChange={e=>location.href=`/admin/couts-quotas?period=${e.target.value}&aggregation=${aggregation}`} className="min-h-9 bg-transparent text-sm font-semibold text-slate-800"><option value="7d">7 derniers jours</option><option value="30d">30 derniers jours</option><option value="90d">90 derniers jours</option></select><ChevronDown className="h-4 w-4"/></span>
-    <label className="sr-only" htmlFor="aggregation">Agrégation</label><select id="aggregation" value={aggregation} onChange={e=>location.href=`/admin/couts-quotas?period=${period}&aggregation=${e.target.value}`} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold"><option value="day">Jour</option><option value="week">Semaine</option><option value="month">Mois</option></select>
+    <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2"><CalendarDays className="h-4 w-4 text-slate-600"/><label className="sr-only" htmlFor="cost-period">Période</label><select id="cost-period" value={period} onChange={e=>updateFilter({ period: e.target.value })} className="min-h-9 bg-transparent text-sm font-semibold text-slate-800"><option value="7d">7 derniers jours</option><option value="30d">30 derniers jours</option><option value="90d">90 derniers jours</option></select><ChevronDown className="h-4 w-4"/></span>
+    <label className="sr-only"><span>Agrégation</span><select id="aggregation" value={aggregation} onChange={e=>updateFilter({ aggregation: e.target.value })} className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold"><option value="day">Jour</option><option value="week">Semaine</option><option value="month">Mois</option></select></label>
     <a href="#alert-panel" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-bold text-white hover:bg-blue-700"><Bell className="h-4 w-4"/>Configurer les alertes</a>
   </div>;
 }
