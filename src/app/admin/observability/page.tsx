@@ -1,6 +1,7 @@
 import Link from "@/components/ui/app-link";
-import { Activity, ArrowDownUp, ShieldAlert, Zap, ChevronDown, FileText, Gauge, CircleHelp, Server, Timer, TriangleAlert, ExternalLink, Info, Download } from "lucide-react";
+import { Activity, ArrowDownUp, ShieldAlert, Zap, ChevronDown, FileText, Gauge, CircleHelp, Server, Timer, TriangleAlert, ExternalLink, Info } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
+import { TelemetryReportDownload } from "@/components/admin/telemetry-report-download";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/current-user";
 import { query } from "@/lib/db";
@@ -42,7 +43,7 @@ export default async function AdminObservabilityPage({ searchParams }: { searchP
       })}</nav>
     </header>
 
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/80 px-4 py-2.5 text-sm text-blue-950"><p className="flex items-center gap-3"><Info className="h-5 w-5 shrink-0 fill-blue-500 text-white"/>Cliquez sur une heure ou une route pour comprendre les ressources chargées.</p><div className="flex flex-wrap gap-2"><a href={`/api/admin/observability/report?period=${hours === 168 ? "7d" : hours === 72 ? "72h" : `${hours}h`}`} download className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-blue-200 bg-blue-700 px-3 font-bold text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-blue-600"><Download className="h-4 w-4"/>Télécharger le rapport IA (JSON)</a><Link prefetch={false} href={explorerHref} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 font-bold text-blue-700 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600"><ExternalLink className="h-4 w-4"/>Explorer les requêtes</Link></div></div>
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50/80 px-4 py-2.5 text-sm text-blue-950"><p className="flex items-center gap-3"><Info className="h-5 w-5 shrink-0 fill-blue-500 text-white"/>Cliquez sur une heure ou une route pour comprendre les ressources chargées.</p><div className="flex flex-wrap items-center gap-3"><TelemetryReportDownload period={hours === 168 ? "7d" : hours === 72 ? "72h" : `${hours}h`} /><Link prefetch={false} href={explorerHref} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 font-bold text-blue-700 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600"><ExternalLink className="h-4 w-4"/>Explorer les requêtes</Link></div></div>
     <section aria-label="Indicateurs techniques" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Metric icon={ArrowDownUp} value={formatBytes(transferBytes)} label="Transferts" detail="Données transférées (entrée + sortie)" tone="blue" />
       <Metric icon={FileText} value={requests.toLocaleString("fr-CA")} label="Requêtes" detail="Requêtes HTTP traitées" tone="violet" />
