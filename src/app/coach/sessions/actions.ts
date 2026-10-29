@@ -270,7 +270,14 @@ export async function createTrainingSession(input: CreateSessionInput) {
         ,competitionEvaluation: dryland.competitionEvaluation
       });
 
-      for (const [order, exercise] of dryland.exercises.entries()) await tx.query(`INSERT INTO "DrylandBlockExercise" ("blockId","exerciseId",sets,reps,duration,notes,"order") VALUES ($1,$2,$3,$4,$5,$6,$7)`,[drylandBlock.id,exercise.id,exercise.override?.sets??exercise.defaultSets,exercise.roundTrip?null:exercise.override?.reps??exercise.defaultReps,exercise.roundTrip?null:exercise.override?.duration??exercise.defaultDuration,exercise.override?.notes??null,order]);
+      await insertDrylandExercises(tx, drylandBlock.id, dryland.exercises.map((exercise, order) => ({
+        exerciseId: exercise.id,
+        sets: exercise.override?.sets ?? exercise.defaultSets,
+        reps: exercise.roundTrip ? null : exercise.override?.reps ?? exercise.defaultReps,
+        duration: exercise.roundTrip ? null : exercise.override?.duration ?? exercise.defaultDuration,
+        notes: exercise.override?.notes ?? null,
+        order
+      })));
     }
 
     for (const [index, poolBlock] of poolBlocks.entries()) {
@@ -364,7 +371,14 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
         return exercise ? [{ ...exercise, override: block.exerciseOverrides[id] }] : [];
       });
       const created = await createBlock(tx, { sessionId, type: BlockType.DRYLAND, title: block.title, duration: block.duration, position: index + 2, estimatedVolume: blockExercises.reduce((sum, item) => sum + (item.override?.sets ?? item.defaultSets ?? 1) * (item.override?.reps ?? item.defaultReps ?? 1) * block.athleteIds.length, 0), athleteIds: block.athleteIds.filter((id) => validAthleteIds.has(id)), competitionEvaluation: block.competitionEvaluation });
-      for (const [order, item] of blockExercises.entries()) await tx.query(`INSERT INTO "DrylandBlockExercise" ("blockId","exerciseId",sets,reps,duration,notes,"order") VALUES ($1,$2,$3,$4,$5,$6,$7)`, [created.id, item.id, item.override?.sets ?? item.defaultSets, item.roundTrip ? null : item.override?.reps ?? item.defaultReps, item.roundTrip ? null : item.override?.duration ?? item.defaultDuration, item.override?.notes ?? null, order]);
+      await insertDrylandExercises(tx, created.id, blockExercises.map((item, order) => ({
+        exerciseId: item.id,
+        sets: item.override?.sets ?? item.defaultSets,
+        reps: item.roundTrip ? null : item.override?.reps ?? item.defaultReps,
+        duration: item.roundTrip ? null : item.override?.duration ?? item.defaultDuration,
+        notes: item.override?.notes ?? null,
+        order
+      })));
     }
     for (const [index, block] of data.poolBlocks.entries()) await createPoolBlock(tx, sessionId, { ...block, athleteIds: block.athleteIds.filter((id) => validAthleteIds.has(id)) }, index + data.drylandBlocks.length + 2);
     await tx.query(`DELETE FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [sessionId]);
@@ -1098,18 +1112,19 @@ export async function updateTrainingSession(formData: FormData) {
 
       await tx.query(`UPDATE "SessionBlock" SET title=$1,description=$2,duration=$3,"estimatedVolume"=$4 WHERE id=$5 AND "sessionId"=$6`,[blockTitle,blockDescription||null,Number.isFinite(blockDuration)?blockDuration:block.duration,Number.isFinite(estimatedVolume)?estimatedVolume:block.estimatedVolume,block.id,sessionId]);
       await tx.query(`DELETE FROM "SessionBlockAssignment" WHERE "sessionBlockId"=$1`,[block.id]);
-      for(const athleteId of assignedIds) await tx.query(`INSERT INTO "SessionBlockAssignment" (id,"sessionBlockId","athleteId") VALUES ($1,$2,$3) ON CONFLICT ("sessionBlockId","athleteId") DO NOTHING`,[randomUUID(),block.id,athleteId]);
+      await insertBlockAssignments(tx, block.id, assignedIds);
 
       if (block.type === BlockType.DRYLAND) {
         const selectedIds = formData.getAll(`exerciseSelection:${block.id}`).map(String)
           .filter((id) => validDrylandById.has(id));
         if (selectedIds.length === 0) throw new Error(`Le bloc dryland « ${block.title} » doit contenir un exercice.`);
         await tx.query(`DELETE FROM "DrylandBlockExercise" WHERE "blockId"=$1`,[block.id]);
-        for(const [order,exerciseId] of selectedIds.entries()) {
+        const exerciseRows = selectedIds.map((exerciseId, order) => {
           const defaults = validDrylandById.get(exerciseId)!;
           const existingExercise = block.drylandExercises.filter((exercise) => exercise.exerciseId === exerciseId)[order];
-          await tx.query(`INSERT INTO "DrylandBlockExercise" ("blockId","exerciseId",sets,reps,duration,notes,"order") VALUES ($1,$2,$3,$4,$5,$6,$7)`,[block.id,exerciseId,existingExercise?nullableNumber(formData.get(`exerciseSets:${block.id}:${existingExercise.order}`)):defaults.defaultSets,existingExercise?nullableNumber(formData.get(`exerciseReps:${block.id}:${existingExercise.order}`)):defaults.defaultReps,existingExercise?nullableNumber(formData.get(`exerciseDuration:${block.id}:${existingExercise.order}`)):defaults.defaultDuration,existingExercise?nullableText(formData.get(`exerciseNotes:${block.id}:${existingExercise.order}`)):null,order]);
-        }
+          return { exerciseId, sets: existingExercise ? nullableNumber(formData.get(`exerciseSets:${block.id}:${existingExercise.order}`)) : defaults.defaultSets, reps: existingExercise ? nullableNumber(formData.get(`exerciseReps:${block.id}:${existingExercise.order}`)) : defaults.defaultReps, duration: existingExercise ? nullableNumber(formData.get(`exerciseDuration:${block.id}:${existingExercise.order}`)) : defaults.defaultDuration, notes: existingExercise ? nullableText(formData.get(`exerciseNotes:${block.id}:${existingExercise.order}`)) : null, order };
+        });
+        await insertDrylandExercises(tx, block.id, exerciseRows);
       }
 
       if (block.poolTraining) {
@@ -1122,7 +1137,7 @@ export async function updateTrainingSession(formData: FormData) {
         for (const [sectionOrder, row] of rows.entries()) {
           const sectionId=randomUUID(); await tx.query(`INSERT INTO "PoolSection" (id,"poolTrainingId",height,label,"order") VALUES ($1,$2,$3,$4,$5)`,[sectionId,block.id,poolHeightFromContext(row.context),row.context,sectionOrder]);
           const repetitions = row.repetitions.length === 1 ? row.diveCodes.map(() => row.repetitions[0]) : row.repetitions;
-          for(const [order,diveCode] of row.diveCodes.entries()) await tx.query(`INSERT INTO "PoolDive" (id,"poolSectionId","diveCode","diveName",position,repetitions,"order") VALUES ($1,$2,$3,$3,'Libre',$4,$5)`,[randomUUID(),sectionId,diveCode,repetitions[order],order]);
+          await insertPoolDives(tx, row.diveCodes.map((diveCode, order) => ({ id: randomUUID(), sectionId, diveCode, diveName: diveCode, position: "Libre", repetitions: repetitions[order], notes: null, order })));
         }
         await tx.query(`UPDATE "SessionBlock" SET "estimatedVolume"=$1 WHERE id=$2 AND "sessionId"=$3`,[poolRowsVolume(rows),block.id,sessionId]);
       }
@@ -1156,6 +1171,39 @@ export async function updateTrainingSession(formData: FormData) {
 type Tx = import("pg").PoolClient;
 type BlockType = SessionBlockType;
 
+async function insertDrylandExercises(tx: Tx, blockId: string, rows: Array<{
+  exerciseId: string; sets: number | null; reps: number | null; duration: number | null; notes: string | null; order: number;
+}>) {
+  if (!rows.length) return;
+  await tx.query(
+    `INSERT INTO "DrylandBlockExercise" ("blockId","exerciseId",sets,reps,duration,notes,"order")
+     SELECT $1, * FROM unnest($2::text[], $3::int[], $4::int[], $5::int[], $6::text[], $7::int[])`,
+    [blockId, rows.map((row) => row.exerciseId), rows.map((row) => row.sets), rows.map((row) => row.reps), rows.map((row) => row.duration), rows.map((row) => row.notes), rows.map((row) => row.order)]
+  );
+}
+
+async function insertBlockAssignments(tx: Tx, blockId: string, athleteIds: string[]) {
+  if (!athleteIds.length) return;
+  await tx.query(
+    `INSERT INTO "SessionBlockAssignment" (id,"sessionBlockId","athleteId")
+     SELECT assignment_id, $1, athlete_id FROM unnest($2::text[], $3::text[]) AS assignments(assignment_id, athlete_id)
+     ON CONFLICT ("sessionBlockId","athleteId") DO NOTHING`,
+    [blockId, athleteIds.map(() => randomUUID()), athleteIds]
+  );
+}
+
+async function insertPoolDives(tx: Tx, rows: Array<{
+  id: string; sectionId: string; diveCode: string; diveName: string; position: string;
+  repetitions: number; notes: string | null; order: number;
+}>) {
+  if (!rows.length) return;
+  await tx.query(
+    `INSERT INTO "PoolDive" (id,"poolSectionId","diveCode","diveName",position,repetitions,notes,"order")
+     SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::int[], $7::text[], $8::int[])`,
+    [rows.map((row) => row.id), rows.map((row) => row.sectionId), rows.map((row) => row.diveCode), rows.map((row) => row.diveName), rows.map((row) => row.position), rows.map((row) => row.repetitions), rows.map((row) => row.notes), rows.map((row) => row.order)]
+  );
+}
+
 async function createBlock(
   tx: Tx,
   data: {
@@ -1171,7 +1219,7 @@ async function createBlock(
   }
 ) {
   const block=(await tx.query<{id:string}>(`INSERT INTO "SessionBlock" (id,"sessionId",type,title,duration,position,"estimatedVolume",description,"competitionEvaluation") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,[randomUUID(),data.sessionId,data.type,data.title,data.duration,data.position,data.estimatedVolume,data.description?.trim()||null,data.competitionEvaluation??false])).rows[0];
-  for(const athleteId of data.athleteIds) await tx.query(`INSERT INTO "SessionBlockAssignment" (id,"sessionBlockId","athleteId") VALUES ($1,$2,$3) ON CONFLICT ("sessionBlockId","athleteId") DO NOTHING`,[randomUUID(),block.id,athleteId]);
+  await insertBlockAssignments(tx, block.id, data.athleteIds);
   return block;
 }
 
@@ -1192,7 +1240,7 @@ async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInp
   for (const [sectionOrder, section] of data.sections.entries()) {
     const createdSectionId=randomUUID();
     await tx.query(`INSERT INTO "PoolSection" (id,"poolTrainingId",height,label,"order") VALUES ($1,$2,$3,$4,$5)`,[createdSectionId,block.id,section.height,section.label,sectionOrder]);
-    for(const dive of section.dives) await tx.query(`INSERT INTO "PoolDive" (id,"poolSectionId","diveCode","diveName",position,repetitions,notes,"order") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,[randomUUID(),createdSectionId,dive.diveCode,dive.diveName,dive.position,dive.repetitions,dive.notes,dive.order]);
+    await insertPoolDives(tx, section.dives.map((dive) => ({ id: randomUUID(), sectionId: createdSectionId, diveCode: dive.diveCode, diveName: dive.diveName, position: dive.position, repetitions: dive.repetitions, notes: dive.notes, order: dive.order })));
   }
 }
 

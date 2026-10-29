@@ -45,17 +45,22 @@ export default async function AthletesPage() {
   type AthleteListResult = { id: string; firstName: string; lastName: string; avatar: string | null; level: string; groupName: string | null; active: boolean; lastActivity: string | null; completedSessions: number; volume: number; averageVolume: number | null };
   const [athletesResult, groupsResult] = await Promise.all([
       query<AthleteListResult & { groupId: string | null; birthDate: Date | null }>(
-      `WITH completion_stats AS (
-         SELECT "athleteId", count(*) FILTER (WHERE status = 'COMPLETED')::int AS completed_sessions
-         FROM "AthleteSessionCompletion" GROUP BY "athleteId"
+      `WITH club_athletes AS (
+         SELECT id FROM "Athlete" WHERE "clubId" = $1
+       ), completion_stats AS (
+         SELECT c."athleteId", count(*) FILTER (WHERE c.status = 'COMPLETED')::int AS completed_sessions
+         FROM "AthleteSessionCompletion" c JOIN club_athletes ca ON ca.id = c."athleteId"
+         GROUP BY c."athleteId"
        ), latest_activity AS (
          SELECT DISTINCT ON (c."athleteId") c."athleteId", s.title
          FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id = c."sessionId"
+         JOIN club_athletes ca ON ca.id = c."athleteId"
          WHERE c.status = 'COMPLETED'
          ORDER BY c."athleteId", c."completedAt" DESC NULLS LAST, c."startedAt" DESC NULLS LAST
        ), volume_stats AS (
-         SELECT "athleteId", sum("repetitionsCompleted")::int AS volume
-         FROM "AthleteDiveLog" GROUP BY "athleteId"
+         SELECT l."athleteId", sum(l."repetitionsCompleted")::int AS volume
+         FROM "AthleteDiveLog" l JOIN club_athletes ca ON ca.id = l."athleteId"
+         GROUP BY l."athleteId"
        )
        SELECT a.id, u."firstName", u."lastName", u.avatar, a.level, a."groupId", a."birthDate", g.name AS "groupName", a.active,
          latest_activity.title AS "lastActivity", COALESCE(completion_stats.completed_sessions, 0) AS "completedSessions",
