@@ -1,11 +1,11 @@
 import Link from "@/components/ui/app-link";
-import { ArrowLeft, ArrowRight, Building2, CalendarDays, Check, CircleUserRound, Filter, KeyRound, Mail, Search, Shield, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CircleUserRound, Filter, KeyRound, Search, Shield, Users, X } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { CoachInviteDialog } from "@/components/admin/coach-invite-dialog";
 import { requireAdmin } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { formatMontrealDate } from "@/lib/timezone";
-import { reassignCoachClub, setCoachAccess } from "@/app/admin/actions";
+import { UserDetails } from "./user-details";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +63,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const total = Number(count.rows[0]?.count ?? 0);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const selected = params.user === "none" ? null : users.rows.find((user) => user.id === params.user) ?? users.rows[0] ?? null;
+  const adminEvents = selected ? await query<{ id:string; message:string; createdAt:Date; metadata:{fields?:string[];actorId?:string} }>(`SELECT id,message,"createdAt",metadata FROM "AppEvent" WHERE type='admin.user.updated' AND "userId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,[selected.id]) : null;
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + users.rows.length, total);
 
@@ -128,19 +129,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-500"><p>{from}–{to} sur {total.toLocaleString("fr-CA")} utilisateurs</p><nav aria-label="Pagination" className="flex items-center gap-1"><Link href={href({ page: Math.max(1, page - 1) })} aria-label="Page précédente" aria-disabled={page <= 1} tabIndex={page <= 1 ? -1 : undefined} className={`grid h-8 w-8 place-items-center rounded-lg border border-slate-200 ${page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-slate-50"}`}><ArrowLeft className="h-3.5 w-3.5" /></Link><span aria-current="page" className="grid h-8 min-w-8 place-items-center rounded-lg bg-blue-600 px-2 font-bold text-white">{page} / {pageCount}</span><Link href={href({ page: Math.min(pageCount, page + 1) })} aria-label="Page suivante" aria-disabled={page >= pageCount} tabIndex={page >= pageCount ? -1 : undefined} className={`grid h-8 w-8 place-items-center rounded-lg border border-slate-200 ${page >= pageCount ? "pointer-events-none opacity-40" : "hover:bg-slate-50"}`}><ArrowRight className="h-3.5 w-3.5" /></Link></nav></footer>
       </section>
 
-      {selected && <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Détails de l’utilisateur sélectionné">
-          <div className="relative border-b border-slate-100 p-5"><Link href={href({ user: "none" })} aria-label="Fermer les détails" className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><X className="h-4 w-4" /></Link><div className="flex items-center gap-3 pr-7"><Avatar user={selected} large /><div className="min-w-0"><h2 className="truncate font-black">{selected.firstName} {selected.lastName}</h2><p className="mt-1 truncate text-xs text-slate-500">{selected.email}</p></div></div><div className="mt-3 flex flex-wrap items-center gap-2"><StatusBadge user={selected} /><RoleBadge role={selected.role} /></div><p className="mt-2 text-[11px] text-slate-500">{selected.latestActivity ? `Dernière activité : ${formatMontrealDate(selected.latestActivity, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : "Aucune activité enregistrée"}</p></div>
-          <div className="space-y-5 p-5">
-            <section><h3 className="text-xs font-black uppercase tracking-wide text-slate-500">Informations</h3><div className="mt-2 space-y-2 rounded-xl border border-slate-100 p-3 text-xs"><p className="flex items-center gap-2 text-slate-700"><Mail className="h-4 w-4 shrink-0 text-slate-400" /><span className="break-all">{selected.email}</span></p><p className="flex items-center gap-2 text-slate-600"><CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />Compte créé le {formatMontrealDate(selected.createdAt, { day: "numeric", month: "long", year: "numeric" })}</p><p className="flex items-center gap-2 text-slate-600"><Shield className="h-4 w-4 shrink-0 text-slate-400" />{selected.passwordSetAt ? "Mot de passe configuré" : "Mot de passe à configurer"}</p></div></section>
-            <section><h3 className="text-xs font-black uppercase tracking-wide text-slate-700">Club d’affiliation</h3><div className="mt-2 flex items-center gap-3 rounded-xl border border-slate-200 p-3"><span className="grid h-9 w-9 place-items-center rounded-lg bg-blue-50 text-blue-700"><Building2 className="h-4 w-4" /></span><span className="min-w-0"><span className="block truncate text-sm font-bold">{selected.clubName ?? "Aucun club"}</span><span className="block text-[11px] text-slate-500">{selected.role === "COACH" ? "Club du coach" : "Club associé au compte"}</span></span></div></section>
-            <section><h3 className="text-xs font-black uppercase tracking-wide text-slate-700">Statut du compte</h3><div className="mt-2 rounded-xl border border-slate-100 p-3"><StatusBadge user={selected} /><p className="mt-2 text-[11px] leading-4 text-slate-500">{!selected.accessEnabled ? "Ce compte ne peut pas se connecter à DivePlan." : !selected.passwordSetAt ? "Le compte est activé; l’utilisateur doit encore configurer son mot de passe." : "Ce compte peut se connecter à DivePlan."}</p></div></section>
-            {selected.role === "COACH" && <div className="space-y-2 border-t border-slate-100 pt-4">
-              {clubs.rows.length > 0 && <form action={reassignCoachClub} className="flex gap-2"><input type="hidden" name="userId" value={selected.id} /><input type="hidden" name="returnTo" value="users" /><input type="hidden" name="returnUser" value={selected.id} /><label className="sr-only" htmlFor="selected-coach-club">Club du coach</label><select id="selected-coach-club" name="clubId" defaultValue={selected.clubId ?? ""} required className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="" disabled>Choisir un club</option>{clubs.rows.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select><button className="min-h-10 rounded-lg border px-3 text-xs font-bold hover:bg-slate-50">Changer</button></form>}
-              <form action={setCoachAccess}><input type="hidden" name="userId" value={selected.id} /><input type="hidden" name="enabled" value={selected.accessEnabled ? "false" : "true"} /><input type="hidden" name="returnTo" value="users" /><input type="hidden" name="returnUser" value={selected.id} /><button className={`flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border text-xs font-bold focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${selected.accessEnabled ? "border-red-300 text-red-700 hover:bg-red-50" : "border-emerald-300 text-emerald-800 hover:bg-emerald-50"}`}>{selected.accessEnabled ? <><X className="h-4 w-4" />Désactiver le compte</> : <><Check className="h-4 w-4" />Réactiver le compte</>}</button></form>
-            </div>}
-            {selected.role !== "COACH" && <p className="border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500">Les changements de rôle ou de statut de {roleLabels[selected.role].toLowerCase()} ne sont pas disponibles ici.</p>}
-          </div>
-      </aside>}
+      {selected && <UserDetails user={{...selected, passwordSetAt:selected.passwordSetAt?.toISOString() ?? null, createdAt:selected.createdAt.toISOString(), latestActivity:selected.latestActivity?.toISOString() ?? null}} clubs={clubs.rows} events={(adminEvents?.rows ?? []).map(event=>({id:event.id,message:`${event.message} par ${event.metadata?.actorId ?? "administrateur"}`,createdAt:event.createdAt.toISOString(),fields:event.metadata?.fields ?? []}))} />}
     </div>
   </AdminShell>;
 }
