@@ -121,8 +121,8 @@ if (typeof window !== "undefined" && telemetryEnabled) {
   }
 }
 
-export function onRouterTransitionStart(url: string) {
-  Sentry.captureRouterTransitionStart(url);
+export function onRouterTransitionStart(url: string, navigationType: "push" | "replace" | "traverse") {
+  Sentry.captureRouterTransitionStart(url, navigationType);
   try {
     currentRoute = new URL(url, window.location.origin).pathname;
   } catch {
