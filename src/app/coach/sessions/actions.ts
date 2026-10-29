@@ -190,7 +190,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
       userId: user.id,
       metadata: { sessionId: session.id, templateId: template.id }
     });
-    redirect(`/coach/sessions/${session.id}`);
+    redirect(`/coach/sessions/${session.id}?notice=session-created`);
   }
 
   const blockEvaluationCount = Number(data.warmup.competitionEvaluation) + Number(data.cooldown.competitionEvaluation) +
@@ -316,7 +316,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
     userId: user.id,
     metadata: { sessionId: session.id }
   });
-  redirect(`/coach/sessions/${session.id}`);
+  redirect(`/coach/sessions/${session.id}?notice=session-created`);
 }
 
 export async function updateDraftSessionFromBuilder(sessionId: string, input: CreateSessionInput) {
@@ -391,7 +391,7 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
   revalidatePath("/athlete/calendar");
   revalidatePath("/athlete/week");
   revalidatePath(`/athlete/session/${sessionId}`);
-  redirect(`/coach/sessions/${sessionId}`);
+  redirect(`/coach/sessions/${sessionId}?notice=session-updated`);
 }
 
 export async function duplicateTrainingSession(formData: FormData) {
@@ -1014,7 +1014,7 @@ export async function deleteTrainingSession(formData: FormData) {
   revalidatePath("/coach");
   revalidatePath("/coach/planning");
   revalidatePath("/coach/sessions");
-  redirect("/coach/sessions");
+  redirect("/coach/sessions?notice=session-deleted");
 }
 
 export async function toggleSessionTemplateFavorite(formData: FormData) {
@@ -1150,7 +1150,7 @@ export async function updateTrainingSession(formData: FormData) {
   revalidatePath("/athlete/calendar");
   revalidatePath("/athlete/week");
   revalidatePath(`/athlete/session/${sessionId}`);
-  redirect(`/coach/sessions/${sessionId}`);
+  redirect(`/coach/sessions/${sessionId}?notice=session-updated`);
 }
 
 type Tx = import("pg").PoolClient;

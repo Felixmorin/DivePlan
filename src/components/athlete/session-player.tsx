@@ -14,6 +14,7 @@ import type { AthleteSessionView } from "@/lib/athlete-session";
 import type { MilestoneKey } from "@/lib/milestones";
 import { formatMontrealTime } from "@/lib/timezone";
 import { isSessionStartAvailable, SESSION_EARLY_START_MINUTES } from "@/lib/session-availability";
+import { useToast } from "@/components/ui/toast-provider";
 
 const finalRatings = ["Pas bien", "Difficile", "Moyen", "Bien", "Très bien"];
 
@@ -34,6 +35,7 @@ type SaveStatus = "saved" | "saving" | "error";
 
 export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onComplete, onSaveDiveNote, onSaveCompetitionEvaluation }: SessionPlayerProps) {
   const router = useRouter();
+  const { notify } = useToast();
   const blocks = session.blocks;
   const [current, setCurrent] = useState(() => getResumeBlockIndex(session));
   const [stepIndex, setStepIndex] = useState(() => getResumeStepIndex(session, getResumeBlockIndex(session)));
@@ -46,6 +48,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
   const [error, setError] = useState<string | null>(null);
   const [earnedMilestones, setEarnedMilestones] = useState<Array<{ key: MilestoneKey; title: string; description: string }>>([]);
   const [dirty, setDirty] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const finalFeedbackSaveTimeout = useRef<number | undefined>(undefined);
   const saveVersion = useRef(0);
@@ -240,8 +243,10 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
           ratings: session.competitionDives.map((dive) => ({ competitionDiveId: dive.id, rating: evaluationRatings[dive.id] }))
         });
         setEvaluationOpen(false);
+        notify("Évaluation enregistrée");
       } catch {
         setError("Impossible d’enregistrer l’évaluation. Vérifie ta connexion et réessaie.");
+        notify("Échec de l’enregistrement. Réessaie.", "error");
       }
     });
   }
@@ -376,9 +381,8 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
   }
 
   function leaveSession() {
-    if (!dirty || reviewing || window.confirm("Des données de séance ne sont pas encore enregistrées. Quitter quand même?")) {
-      router.push("/athlete");
-    }
+    if (!dirty || reviewing) router.push("/athlete");
+    else setLeaveConfirmOpen(true);
   }
 
   function nextStep() {
@@ -432,8 +436,10 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
         await onSaveDiveNote(session.id, diveId, note);
         setDiveNotes((previous) => ({ ...previous, [diveId]: note }));
         setOpenDiveNote(null);
+        notify("Note enregistrée");
       } catch {
         setError("La note du plongeon n'a pas pu être sauvegardée. Réessaie.");
+        notify("La note n’a pas pu être enregistrée. Réessaie.", "error");
       }
     });
   }
@@ -479,6 +485,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
         const awards = await onComplete(buildSessionProgressPayload(session.id, blocks, exerciseChecksRef.current, diveChecksRef.current, finalFeedbackRef.current));
         setDirty(false);
         setSaveStatus("saved");
+        notify("Séance complétée !");
         if (awards.length) {
           setEarnedMilestones(awards);
           window.setTimeout(() => router.push("/athlete/progress"), 4500);
@@ -487,6 +494,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
         }
       } catch {
         setError("L'enregistrement a echoue. Verifie la connexion et reessaie.");
+        notify("L’enregistrement a échoué. Vérifie ta connexion et réessaie.", "error");
       }
     });
   }
@@ -769,6 +777,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
           <p className="mt-4 text-sm font-semibold text-white/55">Ton souvenir est enregistré dans ton profil.</p>
         </div>
       </div>}
+      {leaveConfirmOpen && <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"><section role="alertdialog" aria-modal="true" aria-labelledby="leave-session-title" aria-describedby="leave-session-description" className="w-full max-w-md rounded-t-2xl border border-white/10 bg-[#0b1e30] p-5 text-white shadow-2xl sm:rounded-2xl"><div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/25 sm:hidden"/><h2 id="leave-session-title" className="text-center text-lg font-black">Quitter avec des changements non enregistrés ?</h2><p id="leave-session-description" className="mt-2 text-center text-sm leading-5 text-white/70">Certaines données n’ont pas pu être sauvegardées. Tu peux rester dans la séance ou la quitter.</p><div className="mt-6 grid grid-cols-2 gap-2"><Button type="button" variant="outline" onClick={() => setLeaveConfirmOpen(false)}>Rester</Button><Button type="button" variant="action" onClick={() => router.push("/athlete")}>Quitter la séance</Button></div></section></div>}
     </AthleteShell>
   );
 }

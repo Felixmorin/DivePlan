@@ -2,12 +2,13 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, MoreHorizontal, Plus, Search, Star, X } from "lucide-react";
+import { MoreHorizontal, Plus, Search, Star, X } from "lucide-react";
 import { archiveLibraryExercise, saveLibraryExercise, toggleLibraryExerciseFavorite, type LibraryExerciseInput } from "@/app/coach/library/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast-provider";
 
 type Exercise = {
   id: string; name: string; category: string; level: string | null; description: string; bodyArea: string | null; equipment: string | null;
@@ -38,8 +39,9 @@ export function LibraryClient({ exercises, dives, templates }: { exercises: Exer
   const [formExercise, setFormExercise] = useState<Exercise | null | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Exercise | null>(null);
   const [mobileFilters, setMobileFilters] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  const { notify } = useToast();
 
   const visibleExercises = useMemo(() => {
     const normalized = query.toLowerCase().trim();
@@ -56,17 +58,13 @@ export function LibraryClient({ exercises, dives, templates }: { exercises: Exer
   const pageExercises = visibleExercises.slice((page - 1) * pageSize, page * pageSize);
   const selectedExercise = visibleExercises.find((exercise) => exercise.id === selected?.id) ?? visibleExercises[0] ?? null;
 
-  function notify(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(null), 3000);
-  }
   function toggleFilter(filter: string) { setFilters((current) => current.includes(filter) ? current.filter((item) => item !== filter) : [...current, filter]); }
   function favorite(exercise: Exercise) {
-    startTransition(async () => { const next = await toggleLibraryExerciseFavorite(exercise.id); notify(next ? "Ajouté aux favoris" : "Retiré des favoris"); window.location.reload(); });
+    startTransition(async () => { try { const next = await toggleLibraryExerciseFavorite(exercise.id); notify(next ? "Ajouté aux favoris" : "Retiré des favoris"); router.refresh(); } catch { notify("La mise à jour a échoué. Réessayez.", "error"); } });
   }
   function remove() {
     if (!deleteTarget) return;
-    startTransition(async () => { await archiveLibraryExercise(deleteTarget.id); setDeleteTarget(null); setSelected(null); notify("Exercice supprimé"); window.location.reload(); });
+    startTransition(async () => { try { await archiveLibraryExercise(deleteTarget.id); setDeleteTarget(null); setSelected(null); notify("Exercice supprimé"); router.refresh(); } catch { notify("La suppression a échoué. Réessayez.", "error"); } });
   }
 
   return <div className="space-y-5">
@@ -90,9 +88,8 @@ export function LibraryClient({ exercises, dives, templates }: { exercises: Exer
     {section === "templates" && <TemplateLibrary templates={templates} />}
     {mobileFilters && <div className="fixed inset-0 z-40 bg-[var(--color-navy)]/30 lg:hidden" onClick={() => setMobileFilters(false)}><div className="absolute bottom-0 left-0 right-0 rounded-t-3xl bg-white p-5" onClick={(event) => event.stopPropagation()}><div className="mb-4 flex items-center justify-between"><h2 className="font-black">Filtres</h2><button onClick={() => setMobileFilters(false)}><X className="h-5 w-5" /></button></div><FilterPanel filters={filters} toggle={toggleFilter} /><Button className="mt-5 w-full" onClick={() => setMobileFilters(false)}>Voir les résultats</Button></div></div>}
     {selected && <div className="fixed inset-0 z-30 bg-[var(--color-navy)]/30 xl:hidden" onClick={() => setSelected(null)}><div className="absolute bottom-0 right-0 top-0 w-full max-w-md overflow-y-auto bg-white p-5" onClick={(event) => event.stopPropagation()}><Preview exercise={selected} onClose={() => setSelected(null)} onEdit={() => setFormExercise(selected)} onDelete={() => setDeleteTarget(selected)} /></div></div>}
-    {formExercise !== undefined && <ExerciseForm exercise={formExercise} pending={pending} onClose={() => setFormExercise(undefined)} onSaved={(message) => { setFormExercise(undefined); notify(message); window.location.reload(); }} />}
-    {deleteTarget && <div className="fixed inset-0 z-50 grid place-items-center bg-[var(--color-navy)]/40 p-4"><div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><h2 className="text-xl font-black">Supprimer cet exercice ?</h2><p className="mt-2 text-sm text-[var(--color-ink-muted)]">L’exercice « {deleteTarget.name} » sera retiré de ta bibliothèque. Les anciennes séances restent intactes.</p><div className="mt-6 flex justify-end gap-2"><Button variant="outline" onClick={() => setDeleteTarget(null)}>Annuler</Button><Button variant="outline" className="border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-red-50" onClick={remove} disabled={pending}>Supprimer</Button></div></div></div>}
-    {toast && <div className="fixed bottom-5 right-5 z-[60] flex items-center gap-2 rounded-xl bg-[var(--color-navy)] px-4 py-3 text-sm font-bold text-white shadow-xl"><Check className="h-4 w-4 text-[var(--color-brand)]" />{toast}</div>}
+    {formExercise !== undefined && <ExerciseForm exercise={formExercise} pending={pending} onClose={() => setFormExercise(undefined)} onSaved={(message) => { setFormExercise(undefined); notify(message); router.refresh(); }} />}
+    {deleteTarget && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--color-navy)]/45 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"><section role="alertdialog" aria-modal="true" aria-labelledby="delete-exercise-title" aria-describedby="delete-exercise-description" className="w-full max-w-md rounded-t-2xl border border-[var(--color-border)] bg-white p-5 shadow-2xl sm:rounded-2xl sm:p-6"><div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200 sm:hidden"/><h2 id="delete-exercise-title" className="text-center text-xl font-black">Supprimer cet exercice ?</h2><p id="delete-exercise-description" className="mt-2 text-center text-sm text-[var(--color-ink-muted)]">L’exercice « {deleteTarget.name} » sera retiré de ta bibliothèque. Les anciennes séances restent intactes.</p><div className="mt-6 grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => setDeleteTarget(null)}>Garder</Button><Button variant="action" className="bg-[var(--color-danger)] text-white hover:bg-[var(--color-danger)]" onClick={remove} disabled={pending}>{pending ? "Suppression…" : "Supprimer"}</Button></div></section></div>}
   </div>;
 }
 

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Activity, AtSign, Building2, Check, CircleAlert, Clock3, KeyRound, Mail, Pencil, Shield, UserRound, X } from "lucide-react";
 import { updateAdminUser } from "./user-actions";
+import { useToast } from "@/components/ui/toast-provider";
 
 type User = { id: string; firstName: string; lastName: string; email: string; role: "ADMIN" | "COACH" | "ATHLETE"; clubId: string | null; clubName: string | null; accessEnabled: boolean; passwordSetAt: string | null; createdAt: string; latestActivity: string | null };
 type Club = { id: string; name: string };
@@ -12,6 +13,7 @@ const roles = { ADMIN: "Administrateur", COACH: "Coach", ATHLETE: "Athlète" };
 
 export function UserDetails({ user, clubs, events, closeHref }: { user: User; clubs: Club[]; events: Event[]; closeHref: string }) {
   const router = useRouter();
+  const { notify } = useToast();
   const [draft, setDraft] = useState({ firstName: user.firstName, lastName: user.lastName, email: user.email, clubId: user.clubId ?? "" });
   const [tab, setTab] = useState("Aperçu");
   const [error, setError] = useState("");
@@ -24,12 +26,12 @@ export function UserDetails({ user, clubs, events, closeHref }: { user: User; cl
     setError(""); setSuccess(false);
     startTransition(async () => {
       const result = await updateAdminUser(user.id, Object.fromEntries(form) as Record<string, string>);
-      if (!result.ok) setError(result.error);
-      else { setSuccess(true); router.refresh(); }
+      if (!result.ok) { setError(result.error); notify(result.error, "error"); }
+      else { setSuccess(true); notify("Modifications enregistrées"); router.refresh(); }
     });
   }
   function access(enabled: boolean) {
-    setError(""); startTransition(async () => { const result = await updateAdminUser(user.id, { accessEnabled: String(enabled) }); if (!result.ok) setError(result.error); else router.refresh(); });
+    setError(""); startTransition(async () => { const result = await updateAdminUser(user.id, { accessEnabled: String(enabled) }); if (!result.ok) { setError(result.error); notify(result.error, "error"); } else { notify(enabled ? "Compte réactivé" : "Compte désactivé", "success"); router.refresh(); } });
   }
   return <aside className="max-h-[calc(100vh-9.5rem)] min-w-0 overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white shadow-[0_4px_18px_rgba(17,39,63,.07)] motion-safe:animate-[user-panel-in_220ms_ease-out] max-md:fixed max-md:inset-0 max-md:z-40 max-md:max-h-screen max-md:rounded-none" aria-label="Détails de l’utilisateur sélectionné">
     <header className="sticky top-0 z-10 border-b border-slate-100 bg-white px-4 pt-3">

@@ -4,6 +4,8 @@ import { liveSessionForClient } from "@/lib/live-session";
 import { getLiveSessionProgress } from "@/lib/live-session-progress";
 import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, Edit, FileText, Layers3, MapPin, MoreVertical, NotebookText, Play, Printer, Save, Send, Trash2, Users, Waves, XCircle } from "lucide-react";
 import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence, startTrainingSession } from "@/app/coach/sessions/actions";
+import { ConfirmFormButton } from "@/components/ui/confirm-form-button";
+import { ToastActionForm } from "@/components/ui/toast-action-form";
 import { PoolSectionEditor } from "./pool-section-editor";
 import { DraftSessionBlocks } from "./draft-session-blocks";
 import { CompletedSessionOverview } from "./completed-session-overview";
@@ -156,10 +158,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
               <Button type="submit" variant="outline"><XCircle className="h-4 w-4" /> Non faite</Button>
             </form>
           )}
-          <form action={deleteTrainingSession}>
-            <input type="hidden" name="sessionId" value={session.id} />
-            <Button type="submit" variant="outline" title={hasStarted ? "Supprimer la seance et ses donnees athletes" : "Supprimer la seance"}><Trash2 className="h-4 w-4" /> Supprimer</Button>
-          </form>
+          <ConfirmFormButton action={deleteTrainingSession} fields={{ sessionId: session.id }} label="Supprimer" title="Supprimer cette séance ?" description={hasStarted ? "Cette séance et toutes les données de progression des athlètes seront supprimées définitivement." : "Cette séance sera supprimée définitivement."} confirmLabel="Supprimer la séance" danger className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-red-700 hover:bg-red-50" />
         </div>
       </div>
       {hasStarted && (
@@ -239,11 +238,11 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                   <StatusPill status={athlete.status} />
                 </div>
                 {athlete.status !== "COMPLETED" && (
-                  <form action={markAthleteSessionCompleted} className="mt-3">
+                  <ToastActionForm action={markAthleteSessionCompleted} successMessage="Séance marquée comme terminée" className="mt-3">
                     <input type="hidden" name="sessionId" value={session.id} />
                     <input type="hidden" name="athleteId" value={athlete.id} />
                     <Button type="submit" size="sm" variant="outline"><CheckCircle2 className="h-4 w-4" /> Marquer comme terminée</Button>
-                  </form>
+                  </ToastActionForm>
                 )}
                 <div className="mt-3 grid gap-2 md:grid-cols-5">
                   <ComparisonMetric label="Exercices" value={`${athlete.completedExercises}/${athlete.plannedExercises}`} />
@@ -364,9 +363,9 @@ function DraftSessionOverview({ session, published, location, coachName, groupAt
         <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1>{session.title}</h1><span className={`draft-status ${published ? "draft-status-published" : ""}`}><span /> {published ? "Publiée" : "Brouillon"}</span></div>
           <div className="draft-meta"><span><CalendarDays />{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span><span><Clock3 />{formatMontrealTime(session.date)} – {formatMontrealTime(new Date(session.date.getTime() + session.duration * 60_000))} ({session.duration >= 60 ? `${Math.floor(session.duration / 60)} h ${String(session.duration % 60).padStart(2, "0")}` : `${session.duration} min`})</span><span><Users />{session.week.group.name}</span>{location && <span><MapPin />{location}</span>}</div>
         </div>
-        <div className="draft-actions"><details className="draft-more"><summary aria-label="Autres actions"><MoreVertical /></summary><div><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Imprimer</Link><form action={duplicateTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><button><Copy /> Dupliquer</button></form><form action={deleteTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><button className="text-red-600"><Trash2 /> Supprimer la séance</button></form></div></details>
+        <div className="draft-actions"><details className="draft-more"><summary aria-label="Autres actions"><MoreVertical /></summary><div><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Imprimer</Link><form action={duplicateTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><button><Copy /> Dupliquer</button></form><ConfirmFormButton action={deleteTrainingSession} fields={{ sessionId: session.id }} label="Supprimer la séance" title="Supprimer cette séance ?" description="Cette séance et les données qui lui sont associées seront supprimées définitivement." confirmLabel="Supprimer" danger className="flex items-center gap-2 text-red-600" /></div></details>
           <Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}/edit`}><Edit /> Modifier</Link></Button>
-          {published ? <form action={startTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Play /> Démarrer la séance</Button></form> : <form action={publishTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Send /> Publier la séance</Button></form>}
+          {published ? <ToastActionForm action={startTrainingSession} successMessage="Séance démarrée"><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Play /> Démarrer la séance</Button></ToastActionForm> : <ToastActionForm action={publishTrainingSession} successMessage="Séance publiée"><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Send /> Publier la séance</Button></ToastActionForm>}
         </div>
       </header>
       <div className="draft-layout">

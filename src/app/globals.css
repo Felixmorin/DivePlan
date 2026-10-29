@@ -203,6 +203,11 @@ a {
   .motion-safe\:animate-\[user-panel-in_220ms_ease-out\] { animation: none !important; }
 }
 
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes builder-pulse {
   0% {
     transform: scale(0.995);

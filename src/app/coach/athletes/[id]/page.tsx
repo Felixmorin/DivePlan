@@ -4,6 +4,7 @@ import Link from "@/components/ui/app-link";
 import { notFound } from "next/navigation";
 import { Dumbbell, Trophy, ChevronRight, CalendarDays, Activity, FileText, TrendingUp } from "lucide-react";
 import { AthleteActionsMenu } from "@/app/coach/athletes/athlete-actions-menu";
+import { PasswordResetControl } from "@/app/coach/athletes/password-reset-control";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { CompetitionListPreview } from "@/components/coach/competition-list-preview";
 import { CoachCompetitionListsTab } from "@/components/coach/coach-competition-lists-tab";
@@ -328,7 +329,7 @@ function AthleteDetail({ profile, groups = [], demo = false, activeTab = "overvi
     <div className="athlete-dashboard">
       <header className="athlete-profile-head">
         <div className="athlete-identity"><Avatar className="h-14 w-14 border-0 bg-cyan-100 text-cyan-700"><AvatarImage src={profile.avatar ?? undefined}/><AvatarFallback>{profile.firstName[0]}{profile.lastName[0]}</AvatarFallback></Avatar><div><h1>{fullName}</h1><p>Plongeon de compétition · {profile.groupName}{profile.birthDate ? ` · ${formatMontrealDate(profile.birthDate,{year:"numeric"})}` : ""}</p><div className="athlete-tags"><Badge variant="success">{profile.level}</Badge><Badge variant="outline">{profile.groupName}</Badge><Badge variant="outline">{profile.active ? "Actif" : "Inactif"}</Badge></div></div></div>
-        <div className="athlete-head-actions">{profile.nextSession&&<Button asChild size="sm" variant="outline"><Link href={demo?"/coach/sessions/demo":`/coach/sessions/${profile.nextSession.id}`}><CalendarDays className="h-4 w-4"/> Prochaine séance</Link></Button>}<AthleteActionsMenu athlete={{id:profile.id,firstName:profile.firstName,lastName:profile.lastName,level:profile.level,groupId:profile.groupId??null,birthDate:profile.birthDate?formatMontrealDate(profile.birthDate,{year:"numeric",month:"2-digit",day:"2-digit"}).replace(/\//g,"-"):null,active:profile.active}} groups={groups} demo={demo} directEdit/></div>
+        <div className="athlete-head-actions">{profile.nextSession&&<Button asChild size="sm" variant="outline"><Link href={demo?"/coach/sessions/demo":`/coach/sessions/${profile.nextSession.id}`}><CalendarDays className="h-4 w-4"/> Prochaine séance</Link></Button>}<AthleteActionsMenu athlete={{id:profile.id,firstName:profile.firstName,lastName:profile.lastName,level:profile.level,groupId:profile.groupId??null,birthDate:profile.birthDate?formatMontrealDate(profile.birthDate,{year:"numeric",month:"2-digit",day:"2-digit"}).replace(/\//g,"-"):null,active:profile.active}} groups={groups} demo={demo} directEdit/><PasswordResetControl athleteId={profile.id} athleteName={fullName} disabled={demo}/></div>
       </header>
       <AthleteProfileTabs activeTab={activeTab} athleteId={profile.id}>{activeTab === "overview" ? overview : activeTab === "evaluations" ? evaluationsTab : activeTab === "competition" ? competitionTab : historyTab}</AthleteProfileTabs>
     </div>

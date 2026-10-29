@@ -329,6 +329,33 @@ export async function updateAthleteProfile(formData: FormData) {
   revalidatePath(`/coach/athletes/${athleteId}`);
 }
 
+export async function resetAthletePassword(athleteId: string): Promise<{ error?: string; credentials?: { username: string; temporaryPassword: string } }> {
+  const { user: coach, clubId } = await requireCoach();
+  const parsedId = z.string().min(1).safeParse(athleteId);
+  if (!parsedId.success) return { error: "Profil d’athlète invalide." };
+
+  const athlete = await query<{ userId: string; username: string | null }>(
+    `SELECT a."userId", u.username FROM "Athlete" a JOIN "User" u ON u.id = a."userId" WHERE a.id = $1 AND a."clubId" = $2 LIMIT 1`,
+    [parsedId.data, clubId]
+  );
+  const row = athlete.rows[0];
+  if (!row) return { error: "Athlète introuvable dans ton club." };
+  if (!row.username) return { error: "Ce compte n’a pas de nom d’utilisateur. Demande à un administrateur de vérifier sa configuration." };
+
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await hashPassword(temporaryPassword);
+  await query(`UPDATE "User" SET "passwordHash" = $1, "passwordSetAt" = NULL WHERE id = $2 AND role = 'ATHLETE'`, [passwordHash, row.userId]);
+  await trackEvent({
+    type: "athlete.password_reset",
+    message: `Mot de passe temporaire réinitialisé pour ${row.username}`,
+    clubId,
+    userId: coach.id,
+    metadata: { athleteId: parsedId.data, username: row.username }
+  });
+  revalidatePath(`/coach/athletes/${parsedId.data}`);
+  return { credentials: { username: row.username, temporaryPassword } };
+}
+
 export async function addCompetitionDive(formData: FormData) {
   const { clubId } = await requireCoach();
   const parsed = competitionDiveSchema.safeParse({

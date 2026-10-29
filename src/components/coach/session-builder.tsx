@@ -13,6 +13,7 @@ import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PoolListTable } from "@/components/coach/pool-list-table";
 import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -126,6 +127,7 @@ type SessionBuilderProps = {
 const steps = ["Démarrer", "Contenu", "Dryland", "Piscine", "Publier"];
 
 export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAverageById, athletePoolInsightsById = {}, planningEvents, initialTemplate, templates, recentSessions, initialPlanningEventId, initialGroupId: providedGroupId, initialDate, initialTime, initialCoachAthleteNotes, editingSession = false, initialExerciseId, onCreate, onCreateExercise }: SessionBuilderProps) {
+  const { notify } = useToast();
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [assignmentOpenBlockId, setAssignmentOpenBlockId] = useState<string | null>(null);
@@ -542,8 +544,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     formData.set("block", JSON.stringify({ title: block.title, duration: block.duration, exercises }));
     startTransition(() => {
       void saveDrylandBlockAsTemplate(formData)
-        .then(() => { window.alert("Modèle dryland enregistré."); router.refresh(); })
-        .catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Le template n'a pas pu être enregistré."));
+        .then(() => { notify("Modèle dryland enregistré"); router.refresh(); })
+        .catch((error: unknown) => notify(error instanceof Error ? error.message : "Le modèle n’a pas pu être enregistré.", "error"));
     });
   }
 
@@ -570,7 +572,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
 
   function saveCurrentSessionTemplate() {
     if (orderedContentRows.length === 0) {
-      window.alert("Ajoute au moins un bloc avant d’enregistrer un modèle de séance.");
+      notify("Ajoute au moins un bloc avant d’enregistrer un modèle de séance.", "info");
       return;
     }
     const name = window.prompt("Nom du modèle de séance", watched.title?.trim() || "Nouvelle séance");
@@ -612,8 +614,8 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     formData.set("payload", JSON.stringify(payload));
     startTransition(() => {
       void saveSessionStructureTemplate(formData)
-        .then(() => window.alert("Modèle de séance enregistré."))
-        .catch((error: unknown) => window.alert(error instanceof Error ? error.message : "Le modèle n’a pas pu être enregistré."));
+        .then(() => notify("Modèle de séance enregistré"))
+        .catch((error: unknown) => notify(error instanceof Error ? error.message : "Le modèle n’a pas pu être enregistré.", "error"));
     });
   }
 

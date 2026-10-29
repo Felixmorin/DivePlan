@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Check, ChevronRight, Info, Users, ChartNoAxesColumnIncreasing } from "lucide-react";
 import { updateAthleteProfileField } from "@/app/athlete/profile/actions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useToast } from "@/components/ui/toast-provider";
 
 export function ProfileEditor({ firstName, lastName, avatarUrl, level, club, competitionHeights }: {
   firstName: string;
@@ -17,15 +18,17 @@ export function ProfileEditor({ firstName, lastName, avatarUrl, level, club, com
   const [last, setLast] = useState(lastName);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+  const { notify } = useToast();
 
   function save() {
     setMessage("");
     startTransition(async () => {
       const firstResult = await updateAthleteProfileField("firstName", first);
-      if (!firstResult.ok) { setMessage(firstResult.error); return; }
+      if (!firstResult.ok) { setMessage(firstResult.error); notify(firstResult.error, "error"); return; }
       const lastResult = await updateAthleteProfileField("lastName", last);
-      if (!lastResult.ok) { setMessage(lastResult.error); return; }
+      if (!lastResult.ok) { setMessage(lastResult.error); notify(lastResult.error, "error"); return; }
       setMessage("Modifications enregistrées.");
+      notify("Profil mis à jour");
     });
   }
 
