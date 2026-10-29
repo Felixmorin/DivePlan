@@ -1,12 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { resourcePath } from "@/lib/request-observation";
-import { normalizeTelemetryRoute } from "@/lib/telemetry-route";
 
 export function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   // Overwrite the client value: downstream code trusts this normalized path as server-generated context.
   requestHeaders.set("x-diveplan-route", resourcePath(request.nextUrl.pathname) ?? "/");
-  requestHeaders.set("x-diveplan-page-route", normalizeTelemetryRoute(request.nextUrl.pathname) ?? "");
+  requestHeaders.set("x-diveplan-page-route", resourcePath(request.nextUrl.pathname) ?? "");
   const requestId = crypto.randomUUID();
   const prefetch = request.headers.get("next-router-prefetch") === "1" || request.headers.has("next-router-segment-prefetch") || /prefetch/i.test(request.headers.get("purpose") ?? request.headers.get("sec-purpose") ?? "");
   const trigger = prefetch ? "prefetch" : request.headers.has("next-action") ? "action" : request.nextUrl.pathname.startsWith("/api/") ? "api" : "navigation";

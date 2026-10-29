@@ -142,8 +142,10 @@ test("collector attributes a delayed resource to its start page, splits payloads
     }
   }
   const { onRouterTransitionStart } = load<{ onRouterTransitionStart: (url: string) => void }>("src/instrumentation-client.ts", {
+    "@sentry/nextjs": { init: () => {}, captureRouterTransitionStart: () => {} },
     "@/lib/client-errors": { isExternalWebVitalsError: () => false },
-    "@/lib/request-observation": { observationTrigger, resourcePath, resourceType }
+    "@/lib/request-observation": { observationTrigger, resourcePath, resourceType },
+    "@/lib/sentry-privacy": { sanitizeErrorEvent: (event: unknown) => event, sanitizeTransactionEvent: (event: unknown) => event }
   }, {
     process: { env: { NODE_ENV: "production" } },
     window: { location: { pathname: "/coach", href: "https://app.test/coach", origin: "https://app.test" }, addEventListener: () => {}, setInterval: (callback: () => void) => { flush = callback; } },
