@@ -38,7 +38,7 @@ export async function saveCompetitionDiveEvaluation(input: z.infer<typeof compet
   );
   const session = sessionResult.rows[0];
   if (!session) throw new Error("Cette évaluation n’est pas activée pour cette séance.");
-  const divesResult = await query<{ id: string; diveCode: string; height: string }>(`SELECT id, "diveCode", height FROM "CompetitionDive" WHERE "athleteId" = $1`, [athlete.id]);
+  const divesResult = await query<{ id: string; diveCode: string; height: string }>(`SELECT d.id, d."diveCode", d.height FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" WHERE d."athleteId" = $1 AND l.position=0`, [athlete.id]);
   const dives = divesResult.rows;
   const uniqueIds = new Set(data.ratings.map((entry) => entry.competitionDiveId));
   if (dives.length === 0 || uniqueIds.size !== dives.length || dives.some((dive) => !uniqueIds.has(dive.id))) {

@@ -68,7 +68,7 @@ export type AthleteSessionView = {
   blocks: AthleteSessionBlock[];
   competitionEvaluationAtStart: boolean;
   competitionEvaluationBlockIds: string[];
-  competitionDives: Array<{ id: string; code: string; height: PoolHeight; platformHeight: number | null }>;
+  competitionDives: Array<{ id: string; code: string; height: PoolHeight; platformHeight: number | null; listId: string; listName: string }>;
   competitionEvaluations: Array<{ competitionDiveId: string; rating: number }>;
 };
 
@@ -173,7 +173,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
   if (!session) return null;
   const blocks=(await query<{id:string;title:string;description:string|null;type:AthleteSessionBlock["type"];duration:number;estimatedVolume:number;competitionEvaluation:boolean}>(`SELECT b.id,b.title,b.description,b.type,b.duration,b."estimatedVolume",b."competitionEvaluation" FROM "SessionBlock" b WHERE b."sessionId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlockAssignment" a WHERE a."sessionBlockId"=b.id AND a."athleteId"=$2) ORDER BY b.position`,[sessionId,athleteId])).rows;
   const [competitionDives,competitionEvaluations]=await Promise.all([
-    query<{id:string;diveCode:string;height:PoolHeight;platformHeight:number|null}>(`SELECT id,"diveCode",height,"platformHeight" FROM "CompetitionDive" WHERE "athleteId"=$1 ORDER BY height,position,"createdAt"`,[athleteId]),
+    query<{id:string;diveCode:string;height:PoolHeight;platformHeight:number|null;listId:string;listName:string}>(`SELECT d.id,d."diveCode",d.height,d."platformHeight",l.id AS "listId",l.name AS "listName" FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" WHERE d."athleteId"=$1 AND l.position=0 ORDER BY d.height,d.position,d."createdAt"`,[athleteId]),
     query<{competitionDiveId:string;rating:number}>(`SELECT "competitionDiveId",rating FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId"=$1 AND "sessionId"=$2 AND evaluator='ATHLETE'`,[athleteId,sessionId])
   ]);
   const blockIds=blocks.map(block=>block.id);
@@ -202,7 +202,7 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
     finalNote: session.note ?? null,
     competitionEvaluationAtStart: session.competitionEvaluationAtStart,
     competitionEvaluationBlockIds: blocks.filter((block) => block.competitionEvaluation).map((block) => block.id),
-    competitionDives: competitionDives.rows.map((dive) => ({ id: dive.id, code: dive.diveCode, height: dive.height, platformHeight: dive.platformHeight })),
+    competitionDives: competitionDives.rows.map((dive) => ({ id: dive.id, code: dive.diveCode, height: dive.height, platformHeight: dive.platformHeight, listId: dive.listId, listName: dive.listName })),
     competitionEvaluations:competitionEvaluations.rows,
     blocks: blocks.map((block) => {
       const blockExercises=exercisesByBlock.get(block.id)??[];

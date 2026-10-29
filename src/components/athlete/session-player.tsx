@@ -784,15 +784,20 @@ function CompetitionEvaluationDialog({ dives, ratings, pending, error, onChange,
   if (dives.length === 0) return null;
   const complete = dives.every((dive) => ratings[dive.id] !== undefined);
   const heightLabels: Record<string, string> = { ONE_METER: "1 m", THREE_METER: "3 m", PLATFORM: "Plateforme", CUSTOM: "Autre" };
-  const groupedDives = Object.entries(heightLabels).map(([height, label]) => ({ height, label, dives: dives.filter((dive) => dive.height === height) })).filter((group) => group.dives.length > 0);
+  const groupedLists = Array.from(new Map(dives.map((dive) => [dive.listId, { id: dive.listId, name: dive.listName }])).values()).map((list) => ({
+    ...list,
+    groups: Object.entries(heightLabels).map(([height, label]) => ({ height, label, dives: dives.filter((dive) => dive.listId === list.id && dive.height === height) })).filter((group) => group.dives.length > 0)
+  }));
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-3 backdrop-blur-sm sm:items-center" role="presentation">
       <section role="dialog" aria-modal="true" aria-labelledby="confidence-evaluation-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[1.5rem] border border-white/12 bg-[#0b1e30] p-5 text-white shadow-2xl">
         <h2 id="confidence-evaluation-title" className="text-2xl font-black">Confiance en tes plongeons</h2>
         <p className="mt-2 text-sm leading-6 text-white/65">Pour chaque plongeon, choisis ton niveau de confiance. 0 = pas du tout confiant · 5 = très confiant.</p>
         <div className="mt-5 space-y-6">
-          {groupedDives.map((group) => <section key={group.height} className="border-t-2 border-cyan-300/35 pt-4 first:border-t-0 first:pt-0">
-            <h3 className="mb-3 text-base font-black text-cyan-100">{group.label}</h3>
+          {groupedLists.map((list) => <section key={list.id} className="border-t-2 border-white/20 pt-4 first:border-t-0 first:pt-0">
+            <h3 className="mb-3 text-lg font-black text-cyan-100">{list.name}</h3>
+            <div className="space-y-5">{list.groups.map((group) => <div key={group.height}>
+            <h4 className="mb-2 text-sm font-bold text-white/70">{group.label}</h4>
             <div className="space-y-3">{group.dives.map((dive) => (
               <fieldset key={dive.id} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
                 <legend className="px-1 text-sm font-black">{dive.code}{dive.height === "PLATFORM" && <span className="ml-2 text-cyan-200">{dive.platformHeight === null ? "Hauteur à préciser" : `${dive.platformHeight} m`}</span>}</legend>
@@ -802,7 +807,7 @@ function CompetitionEvaluationDialog({ dives, ratings, pending, error, onChange,
                   </label>)}
                 </div>
               </fieldset>
-            ))}</div>
+            ))}</div></div>)}</div>
           </section>)}
         </div>
         {error && <p role="alert" className="mt-3 text-sm font-semibold text-rose-300">{error}</p>}
