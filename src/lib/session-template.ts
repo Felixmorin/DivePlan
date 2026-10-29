@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import { z } from "zod";
 import { query } from "@/lib/db";
 import { formatMontrealDate, startOfMontrealWeek } from "@/lib/timezone";
+import { replaceSessionStructure } from "./session-structure";
 
 export const BlockType = { WARMUP: "WARMUP", DRYLAND: "DRYLAND", POOL: "POOL", COOLDOWN: "COOLDOWN" } as const;
 export const PoolHeight = { ONE_METER: "ONE_METER", THREE_METER: "THREE_METER", PLATFORM: "PLATFORM", CUSTOM: "CUSTOM" } as const;
@@ -32,20 +33,6 @@ export type SessionSnapshot = { id: string; date: Date; title: string; duration:
 type Executor = Pick<PoolClient, "query">;
 const id = () => randomUUID();
 
-async function insertRows(tx: Executor, table: string, columns: string[], rows: unknown[][], suffix = "") {
-  const batchSize = 500;
-  for (let start = 0; start < rows.length; start += batchSize) {
-    const batch = rows.slice(start, start + batchSize);
-    const values = batch.map((row, rowIndex) =>
-      `(${row.map((_, columnIndex) => `$${rowIndex * columns.length + columnIndex + 1}`).join(",")})`
-    ).join(",");
-    await tx.query(
-      `INSERT INTO ${table} (${columns.join(",")}) VALUES ${values}${suffix}`,
-      batch.flat()
-    );
-  }
-}
-
 export function buildSessionTemplatePayload(session: SessionSnapshot): SessionTemplatePayload {
   return { version: 1, competitionEvaluationAtStart: session.competitionEvaluationAtStart, title: session.title, duration: session.duration, notes: session.notes,
     blocks: [...session.blocks].sort((a,b)=>a.position-b.position).map(block=>({ type:block.type,title:block.title,description:block.description,duration:block.duration,position:block.position,estimatedVolume:block.estimatedVolume,competitionEvaluation:block.competitionEvaluation,athleteIds:block.assignments.map(a=>a.athleteId),drylandExercises:[...block.drylandExercises].sort((a,b)=>a.order-b.order).map(({exerciseId,sets,reps,duration,notes,order})=>({exerciseId,sets,reps,duration,notes,order})),poolTraining:block.poolTraining?{sections:[...block.poolTraining.sections].sort((a,b)=>a.order-b.order).map(s=>({height:s.height,label:s.label,dives:[...s.dives].sort((a,b)=>a.order-b.order).map(({diveCode,diveName,position,repetitions,notes,order})=>({diveCode,diveName,position,repetitions,notes,order}))}))}:null })) };
@@ -60,28 +47,12 @@ export async function createSessionFromPayload(tx: Executor, data: { clubId:stri
   if(!week){const result=await tx.query<Week>("INSERT INTO \"TrainingWeek\" (id,\"clubId\",\"groupId\",\"startDate\",title,status) VALUES ($1,$2,$3,$4,$5,'PUBLISHED') RETURNING id,\"clubId\",\"groupId\",\"startDate\",title,status",[id(),data.clubId,data.groupId,start,`Semaine du ${formatMontrealDate(start)}`]);week=result.rows[0];}
   const sessionId=id();
   const session=(await tx.query<SessionSnapshot>("INSERT INTO \"TrainingSession\" (id,date,title,duration,notes,\"weekId\",\"coachId\",status,\"competitionEvaluationAtStart\") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",[sessionId,data.date,data.title,data.duration,data.notes??null,week.id,data.coachId,data.status??SessionStatus.READY,data.payload.competitionEvaluationAtStart])).rows[0];
-  const blocks: unknown[][] = [], assignments: unknown[][] = [], drylandExercises: unknown[][] = [];
-  const poolTrainings: unknown[][] = [], sections: unknown[][] = [], dives: unknown[][] = [];
-  for(const b of data.payload.blocks){
-    const blockId=id();
-    blocks.push([blockId,sessionId,b.type,b.title,b.description,b.duration,b.position,b.estimatedVolume,b.competitionEvaluation]);
-    for(const athleteId of b.athleteIds.filter(v=>validAthletes.has(v))) assignments.push([id(),blockId,athleteId]);
-    for(const e of b.drylandExercises.filter(v=>validExercises.has(v.exerciseId))) drylandExercises.push([blockId,e.exerciseId,e.sets,e.reps,e.duration,e.notes,e.order]);
-    if(b.poolTraining){
-      poolTrainings.push([blockId]);
-      for(const [i,s] of b.poolTraining.sections.entries()){
-        const sectionId=id();
-        sections.push([sectionId,blockId,s.height,s.label,i]);
-        for(const d of s.dives) dives.push([id(),sectionId,d.diveCode,d.diveName,d.position,d.repetitions,d.notes,d.order]);
-      }
-    }
-  }
-  await insertRows(tx, '"SessionBlock"', ['id','"sessionId"','type','title','description','duration','position','"estimatedVolume"','"competitionEvaluation"'], blocks);
-  await insertRows(tx, '"SessionBlockAssignment"', ['id','"sessionBlockId"','"athleteId"'], assignments, ' ON CONFLICT ("sessionBlockId","athleteId") DO NOTHING');
-  await insertRows(tx, '"DrylandBlockExercise"', ['"blockId"','"exerciseId"','sets','reps','duration','notes','"order"'], drylandExercises, ' ON CONFLICT ("blockId","order") DO NOTHING');
-  await insertRows(tx, '"PoolTraining"', ['"blockId"'], poolTrainings);
-  await insertRows(tx, '"PoolSection"', ['id','"poolTrainingId"','height','label','"order"'], sections);
-  await insertRows(tx, '"PoolDive"', ['id','"poolSectionId"','"diveCode"','"diveName"','position','repetitions','notes','"order"'], dives);
+  const validBlocks = data.payload.blocks.map((block) => ({
+    ...block,
+    athleteIds: block.athleteIds.filter((athleteId) => validAthletes.has(athleteId)),
+    drylandExercises: block.drylandExercises.filter((exercise) => validExercises.has(exercise.exerciseId))
+  }));
+  await replaceSessionStructure(tx, sessionId, validBlocks);
   return {...session,week,blocks:[]};
 }
 

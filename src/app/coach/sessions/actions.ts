@@ -18,6 +18,7 @@ import {
 import { formatMontrealDate, parseMontrealDateTimeInput, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { dispatchSessionCancellation, dispatchSessionPublication, dispatchSessionUpdate, isAutomaticSessionPushEnabled, saveSessionCancellationTargets, saveSessionPublicationTargets, saveSessionUpdateTargets } from "@/lib/web-push";
 import { completeSessionIfAllAthletesAreDone } from "@/lib/session-status";
+import { replaceSessionStructure, type SessionStructureBlock } from "@/lib/session-structure";
 
 const sessionInputSchema = z.object({
   title: z.string(),
@@ -232,6 +233,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
     })
   }));
   const poolBlocks = data.poolBlocks.map((block) => ({ ...block, athleteIds: requireValidAthletes(block.athleteIds) }));
+  const structureBlocks = buildSessionStructureBlocks(data, drylandBlocks, poolBlocks, allAthleteIds);
 
   if (data.status === SessionStatus.READY && (allAthleteIds.length === 0 || drylandBlocks.some((block) => block.athleteIds.length === 0 || block.exercises.length !== block.exerciseIds.length) || poolBlocks.some((block) => block.athleteIds.length === 0))) {
     throw new Error("La seance doit contenir au moins un athlete et un exercice valides.");
@@ -244,45 +246,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
     if(!found) await tx.query(`INSERT INTO "TrainingWeek" (id,"clubId","groupId","startDate",title,status) VALUES ($1,$2,$3,$4,$5,$6)`,[weekId,clubId,data.groupId,weekStart,`Semaine du ${formatMontrealDate(weekStart)}`,WeekStatus.PUBLISHED]);
     const createdSession=(await tx.query<{id:string;title:string}>(`INSERT INTO "TrainingSession" (id,date,title,duration,notes,"weekId","coachId",status,"competitionEvaluationAtStart","planningEventId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,title`,[randomUUID(),sessionDate,data.title.trim(),data.duration,data.notes?.trim()||null,weekId,coach.id,data.status,data.evaluationPlacement === "start",planningEvent?.id??null])).rows[0];
 
-    if (data.warmup.enabled) {
-      await createBlock(tx, {
-        sessionId: createdSession.id,
-        type: BlockType.WARMUP,
-        title: data.warmup.title,
-        description: data.warmup.description,
-        duration: data.warmup.duration,
-        position: 1,
-        estimatedVolume: 0,
-        athleteIds: allAthleteIds
-        ,competitionEvaluation: data.warmup.competitionEvaluation
-      });
-    }
-
-    for (const [index, dryland] of drylandBlocks.entries()) {
-      const drylandBlock = await createBlock(tx, {
-        sessionId: createdSession.id,
-        type: BlockType.DRYLAND,
-        title: dryland.title,
-        duration: dryland.duration,
-        position: index + 2,
-        estimatedVolume: dryland.exercises.reduce((sum, exercise) => sum + (exercise.override?.sets ?? exercise.defaultSets ?? 1) * (exercise.override?.reps ?? exercise.defaultReps ?? 1) * dryland.athleteIds.length, 0),
-        athleteIds: dryland.athleteIds
-        ,competitionEvaluation: dryland.competitionEvaluation
-      });
-
-      await insertDrylandExercises(tx, drylandBlock.id, dryland.exercises.map((exercise, order) => ({
-        exerciseId: exercise.id,
-        sets: exercise.override?.sets ?? exercise.defaultSets,
-        reps: exercise.roundTrip ? null : exercise.override?.reps ?? exercise.defaultReps,
-        duration: exercise.roundTrip ? null : exercise.override?.duration ?? exercise.defaultDuration,
-        notes: exercise.override?.notes ?? null,
-        order
-      })));
-    }
-
-    for (const [index, poolBlock] of poolBlocks.entries()) {
-      await createPoolBlock(tx, createdSession.id, poolBlock, index + drylandBlocks.length + 2);
-    }
+    await replaceSessionStructure(tx, createdSession.id, structureBlocks);
 
     const assignedPoolAthletes = new Set(poolBlocks.flatMap((block) => block.athleteIds));
     for (const [athleteId, note] of Object.entries(data.coachAthleteNotes)) {
@@ -293,20 +257,6 @@ export async function createTrainingSession(input: CreateSessionInput) {
     }
 
     if (data.status === SessionStatus.READY && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, createdSession.id);
-
-    if (data.cooldown.enabled) {
-      await createBlock(tx, {
-        sessionId: createdSession.id,
-        type: BlockType.COOLDOWN,
-        title: data.cooldown.title,
-        description: data.cooldown.description,
-        duration: data.cooldown.duration,
-        position: 99,
-        estimatedVolume: 0,
-        athleteIds: allAthleteIds
-        ,competitionEvaluation: data.cooldown.competitionEvaluation
-      });
-    }
 
     return createdSession;
   });
@@ -353,6 +303,17 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
   const exercises = await query<{ id: string; defaultSets: number | null; defaultReps: number | null; defaultDuration: number | null; roundTrip: boolean }>(
     `SELECT id,"defaultSets","defaultReps","defaultDuration","roundTrip" FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`, [drylandIds]
   );
+  const exercisesById = new Map(exercises.rows.map((exercise) => [exercise.id, exercise]));
+  const drylandBlocks = data.drylandBlocks.map((block) => ({
+    ...block,
+    athleteIds: block.athleteIds.filter((athleteId) => validAthleteIds.has(athleteId)),
+    exercises: block.exerciseIds.flatMap((exerciseId) => {
+      const exercise = exercisesById.get(exerciseId);
+      return exercise ? [{ ...exercise, override: block.exerciseOverrides[exerciseId] }] : [];
+    })
+  }));
+  const poolBlocks = data.poolBlocks.map((block) => ({ ...block, athleteIds: block.athleteIds.filter((athleteId) => validAthleteIds.has(athleteId)) }));
+  const structureBlocks = buildSessionStructureBlocks(data, drylandBlocks, poolBlocks, allAthleteIds);
   const weekStart = startOfMontrealWeek(sessionDate);
   const isPublishing = existing.status === SessionStatus.DRAFT && data.status === SessionStatus.READY;
   const isPublishedUpdate = existing.status === SessionStatus.READY && data.status === SessionStatus.READY;
@@ -363,24 +324,7 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
     const weekId = found?.id ?? randomUUID();
     if (!found) await tx.query(`INSERT INTO "TrainingWeek" (id,"clubId","groupId","startDate",title,status) VALUES ($1,$2,$3,$4,$5,$6)`, [weekId, clubId, data.groupId, weekStart, `Semaine du ${formatMontrealDate(weekStart)}`, WeekStatus.PUBLISHED]);
     await tx.query(`UPDATE "TrainingSession" SET date=$1,title=$2,duration=$3,notes=$4,"weekId"=$5,status=$6,"competitionEvaluationAtStart"=$7,"planningEventId"=$8 WHERE id=$9`, [sessionDate, data.title.trim(), data.duration, data.notes?.trim() || null, weekId, data.status, data.evaluationPlacement === "start", planningEvent?.id ?? null, sessionId]);
-    await tx.query(`DELETE FROM "SessionBlock" WHERE "sessionId"=$1`, [sessionId]);
-    if (data.warmup.enabled) await createBlock(tx, { sessionId, type: BlockType.WARMUP, title: data.warmup.title, description: data.warmup.description, duration: data.warmup.duration, position: 1, estimatedVolume: 0, athleteIds: allAthleteIds });
-    for (const [index, block] of data.drylandBlocks.entries()) {
-      const blockExercises = block.exerciseIds.flatMap((id) => {
-        const exercise = exercises.rows.find((item) => item.id === id);
-        return exercise ? [{ ...exercise, override: block.exerciseOverrides[id] }] : [];
-      });
-      const created = await createBlock(tx, { sessionId, type: BlockType.DRYLAND, title: block.title, duration: block.duration, position: index + 2, estimatedVolume: blockExercises.reduce((sum, item) => sum + (item.override?.sets ?? item.defaultSets ?? 1) * (item.override?.reps ?? item.defaultReps ?? 1) * block.athleteIds.length, 0), athleteIds: block.athleteIds.filter((id) => validAthleteIds.has(id)), competitionEvaluation: block.competitionEvaluation });
-      await insertDrylandExercises(tx, created.id, blockExercises.map((item, order) => ({
-        exerciseId: item.id,
-        sets: item.override?.sets ?? item.defaultSets,
-        reps: item.roundTrip ? null : item.override?.reps ?? item.defaultReps,
-        duration: item.roundTrip ? null : item.override?.duration ?? item.defaultDuration,
-        notes: item.override?.notes ?? null,
-        order
-      })));
-    }
-    for (const [index, block] of data.poolBlocks.entries()) await createPoolBlock(tx, sessionId, { ...block, athleteIds: block.athleteIds.filter((id) => validAthleteIds.has(id)) }, index + data.drylandBlocks.length + 2);
+    await replaceSessionStructure(tx, sessionId, structureBlocks);
     await tx.query(`DELETE FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [sessionId]);
     const assignedPoolAthletes = new Set(data.poolBlocks.flatMap((block) => block.athleteIds).filter((id) => validAthleteIds.has(id)));
     for (const [athleteId, note] of Object.entries(data.coachAthleteNotes)) {
@@ -389,7 +333,6 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
         await tx.query(`INSERT INTO "CoachAthleteSessionNote" ("sessionId","athleteId",note,"updatedAt") VALUES ($1,$2,$3,NOW())`, [sessionId, athleteId, trimmedNote]);
       }
     }
-    if (data.cooldown.enabled) await createBlock(tx, { sessionId, type: BlockType.COOLDOWN, title: data.cooldown.title, description: data.cooldown.description, duration: data.cooldown.duration, position: 99, estimatedVolume: 0, athleteIds: allAthleteIds });
     if (isPublishing && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, sessionId);
     if (isPublishedUpdate && isAutomaticSessionPushEnabled()) await saveSessionUpdateTargets(tx, sessionId, updateId);
     return { id: sessionId, title: data.title.trim() };
@@ -1171,6 +1114,106 @@ export async function updateTrainingSession(formData: FormData) {
 type Tx = import("pg").PoolClient;
 type BlockType = SessionBlockType;
 
+type PreparedDrylandExercise = {
+  id: string;
+  defaultSets: number | null;
+  defaultReps: number | null;
+  defaultDuration: number | null;
+  roundTrip: boolean;
+  override: CreateSessionInput["drylandBlocks"][number]["exerciseOverrides"][string] | undefined;
+};
+type PreparedDrylandBlock = CreateSessionInput["drylandBlocks"][number] & {
+  athleteIds: string[];
+  exercises: PreparedDrylandExercise[];
+};
+type PreparedPoolBlock = CreateSessionInput["poolBlocks"][number] & { athleteIds: string[] };
+
+function buildSessionStructureBlocks(
+  data: CreateSessionInput,
+  drylandBlocks: PreparedDrylandBlock[],
+  poolBlocks: PreparedPoolBlock[],
+  allAthleteIds: string[]
+): SessionStructureBlock[] {
+  const blocks: SessionStructureBlock[] = [];
+
+  if (data.warmup.enabled) {
+    blocks.push({
+      type: BlockType.WARMUP,
+      title: data.warmup.title,
+      description: data.warmup.description?.trim() || null,
+      duration: data.warmup.duration,
+      position: 1,
+      estimatedVolume: 0,
+      competitionEvaluation: data.warmup.competitionEvaluation,
+      athleteIds: allAthleteIds,
+      drylandExercises: [],
+      poolTraining: null
+    });
+  }
+
+  for (const [index, block] of drylandBlocks.entries()) {
+    blocks.push({
+      type: BlockType.DRYLAND,
+      title: block.title,
+      description: null,
+      duration: block.duration,
+      position: index + 2,
+      estimatedVolume: block.exercises.reduce((sum, exercise) =>
+        sum + (exercise.override?.sets ?? exercise.defaultSets ?? 1) * (exercise.override?.reps ?? exercise.defaultReps ?? 1) * block.athleteIds.length, 0),
+      competitionEvaluation: block.competitionEvaluation,
+      athleteIds: block.athleteIds,
+      drylandExercises: block.exercises.map((exercise, order) => ({
+        exerciseId: exercise.id,
+        sets: exercise.override?.sets ?? exercise.defaultSets,
+        reps: exercise.roundTrip ? null : exercise.override?.reps ?? exercise.defaultReps,
+        duration: exercise.roundTrip ? null : exercise.override?.duration ?? exercise.defaultDuration,
+        notes: exercise.override?.notes ?? null,
+        order
+      })),
+      poolTraining: null
+    });
+  }
+
+  for (const [index, block] of poolBlocks.entries()) {
+    blocks.push({
+      type: BlockType.POOL,
+      title: block.title,
+      description: null,
+      duration: block.duration,
+      position: index + drylandBlocks.length + 2,
+      estimatedVolume: block.sections.reduce((sum, section) =>
+        sum + Math.max(1, countPoolContexts(section.label ?? "")) * section.dives.reduce((sectionSum, dive) => sectionSum + dive.repetitions, 0), 0),
+      competitionEvaluation: block.competitionEvaluation,
+      athleteIds: block.athleteIds,
+      drylandExercises: [],
+      poolTraining: {
+        sections: block.sections.map((section) => ({
+          height: section.height,
+          label: section.label,
+          dives: section.dives
+        }))
+      }
+    });
+  }
+
+  if (data.cooldown.enabled) {
+    blocks.push({
+      type: BlockType.COOLDOWN,
+      title: data.cooldown.title,
+      description: data.cooldown.description?.trim() || null,
+      duration: data.cooldown.duration,
+      position: 99,
+      estimatedVolume: 0,
+      competitionEvaluation: data.cooldown.competitionEvaluation,
+      athleteIds: allAthleteIds,
+      drylandExercises: [],
+      poolTraining: null
+    });
+  }
+
+  return blocks;
+}
+
 async function insertDrylandExercises(tx: Tx, blockId: string, rows: Array<{
   exerciseId: string; sets: number | null; reps: number | null; duration: number | null; notes: string | null; order: number;
 }>) {
@@ -1202,46 +1245,6 @@ async function insertPoolDives(tx: Tx, rows: Array<{
      SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::int[], $7::text[], $8::int[])`,
     [rows.map((row) => row.id), rows.map((row) => row.sectionId), rows.map((row) => row.diveCode), rows.map((row) => row.diveName), rows.map((row) => row.position), rows.map((row) => row.repetitions), rows.map((row) => row.notes), rows.map((row) => row.order)]
   );
-}
-
-async function createBlock(
-  tx: Tx,
-  data: {
-    sessionId: string;
-    type: BlockType;
-    title: string;
-    duration: number;
-    position: number;
-    estimatedVolume: number;
-    athleteIds: string[];
-    description?: string;
-    competitionEvaluation?: boolean;
-  }
-) {
-  const block=(await tx.query<{id:string}>(`INSERT INTO "SessionBlock" (id,"sessionId",type,title,duration,position,"estimatedVolume",description,"competitionEvaluation") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,[randomUUID(),data.sessionId,data.type,data.title,data.duration,data.position,data.estimatedVolume,data.description?.trim()||null,data.competitionEvaluation??false])).rows[0];
-  await insertBlockAssignments(tx, block.id, data.athleteIds);
-  return block;
-}
-
-async function createPoolBlock(tx: Tx, sessionId: string, data: CreateSessionInput["poolBlocks"][number], position: number) {
-  const volume = data.sections.reduce((sum, section) => sum + Math.max(1, countPoolContexts(section.label ?? "")) * section.dives.reduce((sectionSum, dive) => sectionSum + dive.repetitions, 0), 0);
-  const block = await createBlock(tx, {
-    sessionId,
-    type: BlockType.POOL,
-    title: data.title,
-    duration: data.duration,
-    position,
-    estimatedVolume: volume,
-    athleteIds: data.athleteIds
-    ,competitionEvaluation: data.competitionEvaluation
-  });
-
-  await tx.query(`INSERT INTO "PoolTraining" ("blockId") VALUES ($1)`,[block.id]);
-  for (const [sectionOrder, section] of data.sections.entries()) {
-    const createdSectionId=randomUUID();
-    await tx.query(`INSERT INTO "PoolSection" (id,"poolTrainingId",height,label,"order") VALUES ($1,$2,$3,$4,$5)`,[createdSectionId,block.id,section.height,section.label,sectionOrder]);
-    await insertPoolDives(tx, section.dives.map((dive) => ({ id: randomUUID(), sectionId: createdSectionId, diveCode: dive.diveCode, diveName: dive.diveName, position: dive.position, repetitions: dive.repetitions, notes: dive.notes, order: dive.order })));
-  }
 }
 
 function parsePoolRows(value: FormDataEntryValue | null): PoolListRow[] {
