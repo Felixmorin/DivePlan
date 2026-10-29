@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/current-user";
 import { query } from "@/lib/db";
+import type { QueryResultRow } from "pg";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,17 @@ const periodHours: Record<string, number> = { "1h": 1, "3h": 3, "6h": 6, "12h": 
 const detailLimit = 5_000;
 
 type TelemetryRow = Record<string, string | number | boolean | Date | null>;
+type CollectionIssue = { source: string; category: "schema_unavailable" | "query_failed"; code: string | null };
+
+async function readRows<Row extends QueryResultRow>(issues: CollectionIssue[], source: string, sql: string, values: unknown[] = []) {
+  try {
+    return (await query<Row>(sql, values)).rows;
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : null;
+    issues.push({ source, category: code === "42P01" || code === "42703" ? "schema_unavailable" : "query_failed", code });
+    return [] as Row[];
+  }
+}
 
 export async function GET(request: Request) {
   await requireAdmin();
@@ -19,26 +31,28 @@ export async function GET(request: Request) {
   const since = from.toISOString();
   const aggregateSince = new Date(Math.floor(from.getTime() / 3_600_000) * 3_600_000).toISOString();
   const limit = detailLimit;
+  const collectionIssues: CollectionIssue[] = [];
 
   const [transfers, database, vitals, browserObservations, browserCount, serverRequests, serverCount, appEvents] = await Promise.all([
-    query<TelemetryRow>(`SELECT hour, route, "resourceType", SUM(requests)::text AS requests, SUM("transferBytes")::text AS "transferBytes", SUM("cacheHits")::text AS "cacheHits"
+    readRows<TelemetryRow>(collectionIssues, "browserTransfersHourly", `SELECT hour, route, "resourceType", SUM(requests)::text AS requests, SUM("transferBytes")::text AS "transferBytes", SUM("cacheHits")::text AS "cacheHits"
       FROM "TransferTelemetryHour" WHERE hour >= $1 GROUP BY hour, route, "resourceType" ORDER BY hour, route, "resourceType"`, [aggregateSince]),
-    query<TelemetryRow>(`SELECT hour, route, component, SUM(requests)::text AS requests, SUM("resultBytes")::text AS "resultBytes", SUM("durationMs")::text AS "durationMs", MAX("maxDurationMs")::text AS "maxDurationMs", SUM("slowQueries")::text AS "slowQueries"
+    readRows<TelemetryRow>(collectionIssues, "databaseEgressHourly", `SELECT hour, route, component, SUM(requests)::text AS requests, SUM("resultBytes")::text AS "resultBytes", SUM("durationMs")::text AS "durationMs", MAX("maxDurationMs")::text AS "maxDurationMs", SUM("slowQueries")::text AS "slowQueries"
       FROM "DatabaseEgressTelemetryHour" WHERE hour >= $1 GROUP BY hour, route, component ORDER BY hour, route, component`, [aggregateSince]),
-    query<TelemetryRow>(`SELECT hour, route, metric, SUM(samples)::text AS samples, SUM("totalValue")::text AS "totalValue", MAX("maxValue")::text AS "maxValue"
+    readRows<TelemetryRow>(collectionIssues, "webVitalsHourly", `SELECT hour, route, metric, SUM(samples)::text AS samples, SUM("totalValue")::text AS "totalValue", MAX("maxValue")::text AS "maxValue"
       FROM "PerformanceTelemetryHour" WHERE hour >= $1 GROUP BY hour, route, metric ORDER BY hour, route, metric`, [aggregateSince]),
-    query<TelemetryRow>(`SELECT id::text, "pageId"::text AS "pageId", route, "resourcePath", "resourceType", trigger, "startedAt", durationMs, "transferBytes"::text AS "transferBytes", "cacheHit", status, "serverRequestId"::text AS "serverRequestId"
+    readRows<TelemetryRow>(collectionIssues, "browserObservations", `SELECT id::text, "pageId"::text AS "pageId", route, "resourcePath", "resourceType", trigger, "startedAt", durationMs, "transferBytes"::text AS "transferBytes", "cacheHit", status, "serverRequestId"::text AS "serverRequestId"
       FROM "RequestObservation" WHERE "startedAt" >= $1 ORDER BY "startedAt" DESC, id DESC LIMIT $2`, [since, limit]),
-    query<{ count: string }>(`SELECT count(*)::text AS count FROM "RequestObservation" WHERE "startedAt" >= $1`, [since]),
-    query<TelemetryRow>(`SELECT id::text, route, trigger, "startedAt", "queryCount", "resultBytes"::text AS "resultBytes", "sqlDurationMs", "errorCount"
+    readRows<{ count: string }>(collectionIssues, "browserObservationsCount", `SELECT count(*)::text AS count FROM "RequestObservation" WHERE "startedAt" >= $1`, [since]),
+    readRows<TelemetryRow>(collectionIssues, "serverRequests", `SELECT id::text, route, trigger, "startedAt", "queryCount", "resultBytes"::text AS "resultBytes", "sqlDurationMs", "errorCount"
       FROM "ServerRequestMetric" WHERE "startedAt" >= $1 ORDER BY "startedAt" DESC, id DESC LIMIT $2`, [since, limit]),
-    query<{ count: string }>(`SELECT count(*)::text AS count FROM "ServerRequestMetric" WHERE "startedAt" >= $1`, [since]),
-    query<TelemetryRow>(`SELECT date_trunc('hour', "createdAt") AS hour, type, count(*)::text AS count
+    readRows<{ count: string }>(collectionIssues, "serverRequestsCount", `SELECT count(*)::text AS count FROM "ServerRequestMetric" WHERE "startedAt" >= $1`, [since]),
+    readRows<TelemetryRow>(collectionIssues, "appEventsHourlyByType", `SELECT date_trunc('hour', "createdAt") AS hour, type, count(*)::text AS count
       FROM "AppEvent" WHERE "createdAt" >= $1 GROUP BY date_trunc('hour', "createdAt"), type ORDER BY hour, type`, [since]),
   ]);
 
-  const browserTotal = Number(browserCount.rows[0]?.count ?? 0);
-  const serverTotal = Number(serverCount.rows[0]?.count ?? 0);
+  const browserTotal = browserCount[0]?.count == null ? null : Number(browserCount[0].count);
+  const serverTotal = serverCount[0]?.count == null ? null : Number(serverCount[0].count);
+  const issuesBySource = new Set(collectionIssues.map((issue) => issue.source.replace(/Count$/, "")));
   const report = {
     title: "Rapport de télémétrie DivePlan",
     schemaVersion: 1,
@@ -59,12 +73,14 @@ export async function GET(request: Request) {
       "N'invente pas de seuils absents du rapport. Signale les données manquantes et sépare les anomalies confirmées des pistes à vérifier.",
     ],
     coverage: {
-      transferHourlyRows: transfers.rows.length,
-      databaseEgressHourlyRows: database.rows.length,
-      webVitalsHourlyRows: vitals.rows.length,
-      browserObservations: { total: browserTotal, included: browserObservations.rows.length, limit, truncated: browserTotal > browserObservations.rows.length },
-      serverRequests: { total: serverTotal, included: serverRequests.rows.length, limit, truncated: serverTotal > serverRequests.rows.length },
-      appEventGroups: appEvents.rows.length,
+      transferHourlyRows: transfers.length,
+      databaseEgressHourlyRows: database.length,
+      webVitalsHourlyRows: vitals.length,
+      browserObservations: { total: browserTotal, included: browserObservations.length, limit, truncated: browserTotal === null ? null : browserTotal > browserObservations.length },
+      serverRequests: { total: serverTotal, included: serverRequests.length, limit, truncated: serverTotal === null ? null : serverTotal > serverRequests.length },
+      appEventGroups: appEvents.length,
+      unavailableSources: [...issuesBySource],
+      collectionIssues,
       notes: [
         "Les tableaux horaires sont complets pour la période sélectionnée; ils sont agrégés par heure et par dimensions indiquées.",
         "Les agrégats horaires peuvent inclure le début de l'heure UTC qui précède la borne exacte de la période; les observations individuelles utilisent la borne exacte.",
@@ -74,12 +90,12 @@ export async function GET(request: Request) {
       ],
     },
     telemetry: {
-      browserTransfersHourly: transfers.rows,
-      databaseEgressHourly: database.rows,
-      webVitalsHourly: vitals.rows,
-      browserObservations: browserObservations.rows,
-      serverRequests: serverRequests.rows,
-      appEventsHourlyByType: appEvents.rows,
+      browserTransfersHourly: transfers,
+      databaseEgressHourly: database,
+      webVitalsHourly: vitals,
+      browserObservations,
+      serverRequests,
+      appEventsHourlyByType: appEvents,
     },
   };
 
