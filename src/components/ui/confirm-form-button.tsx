@@ -46,7 +46,7 @@ export function ConfirmFormButton({ action, fields, label, title, description, c
           <h2 id="confirm-form-title" className="mt-3 text-center text-lg font-black text-slate-950">{title}</h2>
           <p id="confirm-form-description" className="mx-auto mt-2 max-w-sm text-center text-sm leading-5 text-slate-600">{description}</p>
           <div className="mt-6 grid grid-cols-2 gap-2">
-            <Button ref={cancelRef} type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>Garder</Button>
+            <button ref={cancelRef} type="button" disabled={pending} onClick={() => setOpen(false)} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-50">Garder</button>
             <Button type="submit" disabled={pending} className={danger ? "bg-red-600 text-white hover:bg-red-700" : ""}>{pending ? "En cours…" : confirmLabel}</Button>
           </div>
         </section>
