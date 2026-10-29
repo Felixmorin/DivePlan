@@ -15,16 +15,17 @@ export function ConfirmFormButton({ action, fields, label, title, description, c
   const triggerRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const { notify } = useToast();
-  pendingRef.current = pending;
   useEffect(() => {
     if (!open) return;
+    const trigger = triggerRef.current;
     cancelRef.current?.focus();
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape" && !pendingRef.current) setOpen(false); };
     window.addEventListener("keydown", closeOnEscape);
-    return () => { window.removeEventListener("keydown", closeOnEscape); triggerRef.current?.focus(); };
+    return () => { window.removeEventListener("keydown", closeOnEscape); trigger?.focus(); };
   }, [open]);
   async function submit(formData: FormData) {
     if (pendingRef.current) return;
+    pendingRef.current = true;
     setPending(true);
     try {
       await action(formData);
@@ -32,6 +33,7 @@ export function ConfirmFormButton({ action, fields, label, title, description, c
     } catch {
       notify("L’action a échoué. Réessayez.", "error");
     } finally {
+      pendingRef.current = false;
       setPending(false);
     }
   }

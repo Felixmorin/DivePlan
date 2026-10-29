@@ -2,7 +2,7 @@ import Link from "@/components/ui/app-link";
 import { notFound } from "next/navigation";
 import { liveSessionForClient } from "@/lib/live-session";
 import { getLiveSessionProgress } from "@/lib/live-session-progress";
-import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, Edit, FileText, Layers3, MapPin, MoreVertical, NotebookText, Play, Printer, Save, Send, Trash2, Users, Waves, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, Edit, FileText, Layers3, MapPin, MoreVertical, NotebookText, Play, Printer, Save, Send, Users, Waves, XCircle } from "lucide-react";
 import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence, startTrainingSession } from "@/app/coach/sessions/actions";
 import { ConfirmFormButton } from "@/components/ui/confirm-form-button";
 import { ToastActionForm } from "@/components/ui/toast-action-form";

@@ -34,9 +34,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       "session-deleted": "Séance supprimée"
     };
     if (!notice || !messages[notice]) return;
-    notify(messages[notice]);
+    const timer = window.setTimeout(() => notify(messages[notice]), 0);
     url.searchParams.delete("notice");
     window.history.replaceState(window.history.state, "", `${pathname}${url.search}${url.hash}`);
+    return () => window.clearTimeout(timer);
   }, [notify, pathname]);
 
   return <ToastContext.Provider value={context}>
