@@ -51,7 +51,7 @@ test("session structure can be created and replaced through one transaction writ
         "diveCode" text NOT NULL,
         "diveName" text NOT NULL,
         position text NOT NULL,
-        repetitions integer NOT NULL,
+        repetitions integer NOT NULL CHECK (repetitions > 0),
         notes text,
         "order" integer NOT NULL
       );
@@ -101,6 +101,20 @@ test("session structure can be created and replaced through one transaction writ
     ]);
     assert.deepEqual((await db.query(`SELECT s.height, s.label, d."diveCode", d.repetitions FROM "PoolSection" s JOIN "PoolDive" d ON d."poolSectionId" = s.id`)).rows, [
       { height: "ONE_METER", label: "board", diveCode: "101A", repetitions: 6 }
+    ]);
+
+    await db.exec("BEGIN");
+    await assert.rejects(replaceSessionStructure(tx, "session-a", [{
+      type: "POOL", title: "Invalid replacement", description: null, duration: 10, position: 1,
+      estimatedVolume: 0, competitionEvaluation: false, athleteIds: ["athlete-a"],
+      drylandExercises: [],
+      poolTraining: { sections: [{ height: "ONE_METER", label: null, dives: [{ diveCode: "101A", diveName: "Forward dive", position: "straight", repetitions: 0, notes: null, order: 0 }] }] }
+    }]), /check constraint/);
+    await db.exec("ROLLBACK");
+    assert.deepEqual((await db.query(`SELECT type, title FROM "SessionBlock" WHERE "sessionId" = 'session-a' ORDER BY position`)).rows, [
+      { type: "WARMUP", title: "Activation" },
+      { type: "DRYLAND", title: "Strength" },
+      { type: "POOL", title: "Entries" }
     ]);
 
     await db.exec("BEGIN");

@@ -220,19 +220,10 @@ export async function createTrainingSession(input: CreateSessionInput) {
   ]);
 
   const validAthleteIds = new Set(athletes.rows.map((athlete) => athlete.id));
-  const requireValidAthletes = (ids: string[]) => ids.filter((id) => validAthleteIds.has(id));
   const allAthleteIds = requestedAthleteIds.length > 0
     ? requestedAthleteIds.filter((id) => validAthleteIds.has(id))
     : Array.from(validAthleteIds);
-  const drylandBlocks = data.drylandBlocks.map((block) => ({
-    ...block,
-    athleteIds: requireValidAthletes(block.athleteIds),
-    exercises: block.exerciseIds.flatMap((id) => {
-      const exercise = exercises.rows.find((item) => item.id === id);
-      return exercise ? [{ ...exercise, override: block.exerciseOverrides[id] }] : [];
-    })
-  }));
-  const poolBlocks = data.poolBlocks.map((block) => ({ ...block, athleteIds: requireValidAthletes(block.athleteIds) }));
+  const { drylandBlocks, poolBlocks } = prepareSessionBuilderBlocks(data, validAthleteIds, exercises.rows);
   const structureBlocks = buildSessionStructureBlocks(data, drylandBlocks, poolBlocks, allAthleteIds);
 
   if (data.status === SessionStatus.READY && (allAthleteIds.length === 0 || drylandBlocks.some((block) => block.athleteIds.length === 0 || block.exercises.length !== block.exerciseIds.length) || poolBlocks.some((block) => block.athleteIds.length === 0))) {
@@ -303,16 +294,7 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
   const exercises = await query<{ id: string; defaultSets: number | null; defaultReps: number | null; defaultDuration: number | null; roundTrip: boolean }>(
     `SELECT id,"defaultSets","defaultReps","defaultDuration","roundTrip" FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`, [drylandIds]
   );
-  const exercisesById = new Map(exercises.rows.map((exercise) => [exercise.id, exercise]));
-  const drylandBlocks = data.drylandBlocks.map((block) => ({
-    ...block,
-    athleteIds: block.athleteIds.filter((athleteId) => validAthleteIds.has(athleteId)),
-    exercises: block.exerciseIds.flatMap((exerciseId) => {
-      const exercise = exercisesById.get(exerciseId);
-      return exercise ? [{ ...exercise, override: block.exerciseOverrides[exerciseId] }] : [];
-    })
-  }));
-  const poolBlocks = data.poolBlocks.map((block) => ({ ...block, athleteIds: block.athleteIds.filter((athleteId) => validAthleteIds.has(athleteId)) }));
+  const { drylandBlocks, poolBlocks } = prepareSessionBuilderBlocks(data, validAthleteIds, exercises.rows);
   const structureBlocks = buildSessionStructureBlocks(data, drylandBlocks, poolBlocks, allAthleteIds);
   const weekStart = startOfMontrealWeek(sessionDate);
   const isPublishing = existing.status === SessionStatus.DRAFT && data.status === SessionStatus.READY;
@@ -1122,11 +1104,33 @@ type PreparedDrylandExercise = {
   roundTrip: boolean;
   override: CreateSessionInput["drylandBlocks"][number]["exerciseOverrides"][string] | undefined;
 };
+type DrylandExerciseDefaults = Omit<PreparedDrylandExercise, "override">;
 type PreparedDrylandBlock = CreateSessionInput["drylandBlocks"][number] & {
   athleteIds: string[];
   exercises: PreparedDrylandExercise[];
 };
 type PreparedPoolBlock = CreateSessionInput["poolBlocks"][number] & { athleteIds: string[] };
+
+function prepareSessionBuilderBlocks(
+  data: CreateSessionInput,
+  validAthleteIds: Set<string>,
+  exerciseRows: DrylandExerciseDefaults[]
+) {
+  const exercisesById = new Map(exerciseRows.map((exercise) => [exercise.id, exercise]));
+  const drylandBlocks: PreparedDrylandBlock[] = data.drylandBlocks.map((block) => ({
+    ...block,
+    athleteIds: block.athleteIds.filter((athleteId) => validAthleteIds.has(athleteId)),
+    exercises: block.exerciseIds.flatMap((exerciseId) => {
+      const exercise = exercisesById.get(exerciseId);
+      return exercise ? [{ ...exercise, override: block.exerciseOverrides[exerciseId] }] : [];
+    })
+  }));
+  const poolBlocks: PreparedPoolBlock[] = data.poolBlocks.map((block) => ({
+    ...block,
+    athleteIds: block.athleteIds.filter((athleteId) => validAthleteIds.has(athleteId))
+  }));
+  return { drylandBlocks, poolBlocks };
+}
 
 function buildSessionStructureBlocks(
   data: CreateSessionInput,
