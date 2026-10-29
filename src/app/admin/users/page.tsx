@@ -49,7 +49,10 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
     AND ($2::text IS NULL OR u.role::text = $2)
     AND ($3::text IS NULL OR ($3 = 'none' AND u."clubId" IS NULL) OR u."clubId" = $3)
     AND ($4::text IS NULL OR ($4 = 'active' AND u."accessEnabled") OR ($4 = 'disabled' AND NOT u."accessEnabled") OR ($4 = 'setup' AND u."accessEnabled" AND u."passwordSetAt" IS NULL))`;
-  const [users, count, stats, clubs] = await Promise.all([
+  const selectedEventsTask = params.user && params.user !== "none"
+    ? query<{ id:string; message:string; createdAt:Date; metadata:{fields?:string[];actorId?:string} }>(`SELECT id,message,"createdAt",metadata FROM "AppEvent" WHERE type='admin.user.updated' AND "userId"=$1 ORDER BY "createdAt" DESC LIMIT 20`, [params.user])
+    : Promise.resolve(null);
+  const [users, count, stats, clubs, selectedEvents] = await Promise.all([
     query<UserRow>(`SELECT u.id, u."firstName", u."lastName", u.email, u.role, u."clubId", c.name AS "clubName", u."accessEnabled", u."passwordSetAt", u."createdAt", activity."createdAt" AS "latestActivity"
       FROM "User" u LEFT JOIN "Club" c ON c.id = u."clubId"
       LEFT JOIN LATERAL (SELECT "createdAt" FROM "AppEvent" WHERE "userId" = u.id ORDER BY "createdAt" DESC LIMIT 1) activity ON TRUE
@@ -58,12 +61,17 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
       LIMIT $5 OFFSET $6`, [...filterValues, pageSize, offset]),
     query<{ count: string }>(`SELECT count(*)::text AS count FROM "User" u WHERE ${where}`, filterValues),
     query<{ total: string; active: string; disabled: string; admins: string; setup: string }>(`SELECT count(*)::text AS total, count(*) FILTER (WHERE "accessEnabled")::text AS active, count(*) FILTER (WHERE NOT "accessEnabled")::text AS disabled, count(*) FILTER (WHERE role = 'ADMIN')::text AS admins, count(*) FILTER (WHERE "accessEnabled" AND "passwordSetAt" IS NULL)::text AS setup FROM "User"`),
-    query<ClubRow>(`SELECT id, name FROM "Club" ORDER BY name`)
+    query<ClubRow>(`SELECT id, name FROM "Club" ORDER BY name`),
+    selectedEventsTask
   ]);
   const total = Number(count.rows[0]?.count ?? 0);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const selected = params.user === "none" ? null : users.rows.find((user) => user.id === params.user) ?? users.rows[0] ?? null;
-  const adminEvents = selected ? await query<{ id:string; message:string; createdAt:Date; metadata:{fields?:string[];actorId?:string} }>(`SELECT id,message,"createdAt",metadata FROM "AppEvent" WHERE type='admin.user.updated' AND "userId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,[selected.id]) : null;
+  const adminEvents = selected
+    ? selectedEvents && params.user === selected.id
+      ? selectedEvents
+      : await query<{ id:string; message:string; createdAt:Date; metadata:{fields?:string[];actorId?:string} }>(`SELECT id,message,"createdAt",metadata FROM "AppEvent" WHERE type='admin.user.updated' AND "userId"=$1 ORDER BY "createdAt" DESC LIMIT 20`, [selected.id])
+    : null;
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + users.rows.length, total);
 
