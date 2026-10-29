@@ -53,6 +53,22 @@ Le produit est actuellement conçu pour des **pilotes accompagnés avec des club
 - Auth.js / NextAuth v5 avec authentification par identifiants
 - Recharts, Lucide, React Hook Form et Zod
 
+## Documentation
+
+| Document | Contenu |
+| --- | --- |
+| [Documentation des skills](docs/skills.md) | Skills locaux disponibles, cas d’usage et limites de pertinence pour DivePlan. |
+| [Architecture](docs/architecture/architecture.md) | Vue d’ensemble technique et conventions d’architecture. |
+| [Accès par rôle](docs/architecture/acces-pages-par-role.md) | Pages accessibles aux entraîneurs, athlètes et administrateurs. |
+| [Agents IA](docs/ai-agents.md) | Console d’agents, migrations, exécution et limites. |
+| [Notifications Web Push](docs/web-push.md) | Configuration et essais des notifications. |
+| [Monitoring des transferts](docs/transfer-monitoring.md) | Indicateurs de transfert et collecte. |
+| [Performance et egress](docs/performance/app-request-egress.md) | Analyse des requêtes et du trafic sortant. |
+| [Sécurité et observabilité CI](docs/ci-security-observability.md) | Contrôles automatisés et observabilité. |
+| [Hygiène quotidienne du dépôt](docs/nightly-repo-hygiene.md) | Revues automatiques du dépôt et configuration GitHub Actions. |
+| [Contrôles de santé admin](docs/admin-health-checks.md) | Contrôles disponibles dans l’administration. |
+| [Préparation commerciale](SELLABLE_CHECKLIST.md) | État des pilotes et travaux avant commercialisation. |
+
 ## Prérequis
 
 - Node.js pris en charge par Next.js 16
@@ -109,10 +125,9 @@ Ouvrir [http://localhost:3000](http://localhost:3000).
 | `PILOT_SEED_PASSWORD` | Mot de passe initial facultatif des comptes créés par le seed pilote. Valeur par défaut : `diveplan-pilot`. |
 | `CRON_SECRET` | Secret Bearer exigé par la route de clôture automatique des séances. |
 
-Les revues quotidiennes du dépôt par Codex et GitHub Actions sont décrites dans [docs/nightly-repo-hygiene.md](docs/nightly-repo-hygiene.md). Le workflow GitHub nécessite le secret `OPENAI_API_KEY` dans les paramètres Actions du dépôt.
-Les photos de profil ont été retirées; les profils affichent les initiales des athlètes.
+Les revues quotidiennes du dépôt par Codex et GitHub Actions sont décrites dans [docs/nightly-repo-hygiene.md](docs/nightly-repo-hygiene.md). Le workflow GitHub nécessite le secret `OPENAI_API_KEY` dans les paramètres Actions du dépôt. Les photos de profil ont été retirées; les profils affichent les initiales des athlètes.
 
-En développement seulement, une connexion de démonstration est disponible : `coach@diveplan.local` / `diveplan-demo`. Elle n’est pas disponible en production.
+En développement seulement, une connexion de démonstration est disponible : `coach@diveplan.local` / `diveplan-demo`. Elle n’est pas disponible en production. Elle est distincte des comptes `*.pilote@diveplan.local` créés par le seed pilote.
 
 ## Comptes et données du pilote
 

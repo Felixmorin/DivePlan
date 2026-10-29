@@ -21,25 +21,38 @@ const rows = [
 const volume = [72,78,84,88,95,91,99,104,101,108,112,110,114,108,103,99,94,88,78,68,58,51,50,47,42,38,36,34,35,41,46,50,53,54,55,57,58,62,64,67,70,73,75,74,71,68,64,61,58,55,53,49];
 const effort = [28,35,39,42,45,48,50,52,55,56,59,62,64,68,71,73,76,79,80,74,68,60,52,43,34,30,27,30,33,37,40,43,46,49,50,53,55,59,64,66,69,72,74,71,68,64,61,58,55,53,51,48];
 
-export function AnnualPlan() {
-  const [week, setWeek] = useState(18);
+type PlanDataMode = "demo" | "worst" | "empty" | "one";
+
+export function AnnualPlan({ dataMode = "demo" }: { dataMode?: PlanDataMode }) {
+  const [week, setWeek] = useState(dataMode === "one" ? 1 : 18);
   const [view, setView] = useState("Année");
   const [help, setHelp] = useState(false);
-  const activePhase = phases.find((phase) => week >= phase.start && week <= phase.end) ?? phases[0];
+  const isWorst = dataMode === "worst";
+  const displayedPhases = dataMode === "empty" ? [] : dataMode === "one" ? phases.slice(0, 1) : isWorst
+    ? phases.map((phase, index) => ({ ...phase, name: index === 1 ? "Préparation spécifique et qualification provinciale" : phase.name }))
+    : phases;
+  const displayedRows = dataMode === "empty" ? [] : dataMode === "one" ? rows.slice(0, 1) : rows;
+  const displayedVolume = dataMode === "empty" ? [] : dataMode === "one" ? [72] : isWorst ? [128,142,151,139,160,147,154,136,149,143,158,146] : volume;
+  const displayedEffort = dataMode === "empty" ? [] : dataMode === "one" ? [28] : isWorst ? [96,99,102,98,100,97,103,101,99,102,98,100] : effort;
+  const activePhase = displayedPhases.find((phase) => week >= phase.start && week <= phase.end) ?? displayedPhases[0];
   const seasonWeeks = Array.from({ length: 52 }, (_, i) => i + 1);
   const selectedMonth = months[Math.floor((week - 1) / 4.34)] ?? "Janv.";
+  const modeHref = (mode: PlanDataMode) => mode === "demo" ? "/coach/planification" : `/coach/planification?data=${mode}`;
 
   return <div className="annual-shell">
     <div className="annual-main">
+      {process.env.NODE_ENV === "development" && <nav aria-label="Données de test" className="mb-3 flex w-fit gap-1 rounded-lg border border-slate-300 bg-slate-100 p-1 text-xs text-slate-700">
+        {(["demo", "worst", "empty", "one"] as const).map((mode) => <a key={mode} href={modeHref(mode)} aria-current={dataMode === mode ? "page" : undefined} className={`rounded-md px-2.5 py-1.5 ${dataMode === mode ? "bg-white font-bold shadow-sm" : "hover:bg-white/70"}`}>{mode === "demo" ? "Demo" : mode === "worst" ? "Worst case" : mode === "empty" ? "Empty" : "One"}</a>)}
+      </nav>}
       <header className="annual-header">
         <div><p className="annual-kicker">SAISON 2026–2027</p><h1>Plan annuel</h1></div>
         <div className="annual-switch" role="tablist" aria-label="Vue du plan">
           {["Année", "Périodes", "Athlètes"].map((item) => <button key={item} role="tab" aria-selected={view === item} className={view === item ? "selected" : ""} onClick={() => setView(item)}>{item}</button>)}
         </div>
       </header>
-      <div className="annual-filters"><button><Users /> Provincial A <ChevronDown /></button><button><CalendarDays /> 2026–2027 <ChevronDown /></button><span className="annual-view-note">{view === "Année" ? "Vue d’ensemble de la saison" : view === "Périodes" ? "Périodisation de la saison" : "Charge et priorités par athlète"}</span></div>
+      <div className="annual-filters"><button><Users /> {isWorst ? "Provincial A — programme de développement des athlètes de niveau élite" : "Provincial A"} <ChevronDown /></button><button><CalendarDays /> 2026–2027 <ChevronDown /></button><span className="annual-view-note">{view === "Année" ? "Vue d’ensemble de la saison" : view === "Périodes" ? "Périodisation de la saison" : "Charge et priorités par athlète"}</span></div>
 
-      <section className="annual-objective"><div className="objective-title"><Target /><span><b>Objectif cible :</b> Championnat provincial <span className="dot-separator">·</span> 22–23 février</span></div><div className="completion"><span>Plan à <b>82 %</b> complété</span><div className="completion-track"><i /></div><b>82 %</b></div></section>
+      <section className="annual-objective"><div className="objective-title"><Target /><span><b>Objectif cible :</b> {isWorst ? "Championnat provincial de qualification et finale des Jeux du Québec" : "Championnat provincial"} <span className="dot-separator">·</span> {isWorst ? "14–16 mars 2027 · Québec" : "22–23 février"}</span></div><div className="completion"><span>Plan à <b>{isWorst ? "142" : "82"} %</b> complété</span><div className="completion-track"><i style={{ width: `${isWorst ? 142 : 82}%` }} /></div><b>{isWorst ? "142" : "82"} %</b></div></section>
 
       <div className="annual-steps"><Step number="1" title="Dates & objectifs" subtitle="Saison et compétitions définies" done /><div className="step-arrow"/><Step number="2" title="Phases" subtitle="Phases planifiées" done /><div className="step-arrow"/><Step number="3" title="Cycles & charge" subtitle="Ajustez les priorités et la charge par période" active /><div className="step-arrow"/><Step number="4" title="Vérification" subtitle="Vérifiez la cohérence globale" /></div>
 
@@ -48,18 +61,18 @@ export function AnnualPlan() {
           <div className="grid-label month-label">Mois</div><div className="month-track">{months.map((month, index) => <div key={month} style={{ gridColumn: `${Math.round(index * 52 / 12) + 1} / ${Math.round((index + 1) * 52 / 12) + 1}` }}>{month}</div>)}</div>
           <div className="grid-label week-label">Semaine</div><div className="week-track">{seasonWeeks.map((number) => <button key={number} onClick={() => setWeek(number)} className={number === week ? "current-week" : ""} aria-label={`Semaine ${number}`} aria-pressed={number === week}>{number}</button>)}</div>
           <div className="grid-label competition-label">Compétitions</div><div className="competition-track">{seasonWeeks.map((number) => <span key={number} className={number === 20 ? "target-star" : [13,24,30,37,43,47].includes(number) ? "competition-dot" : "quiet-dot"}>{number === 20 ? "★" : "●"}</span>)}</div>
-          <div className="grid-label">Périodes</div><div className="bars-track phase-track">{phases.map((phase) => <button key={phase.name + phase.start} className={`plan-bar ${phase.color}`} style={{ gridColumn: `${phase.start} / ${phase.end + 1}` }} onClick={() => setWeek(phase.start)}>{phase.name}</button>)}</div>
-          {rows.map((row) => <Row key={row.label} row={row} selectedWeek={week} setWeek={setWeek} />)}
+          <div className="grid-label">Périodes</div><div className="bars-track phase-track">{displayedPhases.map((phase) => <button key={phase.name + phase.start} className={`plan-bar ${phase.color}`} style={{ gridColumn: `${phase.start} / ${phase.end + 1}` }} onClick={() => setWeek(phase.start)}>{phase.name}</button>)}</div>
+          {displayedRows.map((row) => <Row key={row.label} row={row} selectedWeek={week} setWeek={setWeek} />)}
           <div className="grid-label evaluation-label">Évaluations</div><div className="evaluation-track">{[18,24,32,40,50].map((number) => <button key={number} onClick={() => setWeek(number)} style={{ gridColumn: number }} aria-label={`Évaluation semaine ${number}`}>◆</button>)}</div>
           <div className="grid-label volume-label"><b>Volume piscine</b><small>(plongeons / athlète)</small><button aria-label="À propos du volume" onClick={() => setHelp(!help)}><Info /></button></div>
-          <div className="line-chart volume-chart"><Chart values={volume} color="#1478ff" fill="rgba(20,120,255,.10)" /></div>
+          <div className="line-chart volume-chart"><Chart values={displayedVolume} color="#1478ff" fill="rgba(20,120,255,.10)" /></div>
           <div className="grid-label intensity-label"><b><Zap /> Intensité prévue</b><small>Élevée <span>Faible</span></small></div>
-          <div className="line-chart effort-chart"><Chart values={effort} color="#ff8a00" fill="rgba(255,138,0,.12)" /></div>
+          <div className="line-chart effort-chart"><Chart values={displayedEffort} color="#ff8a00" fill="rgba(255,138,0,.12)" /></div>
           {help && <div className="chart-help"><button onClick={() => setHelp(false)} aria-label="Fermer">×</button><b>Comment est calculé le volume ?</b><p>Volume piscine = plongeons réalisés par athlète. 100 % = moyenne personnelle des 4 dernières semaines comparables.</p><strong>Exemple : Moyenne 40 → planifié 44 = 110 %</strong><p>Chaque athlète peut avoir un volume individuel. En vue de groupe, il s’agit d’un aperçu global, non d’une prescription.</p></div>}
         </div>
       </section>
 
-      <section className="plan-warning"><span className="warning-icon">!</span><div><b>1 objectif de saison sans séance associée</b><p>Ajoutez une séance pour lier cette compétition à votre plan.</p></div><Link href="/coach/planning">Associer une séance <ArrowRight /></Link></section>
+      <section className="plan-warning"><span className="warning-icon">!</span><div><b>{dataMode === "empty" ? "Aucun objectif de saison" : isWorst ? "1 284 plongeons prévus; 1 objectif sans séance associée" : "1 objectif de saison sans séance associée"}</b><p>Ajoutez une séance pour lier cette compétition à votre plan.</p></div><Link href="/coach/planning">Associer une séance <ArrowRight /></Link></section>
       <div className="plan-legend"><b>Légende :</b><span><i className="legend-star">★</i> Compétition cible</span><span><i className="legend-dot"/> Compétition</span><span><i className="legend-phase"/> Phase d’entraînement</span><span><i className="legend-diamond">◆</i> Date d’évaluation</span></div>
     </div>
 
