@@ -1,5 +1,15 @@
+import * as Sentry from "@sentry/nextjs";
 import { observationTrigger, resourcePath, resourceType, type RequestObservation } from "@/lib/request-observation";
 import { isExternalWebVitalsError } from "@/lib/client-errors";
+import { sanitizeErrorEvent, sanitizeTransactionEvent } from "@/lib/sentry-privacy";
+
+Sentry.init({
+  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  enabled: process.env.NODE_ENV === "production" && Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN),
+  tracesSampleRate: 0.1,
+  beforeSend: sanitizeErrorEvent,
+  beforeSendTransaction: sanitizeTransactionEvent,
+});
 
 type TransferBucket = {
   route: string;
@@ -112,6 +122,7 @@ if (typeof window !== "undefined" && telemetryEnabled) {
 }
 
 export function onRouterTransitionStart(url: string) {
+  Sentry.captureRouterTransitionStart(url);
   try {
     currentRoute = new URL(url, window.location.origin).pathname;
   } catch {
