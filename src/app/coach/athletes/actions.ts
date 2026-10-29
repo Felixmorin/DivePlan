@@ -113,15 +113,26 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
   let imported = 0;
   let updated = 0;
 
-  await withTransaction(async (tx) => {
+  const importedResult = await withTransaction(async (tx) => {
     const emails = [...new Set(records.map((record) => record.email))];
-    const existingAthletes = emails.length
-      ? await tx.query<{ email: string }>(
-          `SELECT u.email FROM "User" u INNER JOIN "Athlete" a ON a."userId" = u.id WHERE u.email = ANY($1::text[])`,
+    const existingAccounts = emails.length
+      ? await tx.query<{ email: string; role: string; userClubId: string | null; athleteClubId: string | null }>(
+          `SELECT u.email, u.role, u."clubId" AS "userClubId", a."clubId" AS "athleteClubId"
+           FROM "User" u LEFT JOIN "Athlete" a ON a."userId" = u.id
+           WHERE u.email = ANY($1::text[]) FOR UPDATE OF u`,
           [emails]
         )
       : { rows: [] };
-    const existingEmails = new Set(existingAthletes.rows.map((row) => row.email));
+    const existingByEmail = new Map(existingAccounts.rows.map((row) => [row.email, row]));
+    const hasForeignConflict = records.some((record) => {
+      const existing = existingByEmail.get(record.email);
+      return existing && (existing.role !== USER_ROLE_ATHLETE || existing.userClubId !== clubId || existing.athleteClubId !== clubId);
+    });
+    if (hasForeignConflict) {
+      return false;
+    }
+
+    const existingEmails = new Set(existingByEmail.keys());
     const groupIds = new Map<string, string>();
 
     for (const record of records) {
@@ -142,14 +153,19 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
 
       const account = await tx.query<{ id: string }>(
         `INSERT INTO "User" (id, "firstName", "lastName", email, role, "clubId") VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (email) DO UPDATE SET "firstName" = EXCLUDED."firstName", "lastName" = EXCLUDED."lastName", role = EXCLUDED.role, "clubId" = EXCLUDED."clubId"
+         ON CONFLICT (email) DO UPDATE SET "firstName" = EXCLUDED."firstName", "lastName" = EXCLUDED."lastName"
+         WHERE "User".role = $5 AND "User"."clubId" = $6
          RETURNING id`, [randomUUID(), record.firstName, record.lastName, record.email, USER_ROLE_ATHLETE, clubId]
       );
+      if (!account.rows[0]) {
+        throw new Error("Athlete email ownership changed during CSV import.");
+      }
       const userId = account.rows[0].id;
       await tx.query(
         `INSERT INTO "Athlete" (id, "userId", "clubId", "groupId", "birthDate", level, active)
          VALUES ($1, $2, $3, $4, $5, $6, true)
-         ON CONFLICT ("userId") DO UPDATE SET "clubId" = EXCLUDED."clubId", "groupId" = EXCLUDED."groupId", level = EXCLUDED.level, active = true`,
+         ON CONFLICT ("userId") DO UPDATE SET "groupId" = EXCLUDED."groupId", level = EXCLUDED.level, active = true
+         WHERE "Athlete"."clubId" = EXCLUDED."clubId"`,
         [randomUUID(), userId, clubId, groupId, new Date("2010-01-01"), record.level]
       );
 
@@ -160,7 +176,12 @@ export async function importAthletesCsv(_: ImportAthletesState, formData: FormDa
       }
       existingEmails.add(record.email);
     }
+    return true;
   });
+
+  if (!importedResult) {
+    return { error: "Un courriel appartient deja a un compte d'un autre club ou d'un autre role. Aucun changement effectue." };
+  }
 
   await trackEvent({
     type: "athletes.imported",
