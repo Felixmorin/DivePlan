@@ -108,6 +108,8 @@ Ouvrir [http://localhost:3000](http://localhost:3000).
 | `NEXT_PUBLIC_ENABLE_DEMO_ROUTES` | Met à `true` les pages de démonstration prévues à cet effet. Laisser `false` en production. |
 | `PILOT_SEED_PASSWORD` | Mot de passe initial facultatif des comptes créés par le seed pilote. Valeur par défaut : `diveplan-pilot`. |
 | `CRON_SECRET` | Secret Bearer exigé par la route de clôture automatique des séances. |
+
+Les revues quotidiennes du dépôt par Codex et GitHub Actions sont décrites dans [docs/nightly-repo-hygiene.md](docs/nightly-repo-hygiene.md). Le workflow GitHub nécessite le secret `OPENAI_API_KEY` dans les paramètres Actions du dépôt.
 Les photos de profil ont été retirées; les profils affichent les initiales des athlètes.
 
 En développement seulement, une connexion de démonstration est disponible : `coach@diveplan.local` / `diveplan-demo`. Elle n’est pas disponible en production.

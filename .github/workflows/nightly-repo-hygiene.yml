@@ -1,0 +1,46 @@
+name: Nightly repository hygiene report
+
+on:
+  schedule:
+    # 11:00 UTC: 6:00 AM Toronto in winter, 7:00 AM during daylight time.
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-repo-hygiene
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Run read-only Codex review
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: .github/prompts/repo-hygiene.md
+          output-file: repo-hygiene-report.md
+          permission-profile: ":read-only"
+          safety-strategy: drop-sudo
+
+      - name: Add report to workflow summary
+        if: always() && steps.codex.outcome == 'success'
+        shell: bash
+        run: cat repo-hygiene-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report artifact
+        if: always() && steps.codex.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-hygiene-report-${{ github.run_id }}
+          path: repo-hygiene-report.md
+          if-no-files-found: error
+          retention-days: 14
