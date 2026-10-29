@@ -103,7 +103,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
       <SummaryCard icon={Shield} label="Administrateurs" value={stats.rows[0]?.admins ?? "0"} tone="violet" />
     </section>
 
-    <div className={`grid items-start gap-3 ${selected ? "2xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.8fr)]" : "grid-cols-1"}`}>
+    <div className={`grid items-start gap-3 ${selected ? "xl:grid-cols-[minmax(0,1fr)_minmax(360px,410px)] 2xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1"}`}>
       <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="Liste des utilisateurs">
         <form method="get" action="/admin/users" className="grid gap-2 border-b border-slate-100 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.5fr)_repeat(3,minmax(120px,1fr))_auto]">
           <label className="relative block"><span className="sr-only">Rechercher un utilisateur</span><Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input type="search" name="q" defaultValue={search} placeholder="Nom ou courriel…" className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none placeholder:text-slate-400 focus:border-cyan-600 focus:ring-2 focus:ring-cyan-100" /></label>
@@ -129,7 +129,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-500"><p>{from}–{to} sur {total.toLocaleString("fr-CA")} utilisateurs</p><nav aria-label="Pagination" className="flex items-center gap-1"><Link href={href({ page: Math.max(1, page - 1) })} aria-label="Page précédente" aria-disabled={page <= 1} tabIndex={page <= 1 ? -1 : undefined} className={`grid h-8 w-8 place-items-center rounded-lg border border-slate-200 ${page <= 1 ? "pointer-events-none opacity-40" : "hover:bg-slate-50"}`}><ArrowLeft className="h-3.5 w-3.5" /></Link><span aria-current="page" className="grid h-8 min-w-8 place-items-center rounded-lg bg-blue-600 px-2 font-bold text-white">{page} / {pageCount}</span><Link href={href({ page: Math.min(pageCount, page + 1) })} aria-label="Page suivante" aria-disabled={page >= pageCount} tabIndex={page >= pageCount ? -1 : undefined} className={`grid h-8 w-8 place-items-center rounded-lg border border-slate-200 ${page >= pageCount ? "pointer-events-none opacity-40" : "hover:bg-slate-50"}`}><ArrowRight className="h-3.5 w-3.5" /></Link></nav></footer>
       </section>
 
-      {selected && <UserDetails user={{...selected, passwordSetAt:selected.passwordSetAt?.toISOString() ?? null, createdAt:selected.createdAt.toISOString(), latestActivity:selected.latestActivity?.toISOString() ?? null}} clubs={clubs.rows} events={(adminEvents?.rows ?? []).map(event=>({id:event.id,message:`${event.message} par ${event.metadata?.actorId ?? "administrateur"}`,createdAt:event.createdAt.toISOString(),fields:event.metadata?.fields ?? []}))} />}
+      {selected && <UserDetails closeHref={href({ user: "none" })} user={{...selected, passwordSetAt:selected.passwordSetAt?.toISOString() ?? null, createdAt:selected.createdAt.toISOString(), latestActivity:selected.latestActivity?.toISOString() ?? null}} clubs={clubs.rows} events={(adminEvents?.rows ?? []).map(event=>({id:event.id,message:`${event.message} par ${event.metadata?.actorId ?? "administrateur"}`,createdAt:event.createdAt.toISOString(),fields:event.metadata?.fields ?? []}))} />}
     </div>
   </AdminShell>;
 }
