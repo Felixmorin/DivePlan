@@ -14,10 +14,10 @@ export async function POST(request: Request) {
 
   await query(
     `INSERT INTO "AppEvent" (id, type, message, "clubId", "userId", metadata)
-     VALUES ($1, 'athlete.visit', 'Visite de l’application', $2, $3, jsonb_build_object('actions', jsonb_build_array(jsonb_build_object('action', $4, 'path', $5, 'at', NOW()))))
+     VALUES ($1, 'athlete.visit', 'Visite de l’application', $2, $3, jsonb_build_object('actions', jsonb_build_array(jsonb_build_object('action', $4::text, 'path', $5::text, 'at', NOW()))))
      ON CONFLICT (id) DO UPDATE SET metadata = jsonb_set(
        COALESCE("AppEvent".metadata, '{}'::jsonb), '{actions}',
-       COALESCE("AppEvent".metadata->'actions', '[]'::jsonb) || jsonb_build_array(jsonb_build_object('action', $4, 'path', $5, 'at', NOW()))
+       COALESCE("AppEvent".metadata->'actions', '[]'::jsonb) || jsonb_build_array(jsonb_build_object('action', $4::text, 'path', $5::text, 'at', NOW()))
      ) WHERE "AppEvent"."userId" = $3 AND "AppEvent".type = 'athlete.visit'`,
     [body.visitId, clubId, user.id, action, path]
   );
