@@ -1,6 +1,6 @@
 import Link from "@/components/ui/app-link";
 import Image from "next/image";
-import { Activity, Award, CalendarDays, Computer, Dumbbell, FileText, LayoutDashboard, Library, LogOut, Settings, Users, Waves } from "lucide-react";
+import { Activity, Award, CalendarDays, Computer, Dumbbell, FileText, LayoutDashboard, Library, LogOut, Settings, Users, Waves, Plus } from "lucide-react";
 import { signOutCoach } from "@/app/coach/settings/actions";
 import { requireCoach } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ const navFeature: Record<string, string> = {
 };
 
 const nav = [
-  { href: "/coach", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/coach", label: "Accueil", icon: LayoutDashboard },
   { href: "/coach/planning", label: "Calendrier", icon: CalendarDays },
   { href: "/coach/planification", label: "Planification", icon: CalendarDays, underConstruction: true },
   { href: "/coach/sessions", label: "Séances", match: "Seances", icon: Activity },
@@ -38,7 +38,7 @@ const utilityNav = [
   { href: "/coach/settings", label: "Réglages", match: "Reglages", icon: Settings }
 ];
 
-export async function CoachShell({ children, active }: { children: React.ReactNode; active: string }) {
+export async function CoachShell({ children, active, compactHeader = false }: { children: React.ReactNode; active: string; compactHeader?: boolean }) {
   const { user } = await requireCoach();
   const blocked = await query<{ featureId: string }>(`SELECT "featureId" FROM "CoachFeatureAccess" WHERE "userId" = $1 AND enabled = FALSE`, [user.id]);
   const blockedFeatures = new Set(blocked.rows.map((row) => row.featureId));
@@ -51,7 +51,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[var(--color-coach-bg)] text-[var(--color-ink)]">
-      <aside className="fixed left-0 top-0 z-10 hidden h-screen w-68 flex-col border-r border-[var(--color-border)] bg-[var(--color-navy)] px-4 py-6 text-white lg:flex">
+      <aside className={cn("fixed left-0 top-0 z-10 hidden h-screen w-68 flex-col border-r border-[var(--color-border)] bg-[var(--color-navy)] px-4 py-6 text-white lg:flex print:hidden", compactHeader && "lg:hidden")}>
         <Link href="/coach" className="mb-8 flex items-center gap-3 rounded-2xl px-2 py-1 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
           <BrandMark logo={logo} clubName={clubName} />
           <div>
@@ -102,15 +102,19 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
           <Image src="/icons/diveplan-powered-by.png" alt="DivePlan" width={168} height={56} className="h-auto w-42" />
         </div>
       </aside>
-      <header className="sticky top-0 z-20 border-b border-[var(--color-border)] bg-[var(--color-coach-bg)]/95 px-4 py-3 backdrop-blur lg:hidden">
-        <div className="mb-3 flex items-center justify-between">
+      <header className={cn("sticky top-0 z-20 border-b border-[var(--color-border)] bg-[var(--color-coach-bg)]/95 px-4 py-3 backdrop-blur lg:hidden print:hidden", compactHeader && "lg:block")}>
+        <div className="mb-3 flex items-center justify-between gap-3 lg:mb-2">
           <Link href="/coach" className="flex items-center gap-2 font-black focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
             <BrandMark logo={logo} clubName={clubName} mobile />
             DivePlan
           </Link>
-          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[var(--color-ink-muted)] shadow-sm">{active}</span>
+          <div className="flex items-center gap-2">
+            {compactHeader && <Link href="/coach/settings" aria-label="Profil et réglages" className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)] bg-white text-sm font-black text-[var(--color-navy)]">{user.firstName.slice(0, 1)}{user.lastName.slice(0, 1)}</Link>}
+            {compactHeader && <Link href="/coach/sessions/new" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#0969ef] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#0757cc] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><Plus className="h-4 w-4"/><span className="hidden sm:inline">Créer une séance</span></Link>}
+            {!compactHeader && <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[var(--color-ink-muted)] shadow-sm">{active}</span>}
+          </div>
         </div>
-        <nav className="coach-mobile-nav -mx-1 flex max-w-full gap-1 overflow-x-auto pb-1">
+        <nav aria-label="Navigation coach" className="coach-mobile-nav -mx-1 flex max-w-full gap-1 overflow-x-auto pb-1 lg:gap-2">
           {visibleNav.map((item) => {
             const Icon = item.icon;
             const isActive = active === item.label || active === item.match;
@@ -148,7 +152,7 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
           </SignOutWithPushCleanup>
         </div>
       </header>
-      <main className="min-w-0 lg:pl-68">
+      <main className={cn("min-w-0 lg:pl-68", compactHeader && "lg:pl-0")}>
         <div className="w-full px-3 py-4 sm:px-4 lg:px-5 xl:px-6">{children}</div>
       </main>
     </div>
