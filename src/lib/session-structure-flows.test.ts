@@ -220,6 +220,18 @@ test("form, draft and template flows share the transactional session-structure w
     assert.equal((await query(`SELECT 1 FROM "PoolDive"`)).rows.length, 0);
     assert.equal((await query(`SELECT title FROM "TrainingSession" WHERE id = $1`, [created.id])).rows[0].title, "Updated draft");
 
+    await assert.rejects(
+      (actionExports.updateDraftSessionFromBuilder as (id: string, input: unknown) => Promise<void>)(created.id, {
+        ...builderInput("Invalid published session", false, false),
+        status: "READY",
+        cooldown: { enabled: false, competitionEvaluation: false, title: "Reset", duration: 5, description: "" },
+        drylandBlocks: [],
+        poolBlocks: []
+      }),
+      /au moins un bloc/
+    );
+    assert.equal((await query(`SELECT status FROM "TrainingSession" WHERE id = $1`, [created.id])).rows[0].status, "DRAFT");
+
     const payload: SessionTemplatePayload = {
       version: 1, competitionEvaluationAtStart: false, title: "Template session", duration: 40, notes: null,
       blocks: [

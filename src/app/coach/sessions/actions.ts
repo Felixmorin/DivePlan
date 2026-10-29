@@ -130,15 +130,7 @@ export async function createDrylandExercise(input: QuickExerciseInput) {
 export async function createTrainingSession(input: CreateSessionInput) {
   const { user, coach, clubId } = await requireCoach();
   const data = sessionInputSchema.parse(input);
-  if (data.status === SessionStatus.READY) {
-    const invalidBlocks =
-      data.title.trim().length < 3 ||
-      (data.warmup.enabled && (!data.warmup.title.trim() || data.warmup.duration < 1)) ||
-      (data.cooldown.enabled && (!data.cooldown.title.trim() || data.cooldown.duration < 1)) ||
-      data.drylandBlocks.some((block) => !block.title.trim() || block.duration < 1 || block.exerciseIds.length === 0 || block.athleteIds.length === 0 || Object.values(block.exerciseOverrides).some((value) => (value.sets !== null && (value.sets < 1 || value.sets > 20)) || (value.reps !== null && (value.reps < 1 || value.reps > 200)) || (value.duration !== null && (value.duration < 1 || value.duration > 3600)))) ||
-      data.poolBlocks.some((block) => !block.title.trim() || block.duration < 1 || block.duration > 600 || block.athleteIds.length === 0 || block.sections.length === 0 || block.sections.some((section) => section.dives.length === 0 || section.dives.some((dive) => !dive.diveCode.trim() || !dive.diveName.trim() || !dive.position.trim() || dive.repetitions < 1)));
-    if (invalidBlocks) throw new Error("La séance contient des éléments à corriger avant publication.");
-  }
+  if (!data.templateId) validateSessionForPublication(data);
   const group = (await query<{id:string}>(`SELECT id FROM "TrainingGroup" WHERE id=$1 AND "clubId"=$2`,[data.groupId,clubId])).rows[0];
 
   if (!group) {
@@ -194,24 +186,6 @@ export async function createTrainingSession(input: CreateSessionInput) {
     redirect(`/coach/sessions/${session.id}?notice=session-created`);
   }
 
-  const blockEvaluationCount = Number(data.warmup.competitionEvaluation) + Number(data.cooldown.competitionEvaluation) +
-    data.drylandBlocks.filter((block) => block.competitionEvaluation).length +
-    data.poolBlocks.filter((block) => block.competitionEvaluation).length;
-  const isBlockPlacement = data.evaluationPlacement.startsWith("block:") && data.evaluationPlacement.length > 6;
-  const invalidEvaluationPlacement = data.evaluationPlacement === "none"
-    ? blockEvaluationCount !== 0
-    : data.evaluationPlacement === "start"
-      ? blockEvaluationCount !== 0
-      : !isBlockPlacement || data.warmup.competitionEvaluation || data.cooldown.competitionEvaluation || blockEvaluationCount !== 1;
-  if (data.status === SessionStatus.READY && invalidEvaluationPlacement) {
-    throw new Error("Choisis un seul moment pour l’évaluation de confiance.");
-  }
-
-  if (data.status === SessionStatus.READY && ((!data.warmup.enabled && !data.cooldown.enabled && data.drylandBlocks.length === 0 && data.poolBlocks.length === 0) ||
-      data.poolBlocks.some((block) => block.athleteIds.length === 0))) {
-    throw new Error("La seance doit contenir au moins un bloc et chaque bloc d'entrainement doit etre complet et assigne.");
-  }
-
   const poolAthleteIds = data.poolBlocks.flatMap((block) => block.athleteIds);
   const requestedAthleteIds = Array.from(new Set([...data.drylandBlocks.flatMap((block) => block.athleteIds), ...poolAthleteIds]));
   const [athletes, exercises] = await Promise.all([
@@ -226,9 +200,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
   const { drylandBlocks, poolBlocks } = prepareSessionBuilderBlocks(data, validAthleteIds, exercises.rows);
   const structureBlocks = buildSessionStructureBlocks(data, drylandBlocks, poolBlocks, allAthleteIds);
 
-  if (data.status === SessionStatus.READY && (allAthleteIds.length === 0 || drylandBlocks.some((block) => block.athleteIds.length === 0 || block.exercises.length !== block.exerciseIds.length) || poolBlocks.some((block) => block.athleteIds.length === 0))) {
-    throw new Error("La seance doit contenir au moins un athlete et un exercice valides.");
-  }
+  validateSessionReferencesForPublication(data, allAthleteIds, drylandBlocks, poolBlocks);
 
   const weekStart = startOfMontrealWeek(sessionDate);
   const session = await withTransaction(async (tx) => {
@@ -273,6 +245,7 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
   const existing = await getSessionSnapshot(sessionId, clubId);
   if (!existing || (existing.status !== SessionStatus.DRAFT && existing.status !== SessionStatus.READY)) throw new Error("Séance introuvable ou déjà démarrée pour ce club.");
   if (existing.status === SessionStatus.READY) data = { ...data, status: SessionStatus.READY };
+  validateSessionForPublication(data);
   const activity = await query<{ started: boolean }>(
     `SELECT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" WHERE "sessionId"=$1 AND ("startedAt" IS NOT NULL OR status<>'NOT_STARTED')) OR EXISTS (SELECT 1 FROM "AthleteDiveLog" WHERE "sessionId"=$1) OR EXISTS (SELECT 1 FROM "AthleteExerciseLog" WHERE "sessionId"=$1) AS started`,
     [sessionId]
@@ -296,6 +269,7 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
   );
   const { drylandBlocks, poolBlocks } = prepareSessionBuilderBlocks(data, validAthleteIds, exercises.rows);
   const structureBlocks = buildSessionStructureBlocks(data, drylandBlocks, poolBlocks, allAthleteIds);
+  validateSessionReferencesForPublication(data, allAthleteIds, drylandBlocks, poolBlocks);
   const weekStart = startOfMontrealWeek(sessionDate);
   const isPublishing = existing.status === SessionStatus.DRAFT && data.status === SessionStatus.READY;
   const isPublishedUpdate = existing.status === SessionStatus.READY && data.status === SessionStatus.READY;
@@ -1110,6 +1084,44 @@ type PreparedDrylandBlock = CreateSessionInput["drylandBlocks"][number] & {
   exercises: PreparedDrylandExercise[];
 };
 type PreparedPoolBlock = CreateSessionInput["poolBlocks"][number] & { athleteIds: string[] };
+
+function validateSessionForPublication(data: CreateSessionInput) {
+  if (data.status !== SessionStatus.READY) return;
+  const invalidBlocks =
+    data.title.trim().length < 3 ||
+    (data.warmup.enabled && (!data.warmup.title.trim() || data.warmup.duration < 1)) ||
+    (data.cooldown.enabled && (!data.cooldown.title.trim() || data.cooldown.duration < 1)) ||
+    data.drylandBlocks.some((block) => !block.title.trim() || block.duration < 1 || block.exerciseIds.length === 0 || block.athleteIds.length === 0 || Object.values(block.exerciseOverrides).some((value) => (value.sets !== null && (value.sets < 1 || value.sets > 20)) || (value.reps !== null && (value.reps < 1 || value.reps > 200)) || (value.duration !== null && (value.duration < 1 || value.duration > 3600)))) ||
+    data.poolBlocks.some((block) => !block.title.trim() || block.duration < 1 || block.duration > 600 || block.athleteIds.length === 0 || block.sections.length === 0 || block.sections.some((section) => section.dives.length === 0 || section.dives.some((dive) => !dive.diveCode.trim() || !dive.diveName.trim() || !dive.position.trim() || dive.repetitions < 1)));
+  if (invalidBlocks) throw new Error("La séance contient des éléments à corriger avant publication.");
+
+  const blockEvaluationCount = Number(data.warmup.competitionEvaluation) + Number(data.cooldown.competitionEvaluation) +
+    data.drylandBlocks.filter((block) => block.competitionEvaluation).length +
+    data.poolBlocks.filter((block) => block.competitionEvaluation).length;
+  const isBlockPlacement = data.evaluationPlacement.startsWith("block:") && data.evaluationPlacement.length > 6;
+  const invalidEvaluationPlacement = data.evaluationPlacement === "none"
+    ? blockEvaluationCount !== 0
+    : data.evaluationPlacement === "start"
+      ? blockEvaluationCount !== 0
+      : !isBlockPlacement || data.warmup.competitionEvaluation || data.cooldown.competitionEvaluation || blockEvaluationCount !== 1;
+  if (invalidEvaluationPlacement) throw new Error("Choisis un seul moment pour l’évaluation de confiance.");
+
+  if ((!data.warmup.enabled && !data.cooldown.enabled && data.drylandBlocks.length === 0 && data.poolBlocks.length === 0) ||
+      data.poolBlocks.some((block) => block.athleteIds.length === 0)) {
+    throw new Error("La seance doit contenir au moins un bloc et chaque bloc d'entrainement doit etre complet et assigne.");
+  }
+}
+
+function validateSessionReferencesForPublication(
+  data: CreateSessionInput,
+  allAthleteIds: string[],
+  drylandBlocks: PreparedDrylandBlock[],
+  poolBlocks: PreparedPoolBlock[]
+) {
+  if (data.status === SessionStatus.READY && (allAthleteIds.length === 0 || drylandBlocks.some((block) => block.athleteIds.length === 0 || block.exercises.length !== block.exerciseIds.length) || poolBlocks.some((block) => block.athleteIds.length === 0))) {
+    throw new Error("La seance doit contenir au moins un athlete et un exercice valides.");
+  }
+}
 
 function prepareSessionBuilderBlocks(
   data: CreateSessionInput,
