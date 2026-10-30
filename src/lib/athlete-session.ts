@@ -128,7 +128,11 @@ const currentAthleteUserProjection = (alias: "u" | "cu") => `jsonb_build_object(
   'role', ${alias}.role, 'clubId', ${alias}."clubId", 'passwordHash', ${alias}."passwordHash",
   'passwordSetAt', ${alias}."passwordSetAt", 'createdAt', ${alias}."createdAt")`;
 
-export async function getCurrentAthlete() {
+type CurrentAthleteWithoutCompetitionDives = Omit<CurrentAthlete, "competitionDives">;
+
+export function getCurrentAthlete(options: { includeCompetitionDives: false }): Promise<CurrentAthleteWithoutCompetitionDives | null>;
+export function getCurrentAthlete(options?: { includeCompetitionDives?: true }): Promise<CurrentAthlete | null>;
+export async function getCurrentAthlete(options: { includeCompetitionDives?: boolean } = {}): Promise<CurrentAthlete | CurrentAthleteWithoutCompetitionDives | null> {
   const user = await getCurrentUser();
 
   if (!user || user.role !== "ATHLETE") {
@@ -142,8 +146,12 @@ export async function getCurrentAthlete() {
   const base=(await query<{athlete:CurrentAthlete;user:CurrentAthlete["user"];club:CurrentAthlete["club"];group:CurrentAthlete["group"]}>(`SELECT to_jsonb(a) AS athlete,${currentAthleteUserProjection("u")} AS "user",to_jsonb(c) AS club,to_jsonb(g) AS "group" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" JOIN "Club" c ON c.id=a."clubId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a."userId"=$1`,[user.id])).rows[0];
   if(!base)return null;
   const coach=base.group?.coachId?(await query<{coach:NonNullable<CurrentAthlete["group"]>["coach"];user:CurrentUser}>(`SELECT to_jsonb(co) AS coach,${currentAthleteUserProjection("cu")} AS "user" FROM "Coach" co JOIN "User" cu ON cu.id=co."userId" WHERE co.id=$1`,[base.group.coachId])).rows[0]:null;
+  const profile = {...base.athlete,user:base.user,club:base.club,group:base.group?{...base.group,coach:coach?{...coach.coach,user:coach.user}:null}:null} as CurrentAthleteWithoutCompetitionDives;
+  // Session mutations and progress saves do not use this list. Keep the default
+  // full profile for competition, badges and edit pages that do consume it.
+  if (options.includeCompetitionDives === false) return profile;
   const competitionDives=(await query<CurrentAthlete["competitionDives"][number]>(`SELECT d.* FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" WHERE d."athleteId"=$1 AND l.position=0 ORDER BY d.height,d.position,d."createdAt"`,[base.athlete.id])).rows;
-  return {...base.athlete,user:base.user,club:base.club,group:base.group?{...base.group,coach:coach?{...coach.coach,user:coach.user}:null}:null,competitionDives} as CurrentAthlete;
+  return {...profile,competitionDives};
 }
 
 export async function getAssignedReadySession(athleteId: string): Promise<{id:string;date:Date;title:string;duration:number;sessionStatus:string;completions:{status:string}[];blocks:{estimatedVolume:number;type:string}[]}|null> {

@@ -5,7 +5,7 @@ import test from "node:test";
 import ts from "typescript";
 import { PGlite } from "@electric-sql/pglite";
 
-test("current athlete excludes disabled photos from SQL without changing profile or access", async (t) => {
+test("current athlete preserves profile and access while skipping unused photos and competition lists", async (t) => {
   const db = new PGlite();
   try {
     await db.exec(`
@@ -78,6 +78,96 @@ test("current athlete excludes disabled photos from SQL without changing profile
     assert.ok(beforeBytes - afterBytes >= 1_024_000);
     t.diagnostic(`Synthetic SQL row JSON: ${beforeBytes} -> ${afterBytes} bytes; three reads before and after`);
 
+    // Compare both modes against the same list, including realistic additional
+    // primary entries. The default remains full for profile consumers.
+    await db.exec(`INSERT INTO "CompetitionDive"
+      SELECT 'extra-' || n, 'athlete-a', 'primary', 'THREE_METER', n, NOW()
+      FROM generate_series(1, 11) AS n`);
+    bytes = 0;
+    reads.length = 0;
+    const full = await get();
+    assert.ok(full);
+    const fullBytes = bytes;
+    assert.equal(full.competitionDives.length, 12);
+    assert.equal(reads.length, 3);
+    bytes = 0;
+    reads.length = 0;
+    const light = await get({ includeCompetitionDives: false });
+    assert.ok(light);
+    const lightBytes = bytes;
+    const { competitionDives: omitted, ...profileOnly } = full;
+    assert.equal(omitted.length, 12);
+    assert.deepEqual(JSON.parse(JSON.stringify(light)), JSON.parse(JSON.stringify(profileOnly)));
+    assert.equal("competitionDives" in light, false, "an omitted list cannot masquerade as an empty list");
+    assert.equal(reads.length, 2);
+    assert.ok(reads.every((sql) => !sql.includes('"CompetitionDive"')));
+    assert.ok(fullBytes > lightBytes);
+    t.diagnostic(`Synthetic 12-dive context SQL row JSON: ${fullBytes} -> ${lightBytes} bytes; 3 -> 2 reads per call (auth excluded)`);
+
+    await t.test("progress endpoint saves the same payload without reading the competition list", async () => {
+      await db.exec(`
+        CREATE TABLE "TrainingSession" (id text, date timestamp, status text);
+        CREATE TABLE "AthleteSessionCompletion" ("sessionId" text, "athleteId" text, status text);
+        INSERT INTO "TrainingSession" VALUES ('session-a', NOW(), 'IN_PROGRESS');
+        INSERT INTO "AthleteSessionCompletion" VALUES ('session-a', 'athlete-a', 'IN_PROGRESS');
+      `);
+      const saved: unknown[][] = [];
+      const blocks = [{ id: "block-a" }];
+      // Assignment/persistence boundaries are stubbed; profile and route SQL run
+      // in PGlite. Existing progress tests exercise the persistence itself.
+      const routeDependencies: Record<string, unknown> = {
+        "next/server": { NextResponse: { json: (value: unknown, init?: ResponseInit) => Response.json(value, init) } },
+        "@/lib/athlete-session": { getCurrentAthlete: (options: { includeCompetitionDives: false }) => {
+          assert.equal(options?.includeCompetitionDives, false);
+          return get(options);
+        } },
+        "@/lib/athlete-progress": {
+          getAssignedSessionBlocks: async (sessionId: string, athleteId: string) =>
+            sessionId === "session-a" && athleteId === "athlete-a" ? blocks : [],
+          persistAthleteProgress: async (...args: unknown[]) => { saved.push(args); }
+        },
+        "@/lib/db": { query },
+        "@/lib/session-availability": { isSessionStartAvailable: () => true, SESSION_NOT_STARTED_MESSAGE: "not started" }
+      };
+      const route: { POST?: (request: Request) => Promise<Response> } = {};
+      runInNewContext(ts.transpileModule(readFileSync("src/app/api/athlete/session-progress/route.ts", "utf8"), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+      }).outputText, { exports: route, require: (name: string) => {
+        assert.ok(name in routeDependencies, `Unexpected route dependency ${name}`);
+        return routeDependencies[name];
+      } });
+      const payload = { sessionId: "session-a", exercises: [{ exerciseId: "exercise-a", completed: true }],
+        dives: [{ poolDiveId: "dive-a", repetitionsCompleted: 5, goldenRepetitions: 1 }],
+        sessionFeedback: { rating: "5", note: "Synthetic" } };
+      const request = () => new Request("https://example.test/api/athlete/session-progress", {
+        method: "POST", body: JSON.stringify(payload)
+      });
+      reads.length = 0;
+      const response = await route.POST!(request());
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { ok: true });
+      assert.deepEqual(JSON.parse(JSON.stringify(saved)), [[payload, "athlete-a", blocks]]);
+      assert.ok(reads.every((sql) => !sql.includes('"CompetitionDive"')));
+      assert.equal((await route.POST!(new Request("https://example.test/api/athlete/session-progress", {
+        method: "POST", body: "invalid-json"
+      }))).status, 400);
+      await db.exec(`UPDATE "TrainingSession" SET status='DRAFT'`);
+      assert.equal((await route.POST!(request())).status, 409);
+      await db.exec(`UPDATE "TrainingSession" SET status='IN_PROGRESS';
+        INSERT INTO "User" SELECT 'user-c', "firstName", "lastName", email, username, avatar, role,
+          "clubId", "passwordHash", "passwordSetAt", "createdAt" FROM "User" WHERE id='user-a';
+        INSERT INTO "Athlete" SELECT 'athlete-c', 'user-c', "clubId", "groupId", "birthDate", level, active
+          FROM "Athlete" WHERE id='athlete-a'`);
+      identity = { id: "user-c", role: "ATHLETE", passwordSetAt: new Date() };
+      assert.equal((await route.POST!(request())).status, 403, "another athlete in the same club is refused");
+      identity = { id: "user-b", role: "ATHLETE", passwordSetAt: new Date() };
+      assert.equal((await route.POST!(request())).status, 403);
+      identity = null;
+      assert.equal((await route.POST!(request())).status, 401);
+      assert.equal(saved.length, 1, "other identities cannot persist this session");
+      identity = { id: "user-a", role: "ATHLETE", passwordSetAt: new Date() };
+    });
+
     for (const avatar of [null, "storage:synthetic", "https://example.test/photo.png"]) {
       await db.query(`UPDATE "User" SET avatar=$1`, [avatar]);
       const profile = await get();
@@ -92,16 +182,26 @@ test("current athlete excludes disabled photos from SQL without changing profile
     assert.equal(other?.group, null);
     assert.equal(other?.competitionDives[0].id, "dive-b");
     assert.equal(reads.length, 2, "no coach lookup without a group");
+    reads.length = 0;
+    const otherLight = await get({ includeCompetitionDives: false });
+    assert.equal(otherLight?.id, "athlete-b");
+    assert.equal(otherLight?.clubId, "club-b");
+    assert.equal(otherLight?.group, null);
+    assert.equal(reads.length, 1);
+    assert.ok(!JSON.stringify(otherLight).includes("athlete-a"));
     identity = { ...identity, id: "missing" };
     assert.equal(await get(), null);
+    assert.equal(await get({ includeCompetitionDives: false }), null);
     for (const invalid of [null, { id: "user-a", role: "COACH", passwordSetAt: new Date() }]) {
       identity = invalid;
       reads.length = 0;
       assert.equal(await get(), null);
+      assert.equal(await get({ includeCompetitionDives: false }), null);
       assert.equal(reads.length, 0, "unauthenticated/wrong role cannot read profiles");
     }
     identity = { id: "user-a", role: "ATHLETE", passwordSetAt: null };
     await assert.rejects(get, /REDIRECT \/change-password/);
+    await assert.rejects(() => get({ includeCompetitionDives: false }), /REDIRECT \/change-password/);
     assert.equal(reads.length, 0, "password setup guard runs before SQL");
   } finally { await db.close(); }
 });

@@ -5,7 +5,7 @@ import { query } from "@/lib/db";
 import { isSessionStartAvailable, SESSION_NOT_STARTED_MESSAGE } from "@/lib/session-availability";
 
 export async function POST(request: Request) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
 
   if (!athlete) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
