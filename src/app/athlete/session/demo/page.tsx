@@ -11,7 +11,7 @@ export default async function AthleteSessionDemoPage() {
     notFound();
   }
 
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
 
   if (!athlete) {
     redirect("/login");

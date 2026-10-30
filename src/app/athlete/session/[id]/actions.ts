@@ -27,7 +27,7 @@ const competitionEvaluationSchema = z.object({
 });
 
 export async function saveCompetitionDiveEvaluation(input: z.infer<typeof competitionEvaluationSchema>) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
   if (!athlete) throw new Error("Aucun athlete actif trouve.");
   const data = competitionEvaluationSchema.parse(input);
   const sessionResult = await query<{ id: string }>(
@@ -66,7 +66,7 @@ export async function saveCompetitionDiveEvaluation(input: z.infer<typeof compet
 }
 
 export async function saveAthleteDiveNote(sessionId: string, poolDiveId: string, note: string) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
 
   if (!athlete) {
     throw new Error("Aucun athlete actif trouve.");
@@ -97,7 +97,7 @@ export async function saveAthleteDiveNote(sessionId: string, poolDiveId: string,
 }
 
 export async function startAthleteSession(sessionId: string) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
 
   if (!athlete) {
     throw new Error("Aucun athlete actif trouve.");
@@ -135,7 +135,7 @@ export async function startAthleteSession(sessionId: string) {
 }
 
 export async function saveAthleteProgress(payload: SaveAthleteProgressPayload) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
 
   if (!athlete) {
     throw new Error("Aucun athlete actif trouve.");
@@ -157,7 +157,7 @@ export async function saveAthleteProgress(payload: SaveAthleteProgressPayload) {
 }
 
 export async function recordAthleteSessionPreview(sessionId: string) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
 
   if (!athlete) {
     throw new Error("Aucun athlete actif trouve.");
@@ -184,7 +184,7 @@ export async function recordAthleteSessionPreview(sessionId: string) {
 }
 
 export async function completeAthleteSession(payload: CompleteSessionPayload) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
 
   if (!athlete) {
     throw new Error("Aucun athlete actif trouve.");
@@ -296,7 +296,7 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
 }
 
 async function assertSessionStartAvailable(sessionId: string) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
   if (!athlete) throw new Error("Aucun athlete actif trouve.");
   const sessionResult = await query<{ date: Date; status: string; athleteStatus: string | null }>(
     `SELECT s.date, s.status, c.status AS "athleteStatus" FROM "TrainingSession" s

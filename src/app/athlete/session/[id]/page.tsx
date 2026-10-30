@@ -7,7 +7,7 @@ import { withDatabaseEgressComponent } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function AthleteSessionPage({ params }: { params: Promise<{ id: string }> }) {
-  const [{ id }, athlete] = await withDatabaseEgressComponent("initial_session_load", () => Promise.all([params, getCurrentAthlete()]), "/athlete/session/:id");
+  const [{ id }, athlete] = await withDatabaseEgressComponent("initial_session_load", () => Promise.all([params, getCurrentAthlete({ includeCompetitionDives: false })]), "/athlete/session/:id");
 
   if (!athlete) {
     redirect("/login");
