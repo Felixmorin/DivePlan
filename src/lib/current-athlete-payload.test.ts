@@ -48,7 +48,7 @@ test("current athlete preserves profile and access while skipping unused photos 
       "next/navigation": { redirect: (path: string) => { throw new Error(`REDIRECT ${path}`); } },
       "@/lib/current-user": { getCurrentUser: async () => identity }, "@/lib/db": { query }
     };
-    const exports: { getCurrentAthlete?: typeof import("./athlete-session").getCurrentAthlete } = {};
+    const exports: { getCurrentAthlete?: typeof import("./athlete-session").getCurrentAthlete; getCurrentAthleteIdentity?: () => Promise<{ id: string } | null> } = {};
     runInNewContext(ts.transpileModule(readFileSync("src/lib/athlete-session.ts", "utf8"), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
     }).outputText, { exports, require: (name: string) => {
@@ -56,6 +56,7 @@ test("current athlete preserves profile and access while skipping unused photos 
       return dependencies[name];
     } });
     const get = exports.getCurrentAthlete!;
+    const getIdentity = exports.getCurrentAthleteIdentity!;
     const actual = await get();
     assert.ok(actual);
     assert.equal(reads.length, 3, "query count is unchanged");
@@ -104,7 +105,15 @@ test("current athlete preserves profile and access while skipping unused photos 
     assert.ok(fullBytes > lightBytes);
     t.diagnostic(`Synthetic 12-dive context SQL row JSON: ${fullBytes} -> ${lightBytes} bytes; 3 -> 2 reads per call (auth excluded)`);
 
-    await t.test("progress endpoint saves the same payload without reading the competition list", async () => {
+    bytes = 0;
+    reads.length = 0;
+    assert.deepEqual(JSON.parse(JSON.stringify(await getIdentity())), { id: full.id });
+    const identityBytes = bytes;
+    assert.equal(reads.length, 1);
+    assert.ok(reads.every((sql) => !/TrainingGroup|Coach|CompetitionDive/.test(sql)));
+    t.diagnostic(`Synthetic save context SQL row JSON: ${lightBytes} -> ${identityBytes} bytes; 2 -> 1 reads (getCurrentUser/auth excluded)`);
+
+    await t.test("progress endpoint saves the same payload using only athlete identity", async () => {
       await db.exec(`
         CREATE TABLE "TrainingSession" (id text, date timestamp, status text);
         CREATE TABLE "AthleteSessionCompletion" ("sessionId" text, "athleteId" text, status text);
@@ -117,10 +126,7 @@ test("current athlete preserves profile and access while skipping unused photos 
       // in PGlite. Existing progress tests exercise the persistence itself.
       const routeDependencies: Record<string, unknown> = {
         "next/server": { NextResponse: { json: (value: unknown, init?: ResponseInit) => Response.json(value, init) } },
-        "@/lib/athlete-session": { getCurrentAthlete: (options: { includeCompetitionDives: false }) => {
-          assert.equal(options?.includeCompetitionDives, false);
-          return get(options);
-        } },
+        "@/lib/athlete-session": { getCurrentAthleteIdentity: getIdentity },
         "@/lib/athlete-progress": {
           getAssignedSessionBlocks: async (sessionId: string, athleteId: string) =>
             sessionId === "session-a" && athleteId === "athlete-a" ? blocks : [],
@@ -147,7 +153,8 @@ test("current athlete preserves profile and access while skipping unused photos 
       assert.equal(response.status, 200);
       assert.deepEqual(await response.json(), { ok: true });
       assert.deepEqual(JSON.parse(JSON.stringify(saved)), [[payload, "athlete-a", blocks]]);
-      assert.ok(reads.every((sql) => !sql.includes('"CompetitionDive"')));
+      assert.ok(reads.every((sql) => !/TrainingGroup|Coach|CompetitionDive/.test(sql)));
+      assert.equal(reads.length, 2, "identity and session status only; assignment/persistence stubbed");
       assert.equal((await route.POST!(new Request("https://example.test/api/athlete/session-progress", {
         method: "POST", body: "invalid-json"
       }))).status, 400);
@@ -182,6 +189,7 @@ test("current athlete preserves profile and access while skipping unused photos 
     assert.equal(other?.group, null);
     assert.equal(other?.competitionDives[0].id, "dive-b");
     assert.equal(reads.length, 2, "no coach lookup without a group");
+    assert.equal((await getIdentity())?.id, "athlete-b");
     reads.length = 0;
     const otherLight = await get({ includeCompetitionDives: false });
     assert.equal(otherLight?.id, "athlete-b");
@@ -189,19 +197,61 @@ test("current athlete preserves profile and access while skipping unused photos 
     assert.equal(otherLight?.group, null);
     assert.equal(reads.length, 1);
     assert.ok(!JSON.stringify(otherLight).includes("athlete-a"));
+    await db.exec(`UPDATE "Athlete" SET "clubId"='missing-club' WHERE id='athlete-b'`);
+    assert.equal(await getIdentity(), null, "missing club is refused as in the full loader");
+    assert.equal(await get(), null);
+    await db.exec(`UPDATE "Athlete" SET "clubId"='club-b' WHERE id='athlete-b'`);
     identity = { ...identity, id: "missing" };
     assert.equal(await get(), null);
     assert.equal(await get({ includeCompetitionDives: false }), null);
+    assert.equal(await getIdentity(), null);
     for (const invalid of [null, { id: "user-a", role: "COACH", passwordSetAt: new Date() }]) {
       identity = invalid;
       reads.length = 0;
       assert.equal(await get(), null);
       assert.equal(await get({ includeCompetitionDives: false }), null);
+      assert.equal(await getIdentity(), null);
       assert.equal(reads.length, 0, "unauthenticated/wrong role cannot read profiles");
     }
     identity = { id: "user-a", role: "ATHLETE", passwordSetAt: null };
+    await assert.rejects(getIdentity, /REDIRECT \/change-password/);
     await assert.rejects(get, /REDIRECT \/change-password/);
     await assert.rejects(() => get({ includeCompetitionDives: false }), /REDIRECT \/change-password/);
     assert.equal(reads.length, 0, "password setup guard runs before SQL");
+    await t.test("identity uses the real current-user guards on each request", async () => {
+      await db.exec(`ALTER TABLE "User" ADD COLUMN "accessEnabled" boolean DEFAULT true`);
+      let sessionUser: { id?: string; email?: string } | null = { id: "user-a" };
+      const users: { getCurrentUser?: typeof import("./current-user").getCurrentUser } = {};
+      const authDependencies: Record<string, unknown> = {
+        react: { cache: (fn: unknown) => fn },
+        "next/navigation": dependencies["next/navigation"],
+        "next/headers": { headers: async () => new Headers() },
+        "@/auth": { auth: async () => sessionUser ? { user: sessionUser } : null },
+        "@/lib/db": { query, setDatabaseEgressRoute() {}, setDatabaseEgressClub() {},
+          withDatabaseEgressComponent: (_name: string, fn: () => unknown) => fn() }
+      };
+      runInNewContext(ts.transpileModule(readFileSync("src/lib/current-user.ts", "utf8"), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+      }).outputText, { exports: users, process: { env: { NODE_ENV: "production" } }, require: (name: string) => {
+        assert.ok(name in authDependencies, `Unexpected auth dependency ${name}`);
+        return authDependencies[name];
+      } });
+      (dependencies["@/lib/current-user"] as { getCurrentUser: unknown }).getCurrentUser = users.getCurrentUser;
+      for (const [session, expected] of [
+        [{ id: "user-a" }, "athlete-a"], [{ id: "user-b" }, "athlete-b"],
+        [{ email: "A@EXAMPLE.TEST" }, "athlete-a"], [{ id: "coach-user" }, null],
+        [{ id: "missing", email: "a@example.test" }, null], [null, null]
+      ] as const) {
+        sessionUser = session;
+        assert.equal((await getIdentity())?.id ?? null, expected);
+      }
+      sessionUser = { id: "user-a" };
+      await db.exec(`UPDATE "User" SET "accessEnabled"=false WHERE id='user-a'`);
+      assert.equal(await getIdentity(), null);
+      await db.exec(`UPDATE "User" SET "accessEnabled"=true, "passwordSetAt"=NULL WHERE id='user-a'`);
+      await assert.rejects(getIdentity, /REDIRECT \/change-password/);
+      await db.exec(`UPDATE "User" SET "passwordSetAt"=NOW() WHERE id='user-a'`);
+      assert.equal((await getIdentity())?.id, "athlete-a", "no shared authorization cache");
+    });
   } finally { await db.close(); }
 });
