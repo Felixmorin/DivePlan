@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function PrintPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { coach } = await requireCoach();
-  const session = await getCoachSession(id);
+  const session = await getCoachSession(id, { includeResults: false });
   const showCoachNotes = coach.printShowCoachNotes;
   const showAthleteNames = coach.printShowAthleteNames;
   const repetitionChecks = coach.printRepetitionChecks;

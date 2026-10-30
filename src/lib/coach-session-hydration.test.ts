@@ -4,7 +4,6 @@ import { runInNewContext } from "node:vm";
 import test from "node:test";
 import ts from "typescript";
 import { PGlite } from "@electric-sql/pglite";
-import type { CoachSession } from "./coach-session";
 
 // Run the actual getCoachSession SQL with synthetic rows. Auth, the snapshot
 // loader and due-session mutations are controlled at their module boundaries.
@@ -53,6 +52,7 @@ test("batched session hydration preserves rows and isolation with two detail que
     let clubId = "club-a";
     let authorized = true;
     const queries: Array<{ sql: string; values: unknown[] }> = [];
+    let resultBytes = 0;
     const snapshot = { id: "session", weekId: "week", coachId: "coach", notes: "Synthetic summary", status: "COMPLETED", week: { clubId: "club-a" }, blocks };
     let dbQueue = Promise.resolve();
     const dependencies: Record<string, unknown> = {
@@ -68,12 +68,16 @@ test("batched session hydration preserves rows and isolation with two detail que
       } },
       "@/lib/db": { query: (sql: string, values: unknown[]) => {
         queries.push({ sql, values });
-        const result = dbQueue.then(() => db.query(sql, values));
+        const result = dbQueue.then(async () => {
+          const response = await db.query(sql, values);
+          resultBytes += Buffer.byteLength(JSON.stringify(response.rows));
+          return response;
+        });
         dbQueue = result.then(() => undefined, () => undefined);
         return result;
       } }
     };
-    const exports: { getCoachSession?: (id: string) => Promise<CoachSession> } = {};
+    const exports: { getCoachSession?: typeof import("./coach-session").getCoachSession } = {};
     runInNewContext(ts.transpileModule(readFileSync("src/lib/coach-session.ts", "utf8"), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
     }).outputText, { exports, require: (name: string) => {
@@ -111,16 +115,41 @@ test("batched session hydration preserves rows and isolation with two detail que
     assert.doesNotMatch(JSON.stringify(result), /foreign/);
     t.diagnostic(`Synthetic: ${blocks.length} blocks, identical detail rows; hydration SELECTs ${blocks.length * 2} -> ${detailQueries.length}. Snapshot and other queries excluded; no measured latency, egress or FOT gain.`);
 
+    await t.test("print plan skips every result read and preserves all plan fields", async () => {
+      await db.exec(`INSERT INTO "AthleteDiveLog"
+        SELECT 'synthetic-' || n, 'athlete-a', 'session', 'dive', NULL, '101B', 4, 2, 'GOOD', 'Synthetic result note', NOW()
+        FROM generate_series(1, 1200) AS n;
+        INSERT INTO "AthleteExerciseLog"
+        SELECT 'synthetic-exercise-' || n, 'athlete-a', 'session', 'exercise-a', true, 'GOOD', 'Synthetic feedback'
+        FROM generate_series(1, 300) AS n;`);
+      queries.length = 0; resultBytes = 0;
+      const full = await get("session");
+      const beforeBytes = resultBytes; const beforeQueries = queries.length;
+      queries.length = 0; resultBytes = 0;
+      const plan = await get("session", { includeResults: false });
+      const afterBytes = resultBytes; const afterQueries = queries.length;
+      const { completions, absences, diveLogs, exerciseLogs, ...expectedPlan } = full;
+      assert.equal(completions.length, 1); assert.equal(absences.length, 1);
+      assert.equal(diveLogs.length, 1201); assert.equal(exerciseLogs.length, 301);
+      assert.equal(JSON.stringify(plan), JSON.stringify(expectedPlan));
+      assert.equal(beforeQueries, 7); assert.equal(afterQueries, 3);
+      assert.ok(queries.every(({ sql }) => !/FROM "Athlete(?:SessionCompletion|SessionAbsence|DiveLog|ExerciseLog)"/.test(sql)));
+      assert.ok(afterBytes < beforeBytes / 2);
+      t.diagnostic(`Synthetic print hydration, same 12-block session with 1201 dive logs and 301 exercise logs: SQL reads ${beforeQueries} -> ${afterQueries}, parsed rows JSON ${beforeBytes} -> ${afterBytes} bytes. Excludes auth/snapshot queries, PostgreSQL protocol/TLS, HTML/RSC/JS, latency and billing.`);
+    });
+
     queries.length = 0;
     assert.equal((await get("empty")).blocks.length, 0);
     assert.equal(queries.filter(({ sql }) => /FROM "SessionBlockAssignment"|FROM "DrylandBlockExercise"/.test(sql)).length, 0);
     queries.length = 0;
     clubId = "club-b";
     await assert.rejects(get("session"), /NOT_FOUND/);
+    await assert.rejects(get("session", { includeResults: false }), /NOT_FOUND/);
     assert.equal(queries.length, 0, "no detail reads for a session outside the club");
     clubId = "club-a";
     authorized = false;
     await assert.rejects(get("session"), /FORBIDDEN/);
+    await assert.rejects(get("session", { includeResults: false }), /FORBIDDEN/);
     assert.equal(queries.length, 0);
   } finally { await db.close(); }
 });
