@@ -684,6 +684,40 @@ export async function markAthleteSessionCompleted(formData: FormData) {
   revalidatePath("/athlete/profile");
 }
 
+export async function finishTrainingSession(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const session = (await query<{ id: string; title: string }>(
+    `SELECT s.id,s.title FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId"
+     WHERE s.id=$1 AND w."clubId"=$2 AND s.status='IN_PROGRESS'`, [sessionId, clubId]
+  )).rows[0];
+  if (!session) throw new Error("Séance en cours introuvable pour ce club.");
+  const completedAt = new Date();
+  await withTransaction(async (tx) => {
+    await tx.query(`UPDATE "TrainingSession" SET status='COMPLETED' WHERE id=$1 AND status='IN_PROGRESS'`, [sessionId]);
+    await tx.query(
+      `INSERT INTO "AthleteSessionCompletion" ("athleteId","sessionId","startedAt","completedAt",status)
+       SELECT DISTINCT a."athleteId",s.id,s.date,
+         CASE WHEN absence."athleteId" IS NULL THEN $2::timestamp ELSE NULL::timestamp END,
+         CASE WHEN absence."athleteId" IS NULL THEN 'COMPLETED'::"CompletionStatus" ELSE 'SKIPPED'::"CompletionStatus" END
+       FROM "SessionBlockAssignment" a JOIN "SessionBlock" b ON b.id=a."sessionBlockId"
+       JOIN "TrainingSession" s ON s.id=b."sessionId"
+       LEFT JOIN "AthleteSessionAbsence" absence ON absence."sessionId"=s.id AND absence."athleteId"=a."athleteId"
+       WHERE s.id=$1
+       ON CONFLICT ("athleteId","sessionId") DO UPDATE SET
+         "startedAt"=COALESCE("AthleteSessionCompletion"."startedAt",EXCLUDED."startedAt"),
+         "completedAt"=EXCLUDED."completedAt",status=EXCLUDED.status`, [sessionId, completedAt]
+    );
+  });
+  await trackEvent({ type: "session.completed", message: `Séance terminée manuellement par le coach: ${session.title}`, clubId, userId: user.id, metadata: { sessionId, completedByCoach: true } });
+  revalidatePath("/coach");
+  revalidatePath("/coach/sessions");
+  revalidatePath(`/coach/sessions/${sessionId}`);
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/progress");
+  revalidatePath("/athlete/profile");
+}
+
 export async function updateSessionDive(formData: FormData) {
   const { clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");

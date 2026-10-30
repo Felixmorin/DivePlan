@@ -105,7 +105,7 @@ export default async function CoachDashboard() {
     <CoachShell active="Accueil" compactHeader>
       <div className="mb-5 px-1 print:hidden">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-[var(--color-navy)] sm:text-4xl">Bonjour {user.firstName} 👋</h1>
+          <h1 className="text-3xl font-black tracking-tight text-[var(--color-navy)] sm:text-4xl">Bonjour {user.firstName},</h1>
           <p className="mt-1 text-base font-medium text-[var(--color-ink-muted)]">Voici ce qui se passe avec tes groupes cette semaine.</p>
         </div>
       </div>
@@ -188,7 +188,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
     <CoachShell active="Accueil" compactHeader>
       <div className="mb-5 flex flex-col justify-between gap-2 px-1 sm:flex-row sm:items-end print:hidden">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-[var(--color-navy)] sm:text-4xl">Bonjour {userName.split(" ")[0]} 👋</h1>
+          <h1 className="text-3xl font-black tracking-tight text-[var(--color-navy)] sm:text-4xl">Bonjour {userName.split(" ")[0]},</h1>
           <p className="mt-1 text-base font-medium text-[var(--color-ink-muted)]">Voici ce qui se passe avec tes groupes cette semaine.</p>
         </div>
       </div>
@@ -248,7 +248,7 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false, recent =
     <Card className="relative h-full min-h-[301px] overflow-hidden rounded-[14px] border-[#082e50] bg-[radial-gradient(ellipse_at_96%_0%,rgba(8,181,200,.34),transparent_36%),linear-gradient(112deg,#071a38_0%,#07345d_58%,#063e70_100%)] text-white shadow-[0_10px_26px_rgba(3,27,54,.12)]">
       <CardContent className="relative flex min-h-[301px] flex-col p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-bold uppercase tracking-[.04em] text-[#16d9e5]">{recent ? "Dernière séance terminée" : "Prochaine séance"}</p>
+          <p className="text-xs font-bold uppercase tracking-[.04em] text-[#16d9e5]">{recent ? "Dernière séance" : "Prochaine séance"}</p>
         </div>
         <h2 className="mt-2 text-[1.75rem] font-extrabold leading-tight text-white sm:text-[2rem]">{session.title}</h2>
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-medium text-[#e4effa] sm:text-[15px]">
