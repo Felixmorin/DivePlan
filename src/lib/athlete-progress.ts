@@ -99,7 +99,7 @@ export async function persistAthleteProgress<T = void>(
     await tx.query(
       `INSERT INTO "AthleteSessionCompletion" ("athleteId", "sessionId", "startedAt", status, rating, note)
        VALUES ($1, $2, $3, 'IN_PROGRESS', $4, $5)
-       ON CONFLICT ("athleteId", "sessionId") DO UPDATE SET "startedAt" = EXCLUDED."startedAt",
+       ON CONFLICT ("athleteId", "sessionId") DO UPDATE SET "startedAt" = COALESCE("AthleteSessionCompletion"."startedAt", EXCLUDED."startedAt"),
          rating = CASE WHEN $6 THEN EXCLUDED.rating ELSE "AthleteSessionCompletion".rating END,
          note = CASE WHEN $6 THEN EXCLUDED.note ELSE "AthleteSessionCompletion".note END`,
       [athleteId, payload.sessionId, new Date(), rating, note, feedbackProvided]
