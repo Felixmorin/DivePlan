@@ -128,20 +128,33 @@ const currentAthleteUserProjection = (alias: "u" | "cu") => `jsonb_build_object(
   'role', ${alias}.role, 'clubId', ${alias}."clubId", 'passwordHash', ${alias}."passwordHash",
   'passwordSetAt', ${alias}."passwordSetAt", 'createdAt', ${alias}."createdAt")`;
 
+// Keep the same authentication/password guard for both profile and identity reads.
+async function getAuthenticatedAthleteUser() {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "ATHLETE") return null;
+  if (!user.passwordSetAt) redirect("/change-password");
+  return user;
+}
+
+/** Progress saves need only the athlete ID, not the group, coach or profile. */
+export async function getCurrentAthleteIdentity(): Promise<{ id: string } | null> {
+  const user = await getAuthenticatedAthleteUser();
+  if (!user) return null;
+  // Preserve the profile loader's requirement for an existing athlete and club.
+  const { rows } = await query<{ id: string }>(
+    `SELECT a.id FROM "Athlete" a JOIN "Club" c ON c.id=a."clubId" WHERE a."userId"=$1`,
+    [user.id]
+  );
+  return rows[0] ?? null;
+}
+
 type CurrentAthleteWithoutCompetitionDives = Omit<CurrentAthlete, "competitionDives">;
 
 export function getCurrentAthlete(options: { includeCompetitionDives: false }): Promise<CurrentAthleteWithoutCompetitionDives | null>;
 export function getCurrentAthlete(options?: { includeCompetitionDives?: true }): Promise<CurrentAthlete | null>;
 export async function getCurrentAthlete(options: { includeCompetitionDives?: boolean } = {}): Promise<CurrentAthlete | CurrentAthleteWithoutCompetitionDives | null> {
-  const user = await getCurrentUser();
-
-  if (!user || user.role !== "ATHLETE") {
-    return null;
-  }
-
-  if (!user.passwordSetAt) {
-    redirect("/change-password");
-  }
+  const user = await getAuthenticatedAthleteUser();
+  if (!user) return null;
 
   const base=(await query<{athlete:CurrentAthlete;user:CurrentAthlete["user"];club:CurrentAthlete["club"];group:CurrentAthlete["group"]}>(`SELECT to_jsonb(a) AS athlete,${currentAthleteUserProjection("u")} AS "user",to_jsonb(c) AS club,to_jsonb(g) AS "group" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" JOIN "Club" c ON c.id=a."clubId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a."userId"=$1`,[user.id])).rows[0];
   if(!base)return null;
