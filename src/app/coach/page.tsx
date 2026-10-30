@@ -99,9 +99,9 @@ export default async function CoachDashboard() {
     return map;
   }, new Map<string, typeof recentCompletions>());
   const dashboardAlerts: DashboardAlert[] = [
-    ...(athletesWithoutSession.length ? [{ id: "athletes-without-session", title: `${athletesWithoutSession.length} athlète${athletesWithoutSession.length === 1 ? "" : "s"} sans séance cette semaine`, detail: formatAthleteNames(athletesWithoutSession.map((athlete) => athlete.user)), href: "/coach/athletes", tone: "rose" as const }] : []),
+    ...athletesWithoutSession.map((athlete) => ({ id: `no-session-${athlete.id}`, title: "Séance à planifier", detail: `${athlete.user.firstName} ${athlete.user.lastName} · ${athlete.group?.name ?? "Sans groupe"}`, href: `/coach/athletes/${athlete.id}`, tone: "rose" as const })),
     ...Array.from(followupsBySession, ([sessionId, entries]) => ({ id: `followup-${sessionId}`, title: `${entries.length} suivi${entries.length === 1 ? "" : "s"} à compléter`, detail: `${formatAthleteNames(entries)} · ${entries[0].title}`, href: `/coach/sessions/${sessionId}`, tone: "amber" as const })),
-    ...drafts.slice(0, 2).map((session) => ({ id: `draft-${session.id}`, title: "Séance à publier", detail: `${session.title} · ${formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long" })}`, href: `/coach/sessions/${session.id}/edit`, tone: "cyan" as const })),
+    ...drafts.filter((session) => !followupsBySession.has(session.id)).slice(0, 2).map((session) => ({ id: `draft-${session.id}`, title: "Séance à publier", detail: `${session.title} · ${formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long" })}`, href: `/coach/sessions/${session.id}/edit`, tone: "cyan" as const })),
   ];
 
   return (
@@ -132,41 +132,10 @@ export default async function CoachDashboard() {
         </div>
       </section>
 
-      <div className="mt-4 grid gap-3 print:hidden xl:grid-cols-2 2xl:grid-cols-[1.1fr_0.9fr_0.8fr]">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-2 pb-3"><div><CardTitle className="text-base">Groupes et athlètes</CardTitle><p className="mt-1 text-[11px] text-[var(--color-ink-muted)]">{groups.length} groupes · {activeAthletes.length} athlètes actifs</p></div><Link className="shrink-0 text-xs font-black text-[var(--color-brand-strong)]" href="/coach/groups">Tous les groupes <ArrowRight className="inline h-3 w-3"/></Link></CardHeader>
-          <CardContent className="space-y-3">
-            {groups.map((group) => (
-              <Link href={group.id ? `/coach/groups/${group.id}` : "/coach/athletes"} key={group.id || group.name} className="flex min-h-16 items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3 transition hover:border-[var(--color-brand)]">
-                <div className="flex items-center justify-between gap-3">
-                <div><div className="text-sm font-black">{group.name}</div><div className="text-xs text-[var(--color-ink-muted)]">{group.count} athlètes actifs</div></div>
-                </div>
-                  <AthleteAvatarGroup ids={group.ids} athletes={dashboardAthletes} limit={4} /><ChevronRight className="h-4 w-4 shrink-0 text-[var(--color-ink-soft)]"/>
-              </Link>
-            ))}
-            {groups.length === 0 && <EmptyState title="Aucun athlète actif" description="Ajoutez des athlètes pour afficher les groupes et leur activité." action={<Button asChild><Link href="/coach/athletes">Ouvrir les athlètes</Link></Button>} />}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">À surveiller</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {dashboardAlerts.map((alert) => <Link key={alert.id} href={alert.href} className={`flex min-h-14 items-center gap-3 rounded-xl px-3 py-2 transition hover:brightness-[.98] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${alert.tone === "rose" ? "bg-rose-50" : alert.tone === "amber" ? "bg-amber-50" : "bg-cyan-50"}`}>
-              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white ${alert.tone === "rose" ? "bg-rose-500" : alert.tone === "amber" ? "bg-amber-500" : "bg-cyan-500"}`}>{alert.tone === "rose" ? <AlertCircle className="h-4 w-4"/> : alert.tone === "amber" ? <Clock4 className="h-4 w-4"/> : <ClipboardCheck className="h-4 w-4"/>}</span>
-              <span className="min-w-0 flex-1"><strong className="block truncate text-xs">{alert.title}</strong><span className="block truncate text-[11px] text-[var(--color-ink-muted)]">{alert.detail}</span></span><ChevronRight className="h-4 w-4 shrink-0 text-[var(--color-ink-muted)]"/>
-            </Link>)}
-            {dashboardAlerts.length === 0 && <EmptyState title="Tout est à jour" description="Aucun athlète sans séance ni suivi ouvert pour le moment." />}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">Accès rapide</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            <Shortcut href={clubId === "dev-club" ? "/coach/sessions/demo" : "/coach/sessions/new"} label="Créer une séance" icon={CalendarPlus} primary />
-            <Shortcut href="/coach/athletes" label="Voir les athlètes" icon={Users} />
-            <Shortcut href="/coach/planning" label="Voir le planning" icon={CalendarDays} />
-            <PrintButton label="Imprimer le planning" className="w-full justify-between text-xs" />
-          </CardContent>
-        </Card>
+      <div className="mt-4 grid gap-4 print:hidden md:grid-cols-2 2xl:grid-cols-[1.32fr_1.06fr_1fr]">
+        <DashboardGroupsCard groups={groups} athletes={dashboardAthletes} activeCount={activeAthletes.length} />
+        <DashboardAlertsCard alerts={dashboardAlerts} />
+        <DashboardQuickAccessCard createHref={clubId === "dev-club" ? "/coach/sessions/demo" : "/coach/sessions/new"} />
       </div>
     </CoachShell>
   );
@@ -215,21 +184,59 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
         </div></div>
       </section>
 
-      <div className="mt-4 grid gap-3 print:hidden xl:grid-cols-2 2xl:grid-cols-[1.1fr_0.9fr_0.8fr]">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between pb-3"><CardTitle className="text-base">Groupes et athlètes</CardTitle><Link className="text-xs font-black text-[var(--color-brand-strong)]" href="/coach/groups">Tous les groupes <ArrowRight className="inline h-3 w-3"/></Link></CardHeader>
-          <CardContent>
-            <Link href="/coach/groups" className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3"><div><div className="text-sm font-black">{demoSession.group}</div><div className="text-xs text-[var(--color-ink-muted)]">{demoAssignedIds.length} athlètes actifs</div></div><AthleteAvatarGroup ids={demoAssignedIds} athletes={athletes} limit={4} /><ChevronRight className="h-4 w-4 text-[var(--color-ink-soft)]"/></Link>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">À surveiller</CardTitle></CardHeader>
-          <CardContent><EmptyState title="Tout est à jour" description="Aucun suivi ouvert dans les données de démonstration." /></CardContent>
-        </Card>
-        <Card><CardHeader className="pb-3"><CardTitle className="text-base">Accès rapide</CardTitle></CardHeader><CardContent className="space-y-2"><Shortcut href="/coach/sessions/demo" label="Créer une séance" icon={CalendarPlus} primary/><Shortcut href="/coach/athletes" label="Voir les athlètes" icon={Users}/><PrintButton label="Imprimer le planning" className="w-full justify-between text-xs" /></CardContent></Card>
+      <div className="mt-4 grid gap-4 print:hidden md:grid-cols-2 2xl:grid-cols-[1.32fr_1.06fr_1fr]">
+        <DashboardGroupsCard groups={[{ id: "demo-group", name: demoSession.group, count: demoAssignedIds.length, ids: demoAssignedIds }]} athletes={athletes} activeCount={demoAssignedIds.length} demo />
+        <DashboardAlertsCard alerts={[]} demo />
+        <DashboardQuickAccessCard createHref="/coach/sessions/demo" />
       </div>
     </CoachShell>
   );
+}
+
+type DashboardGroup = { id: string; name: string; count: number; ids: string[] };
+
+function DashboardGroupsCard({ groups, athletes, activeCount, demo = false }: { groups: DashboardGroup[]; athletes: AvatarAthlete[]; activeCount: number; demo?: boolean }) {
+  return <Card className="min-h-[226px] rounded-[14px] border border-[#d7e4ec] bg-white shadow-[0_3px_15px_rgba(30,75,120,.035)] md:col-span-2 2xl:col-span-1">
+    <CardHeader className="flex-row items-center justify-between gap-2 px-4 pb-3 pt-4">
+      <div><CardTitle className="text-[21px] font-bold text-[var(--color-navy)]">Groupes et athlètes</CardTitle><p className="mt-1 text-xs text-[var(--color-ink-muted)]">{groups.length} groupes · {activeCount} athlètes actifs</p></div>
+      <Link className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-[#0879d1] transition-colors motion-reduce:transition-none hover:bg-blue-50 hover:underline focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]" href="/coach/groups">Tous les groupes <ArrowRight aria-hidden="true" className="h-4 w-4"/></Link>
+    </CardHeader>
+    <CardContent className="px-4 pb-4 pt-0">
+      {groups.length ? <div className="max-h-[158px] space-y-1.5 overflow-y-auto pr-1">
+        {groups.map((group) => <Link key={group.id || group.name} href={demo || !group.id ? "/coach/groups" : `/coach/groups/${group.id}`} aria-label={`${group.name}, ${group.count} athlètes actifs. Ouvrir le groupe.`} className="group flex min-h-[72px] items-center gap-3 rounded-xl border border-[#dce6ef] bg-white px-3 py-2 transition-colors duration-150 motion-reduce:transition-none hover:border-[#89d5e2] hover:bg-[#f8fcfd] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0797b1] focus-visible:ring-offset-1">
+          <span aria-hidden="true" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#e5f8fa] text-[#07899c]"><Users className="h-5 w-5"/></span>
+          <span className="min-w-0 flex-1"><strong className="block truncate text-sm font-bold text-[var(--color-navy)]">{group.name}</strong><span className="mt-0.5 block text-xs text-[var(--color-ink-muted)]">{group.count} athlète{group.count === 1 ? "" : "s"} actif{group.count === 1 ? "" : "s"}</span></span>
+          <AthleteAvatarGroup ids={group.ids} athletes={athletes} limit={4}/><ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--color-ink-soft)] transition-transform duration-150 motion-reduce:transition-none group-hover:translate-x-0.5"/>
+        </Link>)}
+      </div> : <EmptyState title="Aucun groupe pour le moment" description="Les groupes et leurs athlètes apparaîtront ici." action={<Button asChild variant="outline"><Link href="/coach/groups">Ouvrir les groupes</Link></Button>} />}
+    </CardContent>
+  </Card>;
+}
+
+function DashboardAlertsCard({ alerts, demo = false }: { alerts: DashboardAlert[]; demo?: boolean }) {
+  return <Card className="min-h-[226px] rounded-[14px] border border-[#d7e4ec] bg-white shadow-[0_3px_15px_rgba(30,75,120,.035)]">
+    <CardHeader className="px-4 pb-3 pt-4"><CardTitle className="text-[21px] font-bold text-[var(--color-navy)]">À surveiller</CardTitle></CardHeader>
+    <CardContent className="px-4 pb-4 pt-0">
+      {alerts.length ? <div className="max-h-[158px] space-y-1.5 overflow-y-auto pr-1">
+        {alerts.map((alert) => <Link key={alert.id} href={alert.href} className={`flex min-h-[48px] items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${alert.tone === "rose" ? "bg-rose-50 hover:bg-rose-100 focus-visible:ring-rose-500" : alert.tone === "amber" ? "bg-amber-50 hover:bg-amber-100 focus-visible:ring-amber-500" : "bg-cyan-50 hover:bg-cyan-100 focus-visible:ring-cyan-600"}`}>
+          <span aria-hidden="true" className={`grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full ${alert.tone === "rose" ? "bg-rose-100 text-rose-700" : alert.tone === "amber" ? "bg-amber-100 text-amber-700" : "bg-cyan-100 text-cyan-700"}`}>{alert.tone === "rose" ? <AlertCircle className="h-4 w-4"/> : alert.tone === "amber" ? <Clock4 className="h-4 w-4"/> : <ClipboardCheck className="h-4 w-4"/>}</span>
+          <span className="min-w-0 flex-1"><strong className="block truncate text-[13px] font-bold leading-5 text-[var(--color-navy)]">{alert.title}</strong><span className="block truncate text-xs leading-4 text-[var(--color-ink-muted)]">{alert.detail}</span></span>
+          <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--color-ink-soft)]"/>
+        </Link>)}
+      </div> : <div className="flex min-h-[130px] flex-col items-center justify-center rounded-xl bg-[#f1fbf7] px-4 py-3 text-center"><span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-100 text-emerald-700"><CircleCheck aria-hidden="true" className="h-5 w-5"/></span><strong className="mt-2 text-sm font-bold text-emerald-900">Tout est à jour</strong><p className="mt-1 text-xs leading-4 text-emerald-800">{demo ? "Aucun suivi ouvert dans les données de démonstration." : "Aucune action en attente pour le moment."}</p></div>}
+    </CardContent>
+  </Card>;
+}
+
+function DashboardQuickAccessCard({ createHref }: { createHref: string }) {
+  return <Card className="min-h-[226px] rounded-[14px] border border-[#d7e4ec] bg-white shadow-[0_3px_15px_rgba(30,75,120,.035)]">
+    <CardHeader className="px-4 pb-3 pt-4"><CardTitle className="text-[21px] font-bold text-[var(--color-navy)]">Accès rapide</CardTitle></CardHeader>
+    <CardContent className="flex flex-col gap-[7px] px-4 pb-4 pt-0">
+      <Shortcut href={createHref} label="Créer une séance" icon={CalendarPlus} primary />
+      <Shortcut href="/coach/athletes" label="Voir les athlètes" icon={Users} />
+      <PrintButton label="Imprimer le planning" showArrow className="h-12 min-h-12 w-full justify-between rounded-xl border-[#d7e4ec] px-3 text-sm font-semibold transition-colors motion-reduce:transition-none hover:border-[#19bfd3] hover:bg-[#f8fcfd]" />
+    </CardContent>
+  </Card>;
 }
 
 function TodayCard({ session, activeSessionIds, athletes, demo = false, recent = false }: { session?: DashboardSession; activeSessionIds: Set<string>; athletes: AvatarAthlete[]; demo?: boolean; recent?: boolean }) {
@@ -393,7 +400,7 @@ function capitalizeFirst(value: string) {
 
 function Shortcut({ href, label, icon: Icon, primary = false }: { href: string; label: string; icon: typeof CalendarPlus; primary?: boolean }) {
   return (
-    <Button asChild variant={primary ? "action" : "outline"} className={`w-full justify-between text-xs ${primary ? "bg-[#0969ef] shadow-[0_8px_20px_rgba(9,105,239,.22)] hover:bg-[#0757cc]" : ""}`}>
+    <Button asChild variant={primary ? "action" : "outline"} className={`h-12 min-h-12 w-full justify-between rounded-xl px-3 text-sm transition-colors motion-reduce:transition-none ${primary ? "border border-[#0969ef] bg-[#0969ef] text-white shadow-none hover:border-[#0757cc] hover:bg-[#0757cc]" : "border-[#d7e4ec] bg-white hover:border-[#19bfd3] hover:bg-[#f8fcfd]"}`}>
       <Link href={href}><span className="inline-flex items-center gap-2"><Icon className="h-4 w-4" /> {label}</span><ArrowRight className="h-4 w-4" /></Link>
     </Button>
   );
