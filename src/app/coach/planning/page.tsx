@@ -175,19 +175,21 @@ function DemoPlanningPage({ period, weekStartsOn }: { period: PlanningPeriod; we
 
 function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = false }: { period: PlanningPeriod; sessions: PlanningSession[]; events: PlanningEvent[]; targets: PlanningTarget[]; weekStartsOn: 0 | 1; demo?: boolean }) {
   const activeSessionIds = new Set(sessions.filter((session) => session.status === "READY" && session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
+  const completedCount = sessions.filter((session) => session.status === "COMPLETED").length;
+  const publishedCount = sessions.filter((session) => session.status === "READY" || session.status === "IN_PROGRESS").length;
 
   return (
     <CoachShell active="Calendrier">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4 rounded-3xl border border-[#dce8f2] bg-white px-5 py-5 shadow-[0_8px_30px_rgba(28,72,116,.045)] sm:px-7 sm:py-6">
         <div>
-          <p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand-strong)]">Calendrier {period.mode === "week" ? "hebdomadaire" : "mensuel"}</p>
-          <h1 className="mt-1 text-3xl font-black">Calendrier</h1>
-          <p className="mt-1 text-sm font-medium text-[var(--color-ink-muted)]">{periodLabel(period)}</p>
+          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[.12em] text-[#0879dc]"><CalendarDays aria-hidden="true" className="h-4 w-4" /> Calendrier coach</p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight text-[var(--color-navy)] sm:text-[34px]">Calendrier</h1>
+          <p className="mt-1 text-sm font-medium capitalize text-[var(--color-ink-muted)]">{periodLabel(period)}</p>
         </div>
         <PlanningEventForm targets={targets} demo={demo} />
       </div>
 
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#dce8f2] bg-white p-3 shadow-[0_4px_18px_rgba(28,72,116,.035)] sm:p-4">
         <div className="flex rounded-full border border-[var(--color-border)] bg-white p-1">
           <PlanningModeLink mode="week" active={period.mode === "week"} period={period} weekStartsOn={weekStartsOn}>Semaine</PlanningModeLink>
           <PlanningModeLink mode="month" active={period.mode === "month"} period={period} weekStartsOn={weekStartsOn}>Mois</PlanningModeLink>
@@ -231,8 +233,33 @@ function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = 
           </div>
         </div>
       )}
+
+      <section aria-label="Résumé et légende du calendrier" className="mt-5 flex flex-col gap-5 rounded-2xl border border-[#dce8f2] bg-white p-4 shadow-[0_4px_18px_rgba(28,72,116,.035)] sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div>
+          <h2 className="text-xs font-black uppercase tracking-[.1em] text-[var(--color-ink-muted)]">Légende</h2>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-[var(--color-ink-muted)]">
+            <LegendItem color="bg-emerald-500" label="Terminée" />
+            <LegendItem color="bg-blue-500" label="Publiée" />
+            <LegendItem color="bg-amber-500" label="Compétition" />
+            <LegendItem color="bg-slate-300" label="Jour libre" />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 sm:min-w-[390px]">
+          <SummaryCount label="Séances" value={sessions.length} />
+          <SummaryCount label="Terminées" value={completedCount} />
+          <SummaryCount label="Publiées" value={publishedCount} />
+        </div>
+      </section>
     </CoachShell>
   );
+}
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return <span className="inline-flex items-center gap-2"><span aria-hidden="true" className={`h-2.5 w-2.5 rounded-full ${color}`} />{label}</span>;
+}
+
+function SummaryCount({ label, value }: { label: string; value: number }) {
+  return <div className="rounded-xl bg-[#f4f8fc] px-3 py-2.5 text-center"><div className="text-lg font-black leading-none text-[var(--color-navy)]">{value}</div><div className="mt-1 text-[10px] font-bold text-[var(--color-ink-muted)] sm:text-xs">{label}</div></div>;
 }
 
 function PlanningModeLink({ mode, active, period, weekStartsOn, children }: { mode: PlanningMode; active: boolean; period: PlanningPeriod; weekStartsOn: 0 | 1; children: React.ReactNode }) {
@@ -249,8 +276,8 @@ function PlanningModeLink({ mode, active, period, weekStartsOn, children }: { mo
 
 function DayColumn({ day, sessions, events, activeSessionIds, targets, demo }: { day: { key: number | string; label: string; date: Date }; sessions: PlanningSession[]; events: PlanningEvent[]; activeSessionIds: Set<string>; targets: PlanningTarget[]; demo: boolean }) {
   return (
-    <div className={`min-h-[420px] bg-white ${sameMontrealDay(day.date, new Date()) ? "bg-[var(--color-action)]/[0.035]" : ""}`}>
-      <div className="sticky top-0 z-10 flex min-h-[58px] flex-col items-center justify-center border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2 py-2 text-center">
+    <div className={`min-h-[420px] bg-white ${sameMontrealDay(day.date, new Date()) ? "bg-[#f0f7ff]" : ""}`}>
+      <div className={`sticky top-0 z-10 flex min-h-[64px] flex-col items-center justify-center border-b px-2 py-2 text-center ${sameMontrealDay(day.date, new Date()) ? "border-[#badcff] bg-[#eaf4ff] text-[#075fc5]" : "border-[var(--color-border)] bg-[var(--color-surface-raised)]"}`}>
           <div>
             <div className="text-sm font-black">{day.label}</div>
             <div className="text-xs font-bold text-[var(--color-ink-soft)]">{formatMontrealDate(day.date, { day: "2-digit", month: "short" })}</div>
@@ -261,7 +288,7 @@ function DayColumn({ day, sessions, events, activeSessionIds, targets, demo }: {
           {sessions.map((session) => <PlanningSessionCard key={session.id} session={session} active={activeSessionIds.has(session.id)} demo={demo} />)}
           {events.map((event) => <PlanningEventCard key={event.id} event={event} targets={targets} demo={demo} />)}
           {sessions.length === 0 && events.length === 0 && (
-            <div className="flex min-h-28 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--color-border-strong)] p-3 text-center">
+            <div className="flex min-h-28 flex-col items-center justify-center rounded-xl border border-dashed border-[#cbd8e4] bg-white/70 p-3 text-center">
               <div className="text-xs font-black text-[var(--color-ink-muted)]">Jour libre</div>
               <PlanningEventForm targets={targets} demo={demo} triggerLabel="Ajouter un événement" defaultStartsAt={`${toMontrealDateInputValue(day.date)}T09:00`} />
             </div>
@@ -402,7 +429,7 @@ function statusTone(status: string) {
 
 function eventTone(type: string, cancelled = false) {
   if (cancelled) return "border-red-500/40 bg-red-500/10 text-red-800";
-  if (type === "COMPETITION") return "border-[var(--color-action)]/30 bg-[var(--color-action)]/12 text-[var(--color-ink)]";
+  if (type === "COMPETITION") return "border-amber-500/35 bg-amber-50 text-amber-950";
   if (type === "CAMP") return "border-[var(--block-dryland-fg)]/25 bg-[var(--block-dryland-bg)]/70 text-[var(--block-dryland-fg)]";
   return "border-[var(--color-brand)]/25 bg-[var(--color-surface-raised)] text-[var(--color-brand-strong)]";
 }
