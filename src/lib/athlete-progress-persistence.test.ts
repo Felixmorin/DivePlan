@@ -49,7 +49,7 @@ test("progress persistence accepts repeated session items without PostgreSQL 210
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
     }).outputText, { exports, Date, require: (name: string) => { assert.ok(name in dependencies); return dependencies[name]; } });
     const persist = exports.persistAthleteProgress!;
-    const blocks = [{ drylandExercises: [{ exerciseId: "exercise-a" }], poolTraining: { sections: [{ dives: [{ id: "dive-a" }] }] } }] as Parameters<Persist>[2];
+    const blocks = [{ id: "block-a", exerciseIds: ["exercise-a"], diveIds: ["dive-a"] }] as Parameters<Persist>[2];
     const payload = playerPayload();
     assert.equal(payload.exercises.length, 2, "real player builder reproduces duplicate exercise IDs");
     await persist(payload, "athlete-a", blocks);

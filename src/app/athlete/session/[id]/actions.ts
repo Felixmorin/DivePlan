@@ -74,7 +74,7 @@ export async function saveAthleteDiveNote(sessionId: string, poolDiveId: string,
 
   const data = diveNoteSchema.parse({ poolDiveId, note });
   const readyBlocks = await getAssignedSessionBlocks(sessionId, athlete.id);
-  const readyDiveIds = new Set(readyBlocks.flatMap((block) => block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.id)) ?? []));
+  const readyDiveIds = new Set(readyBlocks.flatMap((block) => block.diveIds));
   if (!readyDiveIds.has(data.poolDiveId)) throw new Error("Ce plongeon n'est pas accessible a l'athlete courant.");
 
   const dive = await query(

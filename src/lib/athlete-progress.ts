@@ -9,64 +9,47 @@ export type AthleteProgressPayload = {
   dives: Array<{ poolDiveId: string; repetitionsCompleted: number; goldenRepetitions: number; feedbackCompleted: boolean; rating: string | null; note: string | null }>;
 };
 
-type ExerciseBlockItem = { blockId: string; exerciseId: string; sets: number | null; reps: number | null; duration: number | null; notes: string | null; order: number };
-type PoolDiveItem = { id: string; poolSectionId: string; diveCode: string; diveName: string; position: string; repetitions: number; notes: string | null; order: number };
-type PoolSectionItem = { id: string; poolTrainingId: string; height: "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM"; label: string | null; order: number; dives: PoolDiveItem[] };
-type AssignedSessionBlock = {
-  id: string; sessionId: string; type: string; title: string; description: string | null; duration: number; position: number;
-  estimatedVolume: number; competitionEvaluation: boolean; drylandExercises: ExerciseBlockItem[];
-  poolTraining: { blockId: string; sections: PoolSectionItem[] } | null;
-};
+type AssignedSessionBlock = { id: string; exerciseIds: string[]; diveIds: string[] };
 
 export async function getAssignedSessionBlocks(sessionId: string, athleteId: string): Promise<AssignedSessionBlock[]> {
-  // The cron job closes a session after its scheduled end, but athletes who
-  // already started it still need to be able to save and submit their work.
-  const session = await query(
-    `SELECT s.id FROM "TrainingSession" s WHERE s.id = $1 AND (
-       s.status IN ('READY','IN_PROGRESS') OR (s.status = 'COMPLETED' AND EXISTS (
-         SELECT 1 FROM "AthleteSessionCompletion" c WHERE c."sessionId"=s.id AND c."athleteId"=$2 AND c.status IN ('IN_PROGRESS', 'COMPLETED')
-       ))
-     ) LIMIT 1`, [sessionId, athleteId]
+  // Saving only needs membership, not the plan's text, parameters or ordering.
+  // Keep empty assigned blocks so a feedback-only save remains authorized.
+  // Scheduled closure still permits saves by athletes who already started.
+  // UNION ALL avoids multiplying exercises by dives in mixed blocks.
+  const result = await query<{ blockId: string; kind: "block" | "exercise" | "dive"; itemId: string }>(
+    `WITH assigned_blocks AS (
+       SELECT b.id FROM "SessionBlock" b
+       JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
+       JOIN "TrainingSession" s ON s.id = b."sessionId"
+       WHERE b."sessionId" = $1 AND a."athleteId" = $2 AND (
+         s.status IN ('READY','IN_PROGRESS') OR (s.status = 'COMPLETED' AND EXISTS (
+           SELECT 1 FROM "AthleteSessionCompletion" c
+           WHERE c."sessionId" = s.id AND c."athleteId" = $2 AND c.status IN ('IN_PROGRESS','COMPLETED')
+         ))
+       )
+     )
+     SELECT b.id AS "blockId", 'block' AS kind, b.id AS "itemId" FROM assigned_blocks b
+     UNION ALL
+     SELECT b.id, 'exercise', e."exerciseId" FROM assigned_blocks b
+       JOIN "DrylandBlockExercise" e ON e."blockId" = b.id
+     UNION ALL
+     SELECT b.id, 'dive', d.id FROM assigned_blocks b
+       JOIN "PoolTraining" p ON p."blockId" = b.id
+       JOIN "PoolSection" s ON s."poolTrainingId" = p."blockId"
+       JOIN "PoolDive" d ON d."poolSectionId" = s.id`,
+    [sessionId, athleteId]
   );
-  if (!session.rowCount) return [];
-
-  const [blocksResult, exercisesResult, sectionsResult, divesResult] = await Promise.all([
-    query<Omit<AssignedSessionBlock, "drylandExercises" | "poolTraining"> & { id: string }>(
-      `SELECT b.id, b."sessionId", b.type, b.title, b.description, b.duration, b.position, b."estimatedVolume", b."competitionEvaluation"
-       FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
-       WHERE b."sessionId" = $1 AND a."athleteId" = $2 ORDER BY b.position ASC`, [sessionId, athleteId]
-    ),
-    query<ExerciseBlockItem>(
-      `SELECT e."blockId", e."exerciseId", e.sets, e.reps, e.duration, e.notes, e."order"
-       FROM "DrylandBlockExercise" e JOIN "SessionBlock" b ON b.id = e."blockId"
-       JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
-       WHERE b."sessionId" = $1 AND a."athleteId" = $2 ORDER BY e."order" ASC`, [sessionId, athleteId]
-    ),
-    query<PoolSectionItem & { poolTrainingId: string }>(
-      `SELECT s.id, s."poolTrainingId", s.height, s.label, s."order" FROM "PoolSection" s
-       JOIN "PoolTraining" p ON p."blockId" = s."poolTrainingId" JOIN "SessionBlock" b ON b.id = p."blockId"
-       JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
-       WHERE b."sessionId" = $1 AND a."athleteId" = $2 ORDER BY b.position ASC, s."order" ASC`, [sessionId, athleteId]
-    ),
-    query<PoolDiveItem>(
-      `SELECT d.id, d."poolSectionId", d."diveCode", d."diveName", d.position, d.repetitions, d.notes, d."order"
-       FROM "PoolDive" d JOIN "PoolSection" s ON s.id = d."poolSectionId"
-       JOIN "PoolTraining" p ON p."blockId" = s."poolTrainingId" JOIN "SessionBlock" b ON b.id = p."blockId"
-       JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id
-       WHERE b."sessionId" = $1 AND a."athleteId" = $2 ORDER BY b.position ASC, s."order" ASC, d."order" ASC`, [sessionId, athleteId]
-    )
-  ]);
-
-  const exerciseItems = exercisesResult.rows;
-  const sections = sectionsResult.rows.map((section) => ({ ...section, dives: divesResult.rows.filter((dive) => dive.poolSectionId === section.id) }));
-  return blocksResult.rows.map((block) => {
-    const blockSections = sections.filter((section) => section.poolTrainingId === block.id);
-    return {
-      ...block,
-      drylandExercises: exerciseItems.filter((exercise) => exercise.blockId === block.id),
-      poolTraining: blockSections.length ? { blockId: block.id, sections: blockSections } : null
-    };
-  });
+  const blocks = new Map<string, AssignedSessionBlock>();
+  for (const row of result.rows) {
+    let block = blocks.get(row.blockId);
+    if (!block) {
+      block = { id: row.blockId, exerciseIds: [], diveIds: [] };
+      blocks.set(row.blockId, block);
+    }
+    if (row.kind === "exercise") block.exerciseIds.push(row.itemId);
+    if (row.kind === "dive") block.diveIds.push(row.itemId);
+  }
+  return [...blocks.values()];
 }
 
 export async function persistAthleteProgress<T = void>(
@@ -75,8 +58,8 @@ export async function persistAthleteProgress<T = void>(
   assignedBlocks: AssignedSessionBlock[],
   afterPersist?: (tx: PoolClient) => Promise<T>
 ): Promise<T | undefined> {
-  const validExerciseIds = new Set(assignedBlocks.flatMap((block) => block.drylandExercises.map((exercise) => exercise.exerciseId)));
-  const validDiveIds = new Set(assignedBlocks.flatMap((block) => block.poolTraining?.sections.flatMap((section) => section.dives.map((dive) => dive.id)) ?? []));
+  const validExerciseIds = new Set(assignedBlocks.flatMap((block) => block.exerciseIds));
+  const validDiveIds = new Set(assignedBlocks.flatMap((block) => block.diveIds));
   const feedbackProvided = payload.sessionFeedback !== undefined;
   const rating = feedbackProvided ? normalizeText(payload.sessionFeedback?.rating ?? null) : null;
   const note = feedbackProvided ? normalizeText(payload.sessionFeedback?.note ?? null) : null;
