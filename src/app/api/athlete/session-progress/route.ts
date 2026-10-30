@@ -11,15 +11,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let payload: AthleteProgressPayload;
+  let payload: unknown;
 
   try {
-    payload = (await request.json()) as AthleteProgressPayload;
+    payload = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  if (!payload.sessionId || !Array.isArray(payload.exercises) || !Array.isArray(payload.dives) || !isSessionFeedback(payload.sessionFeedback)) {
+  if (!isProgressPayload(payload)) {
     return NextResponse.json({ error: "Invalid progress payload" }, { status: 400 });
   }
 
@@ -45,9 +45,29 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true });
 }
 
-function isSessionFeedback(value: AthleteProgressPayload["sessionFeedback"]) {
-  return (
-    value === undefined ||
-    ((typeof value.rating === "string" || value.rating === null) && (typeof value.note === "string" || value.note === null))
-  );
+// JSON is untrusted at this boundary. Reject malformed snapshots before any
+// assignment/status reads or persistence; never silently coerce saved work.
+function isProgressPayload(value: unknown): value is AthleteProgressPayload {
+  if (!isRecord(value) || !isId(value.sessionId) || !Array.isArray(value.exercises) || !Array.isArray(value.dives)) return false;
+  const feedback = value.sessionFeedback;
+  if (feedback !== undefined && (!isRecord(feedback) || !isText(feedback.rating) || !isText(feedback.note))) return false;
+  return value.exercises.every((item: unknown) => isRecord(item)
+    && isId(item.exerciseId) && typeof item.completed === "boolean"
+    && isText(item.rating) && isText(item.note))
+    && value.dives.every((item: unknown) => isRecord(item)
+      && isId(item.poolDiveId) && Number.isSafeInteger(item.repetitionsCompleted)
+      && Number.isSafeInteger(item.goldenRepetitions) && typeof item.feedbackCompleted === "boolean"
+      && isText(item.rating) && isText(item.note));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function isText(value: unknown): value is string | null {
+  return typeof value === "string" || value === null;
 }
