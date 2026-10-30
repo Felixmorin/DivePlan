@@ -120,6 +120,14 @@ export type AthleteCurrentWeekSummary = {
 type CurrentUser = {id:string;firstName:string;lastName:string;email:string;username:string|null;avatar:string|null;role:"ADMIN"|"COACH"|"ATHLETE";clubId:string|null;passwordHash:string|null;passwordSetAt:Date|null;createdAt:Date};
 type CurrentAthlete = {id:string;userId:string;clubId:string;groupId:string|null;birthDate:Date;level:string;active:boolean;user:CurrentUser;club:{id:string;name:string;logo:string|null;createdAt:Date};group:({id:string;name:string;clubId:string;coachId:string;coach:{id:string;userId:string;clubId:string;planningDefaultView:string;weekStartsOn:number;printShowCoachNotes:boolean;printShowAthleteNames:boolean;printRepetitionChecks:boolean;user:CurrentUser}})|null;competitionDives:Array<{id:string;athleteId:string;height:PoolHeight;platformHeight:number|null;diveCode:string;diveName:string;difficulty:number|null;position:number;createdAt:Date}>};
 
+// Profile photos are disabled (resolveAvatarUrls always returns null). Project
+// user fields explicitly so legacy inline photos never cross the DB connection.
+const currentAthleteUserProjection = (alias: "u" | "cu") => `jsonb_build_object(
+  'id', ${alias}.id, 'firstName', ${alias}."firstName", 'lastName', ${alias}."lastName",
+  'email', ${alias}.email, 'username', ${alias}.username, 'avatar', NULL::text,
+  'role', ${alias}.role, 'clubId', ${alias}."clubId", 'passwordHash', ${alias}."passwordHash",
+  'passwordSetAt', ${alias}."passwordSetAt", 'createdAt', ${alias}."createdAt")`;
+
 export async function getCurrentAthlete() {
   const user = await getCurrentUser();
 
@@ -131,9 +139,9 @@ export async function getCurrentAthlete() {
     redirect("/change-password");
   }
 
-  const base=(await query<{athlete:CurrentAthlete;user:CurrentAthlete["user"];club:CurrentAthlete["club"];group:CurrentAthlete["group"]}>(`SELECT to_jsonb(a) AS athlete,to_jsonb(u) AS "user",to_jsonb(c) AS club,to_jsonb(g) AS "group" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" JOIN "Club" c ON c.id=a."clubId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a."userId"=$1`,[user.id])).rows[0];
+  const base=(await query<{athlete:CurrentAthlete;user:CurrentAthlete["user"];club:CurrentAthlete["club"];group:CurrentAthlete["group"]}>(`SELECT to_jsonb(a) AS athlete,${currentAthleteUserProjection("u")} AS "user",to_jsonb(c) AS club,to_jsonb(g) AS "group" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" JOIN "Club" c ON c.id=a."clubId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a."userId"=$1`,[user.id])).rows[0];
   if(!base)return null;
-  const coach=base.group?.coachId?(await query<{coach:NonNullable<CurrentAthlete["group"]>["coach"];user:CurrentUser}>(`SELECT to_jsonb(co) AS coach,to_jsonb(cu) AS "user" FROM "Coach" co JOIN "User" cu ON cu.id=co."userId" WHERE co.id=$1`,[base.group.coachId])).rows[0]:null;
+  const coach=base.group?.coachId?(await query<{coach:NonNullable<CurrentAthlete["group"]>["coach"];user:CurrentUser}>(`SELECT to_jsonb(co) AS coach,${currentAthleteUserProjection("cu")} AS "user" FROM "Coach" co JOIN "User" cu ON cu.id=co."userId" WHERE co.id=$1`,[base.group.coachId])).rows[0]:null;
   const competitionDives=(await query<CurrentAthlete["competitionDives"][number]>(`SELECT d.* FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" WHERE d."athleteId"=$1 AND l.position=0 ORDER BY d.height,d.position,d."createdAt"`,[base.athlete.id])).rows;
   return {...base.athlete,user:base.user,club:base.club,group:base.group?{...base.group,coach:coach?{...coach.coach,user:coach.user}:null}:null,competitionDives} as CurrentAthlete;
 }
