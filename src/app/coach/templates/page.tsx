@@ -18,10 +18,10 @@ export default async function TemplatesPage() {
     return (
       <CoachShell active="Template">
         <div className="mb-6 flex items-center justify-between">
-          <div><h1 className="text-3xl font-black">Templates</h1><p className="text-[var(--color-ink-muted)]">Mode demo local sans PostgreSQL.</p></div>
-          <Button asChild><Link href="/coach/sessions/demo">Ouvrir la seance demo</Link></Button>
+          <div><h1 className="text-3xl font-black">Modèles</h1><p className="text-[var(--color-ink-muted)]">Mode démo local sans PostgreSQL.</p></div>
+          <Button asChild><Link href="/coach/sessions/demo">Ouvrir la séance démo</Link></Button>
         </div>
-        <EmptyState title="Base de donnees requise" description="Les modeles de seance necessitent DATABASE_URL." />
+        <EmptyState title="Base de données requise" description="Les modèles de séance nécessitent DATABASE_URL." />
       </CoachShell>
     );
   }
@@ -39,8 +39,8 @@ export default async function TemplatesPage() {
   return (
     <CoachShell active="Template">
       <div className="mb-6 flex items-center justify-between">
-        <div><h1 className="text-3xl font-black">Templates</h1><p className="text-[var(--color-ink-muted)]">Modeles sauvegardes par les coachs du club.</p></div>
-        <Button asChild><Link href="/coach/sessions/new">Nouvelle seance</Link></Button>
+        <div><h1 className="text-3xl font-black">Modèles</h1><p className="text-[var(--color-ink-muted)]">Modèles sauvegardés par les coachs du club.</p></div>
+        <Button asChild><Link href="/coach/sessions/new">Nouvelle séance</Link></Button>
       </div>
       <div className="space-y-8">
           {templateGroups.map((group) => <section key={group.key}>

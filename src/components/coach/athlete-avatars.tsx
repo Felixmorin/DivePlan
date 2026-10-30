@@ -9,7 +9,7 @@ type AvatarAthlete = {
 };
 
 export function AthleteAvatars({ ids, limit = 5, athletes = demoAthletes }: { ids: string[]; limit?: number; athletes?: AvatarAthlete[] }) {
-  const selected = ids.map((id) => athletes.find((a) => a.id === id)).filter(Boolean);
+  const selected = Array.from(new Set(ids)).map((id) => athletes.find((a) => a.id === id)).filter(Boolean);
   return (
     <div className="flex items-center">
       {selected.slice(0, limit).map((athlete) => (
