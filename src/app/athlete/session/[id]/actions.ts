@@ -209,12 +209,19 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   );
   const evaluationSession = evaluationSessionResult.rows[0];
   if (evaluationSession) {
-    const [diveCount, evaluationCount] = await Promise.all([
-      query<{ count: string }>(`SELECT count(*)::text AS count FROM "CompetitionDive" WHERE "athleteId" = $1`, [athlete.id]),
-      query<{ count: string }>(`SELECT count(*)::text AS count FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId" = $1 AND "sessionId" = $2 AND evaluator = 'ATHLETE'`, [athlete.id, payload.sessionId])
-    ]);
-    const totalDives = Number(diveCount.rows[0]?.count ?? 0);
-    if (totalDives > 0 && Number(evaluationCount.rows[0]?.count ?? 0) !== totalDives) throw new Error("Réponds à tous les plongeons de compétition avant de terminer.");
+    // The player and evaluation save use only the active list (position 0).
+    // Match each required dive, not counts that unrelated evaluations can fill.
+    const evaluation = await query<{ complete: boolean }>(
+      `SELECT NOT EXISTS (
+         SELECT 1 FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId"
+         WHERE d."athleteId"=$1 AND l.position=0 AND NOT EXISTS (
+           SELECT 1 FROM "AthleteCompetitionDiveEvaluation" e
+           WHERE e."athleteId"=$1 AND e."sessionId"=$2
+             AND e."competitionDiveId"=d.id AND e.evaluator='ATHLETE'
+         )
+       ) AS complete`, [athlete.id, payload.sessionId]
+    );
+    if (!evaluation.rows[0]?.complete) throw new Error("Réponds à tous les plongeons de compétition avant de terminer.");
   }
 
   await assertSessionStartAvailable(payload.sessionId);
