@@ -103,15 +103,14 @@ export default async function CoachDashboard() {
 
   return (
     <CoachShell active="Accueil" compactHeader>
-      <div className="mb-5 flex flex-col justify-between gap-2 px-1 sm:flex-row sm:items-end print:hidden">
+      <div className="mb-5 px-1 print:hidden">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-[var(--color-navy)] sm:text-4xl">Bonjour {user.firstName} 👋</h1>
           <p className="mt-1 text-base font-medium text-[var(--color-ink-muted)]">Voici ce qui se passe avec tes groupes cette semaine.</p>
         </div>
-        <p className="hidden items-center gap-2 pb-1 text-xs font-bold capitalize text-[var(--color-ink-muted)] sm:flex"><CalendarDays className="h-4 w-4"/>{formatMontrealDate(today, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
       </div>
 
-      <div className="grid gap-4 print:hidden 2xl:grid-cols-[1.6fr_1fr]">
+      <div className="grid gap-4 print:hidden lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={dashboardAthletes} recent={isRecentSession} />
         <QuickReadCard sessions={sessions} schedules={schedules} activeAthletes={activeAthletes} weekStart={weekStart} weekStartsOn={weekStartsOn} />
       </div>
@@ -194,7 +193,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
         </div>
       </div>
 
-      <div className="grid gap-4 print:hidden 2xl:grid-cols-[1.6fr_1fr]">
+      <div className="grid gap-4 print:hidden lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={athletes} demo recent={isRecentSession} />
         <QuickReadCard sessions={sessions} schedules={[]} activeAthletes={athletes.map((athlete) => ({ id: athlete.id, group: { id: "demo-group", name: demoSession.group } }))} weekStart={weekStart} weekStartsOn={1} />
       </div>
@@ -229,8 +228,8 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
 function TodayCard({ session, activeSessionIds, athletes, demo = false, recent = false }: { session?: DashboardSession; activeSessionIds: Set<string>; athletes: AvatarAthlete[]; demo?: boolean; recent?: boolean }) {
   if (!session) {
     return (
-      <Card className="overflow-hidden border-[var(--color-navy)] bg-[var(--color-navy)] text-white">
-        <CardContent className="p-6">
+      <Card className="min-h-[280px] overflow-hidden border-[var(--color-navy)] bg-[var(--color-navy)] text-white">
+        <CardContent className="flex min-h-[280px] flex-col justify-center p-6">
           <p className="text-sm font-black uppercase text-[var(--color-brand)]">Prochaine séance</p>
           <h2 className="mt-4 text-3xl font-black leading-tight text-white sm:text-4xl">Aucune séance à venir</h2>
           <p className="mt-3 max-w-xl text-sm leading-6 text-white/75">Consulte le calendrier ou crée une séance pour préparer la suite.</p>
@@ -246,21 +245,21 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false, recent =
   const volume = session.blocks.reduce((sum, block) => sum + block.estimatedVolume, 0);
 
   return (
-      <Card className="relative overflow-hidden border-[var(--color-navy)] bg-[radial-gradient(ellipse_at_75%_5%,rgba(0,178,204,.38),transparent_42%),linear-gradient(115deg,#061626_0%,#0a243b_58%,#0b3c53_100%)] text-white">
-      <CardContent className="relative p-5 sm:p-6">
+      <Card className="relative h-full min-h-[280px] overflow-hidden border-[var(--color-navy)] bg-[radial-gradient(ellipse_at_78%_0%,rgba(0,178,204,.16),transparent_46%),linear-gradient(115deg,#071a2a_0%,#0a2a43_60%,#0b3b51_100%)] text-white">
+      <CardContent className="relative flex min-h-[280px] flex-col justify-between p-5 sm:p-6 sm:pt-7">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-[11px] font-black uppercase tracking-wide text-[var(--color-brand)]">{recent ? "Dernière séance terminée" : "Prochaine séance"}</p>
           <div className="flex flex-wrap items-center gap-2"><StatusPill status={String(effectiveStatus)} /><span className="text-xs font-bold text-white/75">{formatMontrealDate(session.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})} · {formatMontrealTime(session.date)} – {formatMontrealTime(addMinutes(session.date, session.duration))}</span></div>
         </div>
-        <h2 className="mt-2 max-w-2xl text-3xl font-black leading-tight text-white sm:text-4xl">{session.title}</h2>
-        <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <h2 className="mt-3 max-w-2xl text-2xl font-black leading-tight text-white sm:text-[2rem]">{session.title}</h2>
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <DarkMetric icon={Clock3} label="Durée" value={`${session.duration} min`} />
           <DarkMetric icon={Users} label="Athlètes" value={assignedIds.length} />
           <DarkMetric icon={Timer} label="Plongeons" value={volume} />
           <DarkMetric icon={ListChecks} label="Blocs" value={session.blocks.length} />
         </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3"><AthleteAvatarGroup ids={assignedIds} athletes={athletes} limit={6} /><div className="flex flex-wrap gap-1.5">{uniqueBlockTypes(session.blocks).map((type) => <BlockTypeBadge key={String(type)} type={String(type)} />)}</div></div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3"><AthleteAvatarGroup ids={assignedIds} athletes={athletes} limit={5} /><div className="flex flex-wrap gap-1.5">{uniqueBlockTypes(session.blocks).map((type) => <BlockTypeBadge key={String(type)} type={String(type)} />)}</div></div>
           <Button asChild variant="action" size="default" className="min-h-12 min-w-36 bg-[#0969ef] shadow-none hover:bg-[#0757cc]">
             <Link href={action.href}>{action.label} <ArrowRight className="h-5 w-5" /></Link>
           </Button>
@@ -325,23 +324,23 @@ function QuickReadCard({ sessions, schedules, activeAthletes, weekStart, weekSta
   const completedCount = weekSessions.filter((session) => session.status === "COMPLETED").length;
   const progress = sessionCount ? Math.round(completedCount / sessionCount * 100) : 0;
   return (
-    <Card className="flex flex-col">
+    <Card className="flex min-h-[280px] flex-col">
       <CardHeader className="pb-3"><CardTitle className="text-base">Cette semaine</CardTitle></CardHeader>
-      <CardContent className="flex flex-1 flex-col justify-between gap-4">
+      <CardContent className="flex flex-1 flex-col justify-between gap-[15px]">
           <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-2.5 rounded-xl bg-[var(--color-surface-raised)] p-3"><CalendarPlus className="h-6 w-6 shrink-0 text-[var(--color-brand-strong)]"/><div><strong className="block text-2xl leading-none">{sessionCount}</strong><span className="text-[11px] text-[var(--color-ink-muted)]">séances planifiées</span></div></div>
-            <div className="flex items-center gap-2.5 rounded-xl bg-[var(--color-surface-raised)] p-3"><Users className="h-6 w-6 shrink-0 text-[var(--color-brand-strong)]"/><div><strong className="block text-2xl leading-none">{athleteCount}</strong><span className="text-[11px] text-[var(--color-ink-muted)]">athlètes attendus</span></div></div>
+            <div className="flex min-h-[68px] items-center gap-2.5 rounded-xl bg-[var(--color-surface-raised)] p-3"><CalendarPlus className="h-6 w-6 shrink-0 text-[var(--color-brand-strong)]"/><div><strong className="block text-[1.375rem] leading-none">{sessionCount}</strong><span className="text-[11px] text-[var(--color-ink-muted)]">séances planifiées</span></div></div>
+            <div className="flex min-h-[68px] items-center gap-2.5 rounded-xl bg-[var(--color-surface-raised)] p-3"><Users className="h-6 w-6 shrink-0 text-[var(--color-brand-strong)]"/><div><strong className="block text-[1.375rem] leading-none">{athleteCount}</strong><span className="text-[11px] text-[var(--color-ink-muted)]">athlètes attendus</span></div></div>
           </div>
-          <div className="border-t border-[var(--color-border)] pt-3">
+          <div className="border-t border-[var(--color-border)] pt-[10px]">
             <div className="mb-2 flex items-center justify-between text-xs font-bold"><span className="flex items-center gap-2"><Timer className="h-4 w-4 text-[var(--color-brand-strong)]"/>Progression de la semaine</span><span>{completedCount} / {sessionCount} séances</span></div>
-            <div role="progressbar" aria-label="Séances terminées cette semaine" aria-valuenow={completedCount} aria-valuemin={0} aria-valuemax={sessionCount} className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-teal-300 to-teal-400 transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
+            <div role="progressbar" aria-label="Séances terminées cette semaine" aria-valuenow={completedCount} aria-valuemin={0} aria-valuemax={sessionCount} className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[#25d9bd] transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
           </div>
           <div className="grid grid-cols-7 gap-1.5 pt-1">
             {weekDays(weekStart, weekStartsOn).map((day) => {
               const count = weekSessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date)).length + weekSchedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date)).length;
               const completed = weekSessions.some((session) => session.status === "COMPLETED" && sameMontrealDay(session.date, day.date));
               const isToday = sameMontrealDay(day.date, new Date());
-              return <Link key={day.key} href={`#day-${day.key}`} aria-label={`${day.label} ${formatMontrealDate(day.date, { day: "numeric", month: "long" })}, ${count} séance${count === 1 ? "" : "s"}`} className={`grid min-h-16 place-items-center rounded-lg border px-1 py-2 text-center transition-colors motion-reduce:transition-none ${isToday ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-500" : "border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] hover:border-blue-300"}`}><span className="text-[9px] font-bold uppercase">{day.label.slice(0, 3)}</span><span className="text-xs font-black">{formatMontrealDate(day.date, { day: "numeric" })}</span><span className={`h-2 w-2 rounded-full ${completed ? "bg-emerald-500" : count ? "bg-sky-400" : "bg-slate-300"}`} /></Link>;
+              return <Link key={day.key} href={`#day-${day.key}`} aria-label={`${day.label} ${formatMontrealDate(day.date, { day: "numeric", month: "long" })}, ${count} séance${count === 1 ? "" : "s"}`} className={`grid min-h-[60px] place-items-center rounded-lg border px-1 py-1.5 text-center transition-colors motion-reduce:transition-none ${isToday ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-500" : "border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] hover:border-blue-300"}`}><span className="text-[9px] font-bold uppercase">{day.label.slice(0, 3)}</span><span className="text-xs font-black">{formatMontrealDate(day.date, { day: "numeric" })}</span><span className={`h-2 w-2 rounded-full ${completed ? "bg-emerald-500" : count ? "bg-sky-400" : "bg-slate-300"}`} /></Link>;
             })}
           </div>
       </CardContent>
@@ -350,7 +349,7 @@ function QuickReadCard({ sessions, schedules, activeAthletes, weekStart, weekSta
 }
 
 function DarkMetric({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string | number }) {
-  return <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/7 px-3 py-2"><Icon className="h-5 w-5 shrink-0 text-[var(--color-brand)]"/><div className="min-w-0"><div className="text-[10px] font-bold text-white/60">{label}</div><div className="truncate text-sm font-black text-white">{value}</div></div></div>;
+  return <div className="flex min-h-[50px] items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.07] px-3 py-2"><Icon className="h-5 w-5 shrink-0 text-[var(--color-brand)]"/><div className="min-w-0"><div className="text-[9px] font-bold leading-tight text-white/60">{label}</div><div className="truncate text-sm font-black leading-tight text-white">{value}</div></div></div>;
 }
 
 function Shortcut({ href, label, icon: Icon, primary = false }: { href: string; label: string; icon: typeof CalendarPlus; primary?: boolean }) {
