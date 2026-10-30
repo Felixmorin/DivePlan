@@ -142,8 +142,8 @@ test("current athlete preserves profile and access while skipping unused photos 
         assert.ok(name in routeDependencies, `Unexpected route dependency ${name}`);
         return routeDependencies[name];
       } });
-      const payload = { sessionId: "session-a", exercises: [{ exerciseId: "exercise-a", completed: true }],
-        dives: [{ poolDiveId: "dive-a", repetitionsCompleted: 5, goldenRepetitions: 1 }],
+      const payload = { sessionId: "session-a", exercises: [{ exerciseId: "exercise-a", completed: true, rating: null, note: null }],
+        dives: [{ poolDiveId: "dive-a", repetitionsCompleted: 5, goldenRepetitions: 1, feedbackCompleted: false, rating: null, note: null }],
         sessionFeedback: { rating: "5", note: "Synthetic" } };
       const request = () => new Request("https://example.test/api/athlete/session-progress", {
         method: "POST", body: JSON.stringify(payload)
@@ -272,7 +272,7 @@ test("current athlete preserves profile and access while skipping unused photos 
         return routeDependencies[name];
       } });
       const payload = { sessionId: "session-a", exercises: [], dives: [
-        { poolDiveId: "dive-a", repetitionsCompleted: 8, goldenRepetitions: 2 }
+        { poolDiveId: "dive-a", repetitionsCompleted: 8, goldenRepetitions: 2, feedbackCompleted: false, rating: null, note: null }
       ], sessionFeedback: { rating: "4", note: "Synthetic" } };
       const request = () => new Request("https://example.test/api/athlete/session-progress", { method: "POST", body: JSON.stringify(payload) });
       assert.equal((await realRoute.POST!(request())).status, 200);
