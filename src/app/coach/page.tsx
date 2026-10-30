@@ -32,7 +32,6 @@ type DashboardSession = {
 type DashboardSchedule = { id: string; title: string; startsAt: Date; duration: number | null; location: string | null; groupId: string | null; groupName: string | null; athleteId: string | null; sessionId: string | null; sessionStatus: string | null };
 type SessionRow = {id:string;title:string;date:Date;duration:number;status:string;planningEventId:string|null;groupName:string};
 type GroupRow = { id: string; name: string };
-type DashboardAlert = { id: string; title: string; detail: string; href: string; tone: "amber" | "cyan" | "rose" };
 
 type AvatarAthlete = { id: string; firstName: string; lastName: string; avatar?: string | null };
 type DashboardAlert = { id: string; title: string; detail: string; href: string; tone: "rose" | "amber" | "cyan" };
