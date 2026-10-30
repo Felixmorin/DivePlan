@@ -1,6 +1,6 @@
 import Link from "@/components/ui/app-link";
 import { redirect } from "next/navigation";
-import { ArrowRight, AlertCircle, CalendarDays, CalendarPlus, ChevronRight, Clock3, ListChecks, Timer, Users, ClipboardCheck, CircleCheck, CircleX, Clock4, FileText } from "lucide-react";
+import { ArrowRight, AlertCircle, CalendarDays, CalendarPlus, ChevronRight, Clock3, ListChecks, Timer, Users, ClipboardCheck, CircleCheck, CircleX, Clock4, FileText, Moon } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PrintButton } from "@/components/coach/print-button";
@@ -14,7 +14,7 @@ import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
 import { shouldCompleteSession } from "@/lib/session-status";
-import { addMontrealDays, formatMontrealDate, formatMontrealTime, sameMontrealDay, startOfMontrealWeek } from "@/lib/timezone";
+import { addMontrealDays, formatMontrealDate, formatMontrealTime, sameMontrealDay, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ type DashboardSession = {
   completions: Array<{ status: string }>;
   planningEventId: string | null;
 };
-type DashboardSchedule = { id: string; title: string; startsAt: Date; duration: number | null; location: string | null; groupId: string | null; groupName: string | null; athleteId: string | null; sessionId: string | null; sessionStatus: string | null };
+type DashboardSchedule = { id: string; title: string; startsAt: Date; endsAt: Date | null; duration: number | null; location: string | null; cancelledAt: Date | null; groupId: string | null; groupName: string | null; athleteId: string | null; sessionId: string | null; sessionStatus: string | null };
 type SessionRow = {id:string;title:string;date:Date;duration:number;status:string;planningEventId:string|null;groupName:string};
 type GroupRow = { id: string; name: string };
 
@@ -55,7 +55,7 @@ export default async function CoachDashboard() {
     query<{id:string;firstName:string;lastName:string;avatar:string|null;groupId:string|null;groupName:string|null}>(`SELECT a.id,u."firstName",u."lastName",u.avatar,g.id AS "groupId",g.name AS "groupName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
     query<GroupRow>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`, [clubId]),
     query<SessionRow>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s."calendarHiddenAt" IS NULL AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,weekStart,weekEnd]),
-    query<DashboardSchedule>(`SELECT e.id,e.title,e."startsAt",COALESCE(e.duration,s.duration) AS duration,e.location,COALESCE(e."groupId",a."groupId") AS "groupId",g.name AS "groupName",e."athleteId",s.id AS "sessionId",s.status AS "sessionStatus" FROM "PlanningEvent" e LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "TrainingGroup" g ON g.id=COALESCE(e."groupId",a."groupId") LEFT JOIN "TrainingSession" s ON s."planningEventId"=e.id WHERE e."clubId"=$1 AND e.type='TRAINING_SCHEDULE' AND e."cancelledAt" IS NULL AND e."calendarHiddenAt" IS NULL AND e."startsAt">=$2 AND e."startsAt"<$3 ORDER BY e."startsAt"`,[clubId,weekStart,weekEnd]),
+    query<DashboardSchedule>(`SELECT e.id,e.title,e."startsAt",e."endsAt",COALESCE(e.duration,s.duration) AS duration,e.location,e."cancelledAt",COALESCE(e."groupId",a."groupId") AS "groupId",g.name AS "groupName",e."athleteId",s.id AS "sessionId",s.status AS "sessionStatus" FROM "PlanningEvent" e LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "TrainingGroup" g ON g.id=COALESCE(e."groupId",a."groupId") LEFT JOIN "TrainingSession" s ON s."planningEventId"=e.id WHERE e."clubId"=$1 AND e.type='TRAINING_SCHEDULE' AND e."coachCalendarHiddenAt" IS NULL AND e."startsAt">=$2 AND e."startsAt"<$3 ORDER BY e."startsAt"`,[clubId,weekStart,weekEnd]),
     query<{athleteId:string;sessionId:string;status:string;completedAt:Date|null;startedAt:Date|null;firstName:string;lastName:string;title:string}>(`SELECT c."athleteId",c."sessionId",c.status,c."completedAt",c."startedAt",u."firstName",u."lastName",s.title FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "Athlete" a ON a.id=c."athleteId" JOIN "User" u ON u.id=a."userId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 AND c.status IN ('IN_PROGRESS','SKIPPED') AND (c.status='SKIPPED' OR s.date + (COALESCE(pe.duration,s.duration) + 30) * INTERVAL '1 minute' > $4) ORDER BY s.date DESC,u."firstName" ASC`,[clubId,weekStart,weekEnd,today]),
     query<SessionRow>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s."calendarHiddenAt" IS NULL AND s.status NOT IN ('COMPLETED','CANCELLED') AND s.date>$2 AND s.date<$3 ORDER BY s.date ASC LIMIT 1`,[clubId,today,weekEnd]),
     query<SessionRow>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s."calendarHiddenAt" IS NULL AND s.status <> 'CANCELLED' AND s.date<=$2 AND (s.status='COMPLETED' OR (s.status IN ('READY','IN_PROGRESS') AND s.date + (COALESCE(pe.duration,s.duration) + 30) * INTERVAL '1 minute' <= $2)) ORDER BY s.date DESC LIMIT 1`,[clubId,today]),
@@ -63,12 +63,13 @@ export default async function CoachDashboard() {
   const athleteAvatarUrls = await resolveAvatarUrls(athleteRows.rows.map((athlete) => athlete.avatar));
   const activeAthletes=athleteRows.rows.map((a,index)=>({id:a.id,user:{firstName:a.firstName,lastName:a.lastName,avatar:athleteAvatarUrls[index]},group:a.groupName?{id:a.groupId!,name:a.groupName}:null}));
   const rawSessions=await loadDashboardSessions([...weekSessionRows.rows,...nextRows.rows,...latestRows.rows]);
-  const sessions: DashboardSession[] = rawSessions.map(toDashboardSession).map((session) => (
+  const weeklySessions: DashboardSession[] = rawSessions.map(toDashboardSession);
+  const sessions: DashboardSession[] = weeklySessions.map((session) => (
     (session.status === "READY" || session.status === "IN_PROGRESS") && shouldCompleteSession(session.date, session.duration, today)
       ? { ...session, status: "COMPLETED" }
       : session
   ));
-  const effectiveSessionStatus = new Map(sessions.map((session) => [session.id, session.status]));
+  const effectiveSessionStatus = new Map(weeklySessions.map((session) => [session.id, session.status]));
   const schedules = scheduleRows.rows.map((schedule) => schedule.sessionId && effectiveSessionStatus.has(schedule.sessionId)
     ? { ...schedule, sessionStatus: effectiveSessionStatus.get(schedule.sessionId)! }
     : schedule);
@@ -85,7 +86,7 @@ export default async function CoachDashboard() {
   }));
   const weekAssignments = sessions.filter((session) => session.date >= weekStart && session.date < weekEnd);
   const scheduledAthleteIds = new Set(weekAssignments.filter((session) => session.status !== "CANCELLED").flatMap((session) => uniqueAssignedIds(session.blocks)));
-  for (const schedule of schedules) {
+  for (const schedule of schedules.filter((item) => !item.cancelledAt && item.sessionStatus !== "CANCELLED")) {
     const expected = schedule.athleteId ? activeAthletes.filter((athlete) => athlete.id === schedule.athleteId) : schedule.groupId ? activeAthletes.filter((athlete) => athlete.group?.id === schedule.groupId) : activeAthletes;
     expected.forEach((athlete) => scheduledAthleteIds.add(athlete.id));
   }
@@ -114,17 +115,21 @@ export default async function CoachDashboard() {
 
       <div className="grid gap-4 print:hidden lg:grid-cols-2">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={dashboardAthletes} recent={isRecentSession} />
-        <QuickReadCard sessions={sessions} schedules={schedules} activeAthletes={activeAthletes} weekStart={weekStart} weekStartsOn={weekStartsOn} />
+        <QuickReadCard sessions={weeklySessions} schedules={schedules} activeAthletes={activeAthletes} weekStart={weekStart} weekStartsOn={weekStartsOn} />
       </div>
 
       <section className="mt-6 print:mt-0">
         <div className="mb-3 flex items-center justify-between gap-4 px-1">
-          <h2 className="text-lg font-black tracking-tight">Planning de la semaine</h2>
-          <Link href="/coach/planning" className="inline-flex items-center gap-1 text-xs font-black text-[var(--color-brand-strong)] hover:underline">Voir le planning complet <ArrowRight className="h-3.5 w-3.5"/></Link>
+          <h2 className="text-[22px] font-bold tracking-tight text-[var(--color-navy)] sm:text-2xl">Planning de la semaine</h2>
+          <Link href="/coach/planning" className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-[#0879d1] transition-colors motion-reduce:transition-none hover:bg-blue-50 hover:underline focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">Voir le planning complet <ArrowRight className="h-4 w-4"/></Link>
         </div>
-        <div className="rounded-2xl border border-white/80 bg-white/70 p-2 shadow-[var(--shadow-card)] print:border-0 print:shadow-none"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7 print:grid-cols-7">
-          {weekDays(weekStart, weekStartsOn).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date))} schedules={schedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date))} />)}
-        </div></div>
+        <div className="rounded-[14px] border border-[#d7e4ec] bg-white p-3 shadow-[0_3px_15px_rgba(30,75,120,.035)] transition-colors duration-200 motion-reduce:transition-none sm:p-4 print:border-0 print:shadow-none">
+          <div className="overflow-x-auto pb-1" aria-label="Planning de la semaine, défilement horizontal sur petit écran">
+            <div className="grid min-w-[1120px] grid-cols-7 gap-2 xl:min-w-0 print:min-w-0">
+              {weekDays(weekStart, weekStartsOn).map((day) => <WeekDayCard key={day.key} day={day} weekStart={weekStart} sessions={weeklySessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date))} schedules={schedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date))} />)}
+            </div>
+          </div>
+        </div>
       </section>
 
       <div className="mt-4 grid gap-3 print:hidden xl:grid-cols-2 2xl:grid-cols-[1.1fr_0.9fr_0.8fr]">
@@ -206,7 +211,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
           <Link href="/coach/planning" className="inline-flex items-center gap-1 text-xs font-black text-[var(--color-brand-strong)] hover:underline">Voir le planning complet <ArrowRight className="h-3.5 w-3.5"/></Link>
         </div>
         <div className="rounded-2xl border border-white/80 bg-white/70 p-2 shadow-[var(--shadow-card)] print:border-0 print:shadow-none"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7 print:grid-cols-7">
-          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))} schedules={[]} demo />)}
+          {weekDays(weekStart).map((day) => <WeekDayCard key={day.key} day={day} weekStart={weekStart} sessions={sessions.filter((session) => sameMontrealDay(session.date, day.date))} schedules={[]} demo />)}
         </div></div>
       </section>
 
@@ -287,39 +292,37 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false, recent =
   );
 }
 
-function WeekDayCard({ day, sessions, schedules, demo = false }: { day: { key: number; label: string; date: Date }; sessions: DashboardSession[]; schedules: DashboardSchedule[]; demo?: boolean }) {
+function WeekDayCard({ day, weekStart, sessions, schedules, demo = false }: { day: { key: number; label: string; date: Date }; weekStart: Date; sessions: DashboardSession[]; schedules: DashboardSchedule[]; demo?: boolean }) {
   const isToday = sameMontrealDay(day.date, new Date());
-  const cancelled = sessions.filter((session) => session.status === "CANCELLED").length + schedules.filter((schedule) => schedule.sessionStatus === "CANCELLED").length;
+  const entries = [
+    ...sessions.map((session) => ({ id: session.id, date: session.date, title: session.title, duration: session.duration, endDate: null as Date | null, location: null as string | null, groupName: session.groupName, status: session.status, href: demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`, blocks: session.blocks })),
+    ...schedules.map((schedule) => ({ id: schedule.id, date: schedule.startsAt, title: schedule.title, duration: schedule.duration, endDate: schedule.endsAt, location: schedule.location, groupName: schedule.groupName, status: schedule.cancelledAt || schedule.sessionStatus === "CANCELLED" ? "CANCELLED" : schedule.sessionStatus ?? "SCHEDULED", href: schedule.sessionId ? `/coach/sessions/${schedule.sessionId}` : `/coach/planning?view=week&week=${toMontrealDateInputValue(weekStart)}`, blocks: [] as DashboardSession["blocks"] }))
+  ].sort((left, right) => left.date.getTime() - right.date.getTime());
+  const showYear = new Set(weekDays(weekStart).map((item) => formatMontrealDate(item.date, { year: "numeric" }))).size > 1;
+  const planningHref = `/coach/planning?view=week&week=${toMontrealDateInputValue(weekStart)}`;
   return (
-    <Card id={`day-${day.key}`} className={`min-h-36 scroll-mt-28 rounded-xl transition-colors motion-reduce:transition-none ${isToday ? "border-blue-500 bg-blue-50/70 shadow-[0_0_0_1px_#3b82f6]" : "bg-white"}`}>
-      <CardContent className="p-2.5">
-        <div className="mb-2 flex items-start justify-between gap-1.5">
-          <div className="min-w-0"><div className="truncate text-xs font-black">{day.label}</div><div className="text-[10px] font-bold text-[var(--color-ink-soft)]">{formatMontrealDate(day.date, { day: "2-digit", month: "short" })}</div></div>
-          <span className="shrink-0 text-[10px] font-bold text-[var(--color-ink-soft)]">{sessions.length + schedules.length || "Repos"}</span>
-        </div>
-        <div className="space-y-3">
-          {sessions.map((session) => {
-            const completed = session.status === "COMPLETED";
-            return (
-              <div key={session.id} className={`rounded-lg border p-2.5 ${completed ? "border-emerald-200 bg-emerald-50/80" : session.status === "CANCELLED" ? "border-rose-200 bg-rose-50/80" : session.status === "DRAFT" ? "border-amber-200 bg-amber-50/80" : "border-sky-200 bg-sky-50/80"}`}>
-                <div className="text-[10px] font-black text-[var(--color-brand-strong)]">{formatMontrealTime(session.date)}</div>
-                <Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`} className="mt-1 block text-xs font-black leading-snug hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{session.title}</Link>
-                <div className="mt-1 text-[10px] leading-tight text-[var(--color-ink-muted)]">{session.groupName}</div>
-                <div className="mt-1.5 flex flex-wrap gap-1">{uniqueBlockTypes(session.blocks).map((type) => <BlockTypeBadge key={String(type)} type={String(type)} className="px-1.5 py-0.5 text-[9px]" />)}</div>
-                <div className={`mt-2 flex items-center gap-1.5 text-[10px] font-bold ${completed ? "text-emerald-700" : session.status === "CANCELLED" || session.status === "NOT_DONE" ? "text-rose-700" : session.status === "DRAFT" ? "text-amber-800" : "text-sky-800"}`}>{completed ? <CircleCheck className="h-3.5 w-3.5"/> : session.status === "CANCELLED" ? <CircleX className="h-3.5 w-3.5"/> : <Clock3 className="h-3.5 w-3.5"/>}{completed ? "Séance terminée" : session.status === "CANCELLED" ? "Séance annulée" : session.status === "NOT_DONE" ? "Séance non tenue" : session.status === "DRAFT" ? "Brouillon à publier" : session.status === "IN_PROGRESS" ? "Séance en cours" : "Séance planifiée"}</div>
-              </div>
-            );
-          })}
-          {schedules.map((schedule) => <div key={schedule.id} className={`rounded-lg border p-2.5 ${schedule.sessionStatus === "COMPLETED" ? "border-emerald-200 bg-emerald-50/80" : schedule.sessionStatus === "CANCELLED" ? "border-rose-200 bg-rose-50/80" : "border-sky-200 bg-sky-50/80"}`}>
-            <div className="text-[10px] font-black text-[var(--color-brand-strong)]">{formatMontrealTime(schedule.startsAt)}</div>
-            <Link href={schedule.sessionId ? `/coach/sessions/${schedule.sessionId}` : "/coach/planning"} className="mt-1 block text-xs font-black leading-snug hover:text-[var(--color-brand-strong)]">{schedule.title}</Link>
-            <div className="mt-1 text-[10px] leading-tight text-[var(--color-ink-muted)]">{schedule.groupName ?? "Club complet"}{schedule.location ? ` · ${schedule.location}` : ""}</div>
-            <div className={`mt-2 flex items-center gap-1.5 text-[10px] font-bold ${schedule.sessionStatus === "COMPLETED" ? "text-emerald-700" : schedule.sessionStatus === "CANCELLED" ? "text-rose-700" : "text-sky-800"}`}>{schedule.sessionStatus === "COMPLETED" ? <CircleCheck className="h-3.5 w-3.5"/> : schedule.sessionStatus === "CANCELLED" ? <CircleX className="h-3.5 w-3.5"/> : <Clock3 className="h-3.5 w-3.5"/>}{schedule.sessionStatus === "COMPLETED" ? "Séance terminée" : schedule.sessionStatus === "CANCELLED" ? "Séance annulée" : schedule.sessionId ? "Séance planifiée" : "Entraînement à préparer"}</div>
-          </div>)}
-          {sessions.length === 0 && schedules.length === 0 && <div className="flex min-h-14 items-center justify-center rounded-lg border border-dashed border-[var(--color-border-strong)] px-2 py-3 text-center text-[11px] font-semibold text-[var(--color-ink-soft)]">Aucune séance prévue</div>}
-          {cancelled > 0 && <span className="sr-only">{cancelled} séance{cancelled === 1 ? "" : "s"} annulée{cancelled === 1 ? "" : "s"}</span>}
-        </div>
-      </CardContent>
+    <Card id={`day-${day.key}`} className={`min-h-[166px] scroll-mt-28 rounded-xl border p-3 transition-colors duration-200 motion-reduce:transition-none ${isToday ? "border-2 border-blue-500 bg-[#f1f7ff]" : "border-[#dce6ef] bg-white"}`}>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <Link href={planningHref} aria-label={`Ouvrir le planning de ${day.label} ${formatMontrealDate(day.date, { day: "numeric", month: "long", ...(showYear ? { year: "numeric" as const } : {}) })}`} className="min-w-0 rounded-sm focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+          <span className={`block truncate text-sm font-bold ${isToday ? "text-blue-800" : "text-[var(--color-navy)]"}`}>{day.label}</span>
+          <span className="block text-xs font-medium text-[var(--color-ink-muted)]">{formatMontrealDate(day.date, { day: "numeric", month: "short", ...(showYear ? { year: "numeric" as const } : {}) })}</span>
+        </Link>
+        <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2 py-1 text-[11px] font-semibold text-[#53677f]">{entries.length ? `${entries.length} séance${entries.length === 1 ? "" : "s"}` : "Repos"}</span>
+      </div>
+      {entries.length ? <div className="max-h-[116px] space-y-2 overflow-y-auto pr-1">
+        {entries.map((entry) => {
+          const tone = entry.status === "COMPLETED" ? "border-emerald-200 bg-emerald-50/70 text-emerald-800" : entry.status === "IN_PROGRESS" ? "border-teal-200 bg-teal-50 text-teal-900" : entry.status === "CANCELLED" ? "border-slate-200 bg-slate-50 text-slate-700" : entry.status === "DRAFT" ? "border-amber-200 bg-amber-50/80 text-amber-900" : entry.status === "NOT_DONE" ? "border-slate-200 bg-slate-50 text-slate-700" : "border-sky-200 bg-sky-50/70 text-sky-900";
+          const statusLabel = entry.status === "COMPLETED" ? "Séance terminée" : entry.status === "IN_PROGRESS" ? "Séance en cours" : entry.status === "CANCELLED" ? "Séance annulée" : entry.status === "DRAFT" ? "Brouillon à publier" : entry.status === "NOT_DONE" ? "Séance non tenue" : entry.status === "SCHEDULED" ? "Entraînement à préparer" : "Séance planifiée";
+          const endAt = entry.endDate ?? (entry.duration ? addMinutes(entry.date, entry.duration) : null);
+          const place = [entry.groupName, entry.location].filter(Boolean).join(" · ");
+          return <article key={entry.id} className={`rounded-lg border px-2.5 py-2 ${tone}`}>
+            <div className="text-xs font-bold tabular-nums text-[#087f9b]">{formatMontrealTime(entry.date)}{endAt ? ` – ${formatMontrealTime(endAt)}` : ""}</div>
+            <Link href={entry.href} className="mt-0.5 block text-[13px] font-bold leading-snug text-[var(--color-navy)] hover:text-[#0879d1] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{entry.title}</Link>
+            {(place || (!entry.groupName && entry.status === "SCHEDULED")) && <div className="mt-0.5 text-[11px] leading-snug text-[var(--color-ink-muted)]">{place || "Club complet"}</div>}
+            <div className={`mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold ${entry.status === "COMPLETED" ? "text-emerald-700" : entry.status === "IN_PROGRESS" ? "text-teal-800" : entry.status === "CANCELLED" || entry.status === "NOT_DONE" ? "text-slate-600" : entry.status === "DRAFT" ? "text-amber-800" : "text-sky-800"}`}>{entry.status === "COMPLETED" ? <CircleCheck aria-hidden="true" className="h-3.5 w-3.5"/> : entry.status === "CANCELLED" ? <CircleX aria-hidden="true" className="h-3.5 w-3.5"/> : <Clock3 aria-hidden="true" className="h-3.5 w-3.5"/>}{statusLabel}</div>
+          </article>;
+        })}
+      </div> : <div className="flex min-h-[82px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[#cbd8e4] px-2 py-3 text-center text-xs font-medium text-[var(--color-ink-soft)]"><Moon aria-hidden="true" className="h-4 w-4"/><span>Aucune séance prévue</span></div>}
     </Card>
   );
 }
@@ -335,7 +338,7 @@ function QuickReadCard({ sessions, schedules, activeAthletes, weekStart, weekSta
   const weekSessions = sessions.filter((item) => item.date >= weekStart && item.date < weekEnd);
   const weekSchedules = schedules.filter((item) => item.startsAt >= weekStart && item.startsAt < weekEnd);
   const plannedSessions = weekSessions.filter((session) => !session.planningEventId && session.status !== "CANCELLED");
-  const plannedSchedules = weekSchedules.filter((schedule) => schedule.sessionStatus !== "CANCELLED");
+  const plannedSchedules = weekSchedules.filter((schedule) => !schedule.cancelledAt && schedule.sessionStatus !== "CANCELLED");
   const sessionCount = plannedSessions.length + plannedSchedules.length;
   const expectedAthletes = new Set(weekSessions.filter((session) => session.status !== "CANCELLED").flatMap((item) => uniqueAssignedIds(item.blocks)));
   for (const schedule of plannedSchedules) {
@@ -365,9 +368,9 @@ function QuickReadCard({ sessions, schedules, activeAthletes, weekStart, weekSta
             {weekDays(weekStart, weekStartsOn).map((day) => {
               const daySessions = weekSessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date));
               const daySchedules = weekSchedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date));
-              const plannedCount = daySessions.filter((session) => session.status !== "CANCELLED").length + daySchedules.filter((schedule) => schedule.sessionStatus !== "CANCELLED").length;
+              const plannedCount = daySessions.filter((session) => session.status !== "CANCELLED").length + daySchedules.filter((schedule) => !schedule.cancelledAt && schedule.sessionStatus !== "CANCELLED").length;
               const completedCountForDay = daySessions.filter((session) => session.status === "COMPLETED").length + daySchedules.filter((schedule) => schedule.sessionStatus === "COMPLETED").length;
-              const cancelledCount = daySessions.filter((session) => session.status === "CANCELLED").length + daySchedules.filter((schedule) => schedule.sessionStatus === "CANCELLED").length;
+              const cancelledCount = daySessions.filter((session) => session.status === "CANCELLED").length + daySchedules.filter((schedule) => schedule.cancelledAt || schedule.sessionStatus === "CANCELLED").length;
               const isToday = sameMontrealDay(day.date, today);
               const indicator = completedCountForDay ? "completed" : plannedCount ? "planned" : cancelledCount ? "cancelled" : "empty";
               const stateLabel = indicator === "completed" ? `${completedCountForDay} séance${completedCountForDay === 1 ? "" : "s"} terminée${completedCountForDay === 1 ? "" : "s"}` : indicator === "planned" ? `${plannedCount} séance${plannedCount === 1 ? "" : "s"} planifiée${plannedCount === 1 ? "" : "s"}` : indicator === "cancelled" ? `${cancelledCount} séance${cancelledCount === 1 ? "" : "s"} annulée${cancelledCount === 1 ? "" : "s"}` : "Aucune séance";
