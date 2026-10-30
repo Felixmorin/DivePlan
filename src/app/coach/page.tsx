@@ -1,6 +1,6 @@
 import Link from "@/components/ui/app-link";
 import { redirect } from "next/navigation";
-import { ArrowRight, AlertCircle, CalendarDays, CalendarPlus, ChevronRight, Clock3, ListChecks, Timer, Users, ClipboardCheck, CircleCheck, Clock4 } from "lucide-react";
+import { ArrowRight, AlertCircle, CalendarDays, CalendarPlus, ChevronRight, Clock3, ListChecks, Timer, Users, ClipboardCheck, CircleCheck, Clock4, FileText } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PrintButton } from "@/components/coach/print-button";
@@ -228,7 +228,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
 function TodayCard({ session, activeSessionIds, athletes, demo = false, recent = false }: { session?: DashboardSession; activeSessionIds: Set<string>; athletes: AvatarAthlete[]; demo?: boolean; recent?: boolean }) {
   if (!session) {
     return (
-      <Card className="min-h-[280px] overflow-hidden border-[var(--color-navy)] bg-[var(--color-navy)] text-white">
+      <Card className="min-h-[301px] overflow-hidden border-[#082e50] bg-[var(--color-navy)] text-white">
         <CardContent className="flex min-h-[280px] flex-col justify-center p-6">
           <p className="text-sm font-black uppercase text-[var(--color-brand)]">Prochaine séance</p>
           <h2 className="mt-4 text-3xl font-black leading-tight text-white sm:text-4xl">Aucune séance à venir</h2>
@@ -245,24 +245,40 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false, recent =
   const volume = session.blocks.reduce((sum, block) => sum + block.estimatedVolume, 0);
 
   return (
-      <Card className="relative h-full min-h-[280px] overflow-hidden border-[var(--color-navy)] bg-[radial-gradient(ellipse_at_78%_0%,rgba(0,178,204,.16),transparent_46%),linear-gradient(115deg,#071a2a_0%,#0a2a43_60%,#0b3b51_100%)] text-white">
-      <CardContent className="relative flex min-h-[280px] flex-col justify-between p-5 sm:p-6 sm:pt-7">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] font-black uppercase tracking-wide text-[var(--color-brand)]">{recent ? "Dernière séance terminée" : "Prochaine séance"}</p>
-          <div className="flex flex-wrap items-center gap-2"><StatusPill status={String(effectiveStatus)} /><span className="text-xs font-bold text-white/75">{formatMontrealDate(session.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})} · {formatMontrealTime(session.date)} – {formatMontrealTime(addMinutes(session.date, session.duration))}</span></div>
+    <Card className="relative h-full min-h-[301px] overflow-hidden rounded-[14px] border-[#082e50] bg-[radial-gradient(ellipse_at_96%_0%,rgba(8,181,200,.34),transparent_36%),linear-gradient(112deg,#071a38_0%,#07345d_58%,#063e70_100%)] text-white shadow-[0_10px_26px_rgba(3,27,54,.12)]">
+      <CardContent className="relative flex min-h-[301px] flex-col p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-bold uppercase tracking-[.04em] text-[#16d9e5]">{recent ? "Dernière séance terminée" : "Prochaine séance"}</p>
         </div>
-        <h2 className="mt-3 max-w-2xl text-2xl font-black leading-tight text-white sm:text-[2rem]">{session.title}</h2>
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <DarkMetric icon={Clock3} label="Durée" value={`${session.duration} min`} />
-          <DarkMetric icon={Users} label="Athlètes" value={assignedIds.length} />
-          <DarkMetric icon={Timer} label="Plongeons" value={volume} />
-          <DarkMetric icon={ListChecks} label="Blocs" value={session.blocks.length} />
+        <h2 className="mt-2 text-[1.75rem] font-extrabold leading-tight text-white sm:text-[2rem]">{session.title}</h2>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-medium text-[#e4effa] sm:text-[15px]">
+          <CalendarDays className="h-[22px] w-[22px] shrink-0 text-white" />
+          <span>{capitalizeFirst(formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "short", year: "numeric" }))}</span>
+          <span aria-hidden="true" className="hidden h-5 w-px bg-white/35 sm:block" />
+          <Clock3 className="h-[22px] w-[22px] shrink-0 text-white" />
+          <span>{formatMontrealTime(session.date)} – {formatMontrealTime(addMinutes(session.date, session.duration))} ({session.duration} min)</span>
         </div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3"><AthleteAvatarGroup ids={assignedIds} athletes={athletes} limit={5} /><div className="flex flex-wrap gap-1.5">{uniqueBlockTypes(session.blocks).map((type) => <BlockTypeBadge key={String(type)} type={String(type)} />)}</div></div>
-          <Button asChild variant="action" size="default" className="min-h-12 min-w-36 bg-[#0969ef] shadow-none hover:bg-[#0757cc]">
-            <Link href={action.href}>{action.label} <ArrowRight className="h-5 w-5" /></Link>
-          </Button>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            {uniqueBlockTypes(session.blocks).map((type) => <BlockTypeBadge key={String(type)} type={String(type)} className="min-h-11 rounded-full border border-white/10 bg-white/10 px-3 text-sm font-semibold text-white [&_svg]:text-[#32d6e6]" />)}
+          </div>
+          <AthleteAvatarGroup ids={assignedIds} athletes={athletes} limit={5} size="large" />
+        </div>
+        <div aria-hidden="true" className="my-4 h-px w-full bg-sky-100/20 sm:my-4" />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <div className="grid w-full grid-cols-2 gap-x-3 gap-y-3 sm:w-auto sm:flex sm:flex-1 sm:items-center sm:gap-0">
+            <FooterMetric icon={Users} value={assignedIds.length} label="athlètes" />
+            <span aria-hidden="true" className="hidden h-12 w-px bg-sky-100/25 sm:block" />
+            <FooterMetric icon={ListChecks} value={session.blocks.length} label="blocs" />
+            <span aria-hidden="true" className="hidden h-12 w-px bg-sky-100/25 sm:block" />
+            <FooterMetric icon={Timer} value={new Intl.NumberFormat("fr-CA").format(volume)} label="plongeons" />
+          </div>
+          <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:justify-end sm:gap-3">
+            <StatusPill status={String(effectiveStatus)} className={effectiveStatus === "COMPLETED" ? "min-h-8 border border-emerald-100/25 bg-emerald-300/15 px-3 text-emerald-100" : "min-h-8 px-3"} />
+            <Button asChild variant="outline" className="h-14 min-h-14 w-full justify-between rounded-xl border border-blue-300/80 bg-blue-500/10 px-4 text-sm font-bold text-white transition-colors motion-reduce:transition-none hover:border-blue-200 hover:bg-blue-500/20 hover:text-white sm:w-auto sm:min-w-[190px]">
+              <Link href={action.href}><span className="inline-flex items-center gap-2"><FileText className="h-4 w-4" />{action.label}</span><ArrowRight className="h-4 w-4" /></Link>
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -348,8 +364,12 @@ function QuickReadCard({ sessions, schedules, activeAthletes, weekStart, weekSta
   );
 }
 
-function DarkMetric({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string | number }) {
-  return <div className="flex min-h-[50px] items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.07] px-3 py-2"><Icon className="h-5 w-5 shrink-0 text-[var(--color-brand)]"/><div className="min-w-0"><div className="text-[9px] font-bold leading-tight text-white/60">{label}</div><div className="truncate text-sm font-black leading-tight text-white">{value}</div></div></div>;
+function FooterMetric({ icon: Icon, value, label }: { icon: typeof Users; value: string | number; label: string }) {
+  return <div className="flex min-w-0 items-center gap-2 sm:flex-1 sm:px-3 first:sm:pl-0 last:sm:pr-0"><Icon className="h-6 w-6 shrink-0 text-[#12d5e6]"/><div className="min-w-0"><div className="text-[1.55rem] font-bold leading-none text-white">{value}</div><div className="mt-1 text-[13px] leading-none text-[#d2e1ef]">{label}</div></div></div>;
+}
+
+function capitalizeFirst(value: string) {
+  return value ? `${value[0].toLocaleUpperCase()}${value.slice(1)}` : value;
 }
 
 function Shortcut({ href, label, icon: Icon, primary = false }: { href: string; label: string; icon: typeof CalendarPlus; primary?: boolean }) {
