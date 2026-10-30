@@ -511,9 +511,11 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
             warmup: { ...warmup, competitionEvaluation: false },
             cooldown: { ...cooldown, competitionEvaluation: false },
             evaluationPlacement: effectiveEvaluationPlacement,
+            contentOrder: orderedContentRows.map((row) => row.id),
             coachAthleteNotes,
-            drylandBlocks: effectiveDrylandBlocks.map(({ id, title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides }) => ({ title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides, competitionEvaluation: effectiveEvaluationPlacement === `block:${id}` })),
+            drylandBlocks: effectiveDrylandBlocks.map(({ id, title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides }) => ({ sourceBlockId: id, title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides, competitionEvaluation: effectiveEvaluationPlacement === `block:${id}` })),
       poolBlocks: individualPoolBlocks.map((block) => ({
+              sourceBlockId: block.sourceBlockId,
               title: block.title,
               duration: block.duration,
               athleteIds: block.athleteIds,

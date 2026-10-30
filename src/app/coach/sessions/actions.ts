@@ -29,6 +29,7 @@ const sessionInputSchema = z.object({
   notes: z.string().optional(),
   coachAthleteNotes: z.record(z.string(), z.string().max(2000)).default({}),
   evaluationPlacement: z.string().default("none"),
+  contentOrder: z.array(z.string()).default([]),
   planningEventId: z.string().optional(),
   templateId: z.string().optional(),
   status: z.nativeEnum(SessionStatus).default(SessionStatus.READY).refine((status) => status === SessionStatus.DRAFT || status === SessionStatus.READY),
@@ -47,6 +48,7 @@ const sessionInputSchema = z.object({
     description: z.string().optional()
   }),
   drylandBlocks: z.array(z.object({
+    sourceBlockId: z.string().optional(),
     competitionEvaluation: z.boolean().default(false),
     title: z.string().trim(),
     duration: z.number().int(),
@@ -60,6 +62,7 @@ const sessionInputSchema = z.object({
     })).default({})
   })).default([]),
   poolBlocks: z.array(z.object({
+    sourceBlockId: z.string().optional(),
     competitionEvaluation: z.boolean().default(false),
     title: z.string(),
     duration: z.number().int(),
@@ -1018,9 +1021,12 @@ export async function updateTrainingSession(formData: FormData) {
           .filter((id) => validDrylandById.has(id));
         if (selectedIds.length === 0) throw new Error(`Le bloc dryland « ${block.title} » doit contenir un exercice.`);
         await tx.query(`DELETE FROM "DrylandBlockExercise" WHERE "blockId"=$1`,[block.id]);
+        const exerciseOccurrenceCounts = new Map<string, number>();
         const exerciseRows = selectedIds.map((exerciseId, order) => {
           const defaults = validDrylandById.get(exerciseId)!;
-          const existingExercise = block.drylandExercises.filter((exercise) => exercise.exerciseId === exerciseId)[order];
+          const occurrence = exerciseOccurrenceCounts.get(exerciseId) ?? 0;
+          exerciseOccurrenceCounts.set(exerciseId, occurrence + 1);
+          const existingExercise = block.drylandExercises.filter((exercise) => exercise.exerciseId === exerciseId)[occurrence];
           return { exerciseId, sets: existingExercise ? nullableNumber(formData.get(`exerciseSets:${block.id}:${existingExercise.order}`)) : defaults.defaultSets, reps: existingExercise ? nullableNumber(formData.get(`exerciseReps:${block.id}:${existingExercise.order}`)) : defaults.defaultReps, duration: existingExercise ? nullableNumber(formData.get(`exerciseDuration:${block.id}:${existingExercise.order}`)) : defaults.defaultDuration, notes: existingExercise ? nullableText(formData.get(`exerciseNotes:${block.id}:${existingExercise.order}`)) : null, order };
         });
         await insertDrylandExercises(tx, block.id, exerciseRows);
@@ -1150,11 +1156,12 @@ function buildSessionStructureBlocks(
   poolBlocks: PreparedPoolBlock[],
   allAthleteIds: string[]
 ): SessionStructureBlock[] {
-  const blocks: SessionStructureBlock[] = [];
+  const blocks: Array<SessionStructureBlock & { contentKey?: string }> = [];
 
   if (data.warmup.enabled) {
     blocks.push({
       type: BlockType.WARMUP,
+      contentKey: "warmup",
       title: data.warmup.title,
       description: data.warmup.description?.trim() || null,
       duration: data.warmup.duration,
@@ -1170,6 +1177,7 @@ function buildSessionStructureBlocks(
   for (const [index, block] of drylandBlocks.entries()) {
     blocks.push({
       type: BlockType.DRYLAND,
+      contentKey: block.sourceBlockId,
       title: block.title,
       description: null,
       duration: block.duration,
@@ -1193,6 +1201,7 @@ function buildSessionStructureBlocks(
   for (const [index, block] of poolBlocks.entries()) {
     blocks.push({
       type: BlockType.POOL,
+      contentKey: block.sourceBlockId,
       title: block.title,
       description: null,
       duration: block.duration,
@@ -1215,6 +1224,7 @@ function buildSessionStructureBlocks(
   if (data.cooldown.enabled) {
     blocks.push({
       type: BlockType.COOLDOWN,
+      contentKey: "cooldown",
       title: data.cooldown.title,
       description: data.cooldown.description?.trim() || null,
       duration: data.cooldown.duration,
@@ -1227,6 +1237,11 @@ function buildSessionStructureBlocks(
     });
   }
 
+  if (data.contentOrder.length) {
+    const order = new Map(data.contentOrder.map((id, index) => [id, index]));
+    blocks.sort((a, b) => (order.get(a.contentKey ?? "") ?? Number.MAX_SAFE_INTEGER) - (order.get(b.contentKey ?? "") ?? Number.MAX_SAFE_INTEGER));
+    blocks.forEach((block, index) => { block.position = index + 1; delete block.contentKey; });
+  }
   return blocks;
 }
 
