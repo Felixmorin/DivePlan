@@ -1,6 +1,6 @@
 import Link from "@/components/ui/app-link";
 import { redirect } from "next/navigation";
-import { ArrowRight, AlertCircle, CalendarDays, CalendarPlus, ChevronRight, Clock3, ListChecks, Timer, Users, ClipboardCheck, CircleCheck, Clock4, FileText } from "lucide-react";
+import { ArrowRight, AlertCircle, CalendarDays, CalendarPlus, ChevronRight, Clock3, ListChecks, Timer, Users, ClipboardCheck, CircleCheck, CircleX, Clock4, FileText } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { AthleteAvatarGroup } from "@/components/coach/athlete-avatar-group";
 import { PrintButton } from "@/components/coach/print-button";
@@ -54,7 +54,7 @@ export default async function CoachDashboard() {
   const [athleteRows, groupRows, weekSessionRows, scheduleRows, completionRows, nextRows, latestRows] = await Promise.all([
     query<{id:string;firstName:string;lastName:string;avatar:string|null;groupId:string|null;groupName:string|null}>(`SELECT a.id,u."firstName",u."lastName",u.avatar,g.id AS "groupId",g.name AS "groupName" FROM "Athlete" a JOIN "User" u ON u.id=a."userId" LEFT JOIN "TrainingGroup" g ON g.id=a."groupId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
     query<GroupRow>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`, [clubId]),
-    query<SessionRow>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s."calendarHiddenAt" IS NULL AND s.status <> 'CANCELLED' AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,weekStart,weekEnd]),
+    query<SessionRow>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s."calendarHiddenAt" IS NULL AND s.date >= $2 AND s.date < $3 ORDER BY s.date`,[clubId,weekStart,weekEnd]),
     query<DashboardSchedule>(`SELECT e.id,e.title,e."startsAt",COALESCE(e.duration,s.duration) AS duration,e.location,COALESCE(e."groupId",a."groupId") AS "groupId",g.name AS "groupName",e."athleteId",s.id AS "sessionId",s.status AS "sessionStatus" FROM "PlanningEvent" e LEFT JOIN "Athlete" a ON a.id=e."athleteId" LEFT JOIN "TrainingGroup" g ON g.id=COALESCE(e."groupId",a."groupId") LEFT JOIN "TrainingSession" s ON s."planningEventId"=e.id WHERE e."clubId"=$1 AND e.type='TRAINING_SCHEDULE' AND e."cancelledAt" IS NULL AND e."calendarHiddenAt" IS NULL AND e."startsAt">=$2 AND e."startsAt"<$3 ORDER BY e."startsAt"`,[clubId,weekStart,weekEnd]),
     query<{athleteId:string;sessionId:string;status:string;completedAt:Date|null;startedAt:Date|null;firstName:string;lastName:string;title:string}>(`SELECT c."athleteId",c."sessionId",c.status,c."completedAt",c."startedAt",u."firstName",u."lastName",s.title FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "Athlete" a ON a.id=c."athleteId" JOIN "User" u ON u.id=a."userId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3 AND c.status IN ('IN_PROGRESS','SKIPPED') AND (c.status='SKIPPED' OR s.date + (COALESCE(pe.duration,s.duration) + 30) * INTERVAL '1 minute' > $4) ORDER BY s.date DESC,u."firstName" ASC`,[clubId,weekStart,weekEnd,today]),
     query<SessionRow>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.status,s."planningEventId",g.name AS "groupName" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE w."clubId"=$1 AND s."calendarHiddenAt" IS NULL AND s.status NOT IN ('COMPLETED','CANCELLED') AND s.date>$2 AND s.date<$3 ORDER BY s.date ASC LIMIT 1`,[clubId,today,weekEnd]),
@@ -63,14 +63,16 @@ export default async function CoachDashboard() {
   const athleteAvatarUrls = await resolveAvatarUrls(athleteRows.rows.map((athlete) => athlete.avatar));
   const activeAthletes=athleteRows.rows.map((a,index)=>({id:a.id,user:{firstName:a.firstName,lastName:a.lastName,avatar:athleteAvatarUrls[index]},group:a.groupName?{id:a.groupId!,name:a.groupName}:null}));
   const rawSessions=await loadDashboardSessions([...weekSessionRows.rows,...nextRows.rows,...latestRows.rows]);
-  const schedules=scheduleRows.rows;
-  const recentCompletions=completionRows.rows;
-
   const sessions: DashboardSession[] = rawSessions.map(toDashboardSession).map((session) => (
     (session.status === "READY" || session.status === "IN_PROGRESS") && shouldCompleteSession(session.date, session.duration, today)
       ? { ...session, status: "COMPLETED" }
       : session
   ));
+  const effectiveSessionStatus = new Map(sessions.map((session) => [session.id, session.status]));
+  const schedules = scheduleRows.rows.map((schedule) => schedule.sessionId && effectiveSessionStatus.has(schedule.sessionId)
+    ? { ...schedule, sessionStatus: effectiveSessionStatus.get(schedule.sessionId)! }
+    : schedule);
+  const recentCompletions=completionRows.rows;
   const primarySession = pickPrimarySession(sessions, today);
   const isRecentSession = primarySession?.status === "COMPLETED";
   const activeSessionIds = new Set(sessions.filter((session) => sessionIsWithinActiveWindow(session, today) && (session.status === "IN_PROGRESS" || session.completions.some((completion) => completion.status === "IN_PROGRESS"))).map((session) => session.id));
@@ -82,7 +84,7 @@ export default async function CoachDashboard() {
     avatar: athlete.user.avatar
   }));
   const weekAssignments = sessions.filter((session) => session.date >= weekStart && session.date < weekEnd);
-  const scheduledAthleteIds = new Set(weekAssignments.flatMap((session) => uniqueAssignedIds(session.blocks)));
+  const scheduledAthleteIds = new Set(weekAssignments.filter((session) => session.status !== "CANCELLED").flatMap((session) => uniqueAssignedIds(session.blocks)));
   for (const schedule of schedules) {
     const expected = schedule.athleteId ? activeAthletes.filter((athlete) => athlete.id === schedule.athleteId) : schedule.groupId ? activeAthletes.filter((athlete) => athlete.group?.id === schedule.groupId) : activeAthletes;
     expected.forEach((athlete) => scheduledAthleteIds.add(athlete.id));
@@ -110,7 +112,7 @@ export default async function CoachDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 print:hidden lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 print:hidden lg:grid-cols-2">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={dashboardAthletes} recent={isRecentSession} />
         <QuickReadCard sessions={sessions} schedules={schedules} activeAthletes={activeAthletes} weekStart={weekStart} weekStartsOn={weekStartsOn} />
       </div>
@@ -193,7 +195,7 @@ function DemoCoachDashboard({ userName }: { userName: string }) {
         </div>
       </div>
 
-      <div className="grid gap-4 print:hidden lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid gap-4 print:hidden lg:grid-cols-2">
         <TodayCard session={primarySession} activeSessionIds={activeSessionIds} athletes={athletes} demo recent={isRecentSession} />
         <QuickReadCard sessions={sessions} schedules={[]} activeAthletes={athletes.map((athlete) => ({ id: athlete.id, group: { id: "demo-group", name: demoSession.group } }))} weekStart={weekStart} weekStartsOn={1} />
       </div>
@@ -287,6 +289,7 @@ function TodayCard({ session, activeSessionIds, athletes, demo = false, recent =
 
 function WeekDayCard({ day, sessions, schedules, demo = false }: { day: { key: number; label: string; date: Date }; sessions: DashboardSession[]; schedules: DashboardSchedule[]; demo?: boolean }) {
   const isToday = sameMontrealDay(day.date, new Date());
+  const cancelled = sessions.filter((session) => session.status === "CANCELLED").length + schedules.filter((schedule) => schedule.sessionStatus === "CANCELLED").length;
   return (
     <Card id={`day-${day.key}`} className={`min-h-36 scroll-mt-28 rounded-xl transition-colors motion-reduce:transition-none ${isToday ? "border-blue-500 bg-blue-50/70 shadow-[0_0_0_1px_#3b82f6]" : "bg-white"}`}>
       <CardContent className="p-2.5">
@@ -298,22 +301,23 @@ function WeekDayCard({ day, sessions, schedules, demo = false }: { day: { key: n
           {sessions.map((session) => {
             const completed = session.status === "COMPLETED";
             return (
-              <div key={session.id} className={`rounded-lg border p-2.5 ${completed ? "border-emerald-200 bg-emerald-50/80" : session.status === "DRAFT" ? "border-amber-200 bg-amber-50/80" : "border-sky-200 bg-sky-50/80"}`}>
+              <div key={session.id} className={`rounded-lg border p-2.5 ${completed ? "border-emerald-200 bg-emerald-50/80" : session.status === "CANCELLED" ? "border-rose-200 bg-rose-50/80" : session.status === "DRAFT" ? "border-amber-200 bg-amber-50/80" : "border-sky-200 bg-sky-50/80"}`}>
                 <div className="text-[10px] font-black text-[var(--color-brand-strong)]">{formatMontrealTime(session.date)}</div>
                 <Link href={demo ? "/coach/sessions/demo" : `/coach/sessions/${session.id}`} className="mt-1 block text-xs font-black leading-snug hover:text-[var(--color-brand-strong)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">{session.title}</Link>
                 <div className="mt-1 text-[10px] leading-tight text-[var(--color-ink-muted)]">{session.groupName}</div>
                 <div className="mt-1.5 flex flex-wrap gap-1">{uniqueBlockTypes(session.blocks).map((type) => <BlockTypeBadge key={String(type)} type={String(type)} className="px-1.5 py-0.5 text-[9px]" />)}</div>
-                <div className={`mt-2 flex items-center gap-1.5 text-[10px] font-bold ${completed ? "text-emerald-700" : session.status === "DRAFT" ? "text-amber-800" : "text-sky-800"}`}><CircleCheck className="h-3.5 w-3.5"/>{completed ? "Séance terminée" : session.status === "DRAFT" ? "Brouillon à publier" : "Séance planifiée"}</div>
+                <div className={`mt-2 flex items-center gap-1.5 text-[10px] font-bold ${completed ? "text-emerald-700" : session.status === "CANCELLED" || session.status === "NOT_DONE" ? "text-rose-700" : session.status === "DRAFT" ? "text-amber-800" : "text-sky-800"}`}>{completed ? <CircleCheck className="h-3.5 w-3.5"/> : session.status === "CANCELLED" ? <CircleX className="h-3.5 w-3.5"/> : <Clock3 className="h-3.5 w-3.5"/>}{completed ? "Séance terminée" : session.status === "CANCELLED" ? "Séance annulée" : session.status === "NOT_DONE" ? "Séance non tenue" : session.status === "DRAFT" ? "Brouillon à publier" : session.status === "IN_PROGRESS" ? "Séance en cours" : "Séance planifiée"}</div>
               </div>
             );
           })}
-          {schedules.map((schedule) => <div key={schedule.id} className={`rounded-lg border p-2.5 ${schedule.sessionStatus === "COMPLETED" ? "border-emerald-200 bg-emerald-50/80" : "border-sky-200 bg-sky-50/80"}`}>
+          {schedules.map((schedule) => <div key={schedule.id} className={`rounded-lg border p-2.5 ${schedule.sessionStatus === "COMPLETED" ? "border-emerald-200 bg-emerald-50/80" : schedule.sessionStatus === "CANCELLED" ? "border-rose-200 bg-rose-50/80" : "border-sky-200 bg-sky-50/80"}`}>
             <div className="text-[10px] font-black text-[var(--color-brand-strong)]">{formatMontrealTime(schedule.startsAt)}</div>
             <Link href={schedule.sessionId ? `/coach/sessions/${schedule.sessionId}` : "/coach/planning"} className="mt-1 block text-xs font-black leading-snug hover:text-[var(--color-brand-strong)]">{schedule.title}</Link>
             <div className="mt-1 text-[10px] leading-tight text-[var(--color-ink-muted)]">{schedule.groupName ?? "Club complet"}{schedule.location ? ` · ${schedule.location}` : ""}</div>
-            <div className={`mt-2 flex items-center gap-1.5 text-[10px] font-bold ${schedule.sessionStatus === "COMPLETED" ? "text-emerald-700" : "text-sky-800"}`}><CircleCheck className="h-3.5 w-3.5"/>{schedule.sessionStatus === "COMPLETED" ? "Séance terminée" : schedule.sessionId ? "Séance planifiée" : "Entraînement à préparer"}</div>
+            <div className={`mt-2 flex items-center gap-1.5 text-[10px] font-bold ${schedule.sessionStatus === "COMPLETED" ? "text-emerald-700" : schedule.sessionStatus === "CANCELLED" ? "text-rose-700" : "text-sky-800"}`}>{schedule.sessionStatus === "COMPLETED" ? <CircleCheck className="h-3.5 w-3.5"/> : schedule.sessionStatus === "CANCELLED" ? <CircleX className="h-3.5 w-3.5"/> : <Clock3 className="h-3.5 w-3.5"/>}{schedule.sessionStatus === "COMPLETED" ? "Séance terminée" : schedule.sessionStatus === "CANCELLED" ? "Séance annulée" : schedule.sessionId ? "Séance planifiée" : "Entraînement à préparer"}</div>
           </div>)}
           {sessions.length === 0 && schedules.length === 0 && <div className="flex min-h-14 items-center justify-center rounded-lg border border-dashed border-[var(--color-border-strong)] px-2 py-3 text-center text-[11px] font-semibold text-[var(--color-ink-soft)]">Aucune séance prévue</div>}
+          {cancelled > 0 && <span className="sr-only">{cancelled} séance{cancelled === 1 ? "" : "s"} annulée{cancelled === 1 ? "" : "s"}</span>}
         </div>
       </CardContent>
     </Card>
@@ -330,34 +334,46 @@ function QuickReadCard({ sessions, schedules, activeAthletes, weekStart, weekSta
   const weekEnd = addMontrealDays(weekStart, 7);
   const weekSessions = sessions.filter((item) => item.date >= weekStart && item.date < weekEnd);
   const weekSchedules = schedules.filter((item) => item.startsAt >= weekStart && item.startsAt < weekEnd);
-  const sessionCount = weekSessions.filter((session) => !session.planningEventId).length + weekSchedules.length;
-  const expectedAthletes = new Set(weekSessions.flatMap((item) => uniqueAssignedIds(item.blocks)));
-  for (const schedule of weekSchedules) {
+  const plannedSessions = weekSessions.filter((session) => !session.planningEventId && session.status !== "CANCELLED");
+  const plannedSchedules = weekSchedules.filter((schedule) => schedule.sessionStatus !== "CANCELLED");
+  const sessionCount = plannedSessions.length + plannedSchedules.length;
+  const expectedAthletes = new Set(weekSessions.filter((session) => session.status !== "CANCELLED").flatMap((item) => uniqueAssignedIds(item.blocks)));
+  for (const schedule of plannedSchedules) {
     if (schedule.athleteId) expectedAthletes.add(schedule.athleteId);
     else activeAthletes.filter((athlete) => !schedule.groupId || athlete.group?.id === schedule.groupId).forEach((athlete) => expectedAthletes.add(athlete.id));
   }
   const athleteCount = expectedAthletes.size;
-  const completedCount = weekSessions.filter((session) => session.status === "COMPLETED").length;
+  const completedCount = plannedSessions.filter((session) => session.status === "COMPLETED").length + plannedSchedules.filter((schedule) => schedule.sessionStatus === "COMPLETED").length;
   const progress = sessionCount ? Math.round(completedCount / sessionCount * 100) : 0;
+  const today = new Date();
+  const crossesYear = new Set(weekDays(weekStart, weekStartsOn).map((day) => formatMontrealDate(day.date, { year: "numeric" }))).size > 1;
   return (
-    <Card className="flex min-h-[280px] flex-col">
-      <CardHeader className="pb-3"><CardTitle className="text-base">Cette semaine</CardTitle></CardHeader>
-      <CardContent className="flex flex-1 flex-col justify-between gap-[15px]">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex min-h-[68px] items-center gap-2.5 rounded-xl bg-[var(--color-surface-raised)] p-3"><CalendarPlus className="h-6 w-6 shrink-0 text-[var(--color-brand-strong)]"/><div><strong className="block text-[1.375rem] leading-none">{sessionCount}</strong><span className="text-[11px] text-[var(--color-ink-muted)]">séances planifiées</span></div></div>
-            <div className="flex min-h-[68px] items-center gap-2.5 rounded-xl bg-[var(--color-surface-raised)] p-3"><Users className="h-6 w-6 shrink-0 text-[var(--color-brand-strong)]"/><div><strong className="block text-[1.375rem] leading-none">{athleteCount}</strong><span className="text-[11px] text-[var(--color-ink-muted)]">athlètes attendus</span></div></div>
+    <Card className="flex min-h-[301px] flex-col rounded-[14px] border border-[#d7e4ec] bg-white shadow-[0_3px_15px_rgba(30,75,120,.035)]">
+      <CardHeader className="px-5 pb-1 pt-5"><CardTitle className="text-[25px] font-bold leading-tight tracking-[-.02em] text-[var(--color-navy)]">Cette semaine</CardTitle></CardHeader>
+      <CardContent className="flex flex-1 flex-col gap-3 px-5 pb-5 pt-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="flex min-h-[76px] items-center gap-3 rounded-xl bg-[#f3f7fb] px-3.5 py-3"><CalendarPlus aria-hidden="true" className="h-7 w-7 shrink-0 text-[#0797b1]"/><div><strong className="block text-[30px] font-bold leading-none tabular-nums text-[#102b50]">{sessionCount}</strong><span className="text-sm text-[#647895]">séances planifiées</span></div></div>
+            <div className="flex min-h-[76px] items-center gap-3 rounded-xl bg-[#f3f7fb] px-3.5 py-3"><Users aria-hidden="true" className="h-7 w-7 shrink-0 text-[#0797b1]"/><div><strong className="block text-[30px] font-bold leading-none tabular-nums text-[#102b50]">{athleteCount}</strong><span className="text-sm text-[#647895]">athlètes attendus</span></div></div>
           </div>
-          <div className="border-t border-[var(--color-border)] pt-[10px]">
-            <div className="mb-2 flex items-center justify-between text-xs font-bold"><span className="flex items-center gap-2"><Timer className="h-4 w-4 text-[var(--color-brand-strong)]"/>Progression de la semaine</span><span>{completedCount} / {sessionCount} séances</span></div>
-            <div role="progressbar" aria-label="Séances terminées cette semaine" aria-valuenow={completedCount} aria-valuemin={0} aria-valuemax={sessionCount} className="h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[#25d9bd] transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2 text-sm font-semibold text-[#233c5b]"><span className="flex items-center gap-2"><Timer aria-hidden="true" className="h-4 w-4 text-[#0797b1]"/>Progression de la semaine</span><span className="shrink-0 tabular-nums">{completedCount} / {sessionCount} séances</span></div>
+            <div role="progressbar" aria-label="Séances terminées cette semaine" aria-valuenow={completedCount} aria-valuemin={0} aria-valuemax={sessionCount} className="h-2.5 overflow-hidden rounded-full bg-[#e7edf3]"><div className="h-full rounded-full bg-[#24c8a5] transition-[width] duration-500 motion-reduce:transition-none" style={{ width: `${progress}%` }} /></div>
           </div>
-          <div className="grid grid-cols-7 gap-1.5 pt-1">
+          {sessionCount === 0 && <p className="-mt-1 text-xs text-[var(--color-ink-muted)]">Aucune séance planifiée cette semaine.</p>}
+          <div className="-mx-1 overflow-x-auto pb-1" aria-label="Jours de la semaine">
+            <div className="grid min-w-[455px] grid-cols-7 gap-2 2xl:min-w-0">
             {weekDays(weekStart, weekStartsOn).map((day) => {
-              const count = weekSessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date)).length + weekSchedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date)).length;
-              const completed = weekSessions.some((session) => session.status === "COMPLETED" && sameMontrealDay(session.date, day.date));
-              const isToday = sameMontrealDay(day.date, new Date());
-              return <Link key={day.key} href={`#day-${day.key}`} aria-label={`${day.label} ${formatMontrealDate(day.date, { day: "numeric", month: "long" })}, ${count} séance${count === 1 ? "" : "s"}`} className={`grid min-h-[60px] place-items-center rounded-lg border px-1 py-1.5 text-center transition-colors motion-reduce:transition-none ${isToday ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-500" : "border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] hover:border-blue-300"}`}><span className="text-[9px] font-bold uppercase">{day.label.slice(0, 3)}</span><span className="text-xs font-black">{formatMontrealDate(day.date, { day: "numeric" })}</span><span className={`h-2 w-2 rounded-full ${completed ? "bg-emerald-500" : count ? "bg-sky-400" : "bg-slate-300"}`} /></Link>;
+              const daySessions = weekSessions.filter((session) => !session.planningEventId && sameMontrealDay(session.date, day.date));
+              const daySchedules = weekSchedules.filter((schedule) => sameMontrealDay(schedule.startsAt, day.date));
+              const plannedCount = daySessions.filter((session) => session.status !== "CANCELLED").length + daySchedules.filter((schedule) => schedule.sessionStatus !== "CANCELLED").length;
+              const completedCountForDay = daySessions.filter((session) => session.status === "COMPLETED").length + daySchedules.filter((schedule) => schedule.sessionStatus === "COMPLETED").length;
+              const cancelledCount = daySessions.filter((session) => session.status === "CANCELLED").length + daySchedules.filter((schedule) => schedule.sessionStatus === "CANCELLED").length;
+              const isToday = sameMontrealDay(day.date, today);
+              const indicator = completedCountForDay ? "completed" : plannedCount ? "planned" : cancelledCount ? "cancelled" : "empty";
+              const stateLabel = indicator === "completed" ? `${completedCountForDay} séance${completedCountForDay === 1 ? "" : "s"} terminée${completedCountForDay === 1 ? "" : "s"}` : indicator === "planned" ? `${plannedCount} séance${plannedCount === 1 ? "" : "s"} planifiée${plannedCount === 1 ? "" : "s"}` : indicator === "cancelled" ? `${cancelledCount} séance${cancelledCount === 1 ? "" : "s"} annulée${cancelledCount === 1 ? "" : "s"}` : "Aucune séance";
+              return <Link key={day.key} href={`#day-${day.key}`} aria-label={`${day.label} ${formatMontrealDate(day.date, { day: "numeric", month: "long", ...(crossesYear ? { year: "numeric" as const } : {}) })} : ${stateLabel}. Ouvrir le planning du jour.`} className={`flex min-h-[76px] min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-1.5 py-2 text-center transition-colors motion-reduce:transition-none ${isToday ? "border-blue-500 bg-[#f0f7ff] text-blue-800 shadow-[0_0_0_1px_#3b82f6]" : "border-[#dce6ef] bg-white text-[#62748b] hover:border-blue-300 hover:bg-blue-50/40"}`}><span className="text-[11px] font-bold uppercase tracking-wide">{day.label.slice(0, 3)}</span><span className={`text-xs font-bold tabular-nums ${isToday ? "text-blue-700" : "text-[#314a67]"}`}>{formatMontrealDate(day.date, { day: "numeric", month: "short", ...(crossesYear ? { year: "2-digit" as const } : {}) })}</span>{indicator === "completed" ? <CircleCheck aria-hidden="true" className="h-4 w-4 text-emerald-600"/> : indicator === "planned" ? <Clock3 aria-hidden="true" className="h-4 w-4 text-sky-600"/> : indicator === "cancelled" ? <CircleX aria-hidden="true" className="h-4 w-4 text-rose-500"/> : <span aria-hidden="true" className="h-2 w-2 rounded-full bg-slate-300"/>}</Link>;
             })}
+            </div>
           </div>
       </CardContent>
     </Card>
@@ -390,7 +406,7 @@ function getPrimaryAction(session: DashboardSession, status: string, demo: boole
 
 function pickPrimarySession(sessions: DashboardSession[], now: Date) {
   const active = sessions.filter((session) => session.date <= now && sessionIsWithinActiveWindow(session, now) && (session.status === "IN_PROGRESS" || session.completions.some((completion) => completion.status === "IN_PROGRESS"))).sort((left, right) => left.date.getTime() - right.date.getTime())[0];
-  const upcoming = sessions.filter((session) => session.date >= now && session.status !== "COMPLETED" && session.status !== "IN_PROGRESS").sort((left, right) => left.date.getTime() - right.date.getTime())[0];
+  const upcoming = sessions.filter((session) => session.date >= now && !["COMPLETED", "IN_PROGRESS", "CANCELLED", "NOT_DONE"].includes(session.status)).sort((left, right) => left.date.getTime() - right.date.getTime())[0];
   const recent = sessions.filter((session) => session.date <= now && session.status === "COMPLETED").sort((left, right) => right.date.getTime() - left.date.getTime())[0];
   return active ?? upcoming ?? recent;
 }
