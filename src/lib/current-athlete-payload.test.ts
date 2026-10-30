@@ -46,7 +46,7 @@ test("current athlete preserves profile and access while skipping unused photos 
     const dependencies: Record<string, unknown> = {
       "./pagination": {}, "@/lib/pool-list": {}, "@/lib/timezone": {},
       "next/navigation": { redirect: (path: string) => { throw new Error(`REDIRECT ${path}`); } },
-      "@/lib/current-user": { getCurrentUser: async () => identity }, "@/lib/db": { query }
+      "@/lib/current-user": { getCurrentUser: async () => identity, getCurrentAthleteUserAccess: async () => identity }, "@/lib/db": { query }
     };
     const exports: { getCurrentAthlete?: typeof import("./athlete-session").getCurrentAthlete; getCurrentAthleteIdentity?: () => Promise<{ id: string } | null> } = {};
     runInNewContext(ts.transpileModule(readFileSync("src/lib/athlete-session.ts", "utf8"), {
@@ -221,7 +221,7 @@ test("current athlete preserves profile and access while skipping unused photos 
     await t.test("identity uses the real current-user guards on each request", async () => {
       await db.exec(`ALTER TABLE "User" ADD COLUMN "accessEnabled" boolean DEFAULT true`);
       let sessionUser: { id?: string; email?: string } | null = { id: "user-a" };
-      const users: { getCurrentUser?: typeof import("./current-user").getCurrentUser } = {};
+      const users: Partial<typeof import("./current-user")> = {};
       const authDependencies: Record<string, unknown> = {
         react: { cache: (fn: unknown) => fn },
         "next/navigation": dependencies["next/navigation"],
@@ -236,7 +236,7 @@ test("current athlete preserves profile and access while skipping unused photos 
         assert.ok(name in authDependencies, `Unexpected auth dependency ${name}`);
         return authDependencies[name];
       } });
-      (dependencies["@/lib/current-user"] as { getCurrentUser: unknown }).getCurrentUser = users.getCurrentUser;
+      Object.assign(dependencies["@/lib/current-user"] as object, users);
       for (const [session, expected] of [
         [{ id: "user-a" }, "athlete-a"], [{ id: "user-b" }, "athlete-b"],
         [{ email: "A@EXAMPLE.TEST" }, "athlete-a"], [{ id: "coach-user" }, null],
@@ -245,7 +245,69 @@ test("current athlete preserves profile and access while skipping unused photos 
         sessionUser = session;
         assert.equal((await getIdentity())?.id ?? null, expected);
       }
+      sessionUser = { id: "user-b" };
+      await db.exec(`UPDATE "Athlete" SET "clubId"='missing-club' WHERE id='athlete-b'`);
+      assert.equal(await getIdentity(), null);
+      await db.exec(`UPDATE "Athlete" SET "clubId"='club-b' WHERE id='athlete-b'`);
+      await db.exec(`DELETE FROM "Athlete" WHERE id='athlete-c'`);
+      sessionUser = { id: "user-c" };
+      assert.equal(await getIdentity(), null, "authenticated user still needs an athlete profile");
       sessionUser = { id: "user-a" };
+      const savedWithRealAuth: unknown[][] = [];
+      const realRoute: { POST?: (request: Request) => Promise<Response> } = {};
+      const routeDependencies: Record<string, unknown> = {
+        "next/server": { NextResponse: { json: (value: unknown, init?: ResponseInit) => Response.json(value, init) } },
+        "@/lib/athlete-session": { getCurrentAthleteIdentity: getIdentity },
+        "@/lib/athlete-progress": {
+          getAssignedSessionBlocks: async (_session: string, athleteId: string) => athleteId === "athlete-a" ? [{ id: "block-a" }] : [],
+          persistAthleteProgress: async (...args: unknown[]) => { savedWithRealAuth.push(args); }
+        },
+        "@/lib/db": { query },
+        "@/lib/session-availability": { isSessionStartAvailable: () => true, SESSION_NOT_STARTED_MESSAGE: "not started" }
+      };
+      runInNewContext(ts.transpileModule(readFileSync("src/app/api/athlete/session-progress/route.ts", "utf8"), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+      }).outputText, { exports: realRoute, require: (name: string) => {
+        assert.ok(name in routeDependencies);
+        return routeDependencies[name];
+      } });
+      const payload = { sessionId: "session-a", exercises: [], dives: [
+        { poolDiveId: "dive-a", repetitionsCompleted: 8, goldenRepetitions: 2 }
+      ], sessionFeedback: { rating: "4", note: "Synthetic" } };
+      const request = () => new Request("https://example.test/api/athlete/session-progress", { method: "POST", body: JSON.stringify(payload) });
+      assert.equal((await realRoute.POST!(request())).status, 200);
+      assert.deepEqual(JSON.parse(JSON.stringify(savedWithRealAuth[0])), [payload, "athlete-a", [{ id: "block-a" }]]);
+      for (const id of ["user-b", "coach-user", "missing"]) {
+        sessionUser = { id };
+        assert.equal((await realRoute.POST!(request())).status, id === "user-b" ? 403 : 401);
+      }
+      assert.equal(savedWithRealAuth.length, 1);
+      sessionUser = { id: "user-a" };
+      // Same authenticated identity and database fixture; compare the complete
+      // previous authentication + identity context with the new projection.
+      const logo = `data:image/png;base64,${"L".repeat(512_000)}`;
+      await db.query(`UPDATE "Club" SET logo=$1 WHERE id='club-a'`, [logo]);
+      reads.length = 0;
+      bytes = 0;
+      const previousUser = await users.getCurrentUser!();
+      await query(`SELECT a.id FROM "Athlete" a JOIN "Club" c ON c.id=a."clubId" WHERE a."userId"=$1`, [previousUser!.id]);
+      const previousBytes = bytes;
+      assert.equal(reads.length, 2);
+      reads.length = 0;
+      bytes = 0;
+      assert.equal((await getIdentity())?.id, "athlete-a");
+      assert.equal(reads.length, 2);
+      assert.ok(reads.every(sql => !/logo|avatar|passwordHash|Coach|TrainingGroup/.test(sql)));
+      assert.ok(previousBytes - bytes > 512_000);
+      t.diagnostic(`Synthetic full save auth+identity SQL row JSON: ${previousBytes} -> ${bytes} bytes; 2 reads unchanged, 512k club logo`);
+      await db.exec(`UPDATE "Club" SET logo=NULL WHERE id='club-a'`);
+      bytes = 0;
+      const smallPreviousUser = await users.getCurrentUser!();
+      await query(`SELECT a.id FROM "Athlete" a JOIN "Club" c ON c.id=a."clubId" WHERE a."userId"=$1`, [smallPreviousUser!.id]);
+      const smallPreviousBytes = bytes;
+      bytes = 0;
+      await getIdentity();
+      t.diagnostic(`Synthetic full save auth+identity without logo: ${smallPreviousBytes} -> ${bytes} bytes; 2 reads unchanged`);
       await db.exec(`UPDATE "User" SET "accessEnabled"=false WHERE id='user-a'`);
       assert.equal(await getIdentity(), null);
       await db.exec(`UPDATE "User" SET "accessEnabled"=true, "passwordSetAt"=NULL WHERE id='user-a'`);

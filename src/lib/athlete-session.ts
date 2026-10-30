@@ -1,6 +1,6 @@
 import { PAGE_SIZE, pageNumber } from "./pagination";
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/current-user";
+import { getCurrentUser, getCurrentAthleteUserAccess } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { countPoolContexts } from "@/lib/pool-list";
 import { addMontrealDays, startOfMontrealDay, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
@@ -129,8 +129,8 @@ const currentAthleteUserProjection = (alias: "u" | "cu") => `jsonb_build_object(
   'passwordSetAt', ${alias}."passwordSetAt", 'createdAt', ${alias}."createdAt")`;
 
 // Keep the same authentication/password guard for both profile and identity reads.
-async function getAuthenticatedAthleteUser() {
-  const user = await getCurrentUser();
+async function getAuthenticatedAthleteUser(loadUser: () => Promise<{ id: string; role: string; passwordSetAt: Date | null } | null> = getCurrentUser) {
+  const user = await loadUser();
   if (!user || user.role !== "ATHLETE") return null;
   if (!user.passwordSetAt) redirect("/change-password");
   return user;
@@ -138,7 +138,7 @@ async function getAuthenticatedAthleteUser() {
 
 /** Progress saves need only the athlete ID, not the group, coach or profile. */
 export async function getCurrentAthleteIdentity(): Promise<{ id: string } | null> {
-  const user = await getAuthenticatedAthleteUser();
+  const user = await getAuthenticatedAthleteUser(getCurrentAthleteUserAccess);
   if (!user) return null;
   // Preserve the profile loader's requirement for an existing athlete and club.
   const { rows } = await query<{ id: string }>(

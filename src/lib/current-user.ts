@@ -39,6 +39,25 @@ export const getCurrentUserAccess = cache(async (): Promise<CurrentUserAccess | 
   return row ? { id: row.id, role: row.role, clubId: row.clubId, coach: row.coachId === null ? null : { id: row.coachId } } : null;
 }));
 
+/** Minimal user guard for athlete progress saves; no profile, logo or hash. */
+export const getCurrentAthleteUserAccess = cache(async () => withDatabaseEgressComponent("authentication", async () => {
+  const { sessionUserId, email } = await getSessionIdentity();
+  if (!sessionUserId && !email) return null;
+  // The development coach must not acquire athlete permissions.
+  if (process.env.NODE_ENV !== "production" && sessionUserId === "dev-coach") return null;
+  const { rows } = await query<{
+    id: string; role: "ADMIN" | "COACH" | "ATHLETE"; passwordSetAt: Date | null; clubId: string | null;
+  }>(
+    `SELECT u.id, u.role, u."passwordSetAt", u."clubId"
+     FROM "User" u
+     WHERE ${sessionUserId ? "u.id=$1" : "u.email=$1"} AND u."accessEnabled"=true
+     LIMIT 1`, [sessionUserId ?? email]
+  );
+  const user = rows[0] ?? null;
+  setDatabaseEgressClub(user?.clubId ?? null);
+  return user;
+}));
+
 export const getCurrentUser = cache(async () => withDatabaseEgressComponent("authentication", async () => {
   const { sessionUserId, email } = await getSessionIdentity();
   if (!sessionUserId && !email) {
