@@ -80,8 +80,13 @@ export async function persistAthleteProgress<T = void>(
   const feedbackProvided = payload.sessionFeedback !== undefined;
   const rating = feedbackProvided ? normalizeText(payload.sessionFeedback?.rating ?? null) : null;
   const note = feedbackProvided ? normalizeText(payload.sessionFeedback?.note ?? null) : null;
-  const exerciseLogs = payload.exercises.filter((item) => validExerciseIds.has(item.exerciseId));
-  const diveLogs = payload.dives.filter((item) => validDiveIds.has(item.poolDiveId)).map((item) => ({
+  // Full-session saves can repeat an exercise used in multiple blocks. Logs
+  // are keyed by athlete/session/item, so each upsert must receive one snapshot
+  // per item. Keep the last snapshot (as sequential saves would), never sum reps.
+  const exerciseLogs = [...new Map(payload.exercises.filter((item) => validExerciseIds.has(item.exerciseId))
+    .map((item) => [item.exerciseId, item])).values()];
+  const diveLogs = [...new Map(payload.dives.filter((item) => validDiveIds.has(item.poolDiveId))
+    .map((item) => [item.poolDiveId, item])).values()].map((item) => ({
     ...item,
     // Athletes may add extra reps during a session; retain all completed work.
     repetitionsCompleted: Math.max(0, Math.min(item.repetitionsCompleted, 500)),
