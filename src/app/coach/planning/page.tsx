@@ -308,7 +308,7 @@ function MonthCalendar({ period, sessions, events, targets, demo }: { period: Pl
     <div>
       <div className="hidden overflow-hidden rounded-[20px] border border-[#dce7f1] bg-white shadow-[0_8px_30px_rgba(28,72,116,.055)] lg:block">
         <div className="grid grid-cols-7 border-b border-[#e4ebf3] bg-[#fbfdff]">
-          {(weekStartsOn === 0 ? ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"] : ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]).map((day) => (
+          {["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"].map((day) => (
             <div key={day} className="px-2 py-3.5 text-center text-sm font-black text-[#14284e]">{day}</div>
           ))}
         </div>
