@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarPlus, Pencil, Trophy, X } from "lucide-react";
+import { CalendarPlus, Pencil, Plus, Trophy, X } from "lucide-react";
 import { createPlanningEvent } from "@/app/coach/planning/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ export function PlanningEventForm({ targets, demo, triggerLabel, defaultStartsAt
 
   return (
     <>
-      <Button type="button" variant={triggerLabel ? "ghost" : "action"} onClick={() => setOpen(true)}>{!triggerLabel && <CalendarPlus className="h-4 w-4" />} {triggerLabel ?? "Nouvel événement"}</Button>
+      <Button type="button" variant={triggerLabel ? "ghost" : "action"} aria-label={triggerLabel === "+" ? "Ajouter un événement à cette date" : undefined} onClick={() => setOpen(true)} className={triggerLabel === "+" ? "h-7 min-h-7 w-7 rounded-full bg-[#f0f4f9] p-0 text-[#71839d] hover:bg-[#e4effb] hover:text-[#0879ed]" : undefined}>{triggerLabel === "+" ? <Plus aria-hidden="true" className="h-4 w-4" /> : !triggerLabel && <CalendarPlus className="h-4 w-4" />} {triggerLabel === "+" ? <span className="sr-only">Ajouter un événement</span> : triggerLabel ?? "Nouvel événement"}</Button>
       {open && (
         <div className="fixed inset-0 z-50 flex justify-end bg-[var(--color-navy)]/25" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
           <aside className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-[var(--color-border)] bg-white p-5 shadow-2xl sm:p-7" role="dialog" aria-modal="true" aria-labelledby="new-planning-event-title">
