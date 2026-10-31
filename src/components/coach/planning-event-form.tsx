@@ -9,13 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 
 type PlanningTarget = { id: string; label: string; kind: "group" | "athlete" };
 
-export function PlanningEventForm({ targets, demo, triggerLabel, defaultStartsAt }: { targets: PlanningTarget[]; demo: boolean; triggerLabel?: string; defaultStartsAt?: string }) {
+export function PlanningEventForm({ targets, demo, triggerLabel, defaultStartsAt, prominent = false }: { targets: PlanningTarget[]; demo: boolean; triggerLabel?: string; defaultStartsAt?: string; prominent?: boolean }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState("TRAINING_SCHEDULE");
 
   return (
     <>
-      <Button type="button" variant={triggerLabel ? "ghost" : "action"} aria-label={triggerLabel === "+" ? "Ajouter un événement à cette date" : undefined} onClick={() => setOpen(true)} className={triggerLabel === "+" ? "h-7 min-h-7 w-7 rounded-full bg-[#f0f4f9] p-0 text-[#71839d] hover:bg-[#e4effb] hover:text-[#0879ed]" : undefined}>{triggerLabel === "+" ? <Plus aria-hidden="true" className="h-4 w-4" /> : !triggerLabel && <CalendarPlus className="h-4 w-4" />} {triggerLabel === "+" ? <span className="sr-only">Ajouter un événement</span> : triggerLabel ?? "Nouvel événement"}</Button>
+      <Button type="button" variant={triggerLabel ? "ghost" : "action"} aria-label={triggerLabel === "+" ? "Ajouter un événement à cette date" : undefined} onClick={() => setOpen(true)} className={triggerLabel === "+" ? "h-7 min-h-7 w-7 rounded-full bg-[#f0f4f9] p-0 text-[#71839d] hover:bg-[#e4effb] hover:text-[#0879ed]" : prominent ? "h-[54px] min-h-[54px] w-full rounded-[14px] bg-[#0969ef] px-6 text-base font-bold shadow-[0_8px_18px_rgba(9,105,239,.22)] hover:bg-[#0757cc] sm:w-auto" : undefined}>{triggerLabel === "+" ? <Plus aria-hidden="true" className="h-4 w-4" /> : prominent ? <Plus aria-hidden="true" className="h-5 w-5" /> : !triggerLabel && <CalendarPlus className="h-4 w-4" />} {triggerLabel === "+" ? <span className="sr-only">Ajouter un événement</span> : triggerLabel ?? "Nouvel événement"}</Button>
       {open && (
         <div className="fixed inset-0 z-50 flex justify-end bg-[var(--color-navy)]/25" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
           <aside className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-[var(--color-border)] bg-white p-5 shadow-2xl sm:p-7" role="dialog" aria-modal="true" aria-labelledby="new-planning-event-title">

@@ -1,5 +1,5 @@
 import Link from "@/components/ui/app-link";
-import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, Dumbbell, Edit, MapPin, Printer, Trophy, Users, Waves, XCircle } from "lucide-react";
+import { CalendarDays, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Dumbbell, Edit, MapPin, Printer, Trophy, Users, Waves, XCircle } from "lucide-react";
 import { CoachShell } from "@/components/coach/coach-shell";
 import { PlanningEventForm } from "@/components/coach/planning-event-form";
 import { PlanningEventEditor } from "@/components/coach/planning-event-editor";
@@ -176,43 +176,37 @@ function DemoPlanningPage({ period, weekStartsOn }: { period: PlanningPeriod; we
 function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = false }: { period: PlanningPeriod; sessions: PlanningSession[]; events: PlanningEvent[]; targets: PlanningTarget[]; weekStartsOn: 0 | 1; demo?: boolean }) {
   const activeSessionIds = new Set(sessions.filter((session) => session.status === "READY" && session.completions.some((completion) => completion.status === "IN_PROGRESS")).map((session) => session.id));
   const completedCount = sessions.filter((session) => session.status === "COMPLETED").length;
-  const publishedCount = sessions.filter((session) => session.status === "READY" || session.status === "IN_PROGRESS").length;
+  const publishedCount = sessions.filter((session) => session.status === "READY").length;
 
   return (
     <CoachShell active="Calendrier">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4 rounded-3xl border border-[#dce8f2] bg-white px-5 py-5 shadow-[0_8px_30px_rgba(28,72,116,.045)] sm:px-7 sm:py-6">
-        <div>
-          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[.12em] text-[#0879dc]"><CalendarDays aria-hidden="true" className="h-4 w-4" /> Calendrier coach</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight text-[var(--color-navy)] sm:text-[34px]">Calendrier</h1>
-          <p className="mt-1 text-sm font-medium capitalize text-[var(--color-ink-muted)]">{periodLabel(period)}</p>
+      <section aria-label="En-tête du calendrier" className="mb-5 grid grid-cols-1 gap-x-6 gap-y-4 rounded-[24px] bg-[#eaf5fc] px-5 py-5 sm:px-7 sm:py-6 lg:grid-cols-2 lg:items-start lg:px-8 lg:py-7">
+        <div className="order-1 min-w-0">
+          <h1 className="text-[34px] font-black leading-[1.05] tracking-[-.03em] text-[#10264d] sm:text-[42px]">Calendrier</h1>
+          <p className="mt-1.5 text-lg font-semibold capitalize text-[#6b82a5] sm:text-[21px]">{periodLabel(period)}</p>
         </div>
-        <PlanningEventForm targets={targets} demo={demo} />
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#dce8f2] bg-white p-3 shadow-[0_4px_18px_rgba(28,72,116,.035)] sm:p-4">
-        <div className="flex rounded-full border border-[var(--color-border)] bg-white p-1">
+        <div className="order-2 lg:justify-self-end">
+          <PlanningEventForm targets={targets} demo={demo} prominent />
+        </div>
+        <div className="order-3 flex w-fit max-w-full rounded-full border border-[#dce7f2] bg-white p-1 shadow-[0_2px_8px_rgba(28,72,116,.035)]">
           <PlanningModeLink mode="week" active={period.mode === "week"} period={period} weekStartsOn={weekStartsOn}>Semaine</PlanningModeLink>
           <PlanningModeLink mode="month" active={period.mode === "month"} period={period} weekStartsOn={weekStartsOn}>Mois</PlanningModeLink>
         </div>
 
         {period.mode === "week" ? (
-          <div className="flex items-center gap-2">
-            <Button asChild variant="outline" size="sm"><Link href={planningHref("week", addMontrealDays(period.weekStart, -7), weekStartsOn)}><ChevronLeft className="h-4 w-4" /> Semaine précédente</Link></Button>
-            <Button asChild variant="outline" size="sm"><Link href="/coach/planning?view=week">Aujourd&apos;hui</Link></Button>
-            <Button asChild variant="outline" size="sm"><Link href={planningHref("week", addMontrealDays(period.weekStart, 7), weekStartsOn)}>Semaine suivante <ChevronRight className="h-4 w-4" /></Link></Button>
+          <div className="order-4 flex flex-wrap items-center gap-2 lg:justify-self-end">
+            <Button asChild variant="outline" size="default" className="whitespace-nowrap border-[#dce7f2] bg-white shadow-[0_2px_8px_rgba(28,72,116,.035)] hover:border-[#b8d2ee] hover:bg-[#fafdff]"><Link href={planningHref("week", addMontrealDays(period.weekStart, -7), weekStartsOn)}><ChevronLeft aria-hidden="true" className="h-4 w-4" /> Semaine précédente</Link></Button>
+            <Button asChild variant="outline" size="default" className="whitespace-nowrap border-[#dce7f2] bg-white shadow-[0_2px_8px_rgba(28,72,116,.035)] hover:border-[#b8d2ee] hover:bg-[#fafdff]"><Link href="/coach/planning?view=week">Aujourd&apos;hui</Link></Button>
+            <Button asChild variant="outline" size="default" className="whitespace-nowrap border-[#dce7f2] bg-white shadow-[0_2px_8px_rgba(28,72,116,.035)] hover:border-[#b8d2ee] hover:bg-[#fafdff]"><Link href={planningHref("week", addMontrealDays(period.weekStart, 7), weekStartsOn)}>Semaine suivante <ChevronRight aria-hidden="true" className="h-4 w-4" /></Link></Button>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm"><Link href={planningHref("month", addMontrealMonths(period.rangeStart, -1), weekStartsOn)}><ChevronLeft className="h-4 w-4" /> Mois précédent</Link></Button>
-            <Button asChild variant="outline" size="sm"><Link href="/coach/planning?view=month">Aujourd&apos;hui</Link></Button>
-            <Button asChild variant="outline" size="sm"><Link href={planningHref("month", addMontrealMonths(period.rangeStart, 1), weekStartsOn)}>Mois suivant <ChevronRight className="h-4 w-4" /></Link></Button>
-            <span className="inline-flex items-center gap-2 px-2 text-sm font-bold text-[var(--color-ink-muted)]">
-              <CalendarDays className="h-4 w-4" />
-              {sessions.length} séance{sessions.length > 1 ? "s" : ""} · {events.length} événement{events.length > 1 ? "s" : ""}
-            </span>
+          <div className="order-4 flex flex-wrap items-center gap-2 lg:justify-self-end">
+            <Button asChild variant="outline" size="default" className="whitespace-nowrap border-[#dce7f2] bg-white shadow-[0_2px_8px_rgba(28,72,116,.035)] hover:border-[#b8d2ee] hover:bg-[#fafdff]"><Link href={planningHref("month", addMontrealMonths(period.rangeStart, -1), weekStartsOn)}><ChevronLeft aria-hidden="true" className="h-4 w-4" /> Mois précédent</Link></Button>
+            <Button asChild variant="outline" size="default" className="whitespace-nowrap border-[#dce7f2] bg-white shadow-[0_2px_8px_rgba(28,72,116,.035)] hover:border-[#b8d2ee] hover:bg-[#fafdff]"><Link href="/coach/planning?view=month">Aujourd&apos;hui</Link></Button>
+            <Button asChild variant="outline" size="default" className="whitespace-nowrap border-[#dce7f2] bg-white shadow-[0_2px_8px_rgba(28,72,116,.035)] hover:border-[#b8d2ee] hover:bg-[#fafdff]"><Link href={planningHref("month", addMontrealMonths(period.rangeStart, 1), weekStartsOn)}>Mois suivant <ChevronRight aria-hidden="true" className="h-4 w-4" /></Link></Button>
           </div>
         )}
-      </div>
+      </section>
 
       {period.mode === "month" ? (
         <MonthCalendar period={period} sessions={sessions} events={events} targets={targets} demo={demo} />
@@ -234,20 +228,21 @@ function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = 
         </div>
       )}
 
-      <section aria-label="Résumé et légende du calendrier" className="mt-5 flex flex-col gap-5 rounded-2xl border border-[#dce8f2] bg-white p-4 shadow-[0_4px_18px_rgba(28,72,116,.035)] sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div>
-          <h2 className="text-xs font-black uppercase tracking-[.1em] text-[var(--color-ink-muted)]">Légende</h2>
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-[var(--color-ink-muted)]">
+      <section aria-label="Légende et résumé du calendrier" className="mt-5 flex flex-col gap-5 rounded-2xl border border-[#e0eaf2] bg-white p-5 shadow-[0_5px_20px_rgba(28,72,116,.045)] sm:p-6 lg:flex-row lg:items-center lg:gap-6">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xs font-black uppercase tracking-[.1em] text-[#52677f]">Légende</h2>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:gap-4">
             <LegendItem color="bg-emerald-400" label="Terminée" description="Séance réalisée" />
             <LegendItem color="bg-sky-400" label="Publiée" description="Visible aux athlètes" />
-            <LegendItem color="bg-rose-400" label="Compétition" description="Événement sportif" />
-            <LegendItem color="bg-slate-300" label="Jour libre" description="Aucune activité" />
+            <LegendItem color="bg-[#ff806d]" label="Compétition" description="Événement de compétition" />
+            <LegendItem color="bg-slate-300" label="Jour libre" description="Aucun événement" />
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2 sm:min-w-[390px]">
-          <SummaryCount label="Événements" value={sessions.length + events.length} />
-          <SummaryCount label="Terminées" value={completedCount} />
-          <SummaryCount label="Publiées" value={publishedCount} />
+        <div aria-hidden="true" className="hidden h-12 w-px shrink-0 bg-[#dce7f1] lg:block" />
+        <div role="group" aria-label="Totaux de la période affichée" className="grid gap-2 sm:grid-cols-3 lg:w-auto lg:shrink-0">
+          <SummaryCount icon={CalendarDays} tone="blue" label="événements" value={sessions.length + events.length} />
+          <SummaryCount icon={CheckCircle2} tone="green" label="terminés" value={completedCount} />
+          <SummaryCount icon={Clock3} tone="blue" label="publiés" value={publishedCount} />
         </div>
       </section>
     </CoachShell>
@@ -255,18 +250,27 @@ function PlanningView({ period, sessions, events, targets, weekStartsOn, demo = 
 }
 
 function LegendItem({ color, label, description }: { color: string; label: string; description: string }) {
-  return <span className="inline-flex min-w-36 items-start gap-2"><span aria-hidden="true" className={`mt-1 h-3 w-3 shrink-0 rounded-full ${color}`} /><span><strong className="block text-[#14284e]">{label}</strong><span className="font-medium text-[#7d8da3]">{description}</span></span></span>;
+  return <span className="inline-flex min-w-0 items-start gap-2.5"><span aria-hidden="true" className={`mt-1 h-3 w-3 shrink-0 rounded-full ${color}`} /><span className="min-w-0"><strong className="block text-sm leading-5 text-[#14284e]">{label}</strong><span className="block text-xs font-medium leading-5 text-[#71839a]">{description}</span></span></span>;
 }
 
-function SummaryCount({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-xl bg-[#f4f8fc] px-3 py-2.5 text-center"><div className="text-lg font-black leading-none text-[var(--color-navy)]">{value}</div><div className="mt-1 text-[10px] font-bold text-[var(--color-ink-muted)] sm:text-xs">{label}</div></div>;
+function SummaryCount({ icon: Icon, tone, label, value }: { icon: React.ElementType; tone: "blue" | "green"; label: string; value: number }) {
+  const colors = tone === "green"
+    ? "bg-emerald-50 text-emerald-700"
+    : label === "publiés"
+      ? "bg-blue-50 text-blue-700"
+      : "bg-[#f3f7fc] text-[#1767d2]";
+  return <div className={`flex min-h-12 items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-bold whitespace-nowrap ${colors}`}>
+    <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
+    <span className="text-base font-black tabular-nums">{value}</span>
+    <span>{label}</span>
+  </div>;
 }
 
 function PlanningModeLink({ mode, active, period, weekStartsOn, children }: { mode: PlanningMode; active: boolean; period: PlanningPeriod; weekStartsOn: 0 | 1; children: React.ReactNode }) {
   return (
     <Link
       href={planningHref(mode, period.mode === "week" ? period.weekStart : period.rangeStart, weekStartsOn)}
-      className={`inline-flex min-h-9 items-center rounded-full px-4 text-sm font-black focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] ${active ? "bg-[var(--block-pool-bg)] text-[var(--block-pool-fg)] shadow-sm" : "text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"}`}
+      className={`inline-flex min-h-11 items-center justify-center rounded-full px-5 text-sm font-bold transition-colors duration-[var(--duration-fast)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1685f7] focus-visible:ring-offset-2 ${active ? "bg-[#0969ef] text-white shadow-[0_5px_14px_rgba(9,105,239,.22)]" : "text-[#52677f] hover:bg-[#f4f8fd] hover:text-[#10264d]"}`}
       aria-current={active ? "page" : undefined}
     >
       {children}
