@@ -120,7 +120,7 @@ export async function startAthleteSession(sessionId: string) {
 
   await query(`UPDATE "TrainingSession" SET status='IN_PROGRESS' WHERE id=$1 AND status='READY'`, [sessionId]);
   await query(`INSERT INTO "AthleteSessionCompletion" ("athleteId", "sessionId", "startedAt", status) VALUES ($1,$2,$3,'IN_PROGRESS')
-    ON CONFLICT ("athleteId", "sessionId") DO UPDATE SET "startedAt" = EXCLUDED."startedAt", status = 'IN_PROGRESS'`, [athlete.id, sessionId, new Date()]);
+    ON CONFLICT ("athleteId", "sessionId") DO UPDATE SET "startedAt" = COALESCE("AthleteSessionCompletion"."startedAt", EXCLUDED."startedAt"), status = 'IN_PROGRESS'`, [athlete.id, sessionId, new Date()]);
 
   await trackEvent({
     type: "session.started",
