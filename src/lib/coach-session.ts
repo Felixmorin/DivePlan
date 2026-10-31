@@ -22,13 +22,20 @@ export type CoachSession = Omit<SessionSnapshot,"week"|"blocks"> & {
 // Printing consumes the plan only. Keep results opt-out explicit so views that
 // compare planned and completed work retain the full loader by default.
 export type CoachSessionPlan = Omit<CoachSession, "completions" | "absences" | "diveLogs" | "exerciseLogs">;
+// The live page obtains results once, from getLiveSessionProgress. Other
+// overview states still need full results, including cancelled/not-done views.
+export type CoachSessionOverview =
+  | (Omit<CoachSessionPlan, "status"> & { status: "IN_PROGRESS" })
+  | (Omit<CoachSession, "status"> & { status: Exclude<CoachSession["status"], "IN_PROGRESS"> });
 
 export function getCoachSession(sessionId: string, options: { includeResults: false }): Promise<CoachSessionPlan>;
+export function getCoachSession(sessionId: string, options: { includeResults: "unlessLive" }): Promise<CoachSessionOverview>;
 export function getCoachSession(sessionId: string): Promise<CoachSession>;
-export async function getCoachSession(sessionId: string, { includeResults = true } = {}): Promise<CoachSession | CoachSessionPlan> {
+export async function getCoachSession(sessionId: string, options: { includeResults?: boolean | "unlessLive" } = {}): Promise<CoachSession | CoachSessionPlan> {
   const { clubId } = await requireCoach();
   const session = await getSessionSnapshot(sessionId, clubId);
   if (!session) notFound();
+  const includeResults = options.includeResults !== false && !(options.includeResults === "unlessLive" && session.status === "IN_PROGRESS");
 
   const [groupResult, completionRows, absenceRows, diveLogRows, exerciseLogRows] = await Promise.all([
     query<{group:RelationalRow}>(`SELECT jsonb_build_object('id',g.id,'name',g.name,'clubId',g."clubId",'coachId',g."coachId") AS "group" FROM "TrainingWeek" w JOIN "TrainingGroup" g ON g.id=w."groupId" JOIN "Coach" gc ON gc.id=g."coachId" JOIN "Coach" sc ON sc.id=$2 WHERE w.id=$1 AND g."clubId"=w."clubId" AND gc."clubId"=w."clubId" AND sc."clubId"=w."clubId"`,[session.weekId,session.coachId]),

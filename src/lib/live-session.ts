@@ -1,4 +1,4 @@
-import type { CoachSession } from "./coach-session";
+import type { CoachSessionPlan } from "./coach-session";
 
 export type LiveProgress = {
   status: string;
@@ -9,7 +9,7 @@ export type LiveProgress = {
 };
 
 /** Plan only: progress is supplied once, through initialProgress and subsequent polls. */
-export function liveSessionForClient(session: CoachSession) {
+export function liveSessionForClient(session: CoachSessionPlan) {
   return {
     id: session.id,
     date: session.date instanceof Date ? session.date.toISOString() : session.date,

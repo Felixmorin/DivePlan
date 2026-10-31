@@ -28,8 +28,8 @@ export const dynamic = "force-dynamic";
 
 export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getCoachSession(id);
-  const coachNotes = (await query<{ athleteId: string; note: string }>(
+  const session = await getCoachSession(id, { includeResults: "unlessLive" });
+  const coachNotes = session.status === "IN_PROGRESS" ? [] : (await query<{ athleteId: string; note: string }>(
     `SELECT "athleteId",note FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`,
     [session.id]
   )).rows;

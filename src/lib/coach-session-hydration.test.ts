@@ -138,6 +138,30 @@ test("batched session hydration preserves rows and isolation with two detail que
       t.diagnostic(`Synthetic print hydration, same 12-block session with 1201 dive logs and 301 exercise logs: SQL reads ${beforeQueries} -> ${afterQueries}, parsed rows JSON ${beforeBytes} -> ${afterBytes} bytes. Excludes auth/snapshot queries, PostgreSQL protocol/TLS, HTML/RSC/JS, latency and billing.`);
     });
 
+    await t.test("live overview skips duplicate results but other statuses retain them", async () => {
+      snapshot.status = "IN_PROGRESS";
+      await db.exec(`UPDATE "AthleteSessionCompletion" SET "startedAt"='2026-10-30T22:00:00Z',"completedAt"='2026-10-30T23:00:00Z';
+        UPDATE "AthleteDiveLog" SET timestamp='2026-10-30T22:30:00Z'`);
+      queries.length = 0; resultBytes = 0;
+      const full = await get("session");
+      const beforeBytes = resultBytes; const beforeReads = queries.length;
+      queries.length = 0; resultBytes = 0;
+      const overview = await get("session", { includeResults: "unlessLive" });
+      const afterBytes = resultBytes; const afterReads = queries.length;
+      const { completions, absences, diveLogs, exerciseLogs, ...plan } = full;
+      assert.ok(completions.length && absences.length && diveLogs.length && exerciseLogs.length);
+      assert.equal(JSON.stringify(overview), JSON.stringify(plan));
+      assert.equal(beforeReads, 7); assert.equal(afterReads, 3);
+      assert.ok(queries.every(({ sql }) => !/FROM "Athlete(?:SessionCompletion|SessionAbsence|DiveLog|ExerciseLog)"/.test(sql)));
+      t.diagnostic(`Synthetic live hydration: ${beforeReads} -> ${afterReads} reads, ${beforeBytes} -> ${afterBytes} bytes of SQL rows in JSON; excludes snapshot/auth/live progress and HTTP.`);
+      for (const status of ["DRAFT", "READY", "COMPLETED", "CANCELLED", "NOT_DONE"]) {
+        snapshot.status = status;
+        const expected = await get("session");
+        const actual = await get("session", { includeResults: "unlessLive" });
+        assert.equal(JSON.stringify(actual), JSON.stringify(expected), status);
+      }
+    });
+
     queries.length = 0;
     assert.equal((await get("empty")).blocks.length, 0);
     assert.equal(queries.filter(({ sql }) => /FROM "SessionBlockAssignment"|FROM "DrylandBlockExercise"/.test(sql)).length, 0);
@@ -145,11 +169,13 @@ test("batched session hydration preserves rows and isolation with two detail que
     clubId = "club-b";
     await assert.rejects(get("session"), /NOT_FOUND/);
     await assert.rejects(get("session", { includeResults: false }), /NOT_FOUND/);
+    await assert.rejects(get("session", { includeResults: "unlessLive" }), /NOT_FOUND/);
     assert.equal(queries.length, 0, "no detail reads for a session outside the club");
     clubId = "club-a";
     authorized = false;
     await assert.rejects(get("session"), /FORBIDDEN/);
     await assert.rejects(get("session", { includeResults: false }), /FORBIDDEN/);
+    await assert.rejects(get("session", { includeResults: "unlessLive" }), /FORBIDDEN/);
     assert.equal(queries.length, 0);
   } finally { await db.close(); }
 });
