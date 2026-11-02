@@ -9,7 +9,12 @@ test("athlete sections load only their own queries and authorize the profile bef
  const sql:string[]=[];let progressCalls=0;let historyCalls=0;let exists=true;
  const source=readFileSync("src/app/coach/athletes/[id]/page.tsx","utf8");
  const query=async(text:string)=>{sql.push(text);return {rows:text.startsWith('SELECT a.id,a."userId"') && exists ? [{id:"athlete-a",avatar:null,groupId:null}] : []};};
+ const confidenceExports:Partial<typeof import("./competition-confidence")>={};
+ runInNewContext(ts.transpileModule(readFileSync("src/lib/competition-confidence.ts","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{
+  exports:confidenceExports,require:(name:string)=>{if(name==="server-only")return {};assert.equal(name,"@/lib/db");return {query};}
+ });
  const dependencies:Record<string,unknown>={
+  "@/lib/competition-confidence":confidenceExports,
   "@/lib/athlete-history":{getAthleteHistory:async()=>{historyCalls++;return {sessions:[],total:0,page:1,minutes:0,filters:{}};}},
   "@/lib/current-user":{requireCoach:async()=>({clubId:"club-a"})},"@/lib/db":{query},
   "next/navigation":{notFound:()=>{throw new Error("not found");}},"@/lib/avatar-storage":{resolveAvatarUrls:async()=>[null]},
@@ -25,6 +30,8 @@ test("athlete sections load only their own queries and authorize the profile bef
  await render("history");assert.equal(historyCalls,1);assert.equal(progressCalls,0);assert.ok(!sql.some(s=>s.includes('FROM "CompetitionDive"')||s.includes('FROM "AthleteCompetitionDiveEvaluation"')));
  sql.length=0;
  await render("evaluations");assert.equal(historyCalls,1);assert.equal(progressCalls,0);assert.ok(sql.some(s=>s.includes('FROM "AthleteCompetitionDiveEvaluation"')));assert.ok(!sql.some(s=>s.includes('FROM "AthleteDiveNote"')));
+ sql.length=0;
+ await render("competition");assert.ok(sql.some(s=>s.includes('DISTINCT ON (e."competitionDiveId")')));assert.equal(progressCalls,0);
  sql.length=0;
  await render("overview");assert.equal(progressCalls,1);assert.equal(historyCalls,1);assert.ok(sql.some(s=>s.includes("LIMIT 7")),"overview only fetches the recent wellness ratings");
  exists=false;await assert.rejects(render("history"),/not found/);assert.equal(historyCalls,1,"unauthorized/missing profile cannot fetch its history");
