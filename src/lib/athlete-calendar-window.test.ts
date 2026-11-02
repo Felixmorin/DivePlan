@@ -92,7 +92,8 @@ test("empty calendars and far-away selected dates preserve their empty/detail st
   for(const props of [
     {events:[],monthKey:"2026-11",selectedDayKey:null},
     {events:[],monthKey:"2026-11",selectedDayKey:"2026-11-02"},
-    {events:[event("long","2025-01-01","2027-12-31")],monthKey:"2026-11",selectedDayKey:"2027-08-01"}
+    {events:[event("long","2025-01-01","2027-12-31")],monthKey:"2026-11",selectedDayKey:"2027-08-01"},
+    {events:[event("long","2025-01-01","2027-12-31")],monthKey:"2026-11",selectedDayKey:"2026-02-31"}
   ]) {
     const after=load();assert.deepEqual(plain(after.render(props)),plain(load(true).render(props)));
     assert.ok(after.stats().indexedDays<=43);assert.equal(after.stats().dateAdds,43);

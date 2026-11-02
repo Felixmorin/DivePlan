@@ -29,7 +29,7 @@ Même scénario : douze événements synthétiques couvrant l'année 2026, calen
 
 Même arbre de rendu. Réduction de 99,0 % des appels directs d'arithmétique de dates dans ce scénario; pas une mesure de temps CPU ou de latence. Pour des événements courts, le nouveau code compare jusqu'à 42/43 clés, mais ne développe plus les jours par parsing/arithmétique/formatage.
 
-Autres vérifications : fin et début du changement d'heure Montréal, mois adjacents, date hors grille incluse ou sans événement, dates inversées, fin à minuit, événement sans fin, catégories/annulations/publics conservés et calendriers vides. Le vrai point d'entrée vérifie toujours l'athlète avant ses lectures ciblées; nombre de lectures conservé (2 en grille, 1 en liste). Aucun test ne lit de données de production.
+Autres vérifications : fin et début du changement d'heure Montréal, mois adjacents, date hors grille incluse ou sans événement, date inexistante normalisée par JavaScript (31 février : état vide conservé), dates inversées, fin à minuit, événement sans fin, catégories/annulations/publics conservés et calendriers vides. Le vrai point d'entrée vérifie toujours l'athlète avant ses lectures ciblées; nombre de lectures conservé (2 en grille, 1 en liste). Aucun test ne lit de données de production.
 
 ## État et limites des mesures
 

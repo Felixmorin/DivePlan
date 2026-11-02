@@ -88,7 +88,11 @@ function MonthCalendar({ events, monthKey, selectedDayKey }: { events: AthletePl
   // Index only dates that this view reads. A selected date can be outside the
   // grid (for example through a saved link) and still needs its detail list.
   const indexedDayKeys = new Set(days.map(({ key }) => key));
-  if (selectedDayKey) indexedDayKeys.add(selectedDayKey);
+  // The page accepts date strings that Date.parse normalizes (e.g. February
+  // 31). The old day-by-day index never contained such nonexistent dates.
+  if (selectedDayKey && toMontrealDateInputValue(parseMontrealSessionDate(selectedDayKey, "12:00")) === selectedDayKey) {
+    indexedDayKeys.add(selectedDayKey);
+  }
   const eventsByDay = new Map<string, AthletePlanningEvent[]>();
   for (const event of events) {
     const startKey = toMontrealDateInputValue(event.startsAt);
