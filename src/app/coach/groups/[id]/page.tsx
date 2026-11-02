@@ -19,7 +19,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
   const [{ id }, { clubId }] = await Promise.all([params, requireCoach()]);
   type AthleteResult = { id: string; level: string; firstName: string; lastName: string; avatar: string | null; status: string | null; sessionTitle: string | null; sessionDate: Date | null; recentVolume: number };
   const result = await query<AthleteResult & { groupId: string; groupName: string }>(
-    `SELECT g.id AS "groupId", g.name AS "groupName", a.id, a.level, u."firstName", u."lastName", u.avatar,
+    `SELECT g.id AS "groupId", g.name AS "groupName", a.id, a.level, u."firstName", u."lastName", NULL::text AS avatar,
        latest.status, latest."sessionTitle", latest."sessionDate",
        COALESCE((SELECT sum(l."repetitionsCompleted")::int FROM "AthleteDiveLog" l
          JOIN "TrainingSession" s ON s.id = l."sessionId" JOIN "TrainingWeek" w ON w.id = s."weekId"
