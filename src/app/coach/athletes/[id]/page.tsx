@@ -1,3 +1,4 @@
+import { getCompetitionConfidence } from "@/lib/competition-confidence";
 import { getAthleteHistory, type HistoryParams, type AthleteHistoryPage } from "@/lib/athlete-history";
 import type { QueryResultRow } from "pg";
 import Link from "@/components/ui/app-link";
@@ -102,7 +103,7 @@ export default async function AthleteDetailPage({ params, searchParams }: { para
   let confidenceRows:Array<{competitionDiveId:string;diveCode:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";rating:number;evaluator:"ATHLETE"|"COACH";evaluatedAt:Date}>=[];
   let confidenceSchemaUnavailable=false;
   try {
-    if (competition) confidenceRows=(await query<{competitionDiveId:string;diveCode:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";rating:number;evaluator:"ATHLETE"|"COACH";evaluatedAt:Date}>(`SELECT "competitionDiveId","diveCode",height,rating,evaluator,"evaluatedAt" FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId"=$1 ORDER BY "evaluatedAt"`,[athlete.id])).rows;
+    if (competition) confidenceRows = await getCompetitionConfidence(athlete.id, activeTab === "competition" ? "latest-athlete" : "history");
   } catch(error) {
     const code=(error as {code?:string})?.code;
     if(code!=="42P01"&&code!=="42703")throw error;
