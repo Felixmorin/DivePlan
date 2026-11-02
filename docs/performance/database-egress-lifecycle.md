@@ -1,6 +1,6 @@
 # Rattacher les agrégats SQL horaires au cycle de vie de la réponse
 
-Base : master `c84f571033ac5ee8996a92ce9c1b5e010600d0a1`.
+Base initiale : master `c84f571033ac5ee8996a92ce9c1b5e010600d0a1`. La branche a ensuite intégré sans conflit master `3783f8f66c5c1be4bc510d292ba6cf3c5db7cc86` (PR #80–82 fusionnées pendant le travail), sans réécriture de branche.
 
 ## Défaut de fiabilité
 
@@ -46,10 +46,12 @@ Fast Origin Transfer CDN/compute, transferts navigateur, volume PostgreSQL estim
 
 ## Observabilité et validation après déploiement
 
-Le 2 novembre 2026, projet/team/domaine dive-plan.vercel.app et lien Git Felixmorin/DivePlan reconfirmés via connecteurs. Production examinée READY `dpl_3VWNBj6wJzMnMQfK74j5N8znbxf5`, commit de base. Aucun log error/fatal sur **14:30:41–15:20:41 UTC (09:30:41–10:20:41 Montréal)** ni cluster d’erreur sur 50 minutes; cela ne prouve pas l’absence d’incident ou de perte de télémétrie.
+Le 2 novembre 2026, projet/team/domaine dive-plan.vercel.app et lien Git Felixmorin/DivePlan reconfirmés via connecteurs. Production examinée initialement READY `dpl_3VWNBj6wJzMnMQfK74j5N8znbxf5`, commit c84f571. Aucun log error/fatal sur **14:30:41–15:20:41 UTC (09:30:41–10:20:41 Montréal)** ni cluster d’erreur sur 50 minutes; cela ne prouve pas l’absence d’incident ou de perte de télémétrie.
+
+Après intégration de master, la dernière production a aussi été reconfirmée READY : `dpl_FmDDopV1kgZZAkPJBmoHek6VTvyX`, commit `3783f8f`. Le correctif de collecte de cette PR n’y est pas encore déployé.
 
 Catalogue de métriques découvert avant interrogation; FOT sortant indisponible HTTP 400, CLI Vercel absente. `/coach/observability` redirige vers `/coach`. Instrumentation SQL/request et collecte Web Vitals existantes inspectées, aucune donnée privée connectée consultée. Il s’agit d’une correction ciblée de la collecte existante, pas d’une nouvelle métrique.
 
 Après déploiement habituel, effectuer des requêtes autorisées courtes puis comparer les compteurs horaires par route/composant avec les traces ServerRequestMetric sur la même période, en tenant compte des périmètres/exclusions distincts. Vérifier absence de double comptage, erreurs d’écriture et surcoût SQL des lots. Parcours connecté/mobile/iPad non testé ici.
 
-Aucun fichier commun avec les PR ouvertes #68/#80/#81/#82 vérifiées; aucune dépendance de fusion. Aucune migration, nouvelle dépendance, fusion, auto-merge, modification de données/secrets ou action production.
+Aucun fichier commun avec #68, seule autre PR ouverte après intégration de master; aucune dépendance de fusion. #80–82 sont désormais fusionnées dans cette base. Aucune migration, nouvelle dépendance, fusion, auto-merge, modification de données/secrets ou action production.

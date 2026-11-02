@@ -62,7 +62,7 @@ export default async function AthletesPage() {
          FROM "AthleteDiveLog" l JOIN club_athletes ca ON ca.id = l."athleteId"
          GROUP BY l."athleteId"
        )
-       SELECT a.id, u."firstName", u."lastName", u.avatar, a.level, a."groupId", a."birthDate", g.name AS "groupName", a.active,
+       SELECT a.id, u."firstName", u."lastName", NULL::text AS avatar, a.level, a."groupId", a."birthDate", g.name AS "groupName", a.active,
          latest_activity.title AS "lastActivity", COALESCE(completion_stats.completed_sessions, 0) AS "completedSessions",
          COALESCE(volume_stats.volume, 0) AS volume,
          CASE WHEN COALESCE(completion_stats.completed_sessions, 0) = 0 THEN NULL
