@@ -38,8 +38,8 @@ export async function POST(request: Request) {
 
   let body: unknown;
   try {
-    const raw = await request.text();
-    if (raw.length > maxRequestBytes) return Response.json({ error: "payload_too_large" }, { status: 413 });
+    const raw = await readBoundedText(request);
+    if (raw === null) return Response.json({ error: "payload_too_large" }, { status: 413 });
     body = JSON.parse(raw);
   } catch {
     return Response.json({ error: "invalid_json" }, { status: 400 });
@@ -135,5 +135,29 @@ export async function POST(request: Request) {
   await Promise.all(writes);
 
   return Response.json({ ok: true }, { headers: { "cache-control": "no-store" } });
+}
+
+/** Count request-body bytes before decoding, including when Content-Length is absent. */
+async function readBoundedText(request: Request): Promise<string | null> {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let raw = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) return raw + decoder.decode();
+      bytes += value.byteLength;
+      if (bytes > maxRequestBytes) {
+        // Do not await an upstream cancellation that could itself stall/fail.
+        void reader.cancel().catch(() => undefined);
+        return null;
+      }
+      raw += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
