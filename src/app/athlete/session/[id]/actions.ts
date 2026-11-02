@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { ATHLETE_SESSION_PREVIEW_EVENT, trackEvent } from "@/lib/monitoring";
 import { query, withTransaction } from "@/lib/db";
-import { getCurrentAthlete } from "@/lib/athlete-session";
+import { getCurrentAthlete, getCurrentAthleteIdentity } from "@/lib/athlete-session";
 import { getAssignedSessionBlocks, persistAthleteProgress, type AthleteProgressPayload } from "@/lib/athlete-progress";
 import { isSessionStartAvailable, SESSION_NOT_STARTED_MESSAGE } from "@/lib/session-availability";
 import { z } from "zod";
@@ -135,7 +135,7 @@ export async function startAthleteSession(sessionId: string) {
 }
 
 export async function saveAthleteProgress(payload: SaveAthleteProgressPayload) {
-  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
+  const athlete = await getCurrentAthleteIdentity();
 
   if (!athlete) {
     throw new Error("Aucun athlete actif trouve.");
@@ -147,7 +147,7 @@ export async function saveAthleteProgress(payload: SaveAthleteProgressPayload) {
     throw new Error("Cette seance n'est pas assignee a l'athlete courant.");
   }
 
-  await assertSessionStartAvailable(payload.sessionId);
+  await assertSessionStartAvailable(payload.sessionId, athlete.id);
 
   await persistAthleteProgress(payload, athlete.id, assignedBlocks);
 
@@ -224,7 +224,7 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
     if (!evaluation.rows[0]?.complete) throw new Error("Réponds à tous les plongeons de compétition avant de terminer.");
   }
 
-  await assertSessionStartAvailable(payload.sessionId);
+  await assertSessionStartAvailable(payload.sessionId, athlete.id);
 
   const earnedMilestones = await persistAthleteProgress(payload, athlete.id, assignedBlocks, async (tx): Promise<MilestoneKey[]> => {
     const completedAt = new Date();
@@ -302,13 +302,12 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
   return (earnedMilestones ?? []).map((key) => milestoneText.find((milestone) => milestone.key === key)!);
 }
 
-async function assertSessionStartAvailable(sessionId: string) {
-  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
-  if (!athlete) throw new Error("Aucun athlete actif trouve.");
+// Callers have already authenticated and checked assignment for this athlete.
+async function assertSessionStartAvailable(sessionId: string, athleteId: string) {
   const sessionResult = await query<{ date: Date; status: string; athleteStatus: string | null }>(
     `SELECT s.date, s.status, c.status AS "athleteStatus" FROM "TrainingSession" s
      LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$2 WHERE s.id=$1 LIMIT 1`,
-    [sessionId, athlete.id]
+    [sessionId, athleteId]
   );
   const session = sessionResult.rows[0];
 
