@@ -47,13 +47,27 @@ export async function getAthleteWeekPlanningEvents({
   return findAthletePlanningEvents({ athleteId, clubId, groupId, rangeStart, rangeEnd: addMontrealDays(rangeStart, 7), includeOverlapping });
 }
 
+/** Home only displays two future camps/competitions, not the full calendar. */
+export async function getAthleteUpcomingHighlights({ athleteId, clubId, groupId }: {
+  athleteId: string;
+  clubId: string;
+  groupId: string | null;
+}): Promise<AthletePlanningEvent[]> {
+  const now = new Date();
+  return findAthletePlanningEvents({
+    athleteId, clubId, groupId, rangeStart: now,
+    rangeEnd: addMontrealDays(startOfMontrealDay(now), 183), onlyHighlights: true
+  });
+}
+
 async function findAthletePlanningEvents({
   athleteId,
   clubId,
   groupId,
   rangeStart,
   rangeEnd,
-  includeOverlapping = false
+  includeOverlapping = false,
+  onlyHighlights = false
 }: {
   athleteId: string;
   clubId: string;
@@ -61,6 +75,7 @@ async function findAthletePlanningEvents({
   rangeStart: Date;
   rangeEnd: Date;
   includeOverlapping?: boolean;
+  onlyHighlights?: boolean;
 }): Promise<AthletePlanningEvent[]> {
   const result = await query<{
     id: string; title: string; type: AthletePlanningEvent["type"]; startsAt: Date; endsAt: Date | null;
@@ -71,7 +86,8 @@ async function findAthletePlanningEvents({
      WHERE e."clubId" = $1
        AND (e."athleteId" = $2 OR ($3::text IS NOT NULL AND e."groupId" = $3) OR (e."athleteId" IS NULL AND e."groupId" IS NULL))
        AND ${includeOverlapping ? 'e."startsAt" < $5 AND ((e."endsAt" IS NOT NULL AND e."endsAt" >= $4) OR (e."endsAt" IS NULL AND e."startsAt" >= $4))' : 'e."startsAt" >= $4 AND e."startsAt" < $5'}
-     ORDER BY e."startsAt" ASC`,
+       ${onlyHighlights ? "AND e.type IN ('COMPETITION', 'CAMP') AND e.\"cancelledAt\" IS NULL" : ""}
+     ORDER BY e."startsAt" ASC${onlyHighlights ? ', e.id ASC LIMIT 2' : ''}`,
     [clubId, athleteId, groupId, rangeStart, rangeEnd]
   );
 
