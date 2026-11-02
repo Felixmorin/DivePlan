@@ -20,7 +20,7 @@ function load<T>(path: string, dependencies: Record<string, unknown>, globals: R
   }).outputText;
   const exports = {};
   runInNewContext(code, {
-    exports, Request, Response, URL, ...globals,
+    exports, Request, Response, URL, TextDecoder, ...globals,
     require(name: string) {
       if (!(name in dependencies)) throw new Error(`Unexpected dependency: ${name}`);
       return dependencies[name];

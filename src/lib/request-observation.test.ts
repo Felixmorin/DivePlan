@@ -11,7 +11,7 @@ import { normalizeTelemetryRoute } from "./telemetry-route";
 function load<T>(path: string, dependencies: Record<string, unknown>, globals: Record<string, unknown> = {}): T {
   const code = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const exports = {};
-  runInNewContext(code, { exports, Request, Response, URL, URLSearchParams, Date, ...globals, require(name: string) {
+  runInNewContext(code, { exports, Request, Response, URL, URLSearchParams, Date, TextDecoder, ...globals, require(name: string) {
     assert.ok(name in dependencies, `Unexpected dependency: ${name}`); return dependencies[name];
   } });
   return exports as T;
