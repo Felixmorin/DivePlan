@@ -15,7 +15,7 @@ import { withDatabaseEgressComponent } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function AthleteTodayPage() {
-  const athlete = await withDatabaseEgressComponent("initial_session_load", () => getCurrentAthlete(), "/athlete");
+  const athlete = await withDatabaseEgressComponent("initial_session_load", () => getCurrentAthlete({ includeCompetitionDives: false }), "/athlete");
   if (!athlete) redirect("/login");
 
 

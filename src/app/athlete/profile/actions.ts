@@ -13,7 +13,7 @@ const athleteProfileFieldSchema = z.discriminatedUnion("field", [
 ]);
 
 export async function updateAthleteProfileField(field: "firstName" | "lastName" | "username", value: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
   if (!athlete) {
     return { ok: false, error: "Session invalide. Reconnecte-toi puis réessaie." };
   }
