@@ -35,7 +35,8 @@ export function LibraryClient({ exercises, dives, templates }: { exercises: Exer
   const [sortOrder, setSortOrder] = useState<"az" | "za">("az");
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<string[]>([]);
-  const [selected, setSelected] = useState<Exercise | null>(null);
+  const [selection, setSelected] = useState<Exercise | null>(null);
+  const selected = exercises.find((exercise) => exercise.id === selection?.id) ?? null;
   const [formExercise, setFormExercise] = useState<Exercise | null | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Exercise | null>(null);
   const [mobileFilters, setMobileFilters] = useState(false);
@@ -57,7 +58,6 @@ export function LibraryClient({ exercises, dives, templates }: { exercises: Exer
   const pageCount = Math.max(1, Math.ceil(visibleExercises.length / pageSize));
   const pageExercises = visibleExercises.slice((page - 1) * pageSize, page * pageSize);
   const selectedExercise = visibleExercises.find((exercise) => exercise.id === selected?.id) ?? visibleExercises[0] ?? null;
-  const previewExercise = exercises.find((exercise) => exercise.id === selected?.id) ?? null;
 
   function toggleFilter(filter: string) { setFilters((current) => current.includes(filter) ? current.filter((item) => item !== filter) : [...current, filter]); }
   function favorite(exercise: Exercise) {
@@ -88,7 +88,7 @@ export function LibraryClient({ exercises, dives, templates }: { exercises: Exer
     {section === "dives" && <DiveLibrary dives={dives} query={query} />}
     {section === "templates" && <TemplateLibrary templates={templates} />}
     {mobileFilters && <div className="fixed inset-0 z-40 bg-[var(--color-navy)]/30 lg:hidden" onClick={() => setMobileFilters(false)}><div className="absolute bottom-0 left-0 right-0 rounded-t-3xl bg-white p-5" onClick={(event) => event.stopPropagation()}><div className="mb-4 flex items-center justify-between"><h2 className="font-black">Filtres</h2><button onClick={() => setMobileFilters(false)}><X className="h-5 w-5" /></button></div><FilterPanel filters={filters} toggle={toggleFilter} /><Button className="mt-5 w-full" onClick={() => setMobileFilters(false)}>Voir les résultats</Button></div></div>}
-    {previewExercise && <div className="fixed inset-0 z-30 bg-[var(--color-navy)]/30 xl:hidden" onClick={() => setSelected(null)}><div className="absolute bottom-0 right-0 top-0 w-full max-w-md overflow-y-auto bg-white p-5" onClick={(event) => event.stopPropagation()}><Preview exercise={previewExercise} onClose={() => setSelected(null)} onEdit={() => setFormExercise(previewExercise)} onDelete={() => setDeleteTarget(previewExercise)} /></div></div>}
+    {selected && <div className="fixed inset-0 z-30 bg-[var(--color-navy)]/30 xl:hidden" onClick={() => setSelected(null)}><div className="absolute bottom-0 right-0 top-0 w-full max-w-md overflow-y-auto bg-white p-5" onClick={(event) => event.stopPropagation()}><Preview exercise={selected} onClose={() => setSelected(null)} onEdit={() => setFormExercise(selected)} onDelete={() => setDeleteTarget(selected)} /></div></div>}
     {formExercise !== undefined && <ExerciseForm exercise={formExercise} pending={pending} onClose={() => setFormExercise(undefined)} onSaved={(message) => { setFormExercise(undefined); notify(message); router.refresh(); }} />}
     {deleteTarget && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--color-navy)]/45 p-0 backdrop-blur-[2px] sm:items-center sm:p-4"><section role="alertdialog" aria-modal="true" aria-labelledby="delete-exercise-title" aria-describedby="delete-exercise-description" className="w-full max-w-md rounded-t-2xl border border-[var(--color-border)] bg-white p-5 shadow-2xl sm:rounded-2xl sm:p-6"><div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200 sm:hidden"/><h2 id="delete-exercise-title" className="text-center text-xl font-black">Supprimer cet exercice ?</h2><p id="delete-exercise-description" className="mt-2 text-center text-sm text-[var(--color-ink-muted)]">L’exercice « {deleteTarget.name} » sera retiré de ta bibliothèque. Les anciennes séances restent intactes.</p><div className="mt-6 grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => setDeleteTarget(null)}>Garder</Button><Button variant="action" className="bg-[var(--color-danger)] text-white hover:bg-[var(--color-danger)]" onClick={remove} disabled={pending}>{pending ? "Suppression…" : "Supprimer"}</Button></div></section></div>}
   </div>;

@@ -25,10 +25,7 @@ function mount(legacy=false) {
   let refreshes=0,mutations=0;const pushes:string[]=[];
   const run=(fn:(props:Record<string,unknown>)=>Node,props:Record<string,unknown>)=>{current=states.get(fn)??[];states.set(fn,current);cursor=0;return fn(props);};
   let source=readFileSync("src/app/coach/library/library-client.tsx","utf8");
-  if(legacy)source=source.replace("{previewExercise &&","{selected &&")
-    .replace("<Preview exercise={previewExercise}","<Preview exercise={selected}")
-    .replace("setFormExercise(previewExercise)","setFormExercise(selected)")
-    .replace("setDeleteTarget(previewExercise)","setDeleteTarget(selected)");
+  if(legacy)source=source.replace('const [selection, setSelected] = useState<Exercise | null>(null);\n  const selected = exercises.find((exercise) => exercise.id === selection?.id) ?? null;', 'const [selected, setSelected] = useState<Exercise | null>(null);');
   const wrap=({children}:{children?:ReactNode})=>createElement("div",null,children);
   const dependencies:Record<string,unknown>={
     "react/jsx-runtime":jsx,react:{useMemo:(fn:()=>unknown)=>fn(),useTransition:()=>[false,()=>{throw new Error("Unexpected mutation");}],
