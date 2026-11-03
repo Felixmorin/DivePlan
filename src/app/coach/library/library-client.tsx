@@ -35,7 +35,8 @@ export function LibraryClient({ exercises, dives, templates }: { exercises: Exer
   const [sortOrder, setSortOrder] = useState<"az" | "za">("az");
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<string[]>([]);
-  const [selected, setSelected] = useState<Exercise | null>(null);
+  const [selection, setSelected] = useState<Exercise | null>(null);
+  const selected = exercises.find((exercise) => exercise.id === selection?.id) ?? null;
   const [formExercise, setFormExercise] = useState<Exercise | null | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<Exercise | null>(null);
   const [mobileFilters, setMobileFilters] = useState(false);
