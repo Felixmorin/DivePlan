@@ -55,6 +55,9 @@ export function LibraryClient({ exercises, dives, templates }: { exercises: Exer
   }, [activeCategory, activeLevel, activeMaterial, exercises, filters, query, scope, sortOrder]);
   const pageSize = 6;
   const pageCount = Math.max(1, Math.ceil(visibleExercises.length / pageSize));
+  // Server Action updates can remove the last item on the current page.
+  // Adjust our own state before React commits an empty, out-of-range page.
+  if (page > pageCount) setPage(pageCount);
   const pageExercises = visibleExercises.slice((page - 1) * pageSize, page * pageSize);
   const selectedExercise = visibleExercises.find((exercise) => exercise.id === selected?.id) ?? visibleExercises[0] ?? null;
 
