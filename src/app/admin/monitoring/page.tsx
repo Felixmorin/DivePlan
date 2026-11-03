@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, FileText, Shield } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText } from "lucide-react";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/current-user";
@@ -28,8 +28,7 @@ export default async function AdminMonitoringPage() {
     </header>
     <section aria-label="Statistiques de monitoring" className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard icon={FileText} color="blue" value={events.length} label="Événements" />
-      <MetricCard icon={AlertTriangle} color="amber" value={Number(failedResult.rows[0]?.count ?? 0)} label="Alertes actives" />
-      <MetricCard icon={Shield} color="red" value={0} label="Connexions suspectes" />
+      <MetricCard icon={AlertTriangle} color="amber" value={Number(failedResult.rows[0]?.count ?? 0)} label="Échecs de connexion (24 h)" />
       <MetricCard icon={CheckCircle2} color="green" value={Number(completedResult.rows[0]?.count ?? 0)} label="Séances complétées" />
     </section>
     <MonitoringJournal events={events} />
