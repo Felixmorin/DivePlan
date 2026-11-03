@@ -30,7 +30,7 @@ type DiveDateVolume = DiveVolume & { date: string };
 export default async function AthleteDiveDetailsPage({ searchParams }: {
   searchParams: Promise<{ period?: string | string[]; family?: string | string[]; all?: string | string[] }>;
 }) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
   if (!athlete) redirect("/login");
   const params = await searchParams;
   const periodValue = Array.isArray(params.period) ? params.period[0] : params.period;
@@ -61,7 +61,9 @@ export default async function AthleteDiveDetailsPage({ searchParams }: {
   const diveTotals = new Map<string, DiveVolume>();
   for (const row of dateRows) {
     const key = diveKey(row);
-    datesByDive.set(key, [...(datesByDive.get(key) ?? []), row]);
+    const dates = datesByDive.get(key);
+    if (dates) dates.push(row);
+    else datesByDive.set(key, [row]);
     const dive = diveTotals.get(key);
     if (dive) dive.volume += row.volume;
     else diveTotals.set(key, { family: row.family, code: row.code, height: row.height, heightLabel: row.heightLabel, volume: row.volume });

@@ -38,8 +38,8 @@ export async function POST(request: Request) {
 
   let body: unknown;
   try {
-    const raw = await request.text();
-    if (raw.length > maxRequestBytes) return Response.json({ error: "payload_too_large" }, { status: 413 });
+    const raw = await readBoundedText(request);
+    if (raw === null) return Response.json({ error: "payload_too_large" }, { status: 413 });
     body = JSON.parse(raw);
   } catch {
     return Response.json({ error: "invalid_json" }, { status: 400 });
@@ -61,10 +61,11 @@ export async function POST(request: Request) {
     const item = value as Record<string, unknown>;
     const route = typeof item.route === "string" ? normalizeTelemetryRoute(item.route) : null;
     if (!route || typeof item.resourceType !== "string" || !resourceTypes.has(item.resourceType)) continue;
-    const requests = Number(item.requests);
-    const transferBytes = Number(item.transferBytes);
-    const cacheHits = Number(item.cacheHits);
-    if (!Number.isInteger(requests) || requests < 1 || requests > 100_000
+    const requests = item.requests;
+    const transferBytes = item.transferBytes;
+    const cacheHits = item.cacheHits;
+    if (typeof requests !== "number" || typeof transferBytes !== "number" || typeof cacheHits !== "number"
+      || !Number.isInteger(requests) || requests < 1 || requests > 100_000
       || !Number.isSafeInteger(transferBytes) || transferBytes < 0 || transferBytes > 100_000_000
       || !Number.isInteger(cacheHits) || cacheHits < 0 || cacheHits > requests) continue;
     entries.push({ route, resourceType: item.resourceType, requests, transferBytes, cacheHits });
@@ -75,10 +76,10 @@ export async function POST(request: Request) {
     const item = value as Record<string, unknown>;
     const route = typeof item.route === "string" ? normalizeTelemetryRoute(item.route) : null;
     const name = item.name;
-    const numericValue = Number(item.value);
+    const numericValue = item.value;
     if (!route || !/^\/(coach|athlete|admin)(\/|$)/.test(route)
       || typeof name !== "string" || !vitalNames.has(name)
-      || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 60_000
+      || typeof numericValue !== "number" || !Number.isFinite(numericValue) || numericValue < 0 || numericValue > 60_000
       || (name === "CLS" && numericValue > 10)) continue;
     vitals.push({ route, metric: name, value: numericValue, ...ratingThresholds(name, numericValue) });
   }
@@ -135,5 +136,29 @@ export async function POST(request: Request) {
   await Promise.all(writes);
 
   return Response.json({ ok: true }, { headers: { "cache-control": "no-store" } });
+}
+
+/** Count request-body bytes before decoding, including when Content-Length is absent. */
+async function readBoundedText(request: Request): Promise<string | null> {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let raw = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) return raw + decoder.decode();
+      bytes += value.byteLength;
+      if (bytes > maxRequestBytes) {
+        // Do not await an upstream cancellation that could itself stall/fail.
+        void reader.cancel().catch(() => undefined);
+        return null;
+      }
+      raw += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 

@@ -12,7 +12,7 @@ import { formatMontrealDate } from "@/lib/timezone";
 export const dynamic = "force-dynamic";
 
 export default async function AthleteWeekPage({ searchParams }: { searchParams: Promise<{page?:string}> }) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
   if (!athlete) {
     redirect("/login");
   }

@@ -38,7 +38,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
 
   const [groupsR, athletesR, drylandR, templateR, eventsR, templatesR, recentSessionIdsR] = await Promise.all([
     query<{id:string;name:string}>(`SELECT id,name FROM "TrainingGroup" WHERE "clubId"=$1 ORDER BY name`,[clubId]),
-    query<{id:string;groupId:string;level:string;firstName:string;lastName:string;avatar:string|null}>(`SELECT a.id,a."groupId",a.level,u."firstName",u."lastName",u.avatar FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
+    query<{id:string;groupId:string;level:string;firstName:string;lastName:string;avatar:string|null}>(`SELECT a.id,a."groupId",a.level,u."firstName",u."lastName",NULL::text AS avatar FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
     query<{id:string;name:string;category:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean;equipment:string|null;tags:string[]}>(`SELECT id,name,category,"defaultSets","defaultReps","defaultDuration","roundTrip",equipment,tags FROM "DrylandExercise" WHERE "archivedAt" IS NULL ORDER BY name`),
     templateId ? query<{id:string;name:string;category:string;payload:unknown}>(`SELECT id,name,category,payload FROM "SessionTemplate" WHERE id=$1 AND "clubId"=$2`,[templateId,clubId]) : Promise.resolve(null),
     query<{id:string;title:string;startsAt:Date;duration:number|null;groupId:string;location:string|null}>(`SELECT id,title,"startsAt",duration,"groupId",location FROM "PlanningEvent" WHERE "clubId"=$1 AND type='TRAINING_SCHEDULE' ORDER BY "startsAt"`,[clubId]),

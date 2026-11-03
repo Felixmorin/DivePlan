@@ -6,7 +6,7 @@ import { BlockTypeBadge } from "@/components/training/block-type-badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { getAssignedReadySession, getAthleteCurrentWeekSummary, getCurrentAthlete } from "@/lib/athlete-session";
-import { getAthletePlanningEvents, getAthleteWeekPlanningEvents } from "@/lib/athlete-planning";
+import { getAthleteUpcomingHighlights, getAthleteWeekPlanningEvents } from "@/lib/athlete-planning";
 import { addMontrealDays, formatMontrealDate, formatMontrealTime, startOfMontrealWeek, toMontrealDateInputValue } from "@/lib/timezone";
 import { isSessionStartAvailable } from "@/lib/session-availability";
 import { AthletePageHeader } from "@/components/athlete/page-header";
@@ -15,15 +15,15 @@ import { withDatabaseEgressComponent } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function AthleteTodayPage() {
-  const athlete = await withDatabaseEgressComponent("initial_session_load", () => getCurrentAthlete(), "/athlete");
+  const athlete = await withDatabaseEgressComponent("initial_session_load", () => getCurrentAthlete({ includeCompetitionDives: false }), "/athlete");
   if (!athlete) redirect("/login");
 
 
-  const [readySession, weekEvents, weekSummary, upcomingEvents] = await withDatabaseEgressComponent("initial_session_load", () => Promise.all([
+  const [readySession, weekEvents, weekSummary, nextHighlights] = await withDatabaseEgressComponent("initial_session_load", () => Promise.all([
     getAssignedReadySession(athlete.id),
     getAthleteWeekPlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId, includeOverlapping: true }),
     getAthleteCurrentWeekSummary(athlete.id),
-    getAthletePlanningEvents({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId })
+    getAthleteUpcomingHighlights({ athleteId: athlete.id, clubId: athlete.clubId, groupId: athlete.groupId })
   ]), "/athlete");
 
   const todayKey = toMontrealDateInputValue(new Date());
@@ -40,9 +40,6 @@ export default async function AthleteTodayPage() {
   const blocks = readySession?.blocks ?? [];
   const blockTypes = Array.from(new Set(blocks.map((block) => block.type)));
   const sessionTime = sessionDate ? formatMontrealTime(sessionDate) : "--:--";
-  const nextHighlights = upcomingEvents
-    .filter((event) => (event.type === "COMPETITION" || event.type === "CAMP") && !event.cancelledAt && event.startsAt >= new Date())
-    .slice(0, 2);
 
   return (
     <AthleteShell>

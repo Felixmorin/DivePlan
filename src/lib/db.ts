@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import { getSqlRequestSpan } from "@/lib/server-request-metrics";
 
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from "pg";
@@ -48,7 +49,7 @@ if (process.env.NODE_ENV !== "production") globalForPool.divePlanPool = pool;
 
 export type DatabaseEgressComponent = "authentication" | "initial_session_load" | "other";
 type EgressBucket = { requests: number; resultBytes: number; durationMs: number; maxDurationMs: number; slowQueries: number };
-type EgressScope = { clubId: string | null; route: string | null; buckets: Map<string, { component: DatabaseEgressComponent; route: string; stats: EgressBucket }>; timer?: ReturnType<typeof setTimeout> };
+type EgressScope = { clubId: string | null; route: string | null; buckets: Map<string, { component: DatabaseEgressComponent; route: string; stats: EgressBucket }>; timer?: ReturnType<typeof setTimeout>; flushScheduled?: boolean };
 const egressScope = new AsyncLocalStorage<EgressScope>();
 const egressComponent = new AsyncLocalStorage<DatabaseEgressComponent>();
 
@@ -91,12 +92,32 @@ function recordDatabaseResult(result: QueryResult<QueryResultRow>, durationMs: n
   bucket.stats.maxDurationMs = Math.max(bucket.stats.maxDurationMs, durationMs);
   if (durationMs >= 200) bucket.stats.slowQueries += 1;
   scope.buckets.set(key, bucket);
-  if (scope.timer) clearTimeout(scope.timer);
-  scope.timer = setTimeout(() => {
-    if (!scope.clubId || scope.buckets.size === 0) return;
-    const buckets = [...scope.buckets.values()];
-    scope.buckets.clear();
-    for (const { component, route, stats } of buckets) void pool.query(
+  if (scope.flushScheduled) return;
+  try {
+    // Keep collection owned by the response lifetime on serverless runtimes.
+    // The callback uses captured counters only, never request APIs or business SQL.
+    after(() => flushDatabaseEgress(scope));
+    scope.flushScheduled = true;
+    if (scope.timer !== undefined) clearTimeout(scope.timer);
+    scope.timer = undefined;
+  } catch {
+    // CLI scripts and other non-request callers have no Next.js lifecycle.
+    // Retain their existing debounced fallback without blocking the query.
+    if (scope.timer !== undefined) clearTimeout(scope.timer);
+    scope.timer = setTimeout(async () => { await flushDatabaseEgress(scope); }, 500);
+  }
+}
+
+async function flushDatabaseEgress(scope: EgressScope) {
+  // Clear before awaiting: a later query can schedule another batch without
+  // counting these samples twice (including queries from another after callback).
+  scope.flushScheduled = false;
+  if (scope.timer !== undefined) clearTimeout(scope.timer);
+  scope.timer = undefined;
+  if (!scope.clubId || scope.buckets.size === 0) return;
+  const buckets = [...scope.buckets.values()];
+  scope.buckets.clear();
+  await Promise.all(buckets.map(({ component, route, stats }) => pool.query(
       `INSERT INTO "DatabaseEgressTelemetryHour" ("clubId", hour, route, component, requests, "resultBytes", "durationMs", "maxDurationMs", "slowQueries", "updatedAt")
        VALUES ($1, date_trunc('hour', NOW()), $7, $8, $2, $3, $4, $5, $6, NOW())
        ON CONFLICT ("clubId", hour, route, component) DO UPDATE SET
@@ -107,8 +128,7 @@ function recordDatabaseResult(result: QueryResult<QueryResultRow>, durationMs: n
          "slowQueries" = "DatabaseEgressTelemetryHour"."slowQueries" + EXCLUDED."slowQueries",
          "updatedAt" = NOW()`,
       [scope.clubId, stats.requests, stats.resultBytes, stats.durationMs, stats.maxDurationMs, stats.slowQueries, route, component]
-    ).catch((error: unknown) => console.error("Database egress telemetry write failed", error));
-  }, 500);
+    ).catch((error: unknown) => console.error("Database egress telemetry write failed", error))));
 }
 
 export async function query<Row extends QueryResultRow = QueryResultRow>(

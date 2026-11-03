@@ -10,7 +10,7 @@ import { getCurrentAthlete } from "@/lib/athlete-session";
 export const dynamic = "force-dynamic";
 
 export default async function AthletePreferencesPage() {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
   if (!athlete) redirect("/login");
 
   return <AthleteShell hideNav className="athlete-preferences-page">

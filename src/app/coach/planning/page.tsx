@@ -82,7 +82,7 @@ export default async function PlanningPage({ searchParams }: { searchParams: Pro
   ]);
   const [blockRows,assignmentRows,completionRows]=await Promise.all([
     query<{id:string;sessionId:string;type:string;estimatedVolume:number}>(`SELECT b.id,b."sessionId",b.type,b."estimatedVolume" FROM "SessionBlock" b WHERE b."sessionId"=ANY($1::text[]) ORDER BY b.position`,[sessionRows.rows.map(s=>s.id)]),
-    query<{sessionBlockId:string;athleteId:string}>(`SELECT "sessionBlockId","athleteId" FROM "SessionBlockAssignment" WHERE "sessionBlockId"=ANY($1::text[])`,[sessionRows.rows.map(s=>s.id)]),
+    query<{sessionBlockId:string;athleteId:string}>(`SELECT a."sessionBlockId",a."athleteId" FROM "SessionBlockAssignment" a JOIN "SessionBlock" b ON b.id=a."sessionBlockId" WHERE b."sessionId"=ANY($1::text[])`,[sessionRows.rows.map(s=>s.id)]),
     query<{sessionId:string;status:string}>(`SELECT "sessionId",status FROM "AthleteSessionCompletion" WHERE "sessionId"=ANY($1::text[])`,[sessionRows.rows.map(s=>s.id)])
   ]);
   const blocksBySession=new Map<string,PlanningSession["blocks"]>();

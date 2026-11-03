@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast-provider";
 
 type FormAction = (formData: FormData) => void | Promise<void>;
+// Actions must revalidate their affected page. Next.js then includes the
+// updated UI in the action response; a second router.refresh repeats that work.
 export function ToastActionForm({ action, successMessage, className, children }: { action: FormAction; successMessage: string; className?: string; children: ReactNode }) {
   const [pending, setPending] = useState(false);
-  const router = useRouter();
   const { notify } = useToast();
   async function submit(formData: FormData) {
     if (pending) return;
@@ -15,7 +15,6 @@ export function ToastActionForm({ action, successMessage, className, children }:
     try {
       await action(formData);
       notify(successMessage);
-      router.refresh();
     } catch {
       notify("L’action n’a pas abouti. Réessayez.", "error");
     } finally {
