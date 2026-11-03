@@ -30,7 +30,7 @@ type DiveDateVolume = DiveVolume & { date: string };
 export default async function AthleteDiveDetailsPage({ searchParams }: {
   searchParams: Promise<{ period?: string | string[]; family?: string | string[]; all?: string | string[] }>;
 }) {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
   if (!athlete) redirect("/login");
   const params = await searchParams;
   const periodValue = Array.isArray(params.period) ? params.period[0] : params.period;

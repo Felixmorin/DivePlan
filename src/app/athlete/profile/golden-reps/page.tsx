@@ -7,7 +7,7 @@ import { getAthleteGoldenReps, getCurrentAthlete } from "@/lib/athlete-session";
 export const dynamic = "force-dynamic";
 
 export default async function GoldenRepsPage() {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
   if (!athlete) redirect("/login");
   const goldenReps = await getAthleteGoldenReps(athlete.id);
 

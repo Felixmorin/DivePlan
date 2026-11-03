@@ -12,7 +12,7 @@ import { AthletePageHeader } from "@/components/athlete/page-header";
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
-  const athlete = await getCurrentAthlete();
+  const athlete = await getCurrentAthlete({ includeCompetitionDives: false });
   if (!athlete) {
     redirect("/login");
   }
