@@ -102,7 +102,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
     () => blocks.flatMap((sessionBlock) => sessionBlock.poolSections.flatMap((section) => section.dives.map((dive) => ({ ...dive, sectionLabel: section.label })))),
     [blocks]
   );
-  const completedPoolReps = poolDives.reduce((sum, dive) => sum + (diveChecks[dive.id] ?? []).filter((state) => state > 0).length, 0);
+  const completedPoolReps = poolDives.reduce((sum, dive) => sum + (diveChecks[dive.id] ?? []).filter((state) => state > 0).length, 0) + (session.competitionSimulationStatus === "COMPLETED" ? session.competitionSimulationDives.length : 0);
   const totalPages = blocks.reduce((sum, item) => sum + Math.max(1, item.poolSections.length), 0);
   const pagesBeforeCurrentBlock = blocks.slice(0, current).reduce((sum, item) => sum + Math.max(1, item.poolSections.length), 0);
   const progress = totalPages > 0 ? Math.round(((pagesBeforeCurrentBlock + stepIndex + 1) / totalPages) * 100) : 0;
