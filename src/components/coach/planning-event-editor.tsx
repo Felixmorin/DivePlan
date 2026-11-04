@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Pencil, Trash2, X } from "lucide-react";
 import { deletePlanningEvent, updatePlanningEvent } from "@/app/coach/planning/actions";
 import { Button } from "@/components/ui/button";
@@ -23,9 +23,11 @@ type PlanningEventEditorProps = {
   };
   targets: PlanningTarget[];
   compact?: boolean;
+  fullCard?: boolean;
+  children?: ReactNode;
 };
 
-export function PlanningEventEditor({ event, targets, compact = false }: PlanningEventEditorProps) {
+export function PlanningEventEditor({ event, targets, compact = false, fullCard = false, children }: PlanningEventEditorProps) {
   const [open, setOpen] = useState(false);
   const [eventType, setEventType] = useState(event.type);
 
@@ -34,13 +36,13 @@ export function PlanningEventEditor({ event, targets, compact = false }: Plannin
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={compact ? "h-7 min-h-7 w-7" : "h-8 min-h-8 w-8"}
+        size={fullCard ? "default" : "icon"}
+        className={fullCard ? "h-auto min-h-0 w-full justify-start rounded-lg p-0 text-left hover:bg-transparent" : compact ? "h-7 min-h-7 w-7" : "h-8 min-h-8 w-8"}
         aria-label={`Modifier ${event.title}`}
-        title="Modifier l’horaire"
+        title={fullCard ? undefined : "Modifier l’horaire"}
         onClick={() => setOpen(true)}
       >
-        <Pencil className="h-3.5 w-3.5" />
+        {fullCard ? children : <Pencil className="h-3.5 w-3.5" />}
       </Button>
 
       {open && (

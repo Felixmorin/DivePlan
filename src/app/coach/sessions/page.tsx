@@ -21,9 +21,9 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
 
 function SessionsPageContent({ sessions, pagination }: { sessions: SessionListItem[]; pagination?: CoachSessionsPage }) {
   return <>
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <div><p className="mb-1 text-[10px] font-semibold text-slate-500">Entraîneur <span className="mx-2">/</span> Séances</p><h1 className="text-[28px] font-black leading-tight tracking-tight">Séances</h1><p className="text-[11px] text-slate-600">Planifiez et consultez les entraînements de vos groupes.</p></div>
-      <Button asChild variant="action" className="min-h-8 rounded-lg bg-cyan-500 px-3 text-[10px] hover:bg-cyan-600"><Link href="/coach/sessions/new"><Plus className="h-3.5 w-3.5" /> Nouvelle séance</Link></Button>
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div><h1 className="text-[28px] font-black leading-tight tracking-tight text-[#10284d] sm:text-[30px]">Séances</h1><p className="text-[13px] text-slate-600">Planifie et consulte les entraînements de tes groupes.</p></div>
+      <Button asChild variant="action" className="min-h-10 rounded-xl bg-[#0969ef] px-4 text-xs hover:bg-[#0757cc]"><Link href="/coach/sessions/new"><Plus className="h-4 w-4" /> Nouvelle séance</Link></Button>
     </div>
     <SessionsList sessions={sessions} pagination={pagination} />
   </>;

@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "@/components/ui/app-link";
-import { ChevronDown, ChevronRight, Dumbbell, RefreshCw, UserRound, Waves, X } from "lucide-react";
-import { saveSessionAttendance } from "@/app/coach/sessions/actions";
+import { CheckCircle2, ChevronDown, ChevronRight, Dumbbell, RefreshCw, UserRound, Waves, X } from "lucide-react";
+import { finishTrainingSession, saveSessionAttendance } from "@/app/coach/sessions/actions";
+import { ConfirmFormButton } from "@/components/ui/confirm-form-button";
 import type { LivePlan, LiveProgress, LiveSession } from "@/lib/live-session";
 import { formatMontrealDate } from "@/lib/timezone";
 
@@ -110,7 +111,7 @@ export function ActiveSessionOverview({ session: plan, initialProgress, athletes
     <div className="live-breadcrumb"><Link href="/coach/sessions">Séances</Link><ChevronRight />Séance en cours</div>
     <header className="live-heading">
       <div><div className="live-title-line"><h1>Séance en cours</h1><span className="live-pill"><i /> LIVE</span></div><p>{session.week.group.name}<span>·</span>{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p></div>
-      <div className="live-actions"><span className="sync-pill" role="status"><i /> {syncStatus === "failed" ? "Connexion interrompue · nouvelle tentative" : syncStatus === "loading" ? "Synchronisation…" : "Synchronisé en direct"}</span><button className="refresh-button" onClick={() => setRefreshRequest((value) => value + 1)} disabled={syncStatus === "loading"} aria-label="Actualiser"><RefreshCw /></button></div>
+      <div className="live-actions"><span className="sync-pill" role="status"><i /> {syncStatus === "failed" ? "Connexion interrompue · nouvelle tentative" : syncStatus === "loading" ? "Synchronisation…" : "Synchronisé en direct"}</span><button className="refresh-button" onClick={() => setRefreshRequest((value) => value + 1)} disabled={syncStatus === "loading"} aria-label="Actualiser"><RefreshCw /></button><ConfirmFormButton action={finishTrainingSession} fields={{ sessionId: session.id }} label={<><CheckCircle2 /> Terminer la séance</>} title="Terminer cette séance ?" description="La séance sera clôturée maintenant. Les athlètes présents seront marqués comme ayant terminé; les absents resteront indiqués comme absents." confirmLabel="Terminer la séance" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-bold text-white hover:bg-emerald-800" /></div>
     </header>
     <div className="live-toolbar">
       <nav className="live-tabs" aria-label="Type de bloc">
