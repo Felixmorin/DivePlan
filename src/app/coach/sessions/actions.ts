@@ -112,12 +112,12 @@ const poolRowsEditSchema = z.array(z.object({
 export type QuickExerciseInput = z.infer<typeof quickExerciseSchema>;
 
 async function loadSimulationTurns(groupId: string, clubId: string, athleteIds: string[], height: "ONE_METER" | "THREE_METER" | "PLATFORM") {
-  if (athleteIds.length < 3) throw new Error("La simulation demande au moins trois athlètes participants.");
+  if (athleteIds.length < 1) throw new Error("Assigne au moins un athlète participant à la simulation.");
   const athletes = (await query<{ id: string; name: string }>(
     `SELECT a.id, u."firstName" || ' ' || u."lastName" AS name FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a."groupId"=$2 AND a.active=true AND a.id=ANY($3::text[]) ORDER BY u."firstName",u."lastName"`,
     [clubId, groupId, athleteIds]
   )).rows;
-  if (athletes.length < 3) throw new Error("La simulation demande au moins trois athlètes actifs dans le groupe.");
+  if (athletes.length < 1) throw new Error("Assigne au moins un athlète actif du groupe à la simulation.");
   const dives = (await query<{ athleteId: string; athleteName: string; diveCode: string; diveName: string; height: string; position: number }>(
       `SELECT d."athleteId",u."firstName" || ' ' || u."lastName" AS "athleteName",d."diveCode",d."diveName",d.height,d.position FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" JOIN "Athlete" a ON a.id=d."athleteId" JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a."groupId"=$2 AND a.active=true AND a.id=ANY($3::text[]) AND d.height=$4 AND l.position=0 ORDER BY d."athleteId",d.position,d."createdAt"`,
     [clubId, groupId, athleteIds, height]
@@ -1123,7 +1123,7 @@ type PreparedPoolBlock = CreateSessionInput["poolBlocks"][number] & { athleteIds
 
 function validateSessionForPublication(data: CreateSessionInput) {
   if (data.status !== SessionStatus.READY) return;
-  if (data.competitionSimulation && data.competitionSimulationAthleteIds.length < 3) throw new Error("Assigne au moins trois athlètes participants à la simulation.");
+  if (data.competitionSimulation && data.competitionSimulationAthleteIds.length < 1) throw new Error("Assigne au moins un athlète participant à la simulation.");
   const invalidBlocks =
     data.title.trim().length < 3 ||
     (data.warmup.enabled && (!data.warmup.title.trim() || data.warmup.duration < 1)) ||

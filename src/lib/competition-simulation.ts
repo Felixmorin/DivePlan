@@ -19,7 +19,7 @@ export function buildCompetitionTurns(athletes: Array<{ id: string; name: string
 
 export function eligibleSimulationJudges(turns: CompetitionTurn[], turnIndex: number): string[] {
   const turn = turns[turnIndex];
-  if (!turn || turns.length < 3) return [];
+  if (!turn || new Set(turns.map((item) => item.athleteId)).size < 3) return [];
   const next = turns[(turnIndex + 1) % turns.length];
   return [...new Set(turns.map((item) => item.athleteId))].filter((athleteId) => athleteId !== turn.athleteId && athleteId !== next.athleteId);
 }
