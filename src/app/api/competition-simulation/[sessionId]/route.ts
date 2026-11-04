@@ -51,6 +51,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ses
     turnIndex,
     totalTurns: simulation.turns.length,
     turn,
+    plannedTurns: simulation.turns.flatMap((item, index) => !athlete || item.athleteId === athlete.id ? [{ ...item, turnIndex: index }] : []),
     completedTurns: simulation.status === "COMPLETED" ? simulation.turns : [],
     nextDiver: simulation.turns.length ? simulation.turns[(turnIndex + 1) % simulation.turns.length] : null,
     role: athlete ? (turn?.athleteId === athlete.id ? "DIVER" : eligible.includes(athlete.id) ? "JUDGE" : "NEXT") : "COACH",
