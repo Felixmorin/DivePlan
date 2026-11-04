@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "@/components/ui/app-link";
 import { Button } from "@/components/ui/button";
+import { startVisiblePolling } from "@/lib/visible-polling";
 
 type Snapshot = {
   status: "READY" | "LIVE" | "COMPLETED";
@@ -32,9 +33,19 @@ export function CompetitionSimulationLive({ sessionId, coach = false }: { sessio
   }, [sessionId]);
 
   useEffect(() => {
-    const initial = window.setTimeout(() => void refresh().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Erreur de connexion.")), 0);
-    const timer = window.setInterval(() => void refresh().catch(() => undefined), 2500);
-    return () => { window.clearTimeout(initial); window.clearInterval(timer); };
+    return startVisiblePolling({
+      poll: () => refresh().catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : "Erreur de connexion.");
+      }),
+      isVisible: () => document.visibilityState === "visible",
+      subscribe: (listener) => {
+        document.addEventListener("visibilitychange", listener);
+        return () => document.removeEventListener("visibilitychange", listener);
+      },
+      intervalMs: 2500,
+      schedule: (callback, delayMs) => window.setTimeout(callback, delayMs) as unknown as ReturnType<typeof setTimeout>,
+      cancel: (timer) => window.clearTimeout(timer as unknown as number),
+    });
   }, [refresh]);
 
   async function send(body: Record<string, unknown>, confirmMissing = false) {
