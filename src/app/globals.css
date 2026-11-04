@@ -697,6 +697,10 @@ a {
 .coach-dive-status.is-ready { background:#dcf8eb; color:#008c5e; }
 .coach-dive-status.needs-work { background:#fff2d5; color:#a86900; }
 .coach-competition-empty { padding:1rem 1.25rem 1.4rem; }
+.coach-competition-add-dive { margin:0 1rem 1rem; border-top:1px solid #e5edf3; padding-top:.65rem; }
+.coach-competition-add-dive-button { display:inline-flex; align-items:center; gap:.4rem; border:1px dashed #9bcbd5; border-radius:.55rem; background:#f4fcfd; padding:.55rem .8rem; color:#087f9b; font-size:.78rem; font-weight:800; cursor:pointer; }
+.coach-competition-add-dive-button:disabled { cursor:not-allowed; opacity:.45; }
+.coach-competition-add-dive .coach-dive-editor-form { padding:.6rem; border-radius:.55rem; background:#f7fbfd; }
 .coach-competition-list-footer { display:flex; align-items:center; justify-content:space-between; gap:1rem; border-top:1px solid #e5edf3; padding:.8rem 1rem; }
 .coach-competition-list-footer span { color:#64788f; font-size:.78rem; }
 .coach-competition-list-footer-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }

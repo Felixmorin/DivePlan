@@ -3,7 +3,7 @@
 import { Fragment, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, ChevronDown, Copy, Pencil, Plus, Save, Trash2, X } from "lucide-react";
-import { copyCompetitionDiveList, createCompetitionDiveList, deleteCompetitionDiveList, removeCompetitionDive, renameCompetitionDiveList, reorderCompetitionDives, setActiveCompetitionDiveList, updateCompetitionDiveDetails, updateCompetitionDiveStatus } from "@/app/coach/athletes/actions";
+import { addCompetitionDive, copyCompetitionDiveList, createCompetitionDiveList, deleteCompetitionDiveList, removeCompetitionDive, renameCompetitionDiveList, reorderCompetitionDives, setActiveCompetitionDiveList, updateCompetitionDiveDetails, updateCompetitionDiveStatus } from "@/app/coach/athletes/actions";
 import { worldAquaticsDifficulty } from "@/lib/world-aquatics-dd";
 
 type Dive = {
@@ -52,6 +52,7 @@ export function CoachCompetitionListsTab({ athleteId, lists, dives, demo }: {
   const [copyFromListId, setCopyFromListId] = useState("");
   const [renameOpen, setRenameOpen] = useState(false);
   const [editingDiveId, setEditingDiveId] = useState<string | null>(null);
+  const [addDiveOpen, setAddDiveOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [diveStatuses, setDiveStatuses] = useState<Record<string, Dive["status"]>>({});
@@ -186,6 +187,21 @@ export function CoachCompetitionListsTab({ athleteId, lists, dives, demo }: {
     }
   }
 
+  async function saveNewDive(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError("");
+    try {
+      await addCompetitionDive(new FormData(event.currentTarget));
+      setAddDiveOpen(false);
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Impossible d’ajouter ce plongeon.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function deleteDive(dive: Dive) {
     if (demo || pending || !window.confirm(`Supprimer le plongeon ${dive.code} ?`)) return;
     const formData = new FormData();
@@ -253,6 +269,9 @@ export function CoachCompetitionListsTab({ athleteId, lists, dives, demo }: {
           </table>
         </div>
       ) : <p className="athlete-empty coach-competition-empty">Aucun plongeon n’est enregistré dans cette liste.</p>}
+      {selectedList&&selectedHeight&&selectedHeight.value!=="CUSTOM"&&<div className="coach-competition-add-dive">
+        {addDiveOpen ? <form onSubmit={saveNewDive} className="coach-dive-editor-form"><input type="hidden" name="athleteId" value={athleteId}/><input type="hidden" name="listId" value={selectedList.id}/><input type="hidden" name="height" value={selectedHeight.value}/><label>Code<input name="diveCode" maxLength={12} required autoFocus onChange={(event)=>{const input=event.currentTarget.form?.elements.namedItem("difficulty");if(input instanceof HTMLInputElement){const difficulty=worldAquaticsDifficulty(event.currentTarget.value,selectedHeight.value);input.value=difficulty===null?"":difficulty.toFixed(1);}}}/></label><label>DD<input name="difficulty" inputMode="decimal" placeholder="—"/></label>{selectedHeight.value==="PLATFORM"&&<label>Hauteur<select name="platformHeight" required defaultValue=""><option value="" disabled>Choisir</option><option value="5">5 m</option><option value="7.5">7,5 m</option><option value="10">10 m</option></select></label>}<div className="coach-dive-editor-actions"><button type="submit" disabled={pending}><Save className="h-3.5 w-3.5"/>{pending?"Enregistrement…":"Ajouter le plongeon"}</button><button type="button" onClick={()=>setAddDiveOpen(false)} disabled={pending}>Annuler</button></div></form> : <button type="button" className="coach-competition-add-dive-button" onClick={()=>{setError("");setAddDiveOpen(true);}} disabled={demo||pending}><Plus className="h-4 w-4"/> Ajouter un plongeon</button>}
+      </div>}
       {!lists.length&&<p className="athlete-empty coach-competition-empty">Aucune liste de compétition n’a encore été créée.</p>}
       {selectedList&&<footer className="coach-competition-list-footer"><span>{isActive?"Cette liste est visible par l’athlète.":"Cette liste est réservée au coach tant qu’elle n’est pas activée."}</span><div className="coach-competition-list-footer-actions"><button type="button" onClick={activateSelectedList} disabled={demo||isActive||pending} aria-pressed={isActive}>{isActive?"Liste active":"Définir comme liste active"}</button><button type="button" className="coach-competition-delete-list-button" onClick={()=>void deleteSelectedList()} disabled={demo||pending}><Trash2 className="h-4 w-4"/>Supprimer la liste</button></div></footer>}
       {error&&<p className="coach-competition-error" role="alert">{error}</p>}
