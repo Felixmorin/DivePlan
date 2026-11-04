@@ -139,6 +139,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   const { notify } = useToast();
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const addBlockMenuRef = useRef<HTMLDetailsElement>(null);
   const [assignmentOpenBlockId, setAssignmentOpenBlockId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -210,6 +211,14 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
   });
   const [evaluationPlacement, setEvaluationPlacement] = useState(() => getInitialEvaluationPlacement(initialTemplate?.payload));
   const [flashBlock, setFlashBlock] = useState<string | null>(null);
+  useEffect(() => {
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const menu = addBlockMenuRef.current;
+      if (menu?.open && !menu.contains(event.target as Node)) menu.open = false;
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, []);
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -751,7 +760,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
                 })}
                 {orderedContentRows.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-white p-5 text-center text-sm text-[var(--color-ink-muted)]">Aucun bloc pour le moment. Ajoute un bloc pour commencer.</div>}
               </div>
-              <details className="group relative rounded-2xl border border-dashed border-[var(--color-brand)]/50 bg-[var(--color-brand)]/5">
+              <details ref={addBlockMenuRef} className="group relative rounded-2xl border border-dashed border-[var(--color-brand)]/50 bg-[var(--color-brand)]/5">
                 <summary className="flex cursor-pointer list-none items-center justify-center gap-2 p-3 font-black text-[var(--color-brand-strong)]"><Plus className="h-5 w-5"/>Ajouter un bloc<ChevronDown className="h-4 w-4 transition group-open:rotate-180"/></summary>
                 <div className="absolute bottom-full left-1/2 z-20 mb-2 grid w-64 -translate-x-1/2 gap-1 rounded-2xl border border-[var(--color-border)] bg-white p-2 shadow-[var(--shadow-soft)]">
                   <button type="button" onClick={() => { setWarmup((value) => ({ ...value, enabled: true })); setContentOrder((current) => ["warmup", ...current.filter((id) => id !== "warmup")]); }} className="flex items-center gap-2 rounded-xl p-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]"><Activity className="h-4 w-4 text-[var(--block-warmup-fg)]"/>Échauffement</button>
