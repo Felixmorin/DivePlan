@@ -83,6 +83,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
   const turnIndex = simulation.currentTurnIndex;
   const turn = simulation.turns[turnIndex];
   if (parsed.data.action === "vote") {
+    const rating = parsed.data.rating;
     if (simulation.status !== "LIVE" || !turn) return Response.json({ error: "La simulation n’accepte pas de vote maintenant." }, { status: 409 });
     if (parsed.data.turnIndex !== turnIndex) return Response.json({ error: "Le passage a changé. Actualise l’écran." }, { status: 409 });
     if (athlete && (!simulation.turns.some((item) => item.athleteId === athlete.id) || !eligibleSimulationJudges(simulation.turns, turnIndex).includes(athlete.id))) return Response.json({ error: "Tu n’es pas juge pour ce passage." }, { status: 403 });
@@ -95,7 +96,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
         const locked = await tx.query<{ status: string; currentTurnIndex: number }>(`SELECT status,"currentTurnIndex" FROM "CompetitionSimulation" WHERE id=$1 FOR UPDATE`, [simulation.id]);
         const current = locked.rows[0];
         if (current?.status !== "LIVE" || current.currentTurnIndex !== turnIndex) return false;
-        await tx.query(`INSERT INTO "CompetitionSimulationScore" (id,"simulationId","turnIndex","judgeAthleteId","judgeCoachId",rating) VALUES ($1,$2,$3,$4,$5,$6)`, [randomUUID(), simulation.id, turnIndex, athlete?.id ?? null, coach?.coach.id ?? null, parsed.data.rating]);
+        await tx.query(`INSERT INTO "CompetitionSimulationScore" (id,"simulationId","turnIndex","judgeAthleteId","judgeCoachId",rating) VALUES ($1,$2,$3,$4,$5,$6)`, [randomUUID(), simulation.id, turnIndex, athlete?.id ?? null, coach?.coach.id ?? null, rating]);
         return true;
       });
       if (!saved) return Response.json({ error: "Le passage a changé. Actualise l’écran." }, { status: 409 });
@@ -115,6 +116,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
     });
     if (!started) return Response.json({ error: "La simulation ne peut pas démarrer maintenant." }, { status: 409 });
   } else {
+    const force = parsed.data.force;
     if (simulation.status !== "LIVE" || !turn) return Response.json({ error: "Aucun passage actif." }, { status: 409 });
     const advanced = await withTransaction(async (tx) => {
       const locked = await tx.query<{ status: string; currentTurnIndex: number; sessionStatus: string }>(`SELECT cs.status,cs."currentTurnIndex",s.status AS "sessionStatus" FROM "CompetitionSimulation" cs JOIN "TrainingSession" s ON s.id=cs."sessionId" WHERE cs.id=$1 FOR UPDATE OF cs`, [simulation.id]);
@@ -123,7 +125,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       const expected = eligibleSimulationJudges(simulation.turns, turnIndex).length + 1;
       const voteCounts = (await tx.query<{ received: number; coachVotes: number }>(`SELECT count(*)::int AS received,count(*) FILTER (WHERE "judgeCoachId" IS NOT NULL)::int AS "coachVotes" FROM "CompetitionSimulationScore" WHERE "simulationId"=$1 AND "turnIndex"=$2`, [simulation.id, turnIndex])).rows[0] ?? { received: 0, coachVotes: 0 };
       if (!voteCounts.coachVotes) return { error: "Le coach doit enregistrer sa note avant de passer au plongeur suivant." };
-      if (voteCounts.received < expected && !parsed.data.force) return { error: `${voteCounts.received}/${expected} notes reçues.` };
+      if (voteCounts.received < expected && !force) return { error: `${voteCounts.received}/${expected} notes reçues.` };
       if (turnIndex + 1 >= simulation.turns.length) await tx.query(`UPDATE "CompetitionSimulation" SET status='COMPLETED',"updatedAt"=NOW() WHERE id=$1`, [simulation.id]);
       else await tx.query(`UPDATE "CompetitionSimulation" SET "currentTurnIndex"="currentTurnIndex"+1,"updatedAt"=NOW() WHERE id=$1`, [simulation.id]);
       return { error: null };
