@@ -38,6 +38,7 @@ test("session creation and editing omit disabled photos from SQL while retaining
       CREATE TABLE "PlanningEvent" (id text PRIMARY KEY,title text,"startsAt" timestamptz,duration int,"groupId" text,location text,"clubId" text,type text);
       CREATE TABLE "TrainingWeek" (id text PRIMARY KEY,"groupId" text,"clubId" text);
       CREATE TABLE "TrainingSession" (id text PRIMARY KEY,title text,date timestamptz,"weekId" text);
+      CREATE TABLE "CompetitionSimulation" ("sessionId" text,status text,turns jsonb);
       CREATE TABLE "AthleteSessionCompletion" ("athleteId" text,"sessionId" text,status text);
       CREATE TABLE "AthleteDiveLog" ("athleteId" text,"sessionId" text,"repetitionsCompleted" int);
       CREATE TABLE "CoachAthleteSessionNote" ("athleteId" text,"sessionId" text,note text);

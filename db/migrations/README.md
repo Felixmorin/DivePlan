@@ -35,3 +35,7 @@ Migration `0026_request_observations.sql` ajoute le détail des ressources navig
 pour l’explorateur admin. Appliquez-la avant le nouveau collecteur; les agrégats
 existants sont conservés. Le cron authentifié `request-observations` purge le détail
 ancien séparément. Voir `docs/transfer-monitoring.md` pour le déploiement et les limites.
+
+Migration `0030_competition_simulations.sql` ajoute les simulations rattachées aux séances
+et leurs notes de juges. Elle doit être appliquée explicitement avant de publier le code
+qui active cette fonction.

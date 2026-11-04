@@ -29,6 +29,7 @@ export const dynamic = "force-dynamic";
 export default async function SessionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getCoachSession(id, { includeResults: "unlessLive" });
+  const simulationEnabled = Boolean((await query(`SELECT 1 FROM "CompetitionSimulation" WHERE "sessionId"=$1`, [id])).rowCount);
   const coachNotes = session.status === "IN_PROGRESS" ? [] : (await query<{ athleteId: string; note: string }>(
     `SELECT "athleteId",note FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`,
     [session.id]
@@ -40,7 +41,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       query<{ count: number | string }>(`SELECT count(*) AS count FROM "Athlete" WHERE "groupId"=$1 AND active=true`, [session.week.group.id])
     ]);
     const coach = coachRows.rows[0];
-    return <DraftSessionOverview session={session} published={session.status === "READY"} location={planningEventRows.rows[0]?.location ?? null} coachName={coach ? `${coach.firstName} ${coach.lastName}` : "À confirmer"} groupAthleteCount={Number(athleteCountRows.rows[0]?.count ?? 0)} />;
+    return <DraftSessionOverview session={session} published={session.status === "READY"} simulationEnabled={simulationEnabled} location={planningEventRows.rows[0]?.location ?? null} coachName={coach ? `${coach.firstName} ${coach.lastName}` : "À confirmer"} groupAthleteCount={Number(athleteCountRows.rows[0]?.count ?? 0)} />;
   }
   if (session.status === "COMPLETED") {
     const completedSession = {
@@ -74,7 +75,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       diveLogs: session.diveLogs.map(({ athleteId, poolDiveId, repetitionsCompleted }) => ({ athleteId, poolDiveId, repetitionsCompleted })),
       exerciseLogs: session.exerciseLogs.map(({ athleteId, exerciseId, completed }) => ({ athleteId, exerciseId, completed }))
     };
-    return <CoachShell active="Seances"><CompletedSessionOverview session={completedSession} /></CoachShell>;
+    return <CoachShell active="Seances">{simulationEnabled && <Button asChild className="mb-4"><Link href={`/coach/sessions/${session.id}/simulation`}>Voir la simulation</Link></Button>}<CompletedSessionOverview session={completedSession} /></CoachShell>;
   }
   if (session.status === "IN_PROGRESS") {
     const progress = await getLiveSessionProgress(session.id, session.week.clubId);
@@ -82,7 +83,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     const athletes = Array.from(new Map(session.blocks.flatMap((block) => block.assignments.map(({ athlete }) => [athlete.id, {
       id: athlete.id, firstName: athlete.user.firstName, lastName: athlete.user.lastName
     }] as const))).values());
-    return <CoachShell active="Seances"><ActiveSessionOverview key={`${session.id}:${progress.planVersion}`} session={liveSessionForClient(session)} initialProgress={progress} athletes={athletes} /></CoachShell>;
+    return <CoachShell active="Seances"><div className="space-y-4">{simulationEnabled && <Button asChild><Link href={`/coach/sessions/${session.id}/simulation`}>Ouvrir la simulation de compétition</Link></Button>}<ActiveSessionOverview key={`${session.id}:${progress.planVersion}`} session={liveSessionForClient(session)} initialProgress={progress} athletes={athletes} /></div></CoachShell>;
   }
   const rawAthletes = session.blocks.flatMap((block) =>
     block.assignments.map((assignment) => ({
@@ -349,7 +350,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
 type DraftOverviewSession = Awaited<ReturnType<typeof getCoachSession>>;
 
-function DraftSessionOverview({ session, published, location, coachName, groupAthleteCount }: { session: DraftOverviewSession; published: boolean; location: string | null; coachName: string; groupAthleteCount: number }) {
+function DraftSessionOverview({ session, published, simulationEnabled, location, coachName, groupAthleteCount }: { session: DraftOverviewSession; published: boolean; simulationEnabled: boolean; location: string | null; coachName: string; groupAthleteCount: number }) {
   const blocks = [...session.blocks].sort((a, b) => a.position - b.position);
   const athletes = new Set(blocks.flatMap((block) => block.assignments.map((assignment) => assignment.athleteId)));
   const plannedDiveReps = blocks.reduce((total, block) => total + (block.poolTraining?.sections.reduce((sectionTotal, section) => sectionTotal + Math.max(1, countPoolContexts(section.label ?? section.height)) * section.dives.reduce((sum, dive) => sum + dive.repetitions, 0), 0) ?? 0), 0);
@@ -364,6 +365,7 @@ function DraftSessionOverview({ session, published, location, coachName, groupAt
           <div className="draft-meta"><span><CalendarDays />{formatMontrealDate(session.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</span><span><Clock3 />{formatMontrealTime(session.date)} – {formatMontrealTime(new Date(session.date.getTime() + session.duration * 60_000))} ({session.duration >= 60 ? `${Math.floor(session.duration / 60)} h ${String(session.duration % 60).padStart(2, "0")}` : `${session.duration} min`})</span><span><Users />{session.week.group.name}</span>{location && <span><MapPin />{location}</span>}</div>
         </div>
         <div className="draft-actions"><details className="draft-more"><summary aria-label="Autres actions"><MoreVertical /></summary><div><Link href={`/coach/sessions/${session.id}/print`}><Printer /> Imprimer</Link><form action={duplicateTrainingSession}><input type="hidden" name="sessionId" value={session.id} /><button><Copy /> Dupliquer</button></form><ConfirmFormButton action={deleteTrainingSession} fields={{ sessionId: session.id }} label="Supprimer la séance" title="Supprimer cette séance ?" description="Cette séance et les données qui lui sont associées seront supprimées définitivement." confirmLabel="Supprimer" danger className="flex items-center gap-2 text-red-600" /></div></details>
+          {simulationEnabled && published && <Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}/simulation`}>Ouvrir simulation</Link></Button>}
           <Button asChild variant="outline"><Link href={`/coach/sessions/${session.id}/edit`}><Edit /> Modifier</Link></Button>
           {published ? <ToastActionForm action={startTrainingSession} successMessage="Séance démarrée"><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Play /> Démarrer la séance</Button></ToastActionForm> : <ToastActionForm action={publishTrainingSession} successMessage="Séance publiée"><input type="hidden" name="sessionId" value={session.id} /><Button type="submit" variant="action"><Send /> Publier la séance</Button></ToastActionForm>}
         </div>

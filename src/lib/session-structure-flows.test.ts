@@ -97,6 +97,7 @@ test("form, draft and template flows share the transactional session-structure w
         PRIMARY KEY ("sessionId", "athleteId")
       );
       CREATE TABLE "AthleteSessionCompletion" ("sessionId" text, "startedAt" timestamp, status text);
+      CREATE TABLE "CompetitionSimulation" ("sessionId" text,status text,turns jsonb);
       CREATE TABLE "AthleteDiveLog" ("sessionId" text);
       CREATE TABLE "AthleteExerciseLog" ("sessionId" text);
       INSERT INTO "TrainingGroup" VALUES ('group-a', 'club-a');
@@ -159,7 +160,8 @@ test("form, draft and template flows share the transactional session-structure w
       "@/lib/session-status": { completeSessionIfAllAthletesAreDone: async () => {} },
       "@/lib/pool-list": { countPoolContexts: () => 1, validatePoolListRow: () => true },
       "@/lib/session-template": { ...templateExports, getSessionSnapshot: async (id: string) => ({ id, status: "DRAFT" }) },
-      "@/lib/session-structure": sessionStructure
+      "@/lib/session-structure": sessionStructure,
+      "@/lib/competition-simulation": { buildCompetitionTurns: () => null }
     };
     runInNewContext(ts.transpileModule(readFileSync("src/app/coach/sessions/actions.ts", "utf8"), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }

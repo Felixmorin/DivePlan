@@ -226,6 +226,10 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
     startTransition(async () => {
       try {
         await onStart(session.id);
+        if (session.competitionSimulation) {
+          router.push(`/athlete/session/${session.id}/simulation`);
+          return;
+        }
         setStarted(true);
       } catch {
         setNow(Date.now());

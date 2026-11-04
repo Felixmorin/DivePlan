@@ -228,14 +228,16 @@ Les évaluations actuelles attachées à `TrainingSession` stockent une confianc
 
 Les écritures de vote doivent être idempotentes avec une contrainte unique sur `(passage, juge)`. Le changement de passage doit être une opération atomique du serveur afin que les téléphones ne voient jamais deux passages actifs.
 
-## Points à décider avant l’implémentation
+## Choix retenus pour le premier incrément
 
-1. Barème : plage et incréments souhaités.
-2. Résultats : afficher les notes individuelles, un total par plongeon ou un classement; et à quel moment.
-3. Rotation après le dernier rang : recommencer au premier athlète ou exclure seulement le prochain passage s’il existe.
-4. Nombre minimum de votes requis et politique de clôture quand un juge ne répond pas.
-5. Un plongeon par tour ou une liste complète de plongeons par athlète.
-6. Le coach peut-il corriger une note après clôture, et faut-il conserver un journal visible aux athlètes?
+- Le coach coche « Ajouter une simulation de compétition en direct » à la dernière étape de planification de la séance.
+- Les participants sont les athlètes actifs du groupe; il faut au moins trois et chacun doit avoir un plongeon dans sa liste active.
+- La liste de plongeons active de chaque athlète est copiée à la création, puis jouée en tours : premier plongeon de chaque athlète, deuxième plongeon de chaque athlète, etc. L’ordre des athlètes est alphabétique.
+- La note est un nombre entier de 0 à 10. Les votes bruts sont conservés; aucun classement ni calcul officiel n’est produit.
+- Le coach doit voter. Il peut avancer normalement lorsque toutes les notes attendues sont reçues ou confirmer le passage avec des notes manquantes.
+- Les notes individuelles deviennent visibles après la fin de la simulation. Le coach peut la démarrer depuis la séance; les athlètes entrent au même endroit que pour démarrer leur entraînement.
+
+Ce barème est un choix technique provisoire pour rendre le premier incrément utilisable. Il faudra le remplacer par le barème souhaité avant d’utiliser la simulation pour comparer les résultats.
 
 ## Découpage de livraison recommandé
 

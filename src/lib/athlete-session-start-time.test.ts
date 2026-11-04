@@ -13,6 +13,7 @@ test("starting and saving a session preserve its first recorded start time", asy
   class Clock extends Date { constructor() { super(now); } }
   try {
     await db.exec(`CREATE TABLE "TrainingSession" (id text PRIMARY KEY, date timestamptz, status text);
+      CREATE TABLE "CompetitionSimulation" ("sessionId" text,status text,turns jsonb);
       CREATE TABLE "SessionBlock" (id text PRIMARY KEY, "sessionId" text);
       CREATE TABLE "SessionBlockAssignment" ("sessionBlockId" text, "athleteId" text);
       CREATE TABLE "AthleteSessionCompletion" ("athleteId" text, "sessionId" text, "startedAt" timestamptz,

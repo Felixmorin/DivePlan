@@ -261,6 +261,7 @@ model Athlete {
   competitionDives CompetitionDive[]
   competitionDiveLists CompetitionDiveList[]
   competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
+  competitionSimulationScores CompetitionSimulationScore[]
   milestones       AthleteMilestone[]
 }
 
@@ -321,6 +322,7 @@ model Coach {
   groups                TrainingGroup[]
   sessions              TrainingSession[]
   competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
+  competitionSimulationScores CompetitionSimulationScore[]
 }
 
 model PushSubscription {
@@ -492,10 +494,38 @@ model TrainingSession {
   templates       SessionTemplate[]
   planningEvent   PlanningEvent?             @relation(fields: [planningEventId], references: [id], onDelete: SetNull)
   competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
+  competitionSimulation CompetitionSimulation?
   pushDeliveries PushDelivery[]
   updatePushDeliveries SessionUpdatePushDelivery[]
   cancellationPushDeliveries SessionCancellationPushDelivery[]
   coachAthleteNotes CoachAthleteSessionNote[]
+}
+
+model CompetitionSimulation {
+  id               String                         @id
+  sessionId        String                         @unique
+  status           String                         @default("READY")
+  currentTurnIndex Int                            @default(0)
+  turns            Json
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @default(now()) @updatedAt
+  session          TrainingSession                @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  scores           CompetitionSimulationScore[]
+}
+
+model CompetitionSimulationScore {
+  id               String               @id
+  simulationId     String
+  turnIndex        Int
+  judgeAthleteId   String?
+  judgeCoachId     String?
+  rating           Int
+  createdAt        DateTime             @default(now())
+  simulation       CompetitionSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  judgeAthlete     Athlete?             @relation(fields: [judgeAthleteId], references: [id], onDelete: Cascade)
+  judgeCoach       Coach?               @relation(fields: [judgeCoachId], references: [id], onDelete: Cascade)
+
+  @@index([simulationId, turnIndex])
 }
 
 model CoachAthleteSessionNote {

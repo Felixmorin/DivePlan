@@ -19,5 +19,7 @@ export default async function AthleteSessionPage({ params }: { params: Promise<{
     notFound();
   }
 
+  if (["READY", "LIVE"].includes(session.competitionSimulationStatus ?? "") && session.completionStatus !== "NOT_STARTED") redirect(`/athlete/session/${id}/simulation`);
+
   return <SessionPlayer session={session} onStart={startAthleteSession} onPreview={recordAthleteSessionPreview} onSaveProgress={saveAthleteProgress} onComplete={completeAthleteSession} onSaveDiveNote={saveAthleteDiveNote} onSaveCompetitionEvaluation={saveCompetitionDiveEvaluation} />;
 }

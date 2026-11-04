@@ -104,9 +104,9 @@ export async function startAthleteSession(sessionId: string) {
   }
 
   const sessionResult = await query<{ date: Date; status: string }>(
-    `SELECT s.date, s.status FROM "TrainingSession" s WHERE s.id = $1 AND s.status IN ('READY','IN_PROGRESS') AND EXISTS (
+    `SELECT s.date, s.status FROM "TrainingSession" s WHERE s.id = $1 AND s.status IN ('READY','IN_PROGRESS') AND (EXISTS (
        SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId" = b.id WHERE b."sessionId" = s.id AND a."athleteId" = $2
-     ) LIMIT 1`, [sessionId, athlete.id]
+     ) OR EXISTS (SELECT 1 FROM "CompetitionSimulation" cs WHERE cs."sessionId"=s.id AND cs.turns @> jsonb_build_array(jsonb_build_object('athleteId',$2::text)))) LIMIT 1`, [sessionId, athlete.id]
   );
   const session = sessionResult.rows[0];
 

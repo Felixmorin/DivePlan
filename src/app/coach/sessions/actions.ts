@@ -19,6 +19,7 @@ import { formatMontrealDate, parseMontrealDateTimeInput, startOfMontrealWeek, to
 import { dispatchSessionCancellation, dispatchSessionPublication, dispatchSessionUpdate, isAutomaticSessionPushEnabled, saveSessionCancellationTargets, saveSessionPublicationTargets, saveSessionUpdateTargets } from "@/lib/web-push";
 import { completeSessionIfAllAthletesAreDone } from "@/lib/session-status";
 import { replaceSessionStructure, type SessionStructureBlock } from "@/lib/session-structure";
+import { buildCompetitionTurns } from "@/lib/competition-simulation";
 
 const sessionInputSchema = z.object({
   title: z.string(),
@@ -31,6 +32,7 @@ const sessionInputSchema = z.object({
   evaluationPlacement: z.string().default("none"),
   contentOrder: z.array(z.string()).default([]),
   planningEventId: z.string().optional(),
+  competitionSimulation: z.boolean().default(false),
   templateId: z.string().optional(),
   status: z.nativeEnum(SessionStatus).default(SessionStatus.READY).refine((status) => status === SessionStatus.DRAFT || status === SessionStatus.READY),
   warmup: z.object({
@@ -106,6 +108,23 @@ const poolRowsEditSchema = z.array(z.object({
 
 export type QuickExerciseInput = z.infer<typeof quickExerciseSchema>;
 
+async function loadSimulationTurns(groupId: string, clubId: string) {
+  const athletes = (await query<{ id: string; name: string }>(
+    `SELECT a.id, u."firstName" || ' ' || u."lastName" AS name FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a."groupId"=$2 AND a.active=true ORDER BY u."firstName",u."lastName"`,
+    [clubId, groupId]
+  )).rows;
+  if (athletes.length < 3) throw new Error("La simulation demande au moins trois athlètes actifs dans le groupe.");
+  const dives = (await query<{ athleteId: string; athleteName: string; diveCode: string; diveName: string; height: string; position: number }>(
+    `SELECT d."athleteId",u."firstName" || ' ' || u."lastName" AS "athleteName",d."diveCode",d."diveName",d.height,d.position FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" JOIN "Athlete" a ON a.id=d."athleteId" JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a."groupId"=$2 AND a.active=true AND l.position=0 ORDER BY d."athleteId",d.position,d."createdAt"`,
+    [clubId, groupId]
+  )).rows;
+  const turnList = buildCompetitionTurns(athletes, dives);
+  if (new Set(turnList.map((turn) => turn.athleteId)).size !== athletes.length) {
+    throw new Error("Ajoute au moins un plongeon à la liste de compétition de chaque athlète du groupe.");
+  }
+  return turnList;
+}
+
 export async function createDrylandExercise(input: QuickExerciseInput) {
   await requireCoach();
   const data = quickExerciseSchema.parse(input);
@@ -139,6 +158,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
   if (!group) {
     throw new Error("Groupe introuvable pour ce club.");
   }
+  const simulationTurns = data.competitionSimulation ? await loadSimulationTurns(data.groupId, clubId) : null;
 
   const planningEvent = data.planningEventId
     ? (await query<{id:string;startsAt:Date}>(`SELECT id,"startsAt" FROM "PlanningEvent" WHERE id=$1 AND "clubId"=$2 AND ("groupId"=$3 OR "groupId" IS NULL) AND type='TRAINING_SCHEDULE'`,[data.planningEventId,clubId,data.groupId])).rows[0] ?? null
@@ -169,6 +189,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
         payload,
         status: data.status
       });
+      if (simulationTurns) await tx.query(`INSERT INTO "CompetitionSimulation" (id,"sessionId",turns) VALUES ($1,$2,$3::jsonb)`, [randomUUID(), created.id, JSON.stringify(simulationTurns)]);
       if (planningEvent?.id) await tx.query(`UPDATE "TrainingSession" SET "planningEventId"=$1 WHERE id=$2`,[planningEvent.id,created.id]);
       if (data.status === SessionStatus.READY && isAutomaticSessionPushEnabled()) await saveSessionPublicationTargets(tx, created.id);
       return created;
@@ -213,6 +234,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
     const createdSession=(await tx.query<{id:string;title:string}>(`INSERT INTO "TrainingSession" (id,date,title,duration,notes,"weekId","coachId",status,"competitionEvaluationAtStart","planningEventId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,title`,[randomUUID(),sessionDate,data.title.trim(),data.duration,data.notes?.trim()||null,weekId,coach.id,data.status,data.evaluationPlacement === "start",planningEvent?.id??null])).rows[0];
 
     await replaceSessionStructure(tx, createdSession.id, structureBlocks);
+    if (simulationTurns) await tx.query(`INSERT INTO "CompetitionSimulation" (id,"sessionId",turns) VALUES ($1,$2,$3::jsonb)`, [randomUUID(), createdSession.id, JSON.stringify(simulationTurns)]);
 
     const assignedPoolAthletes = new Set(poolBlocks.flatMap((block) => block.athleteIds));
     for (const [athleteId, note] of Object.entries(data.coachAthleteNotes)) {
@@ -250,13 +272,14 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
   if (existing.status === SessionStatus.READY) data = { ...data, status: SessionStatus.READY };
   validateSessionForPublication(data);
   const activity = await query<{ started: boolean }>(
-    `SELECT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" WHERE "sessionId"=$1 AND ("startedAt" IS NOT NULL OR status<>'NOT_STARTED')) OR EXISTS (SELECT 1 FROM "AthleteDiveLog" WHERE "sessionId"=$1) OR EXISTS (SELECT 1 FROM "AthleteExerciseLog" WHERE "sessionId"=$1) AS started`,
+    `SELECT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" WHERE "sessionId"=$1 AND ("startedAt" IS NOT NULL OR status<>'NOT_STARTED')) OR EXISTS (SELECT 1 FROM "AthleteDiveLog" WHERE "sessionId"=$1) OR EXISTS (SELECT 1 FROM "AthleteExerciseLog" WHERE "sessionId"=$1) OR EXISTS (SELECT 1 FROM "CompetitionSimulation" WHERE "sessionId"=$1 AND status<>'READY') AS started`,
     [sessionId]
   );
   if (activity.rows[0]?.started) throw new Error("Cette séance a déjà commencé et ne peut plus être modifiée.");
 
   const group = (await query<{ id: string }>(`SELECT id FROM "TrainingGroup" WHERE id=$1 AND "clubId"=$2`, [data.groupId, clubId])).rows[0];
   if (!group) throw new Error("Groupe introuvable pour ce club.");
+  const simulationTurns = data.competitionSimulation ? await loadSimulationTurns(data.groupId, clubId) : null;
   const planningEvent = data.planningEventId
     ? (await query<{ id: string; startsAt: Date }>(`SELECT id,"startsAt" FROM "PlanningEvent" WHERE id=$1 AND "clubId"=$2 AND ("groupId"=$3 OR "groupId" IS NULL) AND type='TRAINING_SCHEDULE'`, [data.planningEventId, clubId, data.groupId])).rows[0] ?? null
     : null;
@@ -283,6 +306,8 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
     const weekId = found?.id ?? randomUUID();
     if (!found) await tx.query(`INSERT INTO "TrainingWeek" (id,"clubId","groupId","startDate",title,status) VALUES ($1,$2,$3,$4,$5,$6)`, [weekId, clubId, data.groupId, weekStart, `Semaine du ${formatMontrealDate(weekStart)}`, WeekStatus.PUBLISHED]);
     await tx.query(`UPDATE "TrainingSession" SET date=$1,title=$2,duration=$3,notes=$4,"weekId"=$5,status=$6,"competitionEvaluationAtStart"=$7,"planningEventId"=$8 WHERE id=$9`, [sessionDate, data.title.trim(), data.duration, data.notes?.trim() || null, weekId, data.status, data.evaluationPlacement === "start", planningEvent?.id ?? null, sessionId]);
+    await tx.query(`DELETE FROM "CompetitionSimulation" WHERE "sessionId"=$1`, [sessionId]);
+    if (simulationTurns) await tx.query(`INSERT INTO "CompetitionSimulation" (id,"sessionId",turns) VALUES ($1,$2,$3::jsonb)`, [randomUUID(), sessionId, JSON.stringify(simulationTurns)]);
     await replaceSessionStructure(tx, sessionId, structureBlocks);
     await tx.query(`DELETE FROM "CoachAthleteSessionNote" WHERE "sessionId"=$1`, [sessionId]);
     const assignedPoolAthletes = new Set(data.poolBlocks.flatMap((block) => block.athleteIds).filter((id) => validAthleteIds.has(id)));
@@ -957,7 +982,7 @@ export async function updateTrainingSession(formData: FormData) {
   }
 
   const [completions,diveLogs,exerciseLogs]=await Promise.all([
-    query<{started:boolean}>(`SELECT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" WHERE "sessionId"=$1 AND ("startedAt" IS NOT NULL OR status<>'NOT_STARTED')) AS started`,[sessionId]),
+    query<{started:boolean}>(`SELECT EXISTS (SELECT 1 FROM "AthleteSessionCompletion" WHERE "sessionId"=$1 AND ("startedAt" IS NOT NULL OR status<>'NOT_STARTED')) OR EXISTS (SELECT 1 FROM "CompetitionSimulation" WHERE "sessionId"=$1 AND status<>'READY') AS started`,[sessionId]),
     query<{id:string}>(`SELECT id FROM "AthleteDiveLog" WHERE "sessionId"=$1 LIMIT 1`,[sessionId]),
     query<{id:string}>(`SELECT id FROM "AthleteExerciseLog" WHERE "sessionId"=$1 LIMIT 1`,[sessionId])
   ]);

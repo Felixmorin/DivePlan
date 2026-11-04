@@ -67,6 +67,8 @@ export type AthleteSessionView = {
   finalNote: string | null;
   blocks: AthleteSessionBlock[];
   competitionEvaluationAtStart: boolean;
+  competitionSimulation: boolean;
+  competitionSimulationStatus: string | null;
   competitionEvaluationBlockIds: string[];
   competitionDives: Array<{ id: string; code: string; height: PoolHeight; platformHeight: number | null; listId: string; listName: string }>;
   competitionEvaluations: Array<{ competitionDiveId: string; rating: number }>;
@@ -169,7 +171,7 @@ export async function getCurrentAthlete(options: { includeCompetitionDives?: boo
 
 export async function getAssignedReadySession(athleteId: string): Promise<{id:string;date:Date;title:string;duration:number;sessionStatus:string;completions:{status:string}[];blocks:{estimatedVolume:number;type:string}[]}|null> {
   const today = startOfMontrealDay();
-  const session=(await query<{id:string;date:Date;title:string;duration:number;sessionStatus:string}>(`SELECT s.id,s.date,s.title,COALESCE(pe.duration,s.duration) AS duration,s.status AS "sessionStatus" FROM "TrainingSession" s LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE s.status IN ('READY','IN_PROGRESS') AND (s.status='IN_PROGRESS' OR s.date >= $1) AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$2) ORDER BY CASE WHEN s.status='IN_PROGRESS' THEN 0 ELSE 1 END,s.date ASC LIMIT 1`,[today,athleteId])).rows[0];
+  const session=(await query<{id:string;date:Date;title:string;duration:number;sessionStatus:string}>(`SELECT s.id,s.date,s.title,COALESCE(pe.duration,s.duration) AS duration,s.status AS "sessionStatus" FROM "TrainingSession" s LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" WHERE s.status IN ('READY','IN_PROGRESS') AND (s.status='IN_PROGRESS' OR s.date >= $1) AND (EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$2) OR EXISTS (SELECT 1 FROM "CompetitionSimulation" cs WHERE cs."sessionId"=s.id AND cs.turns @> jsonb_build_array(jsonb_build_object('athleteId',$2::text)))) ORDER BY CASE WHEN s.status='IN_PROGRESS' THEN 0 ELSE 1 END,s.date ASC LIMIT 1`,[today,athleteId])).rows[0];
   if(!session)return null;
   const [completions,blocks]=await Promise.all([
     query<{status:string}>(`SELECT status FROM "AthleteSessionCompletion" WHERE "sessionId"=$1 AND "athleteId"=$2`,[session.id,athleteId]),
@@ -198,7 +200,7 @@ export async function getAthleteRecentCompletions(athleteId: string, page = 1): 
 }
 
 export async function getAthleteSession(sessionId: string, athleteId: string): Promise<AthleteSessionView | null> {
-  const session=(await query<{id:string;title:string;date:Date;duration:number;notes:string|null;competitionEvaluationAtStart:boolean;groupName:string;sessionStatus:string;completionStatus:string|null;rating:string|null;note:string|null}>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.notes,s."competitionEvaluationAtStart",g.name AS "groupName",s.status AS "sessionStatus",c.status AS "completionStatus",c.rating,c.note FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$2 WHERE s.id=$1 AND (s.status IN ('READY','IN_PROGRESS') OR (s.status='COMPLETED' AND c.status IN ('IN_PROGRESS','COMPLETED'))) AND EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$2)`,[sessionId,athleteId])).rows[0];
+  const session=(await query<{id:string;title:string;date:Date;duration:number;notes:string|null;competitionEvaluationAtStart:boolean;competitionSimulation:boolean;competitionSimulationStatus:string|null;groupName:string;sessionStatus:string;completionStatus:string|null;rating:string|null;note:string|null}>(`SELECT s.id,s.title,s.date,COALESCE(pe.duration,s.duration) AS duration,s.notes,s."competitionEvaluationAtStart",EXISTS (SELECT 1 FROM "CompetitionSimulation" cs WHERE cs."sessionId"=s.id) AS "competitionSimulation",(SELECT cs.status FROM "CompetitionSimulation" cs WHERE cs."sessionId"=s.id) AS "competitionSimulationStatus",g.name AS "groupName",s.status AS "sessionStatus",c.status AS "completionStatus",c.rating,c.note FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" JOIN "TrainingGroup" g ON g.id=w."groupId" LEFT JOIN "PlanningEvent" pe ON pe.id=s."planningEventId" LEFT JOIN "AthleteSessionCompletion" c ON c."sessionId"=s.id AND c."athleteId"=$2 WHERE s.id=$1 AND (s.status IN ('READY','IN_PROGRESS') OR (s.status='COMPLETED' AND c.status IN ('IN_PROGRESS','COMPLETED'))) AND (EXISTS (SELECT 1 FROM "SessionBlock" b JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id WHERE b."sessionId"=s.id AND a."athleteId"=$2) OR EXISTS (SELECT 1 FROM "CompetitionSimulation" cs WHERE cs."sessionId"=s.id AND cs.turns @> jsonb_build_array(jsonb_build_object('athleteId',$2::text))))`,[sessionId,athleteId])).rows[0];
   if (!session) return null;
   const blocks=(await query<{id:string;title:string;description:string|null;type:AthleteSessionBlock["type"];duration:number;estimatedVolume:number;competitionEvaluation:boolean}>(`SELECT b.id,b.title,b.description,b.type,b.duration,b."estimatedVolume",b."competitionEvaluation" FROM "SessionBlock" b WHERE b."sessionId"=$1 AND EXISTS (SELECT 1 FROM "SessionBlockAssignment" a WHERE a."sessionBlockId"=b.id AND a."athleteId"=$2) ORDER BY b.position`,[sessionId,athleteId])).rows;
   const [competitionDives,competitionEvaluations]=await Promise.all([
@@ -230,6 +232,8 @@ export async function getAthleteSession(sessionId: string, athleteId: string): P
     finalRating: session.rating ?? null,
     finalNote: session.note ?? null,
     competitionEvaluationAtStart: session.competitionEvaluationAtStart,
+    competitionSimulation: session.competitionSimulation,
+    competitionSimulationStatus: session.competitionSimulationStatus,
     competitionEvaluationBlockIds: blocks.filter((block) => block.competitionEvaluation).map((block) => block.id),
     competitionDives: competitionDives.rows.map((dive) => ({ id: dive.id, code: dive.diveCode, height: dive.height, platformHeight: dive.platformHeight, listId: dive.listId, listName: dive.listName })),
     competitionEvaluations:competitionEvaluations.rows,
