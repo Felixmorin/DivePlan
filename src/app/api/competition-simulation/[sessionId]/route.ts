@@ -64,7 +64,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ses
 }
 
 const inputSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("vote"), turnIndex: z.number().int().nonnegative(), rating: z.number().int().min(0).max(10) }),
+  z.object({ action: z.literal("vote"), turnIndex: z.number().int().nonnegative(), rating: z.number().min(0).max(10).multipleOf(0.5) }),
   z.object({ action: z.literal("start") }),
   z.object({ action: z.literal("advance"), force: z.boolean().default(false) })
 ]);
@@ -126,6 +126,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ ses
       const voteCounts = (await tx.query<{ received: number; coachVotes: number }>(`SELECT count(*)::int AS received,count(*) FILTER (WHERE "judgeCoachId" IS NOT NULL)::int AS "coachVotes" FROM "CompetitionSimulationScore" WHERE "simulationId"=$1 AND "turnIndex"=$2`, [simulation.id, turnIndex])).rows[0] ?? { received: 0, coachVotes: 0 };
       if (!voteCounts.coachVotes) return { error: "Le coach doit enregistrer sa note avant de passer au plongeur suivant." };
       if (voteCounts.received < expected && !force) return { error: `${voteCounts.received}/${expected} notes reçues.` };
+      await tx.query(`INSERT INTO "CompetitionSimulationRepetition" ("simulationId","turnIndex","athleteId","diveCode","diveName",height) VALUES ($1,$2,$3,$4,$5,$6)`, [simulation.id, turnIndex, turn.athleteId, turn.diveCode, turn.diveName, turn.height]);
       if (turnIndex + 1 >= simulation.turns.length) await tx.query(`UPDATE "CompetitionSimulation" SET status='COMPLETED',"updatedAt"=NOW() WHERE id=$1`, [simulation.id]);
       else await tx.query(`UPDATE "CompetitionSimulation" SET "currentTurnIndex"="currentTurnIndex"+1,"updatedAt"=NOW() WHERE id=$1`, [simulation.id]);
       return { error: null };

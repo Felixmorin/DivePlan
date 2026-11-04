@@ -29,7 +29,7 @@ export async function getAthleteHistory(athleteId: string, clubId: string, param
   const total = count.rows[0]?.total ?? 0;
   const page = Math.min(pageNumber(params.page), Math.max(1, Math.ceil(total / PAGE_SIZE)));
   const { rows } = await query<AthleteHistorySession>(`SELECT s.id,s.title,s.date,'Séance' AS type,COALESCE(pe.duration,s.duration)::int AS duration,
-    c.status,c.rating,can.note AS "coachNote",COALESCE((SELECT SUM(l."repetitionsCompleted") FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id AND l."athleteId"=c."athleteId"),0)::int AS volume
+    c.status,c.rating,can.note AS "coachNote",COALESCE((SELECT SUM(l."repetitionsCompleted") FROM "AthleteDiveRepetition" l WHERE l."sessionId"=s.id AND l."athleteId"=c."athleteId"),0)::int AS volume
     ${base} WHERE ${where} ORDER BY s.date DESC,s.id DESC LIMIT $7 OFFSET $8`, [...args, PAGE_SIZE, (page-1)*PAGE_SIZE]);
   return { sessions: rows, total, page, minutes: duration.rows[0]?.minutes ?? 0, filters: { q, status, month } };
 }

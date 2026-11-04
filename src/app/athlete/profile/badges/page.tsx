@@ -12,11 +12,11 @@ export default async function AthleteBadgesPage() {
   const athlete = await getCurrentAthlete();
   if (!athlete) redirect("/login");
   const [totals, goldenReps] = await Promise.all([getAthleteSummary(athlete.id), getAthleteGoldenReps(athlete.id)]);
-  const competitionDone = (await query<{ count: number }>(`SELECT COUNT(DISTINCT c.id)::int AS count FROM "CompetitionDive" c JOIN "AthleteDiveLog" l ON l."athleteId"=c."athleteId" AND l."poolDiveId" IN (SELECT d.id FROM "PoolDive" d JOIN "PoolSection" s ON s.id=d."poolSectionId" WHERE d."diveCode"=c."diveCode" AND s.height=c.height) WHERE c."athleteId"=$1 AND l."repetitionsCompleted">0`, [athlete.id])).rows[0]?.count ?? 0;
+  const competitionDone = (await query<{ count: number }>(`SELECT COUNT(DISTINCT c.id)::int AS count FROM "CompetitionDive" c JOIN "AthleteDiveRepetition" l ON l."athleteId"=c."athleteId" AND l."diveCode"=c."diveCode" AND l.height=c.height::text WHERE c."athleteId"=$1 AND l."repetitionsCompleted">0`, [athlete.id])).rows[0]?.count ?? 0;
   const [year, month] = toMontrealDateInputValue().split("-").map(Number);
   const seasonStartYear = month >= 9 ? year : year - 1;
   const season = `${seasonStartYear}-${seasonStartYear + 1}`;
-  const seasonalVolume = (await query<{ volume: number }>(`SELECT COALESCE(SUM("repetitionsCompleted"),0)::int AS volume FROM "AthleteDiveLog" WHERE "athleteId"=$1 AND timestamp >= $2 AND timestamp < $3`, [athlete.id, parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00"), parseMontrealSessionDate(`${seasonStartYear + 1}-08-31`, "00:00")])).rows[0]?.volume ?? 0;
+  const seasonalVolume = (await query<{ volume: number }>(`SELECT COALESCE(SUM("repetitionsCompleted"),0)::int AS volume FROM "AthleteDiveRepetition" WHERE "athleteId"=$1 AND timestamp >= $2 AND timestamp < $3`, [athlete.id, parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00"), parseMontrealSessionDate(`${seasonStartYear + 1}-08-31`, "00:00")])).rows[0]?.volume ?? 0;
   const goldenCount = goldenReps.reduce((sum, dive) => sum + dive.count, 0);
   const badges = [
     { title: "500 répétitions", progress: Math.min(500, totals.totalDiveRepetitions), goal: 500, Icon: Activity, color: "blue" },

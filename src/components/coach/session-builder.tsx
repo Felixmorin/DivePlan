@@ -269,28 +269,6 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     athleteIds: [athleteId],
     sections: poolRowsToSections(effectivePoolRowsByAthleteBlock[poolAthleteBlockKey(athleteId, block.id)], block.sections)
   })));
-  function assignSimulationAthletes(ids: string[]) {
-    setSimulationAthleteIds(ids);
-    const poolBlockId = activePoolBlocks.find((block) => block.competitionSimulationHeight === simulationHeight)?.id ?? `competition-pool-${simulationBlockId ?? "simulation"}`;
-    if (ids.length === 0) {
-      setActivePoolBlocks((current) => current.filter((block) => block.id !== poolBlockId || block.competitionSimulationHeight !== simulationHeight));
-      setPoolAssignments((current) => { const next = { ...current }; delete next[poolBlockId]; return next; });
-      setContentOrder((current) => current.filter((id) => id !== poolBlockId));
-      return;
-    }
-    setActivePoolBlocks((current) => current.some((block) => block.id === poolBlockId) ? current : [...current, { id: poolBlockId, title: "Plongeons de compétition", duration: 45, athleteIds: ids, sections: [], competitionSimulationHeight: simulationHeight }]);
-    setPoolAssignments((current) => ({ ...current, [poolBlockId]: ids }));
-    setPoolRowsByAthleteBlock((current) => {
-      const next = { ...current };
-      for (const athleteId of ids) {
-        const key = poolAthleteBlockKey(athleteId, poolBlockId);
-        if (next[key]) continue;
-        next[key] = (competitionDivesByAthleteId[athleteId] ?? []).filter((dive) => dive.height === simulationHeight).map((dive, index) => ({ id: `competition-${athleteId}-${index}`, context: heightLabel(dive.height), diveCodes: [dive.diveCode], repetitions: [1] }));
-      }
-      return next;
-    });
-    setContentOrder((current) => current.includes(poolBlockId) ? current : [...current, poolBlockId]);
-  }
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(draftKey);
@@ -755,7 +733,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
                     {isAssignable && <button type="button" aria-label={`${assignmentIsOpen ? "Fermer" : "Associer des athlètes à"} ${row.title}`} aria-expanded={assignmentIsOpen} onClick={() => setAssignmentOpenBlockId((current) => current === row.id ? null : row.id)} className={cn("flex h-9 w-9 items-center justify-center rounded-full border transition focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", assignmentIsOpen ? "border-[var(--color-brand)] bg-[var(--color-brand)]/10 text-[var(--color-brand-strong)]" : "border-[var(--color-border)] text-[var(--color-brand-strong)] hover:border-[var(--color-brand)] hover:bg-[var(--color-brand)]/5")}><Plus className="h-4 w-4" /></button>}
                     {isAssignable && <button type="button" aria-label={`Supprimer ${row.title}`} title="Supprimer le bloc" onClick={() => { if (row.type === "dryland") { setDrylandBlocks((current) => current.filter((block) => block.id !== row.id)); setContentOrder((current) => current.filter((id) => id !== row.id)); } else if (row.type === "simulation") removeSimulationBlock(row.id); else removePoolBlock(row.id); setAssignmentOpenBlockId((current) => current === row.id ? null : current); }} className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-ink-muted)] transition hover:border-[var(--color-danger)] hover:bg-[var(--color-danger)]/5 hover:text-[var(--color-danger)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"><X className="h-4 w-4" /></button>}
                     </div>
-                    {isAssignable && assignmentIsOpen && <div className="pl-2 sm:pl-16"><AssignmentSelector selected={assignedAthleteIds} onChange={(ids) => row.type === "dryland" ? updateDrylandBlock(row.id, { athleteIds: ids }) : row.type === "simulation" ? assignSimulationAthletes(ids) : assignPoolBlock(row.id)(ids)} athletes={visibleAthletes} /></div>}
+                    {isAssignable && assignmentIsOpen && <div className="pl-2 sm:pl-16"><AssignmentSelector selected={assignedAthleteIds} onChange={(ids) => row.type === "dryland" ? updateDrylandBlock(row.id, { athleteIds: ids }) : row.type === "simulation" ? setSimulationAthleteIds(ids) : assignPoolBlock(row.id)(ids)} athletes={visibleAthletes} /></div>}
                   </div>;
                 })}
                 {orderedContentRows.length === 0 && <div className="rounded-2xl border border-dashed border-[var(--color-border)] bg-white p-5 text-center text-sm text-[var(--color-ink-muted)]">Aucun bloc pour le moment. Ajoute un bloc pour commencer.</div>}

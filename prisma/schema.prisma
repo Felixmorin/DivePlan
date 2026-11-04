@@ -262,6 +262,7 @@ model Athlete {
   competitionDiveLists CompetitionDiveList[]
   competitionDiveEvaluations AthleteCompetitionDiveEvaluation[]
   competitionSimulationScores CompetitionSimulationScore[]
+  competitionSimulationRepetitions CompetitionSimulationRepetition[]
   milestones       AthleteMilestone[]
 }
 
@@ -511,6 +512,22 @@ model CompetitionSimulation {
   updatedAt        DateTime                       @default(now()) @updatedAt
   session          TrainingSession                @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   scores           CompetitionSimulationScore[]
+  repetitions      CompetitionSimulationRepetition[]
+}
+
+model CompetitionSimulationRepetition {
+  simulationId String
+  turnIndex    Int
+  athleteId    String
+  diveCode     String
+  diveName     String
+  height       String
+  completedAt  DateTime @default(now())
+  simulation   CompetitionSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
+  athlete      Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@id([simulationId, turnIndex])
+  @@index([athleteId, completedAt], map: "CompetitionSimulationRepetition_athlete_completed_idx")
 }
 
 model CompetitionSimulationScore {
@@ -519,7 +536,7 @@ model CompetitionSimulationScore {
   turnIndex        Int
   judgeAthleteId   String?
   judgeCoachId     String?
-  rating           Int
+  rating           Float
   createdAt        DateTime             @default(now())
   simulation       CompetitionSimulation @relation(fields: [simulationId], references: [id], onDelete: Cascade)
   judgeAthlete     Athlete?             @relation(fields: [judgeAthleteId], references: [id], onDelete: Cascade)

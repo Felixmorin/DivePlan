@@ -13,12 +13,11 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
 
   const [familyRows, competitionRows] = await Promise.all([
     query<{ athleteId: string; family: string; volume: number | string }>(
-      `SELECT l."athleteId", COALESCE(l."familyOverride", CASE LEFT(COALESCE(l."actualDiveCode", d."diveCode"), 1)
+      `SELECT l."athleteId", COALESCE(l."familyOverride", CASE LEFT(l."diveCode", 1)
           WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,
         SUM(l."repetitionsCompleted")::int AS volume
-       FROM "AthleteDiveLog" l JOIN "AthleteSessionCompletion" c ON c."athleteId"=l."athleteId" AND c."sessionId"=l."sessionId"
+       FROM "AthleteDiveRepetition" l JOIN "AthleteSessionCompletion" c ON c."athleteId"=l."athleteId" AND c."sessionId"=l."sessionId"
        JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
-       JOIN "PoolDive" d ON d.id=l."poolDiveId"
        WHERE l."athleteId"=ANY($1::text[]) AND w."clubId"=$2 AND c.status='COMPLETED'
        GROUP BY l."athleteId", family`, [athleteIds, clubId]),
       query<{ athleteId: string; id: string; position: number; height: PoolInsightHeight; platformHeight: number | null; code: string; volume: number | string; averageRating: number | string | null; ratingCount: number | string | null }>(
@@ -29,12 +28,11 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
          JOIN "CompetitionDive" cd ON cd."athleteId"=a.id AND cd."listId"=active_list.id
          WHERE a.id=ANY($1::text[])
        ), volume AS (
-         SELECT l."athleteId", d."diveCode" AS code, ps.height, ps.label AS "heightLabel",
+         SELECT l."athleteId", l."diveCode" AS code, l.height, l."heightLabel",
            SUM(l."repetitionsCompleted")::int AS volume
-         FROM "AthleteDiveLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
-         JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" ps ON ps.id=d."poolSectionId"
+         FROM "AthleteDiveRepetition" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
          WHERE l."athleteId"=ANY($1::text[]) AND w."clubId"=$2
-         GROUP BY l."athleteId", code, ps.height, ps.label
+         GROUP BY l."athleteId", code, l.height, l."heightLabel"
        ), ratings AS (
          SELECT "competitionDiveId", AVG(rating)::numeric AS "averageRating", COUNT(*)::int AS "ratingCount"
          FROM "AthleteCompetitionDiveEvaluation" WHERE "athleteId"=ANY($1::text[]) AND evaluator='ATHLETE'

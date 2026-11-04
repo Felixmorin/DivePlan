@@ -89,7 +89,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
            FROM "AthleteSessionCompletion" c
            JOIN "TrainingSession" s ON s.id = c."sessionId"
            JOIN "TrainingWeek" w ON w.id = s."weekId"
-           LEFT JOIN "AthleteDiveLog" l ON l."athleteId" = c."athleteId" AND l."sessionId" = c."sessionId"
+           LEFT JOIN "AthleteDiveRepetition" l ON l."athleteId" = c."athleteId" AND l."sessionId" = c."sessionId"
            WHERE c."athleteId" = ANY($1::text[]) AND w."clubId" = $2 AND c.status = 'COMPLETED'
            GROUP BY c."athleteId"`,
           [athletesR.rows.map((athlete) => athlete.id), clubId]

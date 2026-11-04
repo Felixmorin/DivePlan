@@ -1,6 +1,6 @@
 import Link from "@/components/ui/app-link";
 import Image from "next/image";
-import { Activity, Award, CalendarDays, Computer, Dumbbell, FileText, LayoutDashboard, Library, LogOut, Settings, Users, Waves } from "lucide-react";
+import { Activity, Award, CalendarDays, Computer, Dumbbell, FileText, LayoutDashboard, Library, LogOut, Settings, Trophy, Users, Waves } from "lucide-react";
 import { signOutCoach } from "@/app/coach/settings/actions";
 import { requireCoach } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ const navFeature: Record<string, string> = {
   "/coach/planning": "calendar",
   "/coach/planification": "planning",
   "/coach/sessions": "sessions",
+  "/coach/simulations": "simulations",
   "/coach/athletes": "athletes",
   "/coach/milestones": "simulations",
   "/coach/groups": "groups",
@@ -26,6 +27,7 @@ const nav = [
   { href: "/coach/planning", label: "Calendrier", icon: CalendarDays },
   { href: "/coach/planification", label: "Planification", icon: CalendarDays, underConstruction: true },
   { href: "/coach/sessions", label: "Séances", match: "Seances", icon: Activity },
+  { href: "/coach/simulations", label: "Simulation", icon: Trophy },
   { href: "/coach/athletes", label: "Athlètes", match: "Athletes", icon: Users },
   { href: "/coach/milestones", label: "Milestones", icon: Award },
   { href: "/coach/groups", label: "Groupes", icon: Dumbbell },

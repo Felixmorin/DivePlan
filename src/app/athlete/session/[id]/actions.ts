@@ -234,7 +234,7 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
       [completedAt, payload.sessionFeedback?.rating?.trim() || null, payload.sessionFeedback?.note?.trim() || null, athlete.id, payload.sessionId]
     );
     await completeSessionIfAllAthletesAreDone(tx, payload.sessionId);
-    const totalResult = await tx.query<{ total: string }>(`SELECT COALESCE(sum("repetitionsCompleted"), 0)::text AS total FROM "AthleteDiveLog" WHERE "athleteId" = $1`, [athlete.id]);
+    const totalResult = await tx.query<{ total: string }>(`SELECT COALESCE(sum("repetitionsCompleted"), 0)::text AS total FROM "AthleteDiveRepetition" WHERE "athleteId" = $1`, [athlete.id]);
     const earned: MilestoneKey[] = [];
     if (Number(totalResult.rows[0]?.total ?? 0) >= 500) {
       const personal = await tx.query(
@@ -254,7 +254,7 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
     }
     const sessionTotal = await tx.query<{ total: string }>(
       `SELECT COALESCE(sum("repetitionsCompleted"), 0)::text AS total
-       FROM "AthleteDiveLog" WHERE "athleteId" = $1 AND "sessionId" = $2`,
+       FROM "AthleteDiveRepetition" WHERE "athleteId" = $1 AND "sessionId" = $2`,
       [athlete.id, payload.sessionId]
     );
     if (Number(sessionTotal.rows[0]?.total ?? 0) > 60) {
@@ -267,9 +267,8 @@ export async function completeAthleteSession(payload: CompleteSessionPayload) {
     const allCompetitionDivesDone = await tx.query(
       `SELECT 1 WHERE EXISTS (SELECT 1 FROM "CompetitionDive" WHERE "athleteId" = $1)
        AND NOT EXISTS (SELECT 1 FROM "CompetitionDive" c WHERE c."athleteId" = $1 AND (
-         SELECT COALESCE(sum(l."repetitionsCompleted"), 0) FROM "AthleteDiveLog" l
-         JOIN "PoolDive" d ON d.id = l."poolDiveId" JOIN "PoolSection" s ON s.id = d."poolSectionId"
-         WHERE l."athleteId" = $1 AND d."diveCode" = c."diveCode" AND s.height = c.height
+         SELECT COALESCE(sum(l."repetitionsCompleted"), 0) FROM "AthleteDiveRepetition" l
+         WHERE l."athleteId" = $1 AND l."diveCode" = c."diveCode" AND l.height = c.height::text
        ) < 5)`, [athlete.id]
     );
     if (allCompetitionDivesDone.rowCount) {

@@ -39,3 +39,6 @@ ancien séparément. Voir `docs/transfer-monitoring.md` pour le déploiement et 
 Migration `0030_competition_simulations.sql` ajoute les simulations rattachées aux séances
 et leurs notes de juges. Elle doit être appliquée explicitement avant de publier le code
 qui active cette fonction.
+
+Migration `0031_competition_simulation_repetitions.sql` enregistre chaque passage terminé
+et expose les répétitions de piscine et de simulation dans la même vue d'agrégation.

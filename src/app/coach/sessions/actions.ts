@@ -118,8 +118,8 @@ async function loadSimulationTurns(groupId: string, clubId: string, athleteIds: 
     [clubId, groupId, athleteIds]
   )).rows;
   if (athletes.length < 1) throw new Error("Assigne au moins un athlète actif du groupe à la simulation.");
-  const dives = (await query<{ athleteId: string; athleteName: string; diveCode: string; diveName: string; height: string; position: number }>(
-      `SELECT d."athleteId",u."firstName" || ' ' || u."lastName" AS "athleteName",d."diveCode",d."diveName",d.height,d.position FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" JOIN "Athlete" a ON a.id=d."athleteId" JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a."groupId"=$2 AND a.active=true AND a.id=ANY($3::text[]) AND d.height=$4 AND l.position=0 ORDER BY d."athleteId",d.position,d."createdAt"`,
+  const dives = (await query<{ athleteId: string; athleteName: string; diveCode: string; diveName: string; height: string; position: number; difficulty: number | null }>(
+      `SELECT d."athleteId",u."firstName" || ' ' || u."lastName" AS "athleteName",d."diveCode",d."diveName",d.height,d.position,d.difficulty FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" JOIN "Athlete" a ON a.id=d."athleteId" JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a."groupId"=$2 AND a.active=true AND a.id=ANY($3::text[]) AND d.height=$4 AND l.position=0 ORDER BY d."athleteId",d.position,d."createdAt"`,
     [clubId, groupId, athleteIds, height]
   )).rows;
   const turnList = buildCompetitionTurns(athletes, dives);

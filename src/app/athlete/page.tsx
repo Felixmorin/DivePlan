@@ -11,6 +11,7 @@ import { addMontrealDays, formatMontrealDate, formatMontrealTime, startOfMontrea
 import { isSessionStartAvailable } from "@/lib/session-availability";
 import { AthletePageHeader } from "@/components/athlete/page-header";
 import { withDatabaseEgressComponent } from "@/lib/db";
+import { demoRoutesEnabled } from "@/lib/demo-routes";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,8 @@ export default async function AthleteTodayPage() {
   return (
     <AthleteShell>
       <AthletePageHeader brand title={`Salut ${athlete.user.firstName} 👋`} showAvatar={false} />
+
+      {demoRoutesEnabled() && <Link href="/athlete/simulation-demo" className="mb-5 block rounded-2xl border border-cyan-200/50 bg-[#102b41] p-4 font-black text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">Tester le vote des athlètes <span className="ml-2 text-xs font-bold text-cyan-200/70">MODE DÉMO</span></Link>}
 
       <section className="today-card" aria-labelledby="today-title">
         <div className="today-card-content">

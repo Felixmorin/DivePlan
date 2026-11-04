@@ -1,4 +1,4 @@
-export type CompetitionTurn = { athleteId: string; athleteName: string; diveCode: string; diveName: string; height: string };
+export type CompetitionTurn = { athleteId: string; athleteName: string; diveCode: string; diveName: string; height: string; difficulty?: number | null };
 export type CompetitionDiveRow = CompetitionTurn & { position: number };
 
 export function buildCompetitionTurns(athletes: Array<{ id: string; name: string }>, dives: CompetitionDiveRow[]): CompetitionTurn[] {
@@ -11,7 +11,7 @@ export function buildCompetitionTurns(athletes: Array<{ id: string; name: string
   for (let round = 0; round < maxDives; round++) {
     for (const athlete of orderedAthletes) {
       const dive = byAthlete.get(athlete.id)?.[round];
-      if (dive) turns.push({ athleteId: athlete.id, athleteName: athlete.name, diveCode: dive.diveCode, diveName: dive.diveName, height: dive.height });
+      if (dive) turns.push({ athleteId: athlete.id, athleteName: athlete.name, diveCode: dive.diveCode, diveName: dive.diveName, height: dive.height, difficulty: dive.difficulty ?? null });
     }
   }
   return turns;

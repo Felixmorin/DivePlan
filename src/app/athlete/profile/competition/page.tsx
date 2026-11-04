@@ -11,7 +11,7 @@ export default async function AthleteCompetitionPage() {
   const athlete = await getCurrentAthlete();
   if (!athlete) redirect("/login");
   const volumes = (await query<{ code: string; height: string; heightLabel: string | null; volume: number }>(
-    `SELECT d."diveCode" AS code,s.height,s.label AS "heightLabel",COALESCE(SUM(l."repetitionsCompleted"),0)::int AS volume FROM "PoolDive" d JOIN "PoolSection" s ON s.id=d."poolSectionId" LEFT JOIN "AthleteDiveLog" l ON l."poolDiveId"=d.id AND l."athleteId"=$1 GROUP BY d."diveCode",s.height,s.label`, [athlete.id]
+    `SELECT l."diveCode" AS code,l.height,l."heightLabel",SUM(l."repetitionsCompleted")::int AS volume FROM "AthleteDiveRepetition" l WHERE l."athleteId"=$1 GROUP BY l."diveCode",l.height,l."heightLabel"`, [athlete.id]
   )).rows;
   const latestEvaluations = (await query<{ competitionDiveId: string; rating: number }>(
     `SELECT DISTINCT ON (e."competitionDiveId") e."competitionDiveId",e.rating FROM "AthleteCompetitionDiveEvaluation" e JOIN "CompetitionDive" d ON d.id=e."competitionDiveId" JOIN "CompetitionDiveList" l ON l.id=d."listId" WHERE e."athleteId"=$1 AND l.position=0 ORDER BY e."competitionDiveId",e."evaluatedAt" DESC,e.id DESC`, [athlete.id]

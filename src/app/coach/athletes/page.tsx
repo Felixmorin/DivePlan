@@ -59,7 +59,7 @@ export default async function AthletesPage() {
          ORDER BY c."athleteId", c."completedAt" DESC NULLS LAST, c."startedAt" DESC NULLS LAST
        ), volume_stats AS (
          SELECT l."athleteId", sum(l."repetitionsCompleted")::int AS volume
-         FROM "AthleteDiveLog" l JOIN club_athletes ca ON ca.id = l."athleteId"
+         FROM "AthleteDiveRepetition" l JOIN club_athletes ca ON ca.id = l."athleteId"
          GROUP BY l."athleteId"
        )
        SELECT a.id, u."firstName", u."lastName", NULL::text AS avatar, a.level, a."groupId", a."birthDate", g.name AS "groupName", a.active,
@@ -97,17 +97,17 @@ export default async function AthletesPage() {
   ) : Promise.resolve({ rows: [] as Array<{ athleteId: string; id: string; title: string; date: Date; status: string }> }),
   query<{ volume: number; completedSessions: number }>(
     `SELECT
-       (SELECT COALESCE(SUM(l."repetitionsCompleted"),0)::int FROM "AthleteDiveLog" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3) AS volume,
+       (SELECT COALESCE(SUM(l."repetitionsCompleted"),0)::int FROM "AthleteDiveRepetition" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3) AS volume,
        (SELECT COUNT(DISTINCT s.id)::int FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId"
         WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3
-          AND EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id AND l."repetitionsCompleted" >= 1)) AS "completedSessions"`,
+          AND EXISTS (SELECT 1 FROM "AthleteDiveRepetition" l WHERE l."sessionId"=s.id AND l."repetitionsCompleted" >= 1)) AS "completedSessions"`,
     [clubId, seasonStart, seasonEnd]
   ),
   query<{ completedSessions: number }>(
     `SELECT COUNT(DISTINCT s.id)::int AS "completedSessions"
      FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId"
      WHERE w."clubId"=$1
-       AND EXISTS (SELECT 1 FROM "AthleteDiveLog" l WHERE l."sessionId"=s.id AND l."repetitionsCompleted" >= 1)`,
+       AND EXISTS (SELECT 1 FROM "AthleteDiveRepetition" l WHERE l."sessionId"=s.id AND l."repetitionsCompleted" >= 1)`,
     [clubId]
   )]);
 
