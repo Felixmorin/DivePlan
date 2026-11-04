@@ -88,6 +88,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
   const finalFeedbackRef = useRef(finalFeedback);
   const finalFeedbackTouchedRef = useRef(false);
   const block = blocks[current];
+  const isSimulationBlock = block?.type === "CUSTOM" && (block.description === "COMPETITION_SIMULATION" || block.description?.startsWith("COMPETITION_SIMULATION:"));
   const blockSteps = useMemo(
     () => block.poolSections.map((section) => ({ kind: "pool" as const, section })),
     [block.poolSections]
@@ -105,8 +106,8 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
   const totalPages = blocks.reduce((sum, item) => sum + Math.max(1, item.poolSections.length), 0);
   const pagesBeforeCurrentBlock = blocks.slice(0, current).reduce((sum, item) => sum + Math.max(1, item.poolSections.length), 0);
   const progress = totalPages > 0 ? Math.round(((pagesBeforeCurrentBlock + stepIndex + 1) / totalPages) * 100) : 0;
-  const blockRemaining = countBlockRemaining(block, exerciseChecks, diveChecks);
-  const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0).length;
+  const blockRemaining = isSimulationBlock && session.competitionSimulationStatus !== "COMPLETED" ? 1 : countBlockRemaining(block, exerciseChecks, diveChecks);
+  const completedBlocks = blocks.filter((item) => countBlockRemaining(item, exerciseChecks, diveChecks) === 0 && !(item.type === "CUSTOM" && item.description?.startsWith("COMPETITION_SIMULATION") && session.competitionSimulationStatus !== "COMPLETED")).length;
   const canStart = session.sessionStatus === "IN_PROGRESS" || isSessionStartAvailable(session.date, new Date(now));
   const evaluationComplete = session.competitionDives.length > 0 && session.competitionDives.every((dive) => evaluationRatings[dive.id] !== undefined);
   const evaluationRequired = session.competitionEvaluationAtStart || session.competitionEvaluationBlockIds.length > 0;
@@ -226,10 +227,6 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
     startTransition(async () => {
       try {
         await onStart(session.id);
-        if (session.competitionSimulation) {
-          router.push(`/athlete/session/${session.id}/simulation`);
-          return;
-        }
         setStarted(true);
       } catch {
         setNow(Date.now());
@@ -699,7 +696,8 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
               <div className="mt-0.5 text-3xl font-black leading-none text-[#0b1640]">{activeStep?.section.label.replace(/\s*(?:mètres?|metres?)$/i, " m")}</div>
             </div>
           </>}
-          {!isPoolBlock && <div className="mb-3 flex justify-end">
+          {isSimulationBlock && <div className="mb-3 rounded-2xl border border-[#0878ff]/20 bg-white p-4 text-center"><h2 className="text-lg font-black text-[#0b1640]">{block.title}</h2><p className="mt-1 text-sm text-slate-600">C’est ton tour de participer à la simulation.</p><Button type="button" variant="action" className="mt-4 w-full" onClick={() => router.push(`/athlete/session/${session.id}/simulation`)}>Démarrer la simulation</Button></div>}
+          {!isPoolBlock && !isSimulationBlock && <div className="mb-3 flex justify-end">
             <Button type="button" size="sm" variant="outline" className="!border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" onClick={completeCurrentPage}>
               <CheckCircle2 className="h-4 w-4" /> Tout complété
             </Button>
@@ -767,7 +765,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
         <div className="bg-[var(--color-athlete-bg)]/95 px-4 pb-3 pt-3 backdrop-blur">
           <div className="mx-auto grid max-w-[430px] grid-cols-[1fr_1.35fr] gap-2">
             <Button type="button" variant="outline" className="h-14 !border-[var(--color-action)] !bg-white !text-[#0878ff] hover:!bg-blue-50" disabled={current === 0 && stepIndex === 0} onClick={previousStep}><ChevronLeft className="h-5 w-5" /> Précédent</Button>
-            <Button type="button" variant="action" className="h-14 rounded-2xl" onClick={nextStep}>{current === blocks.length - 1 && isLastBlockStep ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>
+            {!isSimulationBlock && <Button type="button" variant="action" className="h-14 rounded-2xl" onClick={nextStep}>{current === blocks.length - 1 && isLastBlockStep ? "Terminer l’entraînement" : "Suivant"} <ChevronRight className="h-5 w-5" /></Button>}
           </div>
         </div>
       </div>
@@ -929,6 +927,8 @@ function getResumeBlockIndex(session: AthleteSessionView) {
     block.exercises.some((exercise) => !exercise.completed)
     || block.poolSections.some((section) => section.dives.some((dive) => dive.completedRepetitions < dive.repetitions))
   );
+  const simulationIndex = session.competitionSimulationStatus === "COMPLETED" ? -1 : session.blocks.findIndex((block) => block.type === "CUSTOM" && (block.description === "COMPETITION_SIMULATION" || block.description?.startsWith("COMPETITION_SIMULATION:")));
+  if (simulationIndex >= 0 && (nextIncompleteIndex < 0 || simulationIndex < nextIncompleteIndex)) return simulationIndex;
   return nextIncompleteIndex >= 0 ? nextIncompleteIndex : Math.max(0, session.blocks.length - 1);
 }
 

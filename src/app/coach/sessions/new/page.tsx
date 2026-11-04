@@ -46,6 +46,8 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
     query<{id:string;title:string;date:Date;groupId:string}>(`SELECT s.id,s.title,s.date,w."groupId" FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 ORDER BY s.date DESC LIMIT 8`,[clubId])
   ]);
   const groups=groupsR.rows;
+  const competitionDivesR = athletesR.rows.length ? await query<{athleteId:string;diveCode:string;diveName:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";position:number}>(`SELECT d."athleteId",d."diveCode",d."diveName",d.height,d.position FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" WHERE d."athleteId"=ANY($1::text[]) AND l.position=0 ORDER BY d."athleteId",d.position,d."createdAt"`,[athletesR.rows.map((athlete)=>athlete.id)]) : {rows:[] as {athleteId:string;diveCode:string;diveName:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";position:number}[]};
+  const competitionDivesByAthleteId = competitionDivesR.rows.reduce<Record<string, typeof competitionDivesR.rows>>((map, dive) => { (map[dive.athleteId] ??= []).push(dive); return map; }, {});
   const athletePoolAveragesR = athletesR.rows.length > 0
     ? await query<{ athleteId: string; average: number | string }>(
       `SELECT c."athleteId", ROUND(SUM(l."repetitionsCompleted")::numeric / COUNT(DISTINCT l."sessionId")) AS average
@@ -115,6 +117,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
           groups={groups}
           athletePoolAverageById={athletePoolAverageById}
           athletePoolInsightsById={athletePoolInsightsById}
+          competitionDivesByAthleteId={competitionDivesByAthleteId}
           planningEvents={planningEvents.map((event) => ({ id: event.id, title: event.title, startsAt: event.startsAt, duration: event.duration, groupId: event.groupId, location: event.location }))}
           initialTemplate={initialTemplate}
           templates={templates}

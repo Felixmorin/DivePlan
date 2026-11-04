@@ -33,6 +33,9 @@ const sessionInputSchema = z.object({
   contentOrder: z.array(z.string()).default([]),
   planningEventId: z.string().optional(),
   competitionSimulation: z.boolean().default(false),
+  competitionSimulationAthleteIds: z.array(z.string()).default([]),
+  competitionSimulationBlockId: z.string().optional(),
+  competitionSimulationHeight: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM]).default(PoolHeight.ONE_METER),
   templateId: z.string().optional(),
   status: z.nativeEnum(SessionStatus).default(SessionStatus.READY).refine((status) => status === SessionStatus.DRAFT || status === SessionStatus.READY),
   warmup: z.object({
@@ -108,19 +111,21 @@ const poolRowsEditSchema = z.array(z.object({
 
 export type QuickExerciseInput = z.infer<typeof quickExerciseSchema>;
 
-async function loadSimulationTurns(groupId: string, clubId: string) {
+async function loadSimulationTurns(groupId: string, clubId: string, athleteIds: string[], height: "ONE_METER" | "THREE_METER" | "PLATFORM") {
+  if (athleteIds.length < 3) throw new Error("La simulation demande au moins trois athlètes participants.");
   const athletes = (await query<{ id: string; name: string }>(
-    `SELECT a.id, u."firstName" || ' ' || u."lastName" AS name FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a."groupId"=$2 AND a.active=true ORDER BY u."firstName",u."lastName"`,
-    [clubId, groupId]
+    `SELECT a.id, u."firstName" || ' ' || u."lastName" AS name FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a."groupId"=$2 AND a.active=true AND a.id=ANY($3::text[]) ORDER BY u."firstName",u."lastName"`,
+    [clubId, groupId, athleteIds]
   )).rows;
   if (athletes.length < 3) throw new Error("La simulation demande au moins trois athlètes actifs dans le groupe.");
   const dives = (await query<{ athleteId: string; athleteName: string; diveCode: string; diveName: string; height: string; position: number }>(
-    `SELECT d."athleteId",u."firstName" || ' ' || u."lastName" AS "athleteName",d."diveCode",d."diveName",d.height,d.position FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" JOIN "Athlete" a ON a.id=d."athleteId" JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a."groupId"=$2 AND a.active=true AND l.position=0 ORDER BY d."athleteId",d.position,d."createdAt"`,
-    [clubId, groupId]
+      `SELECT d."athleteId",u."firstName" || ' ' || u."lastName" AS "athleteName",d."diveCode",d."diveName",d.height,d.position FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" JOIN "Athlete" a ON a.id=d."athleteId" JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a."groupId"=$2 AND a.active=true AND a.id=ANY($3::text[]) AND d.height=$4 AND l.position=0 ORDER BY d."athleteId",d.position,d."createdAt"`,
+    [clubId, groupId, athleteIds, height]
   )).rows;
   const turnList = buildCompetitionTurns(athletes, dives);
   if (new Set(turnList.map((turn) => turn.athleteId)).size !== athletes.length) {
-    throw new Error("Ajoute au moins un plongeon à la liste de compétition de chaque athlète du groupe.");
+    const heightName = height === "ONE_METER" ? "1 m" : height === "THREE_METER" ? "3 m" : "la plateforme";
+    throw new Error(`Ajoute au moins un plongeon de ${heightName} à la liste de compétition de chaque participant.`);
   }
   return turnList;
 }
@@ -158,7 +163,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
   if (!group) {
     throw new Error("Groupe introuvable pour ce club.");
   }
-  const simulationTurns = data.competitionSimulation ? await loadSimulationTurns(data.groupId, clubId) : null;
+  const simulationTurns = data.competitionSimulation && data.status === SessionStatus.READY ? await loadSimulationTurns(data.groupId, clubId, data.competitionSimulationAthleteIds, data.competitionSimulationHeight) : null;
 
   const planningEvent = data.planningEventId
     ? (await query<{id:string;startsAt:Date}>(`SELECT id,"startsAt" FROM "PlanningEvent" WHERE id=$1 AND "clubId"=$2 AND ("groupId"=$3 OR "groupId" IS NULL) AND type='TRAINING_SCHEDULE'`,[data.planningEventId,clubId,data.groupId])).rows[0] ?? null
@@ -211,7 +216,7 @@ export async function createTrainingSession(input: CreateSessionInput) {
   }
 
   const poolAthleteIds = data.poolBlocks.flatMap((block) => block.athleteIds);
-  const requestedAthleteIds = Array.from(new Set([...data.drylandBlocks.flatMap((block) => block.athleteIds), ...poolAthleteIds]));
+  const requestedAthleteIds = Array.from(new Set([...data.drylandBlocks.flatMap((block) => block.athleteIds), ...poolAthleteIds, ...data.competitionSimulationAthleteIds]));
   const [athletes, exercises] = await Promise.all([
     query<{id:string}>(`SELECT id FROM "Athlete" WHERE "clubId"=$1 AND active=true AND "groupId"=$2`,[clubId,data.groupId]),
     query<{id:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean}>(`SELECT id,"defaultSets","defaultReps","defaultDuration","roundTrip" FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`,[data.drylandBlocks.flatMap((block) => block.exerciseIds)])
@@ -279,7 +284,7 @@ export async function updateDraftSessionFromBuilder(sessionId: string, input: Cr
 
   const group = (await query<{ id: string }>(`SELECT id FROM "TrainingGroup" WHERE id=$1 AND "clubId"=$2`, [data.groupId, clubId])).rows[0];
   if (!group) throw new Error("Groupe introuvable pour ce club.");
-  const simulationTurns = data.competitionSimulation ? await loadSimulationTurns(data.groupId, clubId) : null;
+  const simulationTurns = data.competitionSimulation && data.status === SessionStatus.READY ? await loadSimulationTurns(data.groupId, clubId, data.competitionSimulationAthleteIds, data.competitionSimulationHeight) : null;
   const planningEvent = data.planningEventId
     ? (await query<{ id: string; startsAt: Date }>(`SELECT id,"startsAt" FROM "PlanningEvent" WHERE id=$1 AND "clubId"=$2 AND ("groupId"=$3 OR "groupId" IS NULL) AND type='TRAINING_SCHEDULE'`, [data.planningEventId, clubId, data.groupId])).rows[0] ?? null
     : null;
@@ -1118,6 +1123,7 @@ type PreparedPoolBlock = CreateSessionInput["poolBlocks"][number] & { athleteIds
 
 function validateSessionForPublication(data: CreateSessionInput) {
   if (data.status !== SessionStatus.READY) return;
+  if (data.competitionSimulation && data.competitionSimulationAthleteIds.length < 3) throw new Error("Assigne au moins trois athlètes participants à la simulation.");
   const invalidBlocks =
     data.title.trim().length < 3 ||
     (data.warmup.enabled && (!data.warmup.title.trim() || data.warmup.duration < 1)) ||
@@ -1198,6 +1204,20 @@ function buildSessionStructureBlocks(
       poolTraining: null
     });
   }
+
+  if (data.competitionSimulation) blocks.push({
+    type: BlockType.CUSTOM,
+    contentKey: data.competitionSimulationBlockId,
+    title: "Simulation de compétition",
+    description: `COMPETITION_SIMULATION:${data.competitionSimulationHeight}`,
+    duration: 15,
+    position: 1,
+    estimatedVolume: 0,
+    competitionEvaluation: false,
+    athleteIds: data.competitionSimulationAthleteIds.filter((athleteId) => allAthleteIds.includes(athleteId)),
+    drylandExercises: [],
+    poolTraining: null
+  });
 
   for (const [index, block] of drylandBlocks.entries()) {
     blocks.push({

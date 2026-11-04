@@ -19,7 +19,7 @@ export default async function AthleteSessionPage({ params }: { params: Promise<{
     notFound();
   }
 
-  if (["READY", "LIVE"].includes(session.competitionSimulationStatus ?? "") && session.completionStatus !== "NOT_STARTED") redirect(`/athlete/session/${id}/simulation`);
+  if (["READY", "LIVE"].includes(session.competitionSimulationStatus ?? "") && session.completionStatus !== "NOT_STARTED" && !session.blocks.some((block) => block.type === "CUSTOM" && (block.description === "COMPETITION_SIMULATION" || block.description?.startsWith("COMPETITION_SIMULATION:")))) redirect(`/athlete/session/${id}/simulation`);
 
   return <SessionPlayer session={session} onStart={startAthleteSession} onPreview={recordAthleteSessionPreview} onSaveProgress={saveAthleteProgress} onComplete={completeAthleteSession} onSaveDiveNote={saveAthleteDiveNote} onSaveCompetitionEvaluation={saveCompetitionDiveEvaluation} />;
 }

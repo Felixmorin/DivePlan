@@ -5,7 +5,7 @@ import { query } from "@/lib/db";
 import { formatMontrealDate, startOfMontrealWeek } from "@/lib/timezone";
 import { replaceSessionStructure } from "./session-structure";
 
-export const BlockType = { WARMUP: "WARMUP", DRYLAND: "DRYLAND", POOL: "POOL", COOLDOWN: "COOLDOWN" } as const;
+export const BlockType = { WARMUP: "WARMUP", DRYLAND: "DRYLAND", POOL: "POOL", COOLDOWN: "COOLDOWN", CUSTOM: "CUSTOM" } as const;
 export const PoolHeight = { ONE_METER: "ONE_METER", THREE_METER: "THREE_METER", PLATFORM: "PLATFORM", CUSTOM: "CUSTOM" } as const;
 export const SessionStatus = { DRAFT: "DRAFT", READY: "READY", IN_PROGRESS: "IN_PROGRESS", COMPLETED: "COMPLETED", NOT_DONE: "NOT_DONE", CANCELLED: "CANCELLED" } as const;
 export const WeekStatus = { DRAFT: "DRAFT", PUBLISHED: "PUBLISHED" } as const;
@@ -15,7 +15,7 @@ export type SessionPoolHeight = typeof PoolHeight[keyof typeof PoolHeight];
 
 export const sessionTemplatePayloadSchema = z.object({
   version: z.literal(1), competitionEvaluationAtStart: z.boolean().default(false), title: z.string(), duration: z.number(), notes: z.string().nullable(),
-  blocks: z.array(z.object({ type: z.enum(["WARMUP", "DRYLAND", "POOL", "COOLDOWN"]), title: z.string(), description: z.string().nullable(), duration: z.number(), position: z.number(), estimatedVolume: z.number(), competitionEvaluation: z.boolean().default(false), athleteIds: z.array(z.string()),
+  blocks: z.array(z.object({ type: z.enum(["WARMUP", "DRYLAND", "POOL", "COOLDOWN", "CUSTOM"]), title: z.string(), description: z.string().nullable(), duration: z.number(), position: z.number(), estimatedVolume: z.number(), competitionEvaluation: z.boolean().default(false), athleteIds: z.array(z.string()),
     drylandExercises: z.array(z.object({ exerciseId: z.string(), sets: z.number().nullable(), reps: z.number().nullable(), duration: z.number().nullable(), notes: z.string().nullable(), order: z.number() })),
     poolTraining: z.object({ sections: z.array(z.object({ height: z.enum(["ONE_METER", "THREE_METER", "PLATFORM", "CUSTOM"]), label: z.string().nullable(), dives: z.array(z.object({ diveCode: z.string(), diveName: z.string(), position: z.string(), repetitions: z.number(), notes: z.string().nullable(), order: z.number() })) })) }).nullable()
   }))

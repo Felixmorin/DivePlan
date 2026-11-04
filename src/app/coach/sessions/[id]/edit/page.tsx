@@ -28,7 +28,12 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
     query<{id:string;groupId:string|null;level:string;firstName:string;lastName:string;avatar:string|null}>(`SELECT a.id,a."groupId",a.level,u."firstName",u."lastName",NULL::text AS avatar FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a."clubId"=$1 AND a.active=true ORDER BY u."firstName"`,[clubId]),
     query<{id:string;name:string;category:string;defaultSets:number|null;defaultReps:number|null;defaultDuration:number|null;roundTrip:boolean;equipment:string|null;tags:string[]}>(`SELECT id,name,category,"defaultSets","defaultReps","defaultDuration","roundTrip",equipment,tags FROM "DrylandExercise" WHERE "archivedAt" IS NULL ORDER BY category,name`)
   ]);
-  const simulationEnabled = Boolean((await query(`SELECT 1 FROM "CompetitionSimulation" WHERE "sessionId"=$1`, [session.id])).rowCount);
+  const simulationRow = (await query<{turns:Array<{athleteId:string;height:string}>}>(`SELECT turns FROM "CompetitionSimulation" WHERE "sessionId"=$1`, [session.id])).rows[0];
+  const simulationEnabled = Boolean(simulationRow);
+  const initialSimulationAthleteIds = Array.from(new Set((simulationRow?.turns ?? []).map((turn) => turn.athleteId)));
+  const initialSimulationHeight = simulationRow?.turns[0]?.height === "THREE_METER" ? "THREE_METER" : simulationRow?.turns[0]?.height === "PLATFORM" ? "PLATFORM" : "ONE_METER";
+  const competitionDivesR = athletesR.rows.length ? await query<{athleteId:string;diveCode:string;diveName:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";position:number}>(`SELECT d."athleteId",d."diveCode",d."diveName",d.height,d.position FROM "CompetitionDive" d JOIN "CompetitionDiveList" l ON l.id=d."listId" WHERE d."athleteId"=ANY($1::text[]) AND l.position=0 ORDER BY d."athleteId",d.position,d."createdAt"`,[athletesR.rows.map((athlete)=>athlete.id)]) : {rows:[] as {athleteId:string;diveCode:string;diveName:string;height:"ONE_METER"|"THREE_METER"|"PLATFORM"|"CUSTOM";position:number}[]};
+  const competitionDivesByAthleteId = competitionDivesR.rows.reduce<Record<string, typeof competitionDivesR.rows>>((map, dive) => { (map[dive.athleteId] ??= []).push(dive); return map; }, {});
   const athleteAvatarUrls = await resolveAvatarUrls(athletesR.rows.map((athlete) => athlete.avatar));
   const athletes=athletesR.rows.map((a,index)=>({id:a.id,user:{firstName:a.firstName,lastName:a.lastName,avatar:athleteAvatarUrls[index]}}));
   const drylandLibrary=drylandR.rows;
@@ -107,6 +112,7 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
           groups={groupsR.rows}
           athletePoolAverageById={Object.fromEntries(averagesR.rows.map((row) => [row.athleteId, Number(row.average)]))}
           athletePoolInsightsById={athletePoolInsightsById}
+          competitionDivesByAthleteId={competitionDivesByAthleteId}
           planningEvents={eventsR.rows}
           initialTemplate={{ id: session.id, name: session.title, category: "Brouillon", payload }}
           templates={[]}
@@ -117,6 +123,8 @@ export default async function EditSessionPage({ params }: { params: Promise<{ id
           initialPlanningEventId={session.planningEventId ?? undefined}
           initialCoachAthleteNotes={Object.fromEntries(coachNotesR.rows.map((row) => [row.athleteId, row.note]))}
           initialSimulationEnabled={simulationEnabled}
+          initialSimulationAthleteIds={initialSimulationAthleteIds}
+          initialSimulationHeight={initialSimulationHeight}
           editingSession
           onCreate={updateDraftSessionFromBuilder.bind(null, session.id)}
           onCreateExercise={createDrylandExercise}

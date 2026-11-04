@@ -7,13 +7,13 @@ import { PGlite } from "@electric-sql/pglite";
 import { createElement, type ReactNode } from "react";
 import * as jsx from "react/jsx-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
-import * as icons from "lucide-react";
 import * as zod from "zod";
 import { randomUUID } from "node:crypto";
 import * as timezone from "./timezone";
 
 const paths = ["src/app/coach/sessions/new/page.tsx", "src/app/coach/sessions/[id]/edit/page.tsx"];
 const plain = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+const icons = new Proxy({}, { get: () => () => null });
 function withoutAvatars(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(withoutAvatars);
   return value && typeof value === "object"
