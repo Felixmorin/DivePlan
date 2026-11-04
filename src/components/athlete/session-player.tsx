@@ -574,7 +574,8 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
                           ))}
                         </div>
                       )}
-                      {previewBlock.exercises.length === 0 && previewBlock.poolSections.length === 0 && <p className="text-sm font-semibold text-white/48">Aucun exercice détaillé pour ce bloc.</p>}
+                      {previewBlock.type === "CUSTOM" && previewBlock.description?.startsWith("COMPETITION_SIMULATION") && session.competitionSimulationDives.length > 0 && <div className="space-y-2">{session.competitionSimulationDives.map((dive, index) => <div key={`${dive.diveCode}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-white/5 px-3 py-2"><div><span className="font-bold">{dive.diveCode}</span><span className="ml-2 text-sm text-white/68">{dive.diveName}</span></div><span className="shrink-0 text-xs font-bold text-white/55">{dive.height === "ONE_METER" ? "1 m" : dive.height === "THREE_METER" ? "3 m" : dive.height === "PLATFORM" ? "Plateforme" : dive.height}</span></div>)}</div>}
+                      {previewBlock.exercises.length === 0 && previewBlock.poolSections.length === 0 && !(previewBlock.type === "CUSTOM" && previewBlock.description?.startsWith("COMPETITION_SIMULATION") && session.competitionSimulationDives.length > 0) && <p className="text-sm font-semibold text-white/48">Aucun exercice détaillé pour ce bloc.</p>}
                     </div>
                   )}
                 </div>

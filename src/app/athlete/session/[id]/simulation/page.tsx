@@ -12,5 +12,5 @@ export default async function AthleteCompetitionSimulationPage({ params }: { par
   if (!session) notFound();
   if (!session.competitionSimulation) notFound();
   if (session.completionStatus === "NOT_STARTED") redirect(`/athlete/session/${id}`);
-  return <AthleteShell hideNav className="!bg-[#071a2b]"><CompetitionSimulationLive sessionId={id} /></AthleteShell>;
+  return <AthleteShell hideNav className="!bg-[#f4f8fc]"><CompetitionSimulationLive sessionId={id} /></AthleteShell>;
 }
