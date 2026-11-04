@@ -60,7 +60,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ses
     expectedCount: eligible.length + 1,
     ownRating: ownScore?.rating ?? null,
     pendingJudges: names.rows.filter((item) => !receivedIds.has(item.id)).map((item) => item.name),
-    scores: simulation.status === "COMPLETED" ? scores.rows.map((score) => ({ turnIndex: score.turnIndex, judgeAthleteId: score.judgeAthleteId, judgeCoachId: score.judgeCoachId, rating: score.rating })) : []
+    scores: simulation.status !== "COMPLETED" ? [] : athlete
+      ? simulation.turns.map((_, index) => {
+          const passageScores = scores.rows.filter((score) => score.turnIndex === index);
+          const athleteScores = passageScores.filter((score) => score.judgeAthleteId !== null);
+          const coachScore = passageScores.find((score) => score.judgeCoachId !== null);
+          return {
+            turnIndex: index,
+            athleteAverage: athleteScores.length ? athleteScores.reduce((sum, score) => sum + score.rating, 0) / athleteScores.length : null,
+            coachRating: coachScore?.rating ?? null
+          };
+        })
+      : scores.rows.map((score) => ({ turnIndex: score.turnIndex, judgeAthleteId: score.judgeAthleteId, judgeCoachId: score.judgeCoachId, rating: score.rating }))
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
