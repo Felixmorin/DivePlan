@@ -40,7 +40,7 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
        )
        SELECT dives."athleteId", dives.id, dives.position, dives.height, dives."platformHeight", dives.code, COALESCE(SUM(volume.volume),0)::int AS volume, ratings."averageRating", ratings."ratingCount"
        FROM dives LEFT JOIN volume ON volume."athleteId"=dives."athleteId" AND volume.code=dives.code AND (
-         (dives.height<>'PLATFORM' AND volume.height=dives.height) OR
+         (dives.height<>'PLATFORM' AND volume.height=dives.height::text) OR
          (dives.height='PLATFORM' AND volume.height IN ('PLATFORM','CUSTOM') AND (
            volume."heightLabel" IS NULL OR (
              dives."platformHeight" IS NOT NULL AND
