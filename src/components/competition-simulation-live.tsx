@@ -18,7 +18,6 @@ type Snapshot = {
   receivedCount: number;
   expectedCount: number;
   ownRating: number | null;
-  pendingJudges: string[];
   scores: Array<{ turnIndex: number; judgeAthleteId: string | null; judgeCoachId: string | null; rating: number } | { turnIndex: number; athleteAverage: number | null; coachRating: number | null }>;
 };
 
@@ -35,6 +34,7 @@ export function CompetitionSimulationLive({ sessionId, coach = false }: { sessio
   }, [sessionId]);
 
   useEffect(() => {
+    if (snapshot?.status === "COMPLETED") return;
     return startVisiblePolling({
       poll: () => refresh().catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : "Erreur de connexion.");
@@ -44,11 +44,11 @@ export function CompetitionSimulationLive({ sessionId, coach = false }: { sessio
         document.addEventListener("visibilitychange", listener);
         return () => document.removeEventListener("visibilitychange", listener);
       },
-      intervalMs: 2500,
+      intervalMs: snapshot?.status === "READY" ? 10_000 : 2500,
       schedule: (callback, delayMs) => window.setTimeout(callback, delayMs) as unknown as ReturnType<typeof setTimeout>,
       cancel: (timer) => window.clearTimeout(timer as unknown as number),
     });
-  }, [refresh]);
+  }, [refresh, snapshot?.status]);
 
   useEffect(() => {
     if (snapshot) setDraftRating(snapshot.ownRating ?? 5);

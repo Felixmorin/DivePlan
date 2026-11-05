@@ -23,6 +23,14 @@ export function AthleteActivityTracker() {
         keepalive: true
       }).catch(() => undefined);
     };
+    let pendingActions: Array<{ action: string; path: string }> = [];
+    let flushTimer: number | undefined;
+    const flush = () => {
+      if (flushTimer !== undefined) window.clearTimeout(flushTimer);
+      flushTimer = undefined;
+      const actions = pendingActions.splice(0);
+      if (actions.length) log(JSON.stringify(actions));
+    };
 
     if (!window.sessionStorage.getItem(`${STORAGE_KEY}-started`)) {
       window.sessionStorage.setItem(`${STORAGE_KEY}-started`, "1");
@@ -37,10 +45,15 @@ export function AthleteActivityTracker() {
       const control = target.closest("a, button, [role='button'], input[type='submit']");
       if (!control) return;
       const label = (control.getAttribute("aria-label") || control.textContent || control.getAttribute("title") || "Action").replace(/\s+/g, " ").trim().slice(0, 100);
-      if (label) log(`Clic : ${label}`);
+      if (label) {
+        pendingActions.push({ action: `Clic : ${label}`, path: window.location.pathname });
+        if (pendingActions.length >= 10) flush();
+        else if (flushTimer === undefined) flushTimer = window.setTimeout(flush, 5000);
+      }
     };
     document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
+    window.addEventListener("pagehide", flush);
+    return () => { flush(); window.removeEventListener("pagehide", flush); document.removeEventListener("click", onClick, true); };
   }, [pathname]);
 
   return null;
