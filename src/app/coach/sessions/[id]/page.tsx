@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { liveSessionForClient } from "@/lib/live-session";
 import { getLiveSessionProgress } from "@/lib/live-session-progress";
 import { AlertTriangle, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, Edit, FileText, Layers3, MapPin, MoreVertical, NotebookText, Play, Printer, Save, Send, Users, Waves, XCircle } from "lucide-react";
-import { deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence, startTrainingSession } from "@/app/coach/sessions/actions";
+import { completeTrainingSession, deleteTrainingSession, duplicateTrainingSession, markAthleteSessionCompleted, markTrainingSessionNotDone, publishTrainingSession, saveSessionAsTemplate, setAthleteSessionAbsence, startTrainingSession } from "@/app/coach/sessions/actions";
 import { ConfirmFormButton } from "@/components/ui/confirm-form-button";
 import { ToastActionForm } from "@/components/ui/toast-action-form";
 import { PoolSectionEditor } from "./pool-section-editor";
@@ -83,7 +83,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     const athletes = Array.from(new Map(session.blocks.flatMap((block) => block.assignments.map(({ athlete }) => [athlete.id, {
       id: athlete.id, firstName: athlete.user.firstName, lastName: athlete.user.lastName
     }] as const))).values());
-    return <CoachShell active="Seances"><div className="space-y-4">{simulationEnabled && <Button asChild><Link href={`/coach/sessions/${session.id}/simulation`}>Ouvrir la simulation de compétition</Link></Button>}<ActiveSessionOverview key={`${session.id}:${progress.planVersion}`} session={liveSessionForClient(session)} initialProgress={progress} athletes={athletes} /></div></CoachShell>;
+    return <CoachShell active="Seances"><div className="space-y-4">{simulationEnabled && <Button asChild><Link href={`/coach/sessions/${session.id}/simulation`}>Ouvrir la simulation de compétition</Link></Button>}<ConfirmFormButton action={completeTrainingSession} fields={{ sessionId: session.id }} label="Terminer la séance" title="Terminer cette séance ?" description="Les suivis des athlètes encore incomplets seront clôturés. La séance ne sera plus en cours." confirmLabel="Terminer la séance" className="rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white" /><ActiveSessionOverview key={`${session.id}:${progress.planVersion}`} session={liveSessionForClient(session)} initialProgress={progress} athletes={athletes} /></div></CoachShell>;
   }
   const rawAthletes = session.blocks.flatMap((block) =>
     block.assignments.map((assignment) => ({
