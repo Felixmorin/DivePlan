@@ -656,6 +656,36 @@ export async function startTrainingSession(formData: FormData) {
   revalidatePath("/athlete");
 }
 
+export async function completeTrainingSession(formData: FormData) {
+  const { user, clubId } = await requireCoach();
+  const sessionId = String(formData.get("sessionId") ?? "");
+  const session = await withTransaction(async (tx) => {
+    const result = await tx.query<{ id: string; title: string }>(
+      `UPDATE "TrainingSession" s SET status='COMPLETED'
+       FROM "TrainingWeek" w WHERE s.id=$1 AND s."weekId"=w.id AND w."clubId"=$2 AND s.status='IN_PROGRESS'
+       RETURNING s.id,s.title`, [sessionId, clubId]
+    );
+    if (!result.rowCount) throw new Error("Séance en cours introuvable.");
+    await tx.query(
+      `INSERT INTO "AthleteSessionCompletion" ("athleteId","sessionId","startedAt","completedAt",status)
+       SELECT DISTINCT a."athleteId",s.id,s.date,
+         CASE WHEN absence."athleteId" IS NULL THEN NOW() ELSE NULL END,
+         CASE WHEN absence."athleteId" IS NULL THEN 'COMPLETED'::"CompletionStatus" ELSE 'SKIPPED'::"CompletionStatus" END
+       FROM "TrainingSession" s JOIN "SessionBlock" b ON b."sessionId"=s.id
+       JOIN "SessionBlockAssignment" a ON a."sessionBlockId"=b.id
+       LEFT JOIN "AthleteSessionAbsence" absence ON absence."sessionId"=s.id AND absence."athleteId"=a."athleteId"
+       WHERE s.id=$1
+       ON CONFLICT ("athleteId","sessionId") DO UPDATE SET
+         "startedAt"=COALESCE("AthleteSessionCompletion"."startedAt",EXCLUDED."startedAt"),
+         "completedAt"=EXCLUDED."completedAt",status=EXCLUDED.status`, [sessionId]
+    );
+    return result.rows[0];
+  });
+  await trackEvent({ type: "session.completed", message: `Séance terminée par le coach: ${session.title}`, clubId, userId: user.id, metadata: { sessionId } });
+  revalidatePath("/coach"); revalidatePath("/coach/planning"); revalidatePath("/coach/sessions");
+  revalidatePath(`/coach/sessions/${sessionId}`); revalidatePath("/athlete"); revalidatePath("/athlete/progress");
+}
+
 export async function updateCompletedSessionSummary(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const sessionId = String(formData.get("sessionId") ?? "");
