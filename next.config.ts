@@ -64,5 +64,6 @@ nextConfig.turbopack = {
 
 export default withSentryConfig(nextConfig, {
   silent: true,
+  telemetry: false,
   sourcemaps: { disable: true },
 });
