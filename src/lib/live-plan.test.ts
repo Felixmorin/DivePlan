@@ -5,11 +5,13 @@ import test from "node:test";
 import * as React from "react";
 import * as jsx from "react/jsx-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
-import * as icons from "lucide-react";
 import ts from "typescript";
 import { liveSessionForClient, type LiveProgress } from "./live-session";
 import type { CoachSession } from "./coach-session";
 import { formatMontrealDate } from "./timezone";
+import { indexLiveSessionProgress } from "./live-session-index";
+
+const icons = new Proxy<Record<string, unknown>>({}, { get: () => () => null });
 
 function fixture() {
   return {
@@ -30,12 +32,13 @@ function fixture() {
 function overview(openPresence: boolean, expanded: string | null) {
   const exports: Record<string, React.ComponentType<Record<string, unknown>>> = {};
   const dependencies: Record<string, unknown> = {
-    react: { ...React, useState: (initial: unknown) => React.useState(initial === false && openPresence ? true : initial === null ? expanded : initial === "POOL" && expanded === "dryland" ? "DRYLAND" : initial) },
+    react: { ...React, useMemo: (create: () => unknown) => create(), useState: (initial: unknown) => React.useState(initial === false && openPresence ? true : initial === null ? expanded : initial === "POOL" && expanded === "dryland" ? "DRYLAND" : initial) },
     "react/jsx-runtime": jsx,
     "next/navigation": { useRouter: () => ({ refresh() {} }) },
-    "@/components/ui/app-link": { default: ({ children, ...props }: React.PropsWithChildren<{ href: string }>) => React.createElement("a", props, children) },
+    "@/components/ui/app-link": { __esModule: true, default: ({ children, ...props }: React.PropsWithChildren<{ href: string }>) => React.createElement("a", props, children) },
     "lucide-react": icons,
     "@/app/coach/sessions/actions": { saveSessionAttendance: async () => {} },
+    "@/lib/live-session-index": { indexLiveSessionProgress },
     "@/lib/timezone": { formatMontrealDate }
   };
   const code = ts.transpileModule(readFileSync("src/app/coach/sessions/[id]/active-session-overview.tsx", "utf8"), {
