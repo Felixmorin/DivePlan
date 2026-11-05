@@ -40,7 +40,7 @@ export async function GET(request: Request) {
       FROM "DatabaseEgressTelemetryHour" WHERE hour >= $1 GROUP BY hour, route, component ORDER BY hour, route, component`, [aggregateSince]),
     readRows<TelemetryRow>(collectionIssues, "webVitalsHourly", `SELECT hour, route, metric, SUM(samples)::text AS samples, SUM("totalValue")::text AS "totalValue", MAX("maxValue")::text AS "maxValue"
       FROM "PerformanceTelemetryHour" WHERE hour >= $1 GROUP BY hour, route, metric ORDER BY hour, route, metric`, [aggregateSince]),
-    readRows<TelemetryRow>(collectionIssues, "browserObservations", `SELECT id::text, "pageId"::text AS "pageId", route, "resourcePath", "resourceType", trigger, "startedAt", durationMs, "transferBytes"::text AS "transferBytes", "cacheHit", status, "serverRequestId"::text AS "serverRequestId"
+    readRows<TelemetryRow>(collectionIssues, "browserObservations", `SELECT id::text, "pageId"::text AS "pageId", route, "resourcePath", "resourceType", trigger, "startedAt", "durationMs", "transferBytes"::text AS "transferBytes", "cacheHit", status, "serverRequestId"::text AS "serverRequestId"
       FROM "RequestObservation" WHERE "startedAt" >= $1 ORDER BY "startedAt" DESC, id DESC LIMIT $2`, [since, limit]),
     readRows<{ count: string }>(collectionIssues, "browserObservationsCount", `SELECT count(*)::text AS count FROM "RequestObservation" WHERE "startedAt" >= $1`, [since]),
     readRows<TelemetryRow>(collectionIssues, "serverRequests", `SELECT id::text, route, trigger, "startedAt", "queryCount", "resultBytes"::text AS "resultBytes", "sqlDurationMs", "errorCount"

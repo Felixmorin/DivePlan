@@ -39,10 +39,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ses
   const turnIndex = simulation.currentTurnIndex;
   const turn = simulation.turns[turnIndex] ?? null;
   const eligible = turn ? eligibleSimulationJudges(simulation.turns, turnIndex) : [];
-  const [scores, names] = turn ? await Promise.all([
-    query<{ turnIndex: number; judgeAthleteId: string | null; judgeCoachId: string | null; rating: number }>(`SELECT "turnIndex","judgeAthleteId","judgeCoachId",rating FROM "CompetitionSimulationScore" WHERE "simulationId"=$1 AND ${simulation.status === "COMPLETED" ? "TRUE" : '"turnIndex"=$2'}`, simulation.status === "COMPLETED" ? [simulation.id] : [simulation.id, turnIndex]),
-    query<{ id: string; name: string }>(`SELECT a.id,u."firstName" || ' ' || u."lastName" AS name FROM "Athlete" a JOIN "User" u ON u.id=a."userId" WHERE a.id=ANY($1::text[])`, [eligible])
-  ]) : [{ rows: [] as { turnIndex: number; judgeAthleteId: string | null; judgeCoachId: string | null; rating: number }[] }, { rows: [] as { id: string; name: string }[] }];
+  const scores = turn ? await query<{ turnIndex: number; judgeAthleteId: string | null; judgeCoachId: string | null; rating: number }>(`SELECT "turnIndex","judgeAthleteId","judgeCoachId",rating FROM "CompetitionSimulationScore" WHERE "simulationId"=$1 AND ${simulation.status === "COMPLETED" ? "TRUE" : '"turnIndex"=$2'}`, simulation.status === "COMPLETED" ? [simulation.id] : [simulation.id, turnIndex]) : { rows: [] as { turnIndex: number; judgeAthleteId: string | null; judgeCoachId: string | null; rating: number }[] };
   const currentScores = scores.rows.filter((score) => score.turnIndex === turnIndex);
   const ownScore = currentScores.find((score) => athlete ? score.judgeAthleteId === athlete.id : score.judgeCoachId === coachId);
   const receivedIds = new Set(currentScores.flatMap((score) => score.judgeAthleteId ? [score.judgeAthleteId] : []));
@@ -59,7 +56,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ses
     receivedCount: currentScores.length,
     expectedCount: eligible.length + 1,
     ownRating: ownScore?.rating ?? null,
-    pendingJudges: names.rows.filter((item) => !receivedIds.has(item.id)).map((item) => item.name),
     scores: simulation.status !== "COMPLETED" ? [] : athlete
       ? simulation.turns.map((_, index) => {
           const passageScores = scores.rows.filter((score) => score.turnIndex === index);
