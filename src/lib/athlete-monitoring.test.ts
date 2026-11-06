@@ -45,7 +45,7 @@ test("athlete monitoring executes the real PostgreSQL upsert without losing acti
 
     await t.test("first action and concurrent appends retain text, timestamps and one visit row", async () => {
       assert.equal((await post({ visitId, action: "  Ouverture de l’application  ", path: "/athlete" })).status, 200);
-      const actions = ["Clic : Séance", "Clic : Plongeons", "Navigation"];
+      const actions = ["Clic : Séance", "Clic : Plongeons", "Navigation", "[Navigation synthétique]"];
       const replies = await Promise.all(actions.map(action => post({ visitId, action, path: "/athlete/sessions/synthetic" })));
       assert.ok(replies.every(reply => reply.status === 200));
       const row = await event();
@@ -55,7 +55,7 @@ test("athlete monitoring executes the real PostgreSQL upsert without losing acti
       assert.ok(row.metadata.actions.every(item => Number.isFinite(Date.parse(item.at))));
       assert.equal(row.metadata.actions[1].path, "/athlete/sessions/synthetic");
       assert.equal((await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM "AppEvent"`)).rows[0].count, 1);
-      assert.equal(queries, 4, "one SQL upsert per action, no additional reads");
+      assert.equal(queries, 5, "one SQL upsert per action, no additional reads");
     });
     await t.test("another user in the same club or another club cannot append to a visit", async () => {
       const before = await event();
