@@ -45,7 +45,7 @@ test("athlete monitoring executes the real PostgreSQL upsert without losing acti
 
     await t.test("first action and concurrent appends retain text, timestamps and one visit row", async () => {
       assert.equal((await post({ visitId, action: "  Ouverture de l’application  ", path: "/athlete" })).status, 200);
-      const actions = ["Clic : Séance", "Clic : Plongeons", "Navigation"];
+      const actions = ["Clic : Séance", "Clic : Plongeons", "Navigation", "[Navigation synthétique]"];
       const replies = await Promise.all(actions.map(action => post({ visitId, action, path: "/athlete/sessions/synthetic" })));
       assert.ok(replies.every(reply => reply.status === 200));
       const row = await event();
@@ -55,7 +55,7 @@ test("athlete monitoring executes the real PostgreSQL upsert without losing acti
       assert.ok(row.metadata.actions.every(item => Number.isFinite(Date.parse(item.at))));
       assert.equal(row.metadata.actions[1].path, "/athlete/sessions/synthetic");
       assert.equal((await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM "AppEvent"`)).rows[0].count, 1);
-      assert.equal(queries, 4, "one SQL upsert per action, no additional reads");
+      assert.equal(queries, 5, "one SQL upsert per action, no additional reads");
     });
     await t.test("another user in the same club or another club cannot append to a visit", async () => {
       const before = await event();
@@ -66,6 +66,27 @@ test("athlete monitoring executes the real PostgreSQL upsert without losing acti
       }
       identity = { user: { id: "a" }, clubId: "club-a" };
     });
+    await t.test("ten batched click actions keep their full text, paths, and timestamps", async () => {
+      const batchVisitId = randomUUID();
+      const batch = Array.from({ length: 10 }, (_, index) => ({
+        action: `Clic synthétique ${index} ${"x".repeat(100)}`,
+        path: `/athlete/session/synthetic-${index}`
+      }));
+      assert.equal((await post({ visitId: batchVisitId, actions: batch })).status, 200);
+      const row = await event(batchVisitId);
+      assert.deepEqual(row.metadata.actions.map(({ action, path }) => ({ action, path })), batch);
+      assert.ok(row.metadata.actions.every(item => Number.isFinite(Date.parse(item.at))));
+    });
+    await t.test("legacy serialized batches are parsed before any single-action truncation", async () => {
+      const batchVisitId = randomUUID();
+      const batch = Array.from({ length: 10 }, (_, index) => ({
+        action: `Clic synthétique ${index} ${"y".repeat(100)}`,
+        path: `/athlete/session/legacy-${index}`
+      }));
+      assert.equal((await post({ visitId: batchVisitId, action: JSON.stringify(batch), path: "/athlete" })).status, 200);
+      const row = await event(batchVisitId);
+      assert.deepEqual(row.metadata.actions.map(({ action, path }) => ({ action, path })), batch);
+    });
     await t.test("null metadata is initialized but another event type is preserved", async () => {
       const emptyId = randomUUID(); const otherId = randomUUID();
       await db.query(`INSERT INTO "AppEvent" (id, type, message, "userId", "clubId") VALUES ($1, 'athlete.visit', 'synthetic', 'a', 'club-a'), ($2, 'other', 'synthetic', 'a', 'club-a')`, [emptyId, otherId]);
@@ -75,7 +96,15 @@ test("athlete monitoring executes the real PostgreSQL upsert without losing acti
     });
     await t.test("invalid input and denied athlete access never reach SQL", async () => {
       const before = queries;
-      for (const body of [null, {}, { visitId: "invalid", action: "Action", path: "/athlete" }, { visitId, action: " ", path: "/athlete" }]) {
+      for (const body of [
+        null,
+        {},
+        { visitId: "invalid", action: "Action", path: "/athlete" },
+        { visitId, action: " ", path: "/athlete" },
+        { visitId, actions: [] },
+        { visitId, actions: Array.from({ length: 11 }, () => ({ action: "Action", path: "/athlete" })) },
+        { visitId, actions: [{ action: "Action", path: 42 }] }
+      ]) {
         assert.equal((await post(body)).status, 400);
       }
       denied = true;
