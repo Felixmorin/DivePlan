@@ -25,7 +25,7 @@ export function CompetitionSimulationLive({ sessionId, coach = false }: { sessio
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
-  const [draftRating, setDraftRating] = useState(5);
+  const [draft, setDraft] = useState<{ turnIndex: number; ownRating: number | null; rating: number } | null>(null);
 
   const refresh = useCallback(async () => {
     const response = await fetch(`/api/competition-simulation/${sessionId}`, { cache: "no-store" });
@@ -50,10 +50,6 @@ export function CompetitionSimulationLive({ sessionId, coach = false }: { sessio
     });
   }, [refresh, snapshot?.status]);
 
-  useEffect(() => {
-    if (snapshot) setDraftRating(snapshot.ownRating ?? 5);
-  }, [snapshot?.turnIndex, snapshot?.ownRating]);
-
   async function send(body: Record<string, unknown>, confirmMissing = false) {
     if (!snapshot) return;
     if (confirmMissing && !window.confirm("Passer au plongeur suivant sans toutes les notes ?")) return;
@@ -72,10 +68,12 @@ export function CompetitionSimulationLive({ sessionId, coach = false }: { sessio
   }
 
   if (!snapshot) return <section className="rounded-2xl bg-white p-5 text-sm">{error || "Chargement de la simulation…"}</section>;
+  const draftRating = draft?.turnIndex === snapshot.turnIndex && draft.ownRating === snapshot.ownRating
+    ? draft.rating : snapshot.ownRating ?? 5;
   const turn = snapshot.turn;
   const heightLabel = turn?.height === "ONE_METER" ? "1 m" : turn?.height === "THREE_METER" ? "3 m" : turn?.height === "PLATFORM" ? "Plateforme" : turn?.height ?? "";
   const canJudge = snapshot.status === "LIVE" && (snapshot.role === "JUDGE" || (coach && snapshot.role === "COACH"));
-  const updateDraft = (value: number) => setDraftRating(Math.min(10, Math.max(0, Math.round(value * 2) / 2)));
+  const updateDraft = (value: number) => setDraft({ turnIndex: snapshot.turnIndex, ownRating: snapshot.ownRating, rating: Math.min(10, Math.max(0, Math.round(value * 2) / 2)) });
 
   return <main className={`${coach ? "competition-simulation-dark bg-[#071a2b] text-white" : "competition-simulation-light bg-[#f4f8fc] text-[#0b1640]"} mx-auto min-h-screen w-full max-w-lg p-4 pb-10 sm:my-6 sm:min-h-0 sm:rounded-[2rem] sm:border sm:border-white/10 sm:p-6`}>
     <header className="mb-5 flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-cyan-300">Simulation en direct</p><h1 className="mt-1 text-xl font-black">{snapshot.status === "COMPLETED" ? "Simulation terminée" : `Passage ${Math.min(snapshot.turnIndex + 1, snapshot.totalTurns)} / ${snapshot.totalTurns}`}</h1></div><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">{snapshot.status === "LIVE" ? "En direct" : snapshot.status === "READY" ? "À démarrer" : "Terminée"}</span></header>

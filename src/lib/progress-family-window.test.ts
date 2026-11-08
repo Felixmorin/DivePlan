@@ -40,6 +40,10 @@ test("progress family breakdown transfers only the six displayed activity days a
       INSERT INTO "SessionBlockAssignment" VALUES ('block','athlete-a');
       INSERT INTO "AthleteSessionCompletion" VALUES ('session','athlete-a','2026-01-01','COMPLETED','GOOD');
       INSERT INTO "AthleteExerciseLog" VALUES ('athlete-a',true);`);
+    await db.exec(`CREATE TABLE "CompetitionSimulation" (id text,"sessionId" text,turns jsonb);
+      CREATE TABLE "CompetitionSimulationRepetition" ("simulationId" text,"athleteId" text,"diveCode" text,"diveName" text,height text,"completedAt" timestamptz);
+      ALTER TABLE "AthleteDiveLog" ADD COLUMN "actualDiveCode" text;`);
+    await db.exec("CREATE OR REPLACE VIEW" + readFileSync("db/migrations/0031_competition_simulation_repetitions.sql","utf8").split("CREATE OR REPLACE VIEW")[1]);
     const source = readFileSync("src/lib/athlete-session.ts", "utf8");
     const load = (legacy: boolean) => {
       let reads = 0; let familyRows: Array<{date:Date;category:string;volume:number}> = []; let familyBytes = 0;
@@ -94,7 +98,7 @@ test("progress family breakdown transfers only the six displayed activity days a
       }
     });
     await t.test("database errors are still propagated without fabricated empty charts",async()=>{
-      await db.exec('DROP TABLE "AthleteDiveLog"');
+      await db.exec('DROP TABLE "AthleteDiveLog" CASCADE');
       await assert.rejects(load(false).get("athlete-a"),(error:unknown)=>(error as {code:string}).code==="42P01");
     });
   } finally {await pending; await db.close();}

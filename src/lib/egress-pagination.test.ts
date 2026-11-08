@@ -18,11 +18,13 @@ test("bounded SQL pagination filters the whole dataset and isolates clubs and at
       CREATE TABLE "TrainingGroup" (id text PRIMARY KEY,name text,"clubId" text);
       CREATE TABLE "TrainingWeek" (id text PRIMARY KEY,"clubId" text,"groupId" text);
       CREATE TABLE "TrainingSession" (id text PRIMARY KEY,title text,date timestamp,duration int,status text,"weekId" text,"planningEventId" text);
+      CREATE TABLE "CompetitionSimulation" (id text,"sessionId" text,turns jsonb);
       CREATE TABLE "PlanningEvent" (id text PRIMARY KEY,duration int,location text);
       CREATE TABLE "SessionBlock" (id text PRIMARY KEY,"sessionId" text,"estimatedVolume" int);
       CREATE TABLE "SessionBlockAssignment" ("sessionBlockId" text,"athleteId" text);
       CREATE TABLE "AthleteSessionCompletion" ("athleteId" text,"sessionId" text,status text,rating text);
       CREATE TABLE "AthleteDiveLog" ("athleteId" text,"sessionId" text,"repetitionsCompleted" int);
+      CREATE VIEW "AthleteDiveRepetition" AS SELECT * FROM "AthleteDiveLog";
       CREATE TABLE "CoachAthleteSessionNote" ("athleteId" text,"sessionId" text,note text);
       INSERT INTO "TrainingGroup" VALUES ('ga','Groupe A','a'),('gb','Groupe B','b');
       INSERT INTO "TrainingWeek" VALUES ('wa','a','ga'),('wb','b','gb');

@@ -38,9 +38,12 @@ test("session creation and editing omit disabled photos from SQL while retaining
       CREATE TABLE "PlanningEvent" (id text PRIMARY KEY,title text,"startsAt" timestamptz,duration int,"groupId" text,location text,"clubId" text,type text);
       CREATE TABLE "TrainingWeek" (id text PRIMARY KEY,"groupId" text,"clubId" text);
       CREATE TABLE "TrainingSession" (id text PRIMARY KEY,title text,date timestamptz,"weekId" text);
+      CREATE TABLE "CompetitionDiveList" (id text PRIMARY KEY,position int);
+      CREATE TABLE "CompetitionDive" ("athleteId" text,"listId" text,"diveCode" text,"diveName" text,height text,position int,"createdAt" timestamptz);
       CREATE TABLE "CompetitionSimulation" ("sessionId" text,status text,turns jsonb);
       CREATE TABLE "AthleteSessionCompletion" ("athleteId" text,"sessionId" text,status text);
       CREATE TABLE "AthleteDiveLog" ("athleteId" text,"sessionId" text,"repetitionsCompleted" int);
+      CREATE VIEW "AthleteDiveRepetition" AS SELECT * FROM "AthleteDiveLog";
       CREATE TABLE "CoachAthleteSessionNote" ("athleteId" text,"sessionId" text,note text);
       INSERT INTO "TrainingGroup" VALUES ('group-a','Synthetic group','club-a'),('group-b','Other group','club-b');
       INSERT INTO "TrainingWeek" VALUES ('week-a','group-a','club-a');
@@ -92,7 +95,7 @@ test("session creation and editing omit disabled photos from SQL while retaining
       "@/components/ui/card":{Card:wrap,CardContent:wrap,CardHeader:wrap,CardTitle:wrap},
       "@/components/ui/input":{Input:wrap},"@/components/ui/textarea":{Textarea:wrap},
       "@/components/ui/empty-state":{EmptyState:({title}:{title:string})=>createElement("p",null,title)},
-      "@/components/ui/app-link":{default:({children,href}:{children?:ReactNode;href:string})=>createElement("a",{href},children)}
+      "@/components/ui/app-link":{__esModule:true,default:({children,href}:{children?:ReactNode;href:string})=>createElement("a",{href},children)}
     };
     type Props={searchParams:Promise<{templateId?:string;exerciseId?:string;planningEventId?:string}>;params:Promise<{id:string}>};
     const pages=paths.map(path=>compile(path,dependencies).default as (props:Props)=>Promise<ReactNode>);
