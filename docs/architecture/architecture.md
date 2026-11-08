@@ -88,6 +88,16 @@ flowchart TD
   AgentWorker --> DB["AiAgent / AiAgentRun"]
 ```
 
+## Observabilité : portée des rapports AppEvent
+
+Le signal d’erreur préparé pour l’agent d’observabilité est un décompte des événements `AppEvent` dont le champ `type` contient `error`, `exception` ou `failed` (sans distinction de casse), sur les dernières 24 heures ou les 7 derniers jours. La requête regroupe par type et ne retourne que les 50 types les plus fréquents. Ce filtre lexical peut inclure des échecs métier attendus, comme `auth.failed`, et omettre des incidents dont le type ne contient aucun de ces termes. Il ne mesure ni toutes les exceptions serveur/navigateur, ni un taux d’erreur : le nombre total de tentatives n’est pas fourni par ce signal. Un résultat vide ne prouve donc pas l’absence d’erreurs ou d’incidents actifs.
+
+L’objectif de diagnostic est de repérer les types d’événements récurrents sur la période, puis de confirmer leur cause et leur impact avec les journaux d’incidents correspondants avant de prioriser un correctif. Ces seuls décomptes ne permettent pas d’établir une cause, une gravité, un état ouvert/résolu ou un lien avec un déploiement. Pour mesurer la fréquence réelle des exceptions ou attribuer une régression à une version, une source d’incidents et une source de déploiements doivent être reliées et leur couverture vérifiée.
+
+La préparation actuelle des données est dans `src/app/api/agent-code-analysis/queue/claim/route.ts`, consommée par `scripts/analyze-observability.ps1`. `src/lib/agent-worker.ts` contient le même filtre et des avertissements de couverture, mais exclut désormais `diveplan-observability` de sa sélection de tâches. L’export `/api/admin/observability/report` regroupe quant à lui tous les types AppEvent par heure, sans exporter leurs messages ni métadonnées; cela n’élargit pas la couverture de collecte des erreurs.
+
+Sentry est instrumenté dans `src/instrumentation.ts`, `src/instrumentation-client.ts` et les configurations `sentry.*.config.ts`, mais ces rapports ne consultent pas ses événements. La présence de cette instrumentation ne prouve ni son fonctionnement effectif en production ni l’exhaustivité des erreurs capturées; ces points restent à vérifier séparément.
+
 ## Déploiement et services externes
 
 `vercel.json` configure les crons quotidiens de clôture et de file agents. Le dépôt contient `next.config.ts` et les configurations Sentry. Vercel est le fournisseur indiqué par la configuration/documentation; les paramètres réels du projet, DNS, politiques de sécurité, sauvegardes et déploiement effectif ne sont pas lisibles dans le dépôt. Variables requises et sensibles décrites dans `README.md`; ne pas recopier leurs valeurs dans une cartographie. Les services externes repérés sont PostgreSQL, Supabase Storage, Web Push et Sentry. Aucun fournisseur LLM n’est configuré pour les rapports agents actuels.
