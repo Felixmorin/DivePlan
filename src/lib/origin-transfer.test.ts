@@ -11,6 +11,7 @@ import { parseObservations } from "./request-observation";
 import { liveSessionForClient } from "./live-session";
 import type { CoachSession } from "./coach-session";
 import type { LiveProgress } from "./live-session";
+import { indexLiveSessionProgress } from "./live-session-index";
 
 // Execute the real route/query code with only auth and the database connection
 // replaced. SQL runs against PostgreSQL, including JSON recordset/NOT NULL rules.
@@ -71,6 +72,7 @@ test("live polling pauses when hidden, prevents overlap and refreshes only on pl
   const progress: LiveProgress = { status: "IN_PROGRESS", planVersion: "v1", absences: [], diveLogs: [], exerciseLogs: [] };
   const { ActiveSessionOverview } = load<{ ActiveSessionOverview: (props: unknown) => unknown }>("src/app/coach/sessions/[id]/active-session-overview.tsx", {
     react: {
+      useMemo: (create: () => unknown) => create(),
       useState: (initial: unknown) => [typeof initial === "function" ? initial() : initial, (next: unknown) => {
         if (initial === "synced") syncStates.push(next);
         if (initial === progress) progressUpdates += 1;
@@ -80,7 +82,8 @@ test("live polling pauses when hidden, prevents overlap and refreshes only on pl
     "react/jsx-runtime": { jsx: () => null, jsxs: () => null },
     "next/navigation": { useRouter: () => ({ refresh: () => { refreshes += 1; } }) },
     "@/components/ui/app-link": {}, "lucide-react": {},
-    "@/app/coach/sessions/actions": {}, "@/lib/timezone": { formatMontrealDate: () => "" }
+    "@/app/coach/sessions/actions": {}, "@/lib/timezone": { formatMontrealDate: () => "" },
+    "@/lib/live-session-index": { indexLiveSessionProgress }
   }, {
     document, AbortController,
     setTimeout: (callback: () => unknown, delay: number) => { timers.set(++timerId, { callback, delay }); return timerId; },
