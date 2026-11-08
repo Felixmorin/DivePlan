@@ -63,7 +63,7 @@ test("coach planning loads assignments through session blocks instead of compari
       "react/jsx-runtime": jsx, "lucide-react": {...icons, Users: () => createElement("i",{"data-icon":"users"})},
       "@/lib/current-user": {requireCoach: async () => { if (!authorized) throw new Error("FORBIDDEN"); return {clubId,coach:{weekStartsOn:1,planningDefaultView:"week"}}; }},
       "@/lib/db": {query}, "@/lib/timezone": timezone, "@/lib/data": demoData,
-      "@/components/ui/app-link": {default: ({children,href}: {children?:ReactNode;href:string}) => createElement("a",{href},children)},
+      "@/components/ui/app-link": {__esModule:true,default: ({children,href}: {children?:ReactNode;href:string}) => createElement("a",{href},children)},
       "@/components/coach/coach-shell": {CoachShell:wrap},
       "@/components/coach/planning-event-form": {PlanningEventForm:noop},
       "@/components/coach/planning-event-editor": {PlanningEventEditor:noop},

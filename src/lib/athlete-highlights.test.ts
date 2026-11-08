@@ -92,6 +92,7 @@ test("real home page uses bounded highlights, keeps week and session data, and a
       getCurrentAthlete:async()=>exists?{id:"athlete-a",clubId:"club-a",groupId:"group-a",user:{firstName:"Synthetic"}}:null,
       getAssignedReadySession:async()=>({id:"session",title:"Synthetic ready session",date:now,duration:90,sessionStatus:"READY",completions:[],blocks:[{type:"POOL"}]}),getAthleteCurrentWeekSummary:async()=>({completed:0,total:0,plannedMinutes:0,completedMinutes:0,volume:0})
     },
+    "@/lib/demo-routes":{demoRoutesEnabled:()=>false},
     "@/lib/athlete-planning":{
       getAthletePlanningEvents:()=>{throw new Error("Full calendar must not load on home");},
       getAthleteWeekPlanningEvents:async(args:unknown)=>{weekCalls++;assert.deepEqual(json(args),{...identity,includeOverlapping:true});return [];},

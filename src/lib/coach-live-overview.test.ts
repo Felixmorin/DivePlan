@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
-import { isValidElement, type ReactNode } from "react";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import ts from "typescript";
 import { liveSessionForClient, type LiveProgress } from "./live-session";
@@ -40,19 +40,30 @@ test("real overview page consumes plan-only live data and preserves the separate
       assert.equal(id, plan.id); assert.equal(options?.includeResults, "unlessLive");
       return state === "IN_PROGRESS" ? plan : { ...full, status: state };
     },
-    query: async () => { noteReads++; return { rows: coachNotes }; },
+    query: async (sql: string) => {
+      if (sql.includes('FROM "CompetitionSimulation"')) return { rows: [], rowCount: 0 };
+      assert.ok(sql.includes('FROM "CoachAthleteSessionNote"'));
+      noteReads++; return { rows: coachNotes };
+    },
     getLiveSessionProgress: async (id: string, clubId: string) => {
       assert.equal(id, plan.id); assert.equal(clubId, "club-a"); return missing ? null : progress;
     },
     liveSessionForClient, CoachShell, ActiveSessionOverview, CompletedSessionOverview,
+    ConfirmFormButton: () => null, completeTrainingSession: async () => {},
     notFound: () => { throw new Error("NOT_FOUND"); }
   });
   const page = exports.default!;
   const render = async () => {
     const root = await page({ params: Promise.resolve({ id: plan.id }) });
     assert.ok(isValidElement<{ children: ReactNode }>(root)); assert.equal(root.type, CoachShell);
-    const child = root.props.children;
-    assert.ok(isValidElement<Record<string, unknown>>(child)); return child;
+    const findOverview = (value: ReactNode): ReactElement<Record<string, unknown>> | undefined => {
+      if (Array.isArray(value)) return value.map(findOverview).find(Boolean);
+      if (!isValidElement<{ children?: ReactNode }>(value)) return;
+      if (value.type === ActiveSessionOverview || value.type === CompletedSessionOverview) return value;
+      return findOverview(value.props.children);
+    };
+    const child = findOverview(root.props.children);
+    assert.ok(child); return child;
   };
   const live = await render();
   assert.equal(live.type, ActiveSessionOverview);

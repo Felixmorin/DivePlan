@@ -29,6 +29,7 @@ test("coach directory and group pages omit disabled photos from SQL while retain
       CREATE TABLE "TrainingSession" (id text PRIMARY KEY,"weekId" text,title text,date timestamptz,duration int,status text);
       CREATE TABLE "AthleteSessionCompletion" ("athleteId" text,"sessionId" text,status text,"startedAt" timestamptz,"completedAt" timestamptz);
       CREATE TABLE "AthleteDiveLog" ("athleteId" text,"sessionId" text,"repetitionsCompleted" int);
+      CREATE VIEW "AthleteDiveRepetition" AS SELECT * FROM "AthleteDiveLog";
       CREATE TABLE "SessionBlock" (id text PRIMARY KEY,"sessionId" text);
       CREATE TABLE "SessionBlockAssignment" ("sessionBlockId" text,"athleteId" text);
       INSERT INTO "User" VALUES ('coach-user','Synthetic','Coach',NULL),('foreign-user','Foreign','Athlete',repeat('X',128000));
@@ -70,7 +71,7 @@ test("coach directory and group pages omit disabled photos from SQL while retain
       "@/lib/db": { query }, "@/lib/avatar-storage": { resolveAvatarUrls }, "@/lib/avatar": { avatarUrlForPage },
       "@/lib/timezone": timezone, "@/lib/data": { athletes: [], demoSession: {} },
       "next/navigation": { notFound: () => { throw new Error("NOT_FOUND"); } },
-      "@/components/ui/app-link": { default: ({children,href}: {children:ReactNode;href:string}) => createElement("a",{href},children) },
+      "@/components/ui/app-link": { __esModule: true, default: ({children,href}: {children:ReactNode;href:string}) => createElement("a",{href},children) },
       "@/app/coach/athletes/athlete-directory": { AthleteDirectory: data },
       "@/components/coach/athlete-avatars": { AthleteAvatars: data },
       "@/components/coach/athlete-avatar-group": { AthleteAvatarGroup: data },

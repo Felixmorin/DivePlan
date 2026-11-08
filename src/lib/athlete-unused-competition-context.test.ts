@@ -63,6 +63,7 @@ test("athlete pages and profile saves skip competition context they never consum
     const common:Record<string,unknown>={
       "react/jsx-runtime":jsx,"lucide-react":icons,"next/navigation":{redirect},"@/lib/athlete-session":athleteHelpers,"@/lib/timezone":timezone,
       "@/lib/pagination":{PAGE_SIZE:20},"@/lib/session-availability":{isSessionStartAvailable:()=>false},
+      "@/lib/demo-routes":{demoRoutesEnabled:()=>false},
       "@/lib/athlete-planning":{getAthleteWeekPlanningEvents:async()=>[],getAthleteUpcomingHighlights:async()=>[]},
       "@/lib/avatar-storage":{resolveAvatarUrls:async(values:unknown[])=>values.map(()=>null)},
       "@/lib/db":{query:async()=>({rows:[]}),withDatabaseEgressComponent:async(_name:string,fn:()=>unknown)=>fn()},
@@ -72,7 +73,7 @@ test("athlete pages and profile saves skip competition context they never consum
       const source=ts.createSourceFile(path,readFileSync(path,"utf8"),ts.ScriptTarget.Latest,true);
       for(const statement of source.statements)if(ts.isImportDeclaration(statement)&&ts.isStringLiteral(statement.moduleSpecifier)){
         const name=statement.moduleSpecifier.text;
-        if(name.startsWith("@/components/"))common[name]=name==="@/components/ui/app-link"?{default:({children,href}:{children:ReactNode;href:string})=>createElement("a",{href},children)}:ui;
+        if(name.startsWith("@/components/"))common[name]=name==="@/components/ui/app-link"?{__esModule:true,default:({children,href}:{children:ReactNode;href:string})=>createElement("a",{href},children)}:ui;
       }
     }
     type Page=(props:{searchParams:Promise<Record<string,string>>})=>Promise<ReactNode>;

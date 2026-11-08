@@ -36,6 +36,7 @@ test("Server Action progress saves use minimal identity without changing authori
       CREATE TABLE "AthleteSessionCompletion" ("athleteId" text,"sessionId" text,"startedAt" timestamptz,"completedAt" timestamptz,status text,rating text,note text,PRIMARY KEY("athleteId","sessionId"));
       CREATE TABLE "AthleteExerciseLog" (id text,"athleteId" text,"sessionId" text,"exerciseId" text,completed boolean,rating text,note text,UNIQUE("athleteId","sessionId","exerciseId"));
       CREATE TABLE "AthleteDiveLog" (id text,"athleteId" text,"sessionId" text,"poolDiveId" text,"repetitionsCompleted" int,"goldenRepetitions" int,"feedbackCompleted" boolean,rating text,note text,timestamp timestamptz,UNIQUE("athleteId","sessionId","poolDiveId"));
+      CREATE VIEW "AthleteDiveRepetition" AS SELECT l.*,d."diveCode",s.height FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId";
       CREATE TABLE "AthleteSessionAbsence" ("sessionId" text,"athleteId" text);
       INSERT INTO "Club" VALUES ('club-a','Synthetic A',repeat('L',128000),NOW()),('club-b','Synthetic B',NULL,NOW());
       INSERT INTO "User" SELECT id,id,'Synthetic',id||'@example.test',NULL,NULL,role,club,'synthetic-hash',NOW(),NOW(),true
@@ -151,7 +152,7 @@ test("Server Action progress saves use minimal identity without changing authori
       assert.equal(current.dives[0].goldenRepetitions,2);assert.equal(current.absences.length,1);
     });
     await t.test("a persistence error rolls back work and never invalidates the UI as if saved",async()=>{
-      const before=(await snapshot()).exercises;await db.exec('DROP TABLE "AthleteDiveLog"');
+      const before=(await snapshot()).exercises;await db.exec('DROP TABLE "AthleteDiveLog" CASCADE');
       const req=request();await assert.rejects(req.actions.saveAthleteProgress({...payload,exercises:[{...payload.exercises[0],completed:false}]}));
       assert.deepEqual((await db.query(`SELECT "athleteId","exerciseId",completed,rating,note FROM "AthleteExerciseLog" ORDER BY "athleteId"`)).rows,before);
       assert.equal(req.invalidations.length,0);
