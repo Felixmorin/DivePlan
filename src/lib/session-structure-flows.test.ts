@@ -188,10 +188,11 @@ test("form, draft and template flows share the transactional session-structure w
       drylandBlocks: [{
         competitionEvaluation: false,
         title: "Strength",
+        description: "Garder le rythme.\nRepos : 60 s",
         duration: 15,
         exerciseIds: ["exercise-a"],
         athleteIds: ["athlete-a"],
-        exerciseOverrides: { "exercise-a": { sets: 2, reps: 4, duration: null, notes: "controlled" } }
+        exerciseOverrides: { "exercise-a": { sets: 2, reps: 4, duration: null, notes: "controlled\nRepos : 30 s" } }
       }],
       poolBlocks: hasPool ? [{
         competitionEvaluation: false,
@@ -207,11 +208,11 @@ test("form, draft and template flows share the transactional session-structure w
     assert.ok(created);
     assert.deepEqual((await query(`SELECT type, title, position, description FROM "SessionBlock" WHERE "sessionId" = $1 ORDER BY position`, [created.id])).rows, [
       { type: "WARMUP", title: "Activation", position: 1, description: "warmup" },
-      { type: "DRYLAND", title: "Strength", position: 2, description: null },
+      { type: "DRYLAND", title: "Strength", position: 2, description: "Garder le rythme.\nRepos : 60 s" },
       { type: "POOL", title: "Entries", position: 3, description: null },
       { type: "COOLDOWN", title: "Reset", position: 99, description: "cooldown" }
     ]);
-    assert.deepEqual((await query(`SELECT sets, reps, notes FROM "DrylandBlockExercise"`)).rows, [{ sets: 2, reps: 4, notes: "controlled" }]);
+    assert.deepEqual((await query(`SELECT sets, reps, notes FROM "DrylandBlockExercise"`)).rows, [{ sets: 2, reps: 4, notes: "controlled\nRepos : 30 s" }]);
     assert.equal((await query(`SELECT 1 FROM "PoolDive" WHERE "diveCode" = '101A'`)).rows.length, 1);
 
     await (actionExports.updateDraftSessionFromBuilder as (id: string, input: unknown) => Promise<void>)(created.id, builderInput("Updated draft", false, false));
@@ -220,6 +221,7 @@ test("form, draft and template flows share the transactional session-structure w
       { type: "COOLDOWN", title: "Reset", position: 99 }
     ]);
     assert.equal((await query(`SELECT 1 FROM "PoolDive"`)).rows.length, 0);
+    assert.equal((await query(`SELECT description FROM "SessionBlock" WHERE "sessionId"=$1 AND type='DRYLAND'`, [created.id])).rows[0].description, "Garder le rythme.\nRepos : 60 s");
     assert.equal((await query(`SELECT title FROM "TrainingSession" WHERE id = $1`, [created.id])).rows[0].title, "Updated draft");
 
     await assert.rejects(

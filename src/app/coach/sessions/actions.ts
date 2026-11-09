@@ -53,6 +53,7 @@ const sessionInputSchema = z.object({
     description: z.string().optional()
   }),
   drylandBlocks: z.array(z.object({
+    description: z.string().max(4000).nullable().optional(),
     sourceBlockId: z.string().optional(),
     competitionEvaluation: z.boolean().default(false),
     title: z.string().trim(),
@@ -456,13 +457,13 @@ export async function saveSessionStructureTemplate(formData: FormData) {
 export async function saveDrylandBlockAsTemplate(formData: FormData) {
   const { user, clubId } = await requireCoach();
   const name = String(formData.get("name") ?? "").trim();
-  let block: { title: string; duration: number; exercises: { exerciseId: string; sets: number | null; reps: number | null; duration: number | null; notes: string | null }[] };
+  let block: { title: string; description?: string | null; duration: number; exercises: { exerciseId: string; sets: number | null; reps: number | null; duration: number | null; notes: string | null }[] };
   try {
     block = JSON.parse(String(formData.get("block") ?? ""));
   } catch {
     throw new Error("Bloc dryland invalide.");
   }
-  if (!name || !block.title || !Number.isFinite(block.duration) || !Array.isArray(block.exercises) || block.exercises.length === 0) {
+  if (!name || (block.description != null && (typeof block.description !== "string" || block.description.length > 4000)) || !block.title || !Number.isFinite(block.duration) || !Array.isArray(block.exercises) || block.exercises.length === 0) {
     throw new Error("Donne un nom au modèle et ajoute au moins un exercice au bloc.");
   }
   const exercises = await query<{id:string}>(`SELECT id FROM "DrylandExercise" WHERE id=ANY($1::text[]) AND "archivedAt" IS NULL`,[block.exercises.map((item) => item.exerciseId)]);
@@ -479,7 +480,7 @@ export async function saveDrylandBlockAsTemplate(formData: FormData) {
         blocks: [{
           type: "DRYLAND",
           title: block.title,
-          description: null,
+          description: block.description ?? null,
           duration: block.duration,
           position: 0,
           estimatedVolume: volume,
@@ -1254,7 +1255,7 @@ function buildSessionStructureBlocks(
       type: BlockType.DRYLAND,
       contentKey: block.sourceBlockId,
       title: block.title,
-      description: null,
+      description: block.description ?? null,
       duration: block.duration,
       position: index + 2,
       estimatedVolume: block.exercises.reduce((sum, exercise) =>

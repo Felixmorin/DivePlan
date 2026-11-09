@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronRight, Clock3, Dumbbell, FileText, GripVertical, Leaf, MoreHorizontal, NotebookPen, Plus, Search, Send, Trash2, UserRound, Users, Waves, X } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, CalendarDays, CalendarPlus, CheckCircle2, ChevronDown, ChevronRight, Clock3, Dumbbell, FileText, Leaf, MoreHorizontal, NotebookPen, Plus, Search, Send, Users, Waves, X } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -18,6 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { readDrylandRest, writeDrylandRest } from "@/lib/dryland-rest";
+import drylandStyles from "./dryland-step.module.css";
 import type { SessionTemplatePayload } from "@/lib/session-template";
 import { countPoolContexts, validatePoolListRow, type PoolListRow } from "@/lib/pool-list";
 import { PoolAthleteInsightPanel } from "@/components/coach/pool-athlete-insight-panel";
@@ -94,6 +96,7 @@ type BuilderPoolBlock = {
 };
 
 type BuilderDrylandBlock = {
+  description?: string | null;
   id: string;
   title: string;
   duration: number;
@@ -167,6 +170,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     ? templateDrylandBlocks.map((block, index) => ({
         id: `template-dryland-${index}`,
         title: block.title,
+        description: block.description,
         duration: block.duration,
         competitionEvaluation: block.competitionEvaluation,
         exerciseIds: block.drylandExercises.map((item) => item.exerciseId).filter((id) => drylandLibrary.some((exercise) => exercise.id === id)),
@@ -387,6 +391,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     const nextDryland = blocks.filter((block) => block.type === "DRYLAND").map((block, index) => ({
       id: `loaded-dryland-${Date.now()}-${index}`,
       title: block.title,
+      description: block.description,
       duration: block.duration,
       exerciseIds: block.drylandExercises.map((exercise) => exercise.exerciseId).filter((id) => validExerciseIds.has(id)),
       athleteIds,
@@ -499,7 +504,23 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     const next = [...block.exerciseIds];
     if (selected && occurrenceIndex !== undefined) next.splice(occurrenceIndex, 1);
     else next.push(exerciseId);
-    updateDrylandBlock(blockId, { exerciseIds: next });
+    const first = library.find((exercise) => exercise.id === block.exerciseIds[0]);
+    const exercise = library.find((item) => item.id === exerciseId);
+    const sets = first ? block.exerciseOverrides[first.id]?.sets ?? first.sets ?? 1 : exercise?.sets ?? 1;
+    updateDrylandBlock(blockId, { exerciseIds: next, ...(!selected && exercise && !block.exerciseIds.includes(exerciseId) ? { exerciseOverrides: { ...block.exerciseOverrides, [exerciseId]: { sets, reps: exercise.reps, duration: exercise.duration, notes: null } } } : {}) });
+    if (!selected) {
+      let undone = false;
+      const occurrence = next.filter((id) => id === exerciseId).length;
+      notify("Exercice ajouté au circuit", "success", { label: "Annuler", onClick: () => {
+        if (undone) return;
+        undone = true;
+        setDrylandBlocks((current) => current.map((item) => {
+          if (item.id !== blockId) return item;
+          let count = 0;
+          return { ...item, exerciseIds: item.exerciseIds.filter((id) => id !== exerciseId || ++count !== occurrence) };
+        }));
+      } });
+    }
   }
 
   function moveExercise(blockId: string, occurrenceIndex: number, direction: -1 | 1) {
@@ -539,6 +560,17 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       const id = `dryland-${Date.now()}`;
       setDrylandBlocks([{ id, title: "Dryland 1", duration: 20, exerciseIds: [exercise.id], athleteIds, exerciseOverrides: {} }]);
       pulse(id);
+    } else {
+      const block = drylandBlocks.find((item) => item.id === selectedDrylandBlockId);
+      if (block) {
+        updateDrylandBlock(block.id, { exerciseIds: [...block.exerciseIds, exercise.id] });
+        let undone = false;
+        notify("Exercice ajouté au circuit", "success", { label: "Annuler", onClick: () => {
+          if (undone) return;
+          undone = true;
+          setDrylandBlocks((current) => current.map((item) => item.id === block.id ? { ...item, exerciseIds: item.exerciseIds.filter((id) => id !== exercise.id) } : item));
+        } });
+      }
     }
   }
 
@@ -571,7 +603,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
             competitionSimulationAthleteIds: effectiveSimulationAthleteIds,
             competitionSimulationBlockId: simulationBlockId ?? undefined,
             competitionSimulationHeight: simulationHeight,
-            drylandBlocks: effectiveDrylandBlocks.map(({ id, title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides }) => ({ sourceBlockId: id, title, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides, competitionEvaluation: effectiveEvaluationPlacement === `block:${id}` })),
+            drylandBlocks: effectiveDrylandBlocks.map(({ id, title, description, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides }) => ({ sourceBlockId: id, title, description, duration, exerciseIds, athleteIds: assignedAthleteIds, exerciseOverrides, competitionEvaluation: effectiveEvaluationPlacement === `block:${id}` })),
       poolBlocks: individualPoolBlocks.map((block) => ({
               sourceBlockId: block.sourceBlockId,
               title: block.title,
@@ -601,7 +633,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     });
     const formData = new FormData();
     formData.set("name", name.trim());
-    formData.set("block", JSON.stringify({ title: block.title, duration: block.duration, exercises }));
+    formData.set("block", JSON.stringify({ title: block.title, description: block.description, duration: block.duration, exercises }));
     startTransition(() => {
       void saveDrylandBlockAsTemplate(formData)
         .then(() => { notify("Modèle dryland enregistré"); router.refresh(); })
@@ -619,6 +651,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
     const loadedBlock: BuilderDrylandBlock = {
       id,
       title: source.title,
+      description: source.description,
       duration: source.duration,
       exerciseIds,
       athleteIds: selectedBlock?.athleteIds ?? (drylandProgramMode === "team" ? drylandTargetAthleteIds : []),
@@ -651,7 +684,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
       return poolVariants.map((poolVariant) => ({
         type,
         title: poolVariant?.title ?? row.title,
-        description: row.type === "simulation" ? `COMPETITION_SIMULATION:${simulationHeight}` : optional?.description || null,
+        description: row.type === "simulation" ? `COMPETITION_SIMULATION:${simulationHeight}` : dryland?.description || optional?.description || null,
         duration: row.type === "simulation" ? 15 : dryland?.duration ?? pool?.duration ?? optional?.duration ?? 0,
         position: position++,
         estimatedVolume: 0,
@@ -751,7 +784,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
             </div>
           )}
           {step === 2 && <div className="space-y-4">
-            <div><p className="text-sm font-bold text-[var(--color-ink-muted)]">Étape 3 sur 5</p><h2 className="mt-1 text-2xl font-black">Dryland</h2></div>
+            <div><h2 className="text-3xl font-black tracking-tight">Construire le dryland</h2><p className="mt-1 text-sm text-[var(--color-ink-muted)]">Organisez les exercices et adaptez le circuit à vos athlètes.</p></div>
             <DrylandStep exercises={library} blocks={effectiveDrylandBlocks} athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} templates={templates.filter((template) => template.category === "Dryland")} onLoadTemplate={loadDrylandTemplate} onSaveTemplate={saveDrylandTemplate} warmup={warmup} onUpdateWarmup={(update) => setWarmup((current) => ({ ...current, ...update }))} onRemoveWarmup={() => { setWarmup((current) => ({ ...current, enabled: false })); setContentOrder((current) => current.filter((id) => id !== "warmup")); }} targetAthleteIds={drylandTargetAthleteIds} selectedBlockId={selectedDrylandBlockId} programMode={drylandProgramMode} flashBlock={flashBlock} onSelectBlock={setRequestedDrylandBlockId} onProgramModeChange={(mode) => { setDrylandProgramMode(mode); if (mode === "team") setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: drylandTargetAthleteIds }))); }} onTargetAthletesChange={(ids) => { setDrylandTargetAthleteIds(ids); setDrylandBlocks((current) => current.map((block) => ({ ...block, athleteIds: ids }))); }} onToggleExercise={toggleExercise} onMoveExercise={moveExercise} onUpdateBlock={updateDrylandBlock} onAddBlock={addDrylandBlock} onRemoveBlock={(blockId) => { setDrylandBlocks((current) => current.filter((block) => block.id !== blockId)); setContentOrder((current) => current.filter((id) => id !== blockId)); }} onSaveAndContinue={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index >= 0 && index < effectiveDrylandBlocks.length - 1) setRequestedDrylandBlockId(effectiveDrylandBlocks[index + 1].id); else void advanceTo(3); }} onBack={() => { const index = effectiveDrylandBlocks.findIndex((block) => block.id === selectedDrylandBlockId); if (index > 0) setRequestedDrylandBlockId(effectiveDrylandBlocks[index - 1].id); }} onCreateExercise={addExercise}/>
           </div>}
           {step === 3 && <PoolAthletesStep athletes={visibleAthletes} groupName={groups.find((group) => group.id === watched.groupId)?.name ?? "Groupe"} averagePoolVolumeByAthlete={athletePoolAverageById} insightsByAthlete={athletePoolInsightsById} blocks={activePoolBlocks} assignments={effectivePoolAssignments} rowsByAthleteBlock={effectivePoolRowsByAthleteBlock} coachAthleteNotes={coachAthleteNotes} onCoachAthleteNoteChange={(athleteId, note) => setCoachAthleteNotes((current) => ({ ...current, [athleteId]: note }))} totalDuration={totalDuration} onRowsChange={(athleteId, blockId, rows) => setPoolRowsByAthleteBlock((current) => ({ ...current, [poolAthleteBlockKey(athleteId, blockId)]: rows }))} onBack={() => setStep(2)} onContinue={() => void advanceTo(4)} />}
@@ -884,130 +917,126 @@ function DrylandStep(props: {
 }) {
   const [search, setSearch] = useState("");
   const [activeExerciseFilter, setActiveExerciseFilter] = useState("Tous");
-  const [showLibrary, setShowLibrary] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(true);
+  const [editingAthletes, setEditingAthletes] = useState(false);
+  const [editingWarmup, setEditingWarmup] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (createOpen) dialogRef.current?.showModal();
+    else dialogRef.current?.close();
+  }, [createOpen]);
   const selectedBlock = props.blocks.find((block) => block.id === props.selectedBlockId);
   const selectedIndex = props.blocks.findIndex((block) => block.id === props.selectedBlockId);
   const selectedExercises = selectedBlock ? orderExercises(props.exercises, selectedBlock.exerciseIds) : [];
-  const completedCount = props.blocks.filter((block) => block.exerciseIds.length > 0 && block.athleteIds.length > 0).length;
-  const progress = props.blocks.length > 0 ? Math.round(completedCount / props.blocks.length * 100) : 0;
-  const nextBlock = selectedIndex >= 0 ? props.blocks[selectedIndex + 1] : undefined;
-  const exerciseFilters = ["Tous", "Échauffement", "Airtrack", "Musculation", "Dryboard", "Flex"];
+  const nextBlock = props.blocks[selectedIndex + 1];
+  const assignedIds = selectedBlock?.athleteIds ?? [];
+  const exerciseFilters = ["Tous", "Airtrack", "Force", "Flex", "Dryboard", "Échauffement"];
   const availableExercises = props.exercises.filter((exercise) => {
-    const searchableText = `${exercise.name} ${exercise.category} ${exercise.equipment ?? ""} ${exercise.tags.join(" ")}`.toLocaleLowerCase("fr");
-    const matchesSearch = searchableText.includes(search.trim().toLocaleLowerCase("fr"));
-    const category = exercise.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr");
-    const metadata = `${exercise.equipment ?? ""} ${exercise.tags.join(" ")}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr");
-    const matchesFilter = activeExerciseFilter === "Tous" || (activeExerciseFilter === "Échauffement" && category === "echauffement") || (activeExerciseFilter === "Musculation" && (category === "force" || metadata.includes("musculation"))) || (activeExerciseFilter === "Flex" && (category === "mobilite" || metadata.includes("flex"))) || ((activeExerciseFilter === "Airtrack" || activeExerciseFilter === "Dryboard") && metadata.includes(activeExerciseFilter.toLocaleLowerCase("fr")));
-    return matchesSearch && matchesFilter;
+    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("fr");
+    const metadata = normalize(`${exercise.name} ${exercise.category} ${exercise.equipment ?? ""} ${exercise.tags.join(" ")}`);
+    const filter = normalize(activeExerciseFilter);
+    return metadata.includes(normalize(search.trim())) && (filter === "tous" || metadata.includes(filter) || (filter === "force" && metadata.includes("musculation")) || (filter === "flex" && metadata.includes("mobilite")));
   });
+  const roundValues = selectedExercises.map((exercise) => selectedBlock?.exerciseOverrides[exercise.id]?.sets ?? exercise.sets ?? 1);
+  const rounds = roundValues.length && roundValues.every((value) => value === roundValues[0]) ? roundValues[0] : null;
 
-  function updateExercise(exercise: BuilderExercise, field: "sets" | "reps" | "duration", value: number | null) {
+  function updateExercise(exercise: BuilderExercise, update: Partial<BuilderDrylandBlock["exerciseOverrides"][string]>) {
     if (!selectedBlock) return;
     const previous = selectedBlock.exerciseOverrides[exercise.id];
-    props.onUpdateBlock(selectedBlock.id, {
-      exerciseOverrides: {
-        ...selectedBlock.exerciseOverrides,
-        [exercise.id]: {
-          sets: previous?.sets ?? exercise.sets,
-          reps: previous?.reps ?? exercise.reps,
-          duration: previous?.duration ?? exercise.duration,
-          notes: previous?.notes ?? null,
-          [field]: value
-        }
-      }
-    });
+    props.onUpdateBlock(selectedBlock.id, { exerciseOverrides: { ...selectedBlock.exerciseOverrides, [exercise.id]: {
+      sets: previous?.sets ?? exercise.sets, reps: previous?.reps ?? exercise.reps,
+      duration: previous?.duration ?? exercise.duration, notes: previous?.notes ?? null, ...update
+    } } });
   }
 
-  return <div className="space-y-4">
-    {props.warmup.enabled && <Card><CardContent className="grid gap-3 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--block-warmup-bg)] text-[var(--block-warmup-fg)]"><Activity className="h-5 w-5"/></span><div className="grid gap-3 sm:grid-cols-2"><Input aria-label="Nom de l’échauffement" value={props.warmup.title} onChange={(event) => props.onUpdateWarmup({ title: event.target.value })} className="font-black"/><Textarea aria-label="Consignes de l’échauffement" value={props.warmup.description} onChange={(event) => props.onUpdateWarmup({ description: event.target.value })} placeholder="Consignes de l’échauffement" className="min-h-11 sm:col-span-1"/></div><Button type="button" variant="outline" size="sm" onClick={props.onRemoveWarmup}><Trash2 className="h-4 w-4"/><span className="hidden sm:inline">Retirer</span></Button></CardContent></Card>}
-    <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white shadow-[var(--shadow-card)]">
-    <div className="grid min-h-[520px] lg:grid-cols-[245px_minmax(0,1fr)]">
-      <aside className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between"><h3 className="font-black">Blocs dryland ({props.blocks.length})</h3><Button type="button" size="sm" variant="outline" aria-label="Ajouter un bloc dryland" onClick={props.onAddBlock}><Plus className="h-4 w-4"/></Button></div>
-        <p className="mt-1 text-xs font-semibold text-[var(--color-ink-muted)]">{completedCount} / {props.blocks.length} complétés</p>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--color-border)]"><div className="h-full rounded-full bg-[var(--color-brand)] transition-all" style={{ width: `${progress}%` }}/></div>
-        <div className="mt-4 space-y-2">{props.blocks.map((block, index) => {
-          const isSelected = block.id === props.selectedBlockId;
-          const isComplete = block.exerciseIds.length > 0 && block.athleteIds.length > 0;
-          return <button key={block.id} type="button" aria-current={isSelected ? "step" : undefined} onClick={() => props.onSelectBlock(block.id)} className={cn("flex w-full items-center gap-3 rounded-xl border p-3 text-left transition", isSelected ? "border-amber-400 bg-amber-50" : "border-[var(--color-border)] bg-white hover:border-[var(--color-brand)]")}>
-            <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-black", isComplete ? "bg-[var(--color-success)] text-white" : isSelected ? "bg-amber-500 text-white" : "bg-[var(--color-surface-raised)] text-[var(--color-ink-muted)]")}>{isComplete ? <CheckCircle2 className="h-4 w-4"/> : index + 1}</span>
-            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{block.title || `Dryland ${index + 1}`}</span><span className="block text-xs text-[var(--color-ink-muted)]">{block.duration} min</span></span><ChevronRight className="h-4 w-4 text-[var(--color-ink-muted)]"/>
-          </button>;
-        })}</div>
-        {props.blocks.length === 0 && <p className="mt-4 text-sm text-[var(--color-ink-muted)]">Ajoute un bloc depuis l’étape Blocs.</p>}
-      </aside>
+  function updateRounds(value: number) {
+    if (!selectedBlock) return;
+    const sets = Math.min(20, Math.max(1, value));
+    props.onUpdateBlock(selectedBlock.id, { exerciseOverrides: { ...selectedBlock.exerciseOverrides, ...Object.fromEntries(selectedExercises.map((exercise) => [exercise.id, {
+      sets, reps: selectedBlock.exerciseOverrides[exercise.id]?.reps ?? exercise.reps,
+      duration: selectedBlock.exerciseOverrides[exercise.id]?.duration ?? exercise.duration,
+      notes: selectedBlock.exerciseOverrides[exercise.id]?.notes ?? null
+    }])) } });
+  }
 
-      <div className="min-w-0 p-4 sm:p-5">
+  function openLibrary() {
+    setShowLibrary(true);
+    requestAnimationFrame(() => { searchRef.current?.querySelector("input")?.focus(); searchRef.current?.scrollIntoView({ block: "nearest" }); });
+  }
+
+  return <div className={drylandStyles.editor}>
+    <div className={drylandStyles.tabs} aria-label="Blocs dryland">
+      {props.warmup.enabled && <button type="button" aria-expanded={editingWarmup} onClick={() => setEditingWarmup(!editingWarmup)}><CheckCircle2 className={drylandStyles.complete}/><strong>{props.warmup.title}</strong><span>{props.warmup.duration} min</span></button>}
+      {props.blocks.map((block, index) => <button key={block.id} type="button" aria-current={block.id === props.selectedBlockId ? "step" : undefined} onClick={() => { props.onSelectBlock(block.id); setEditingWarmup(false); setEditingAthletes(false); }}>
+        {block.exerciseIds.length && block.athleteIds.length ? <CheckCircle2 className={drylandStyles.complete}/> : <Dumbbell/>}<strong>{block.title || `Dryland ${index + 1}`}</strong><span>{block.duration} min</span>
+      </button>)}
+      <button type="button" className={drylandStyles.addTab} aria-label="Ajouter un bloc dryland" onClick={props.onAddBlock}><Plus/></button>
+    </div>
+    {editingWarmup && props.warmup.enabled && <Card><CardContent className="grid gap-3 p-4 sm:grid-cols-2"><Field label="Échauffement"><Input value={props.warmup.title} onChange={(event) => props.onUpdateWarmup({ title: event.target.value })}/></Field><Field label="Durée (min)"><Input type="number" min={1} value={props.warmup.duration} onChange={(event) => props.onUpdateWarmup({ duration: Math.max(1, Number(event.target.value)) })}/></Field><Field label="Consignes"><Textarea value={props.warmup.description} onChange={(event) => props.onUpdateWarmup({ description: event.target.value })}/></Field><Button type="button" variant="outline" onClick={props.onRemoveWarmup}>Retirer l’échauffement</Button></CardContent></Card>}
+    <div className={cn(drylandStyles.workspace, !showLibrary && drylandStyles.libraryClosed)}>
+      <div className={drylandStyles.block}>
         {selectedBlock ? <>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-52 flex-1">
-              <Input aria-label="Nom du bloc dryland" value={selectedBlock.title} onChange={(event) => props.onUpdateBlock(selectedBlock.id, { title: event.target.value })} className="h-auto border-0 bg-transparent px-0 text-2xl font-black shadow-none focus-visible:shadow-none"/>
-              <p className="mt-1 text-sm text-[var(--color-ink-muted)]">{selectedBlock.duration} min · {props.groupName} · {props.programMode === "team" ? props.targetAthleteIds.length : selectedBlock.athleteIds.length} athlètes</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <details className="group relative"><summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm font-bold">Charger un modèle<ChevronDown className="h-4 w-4 transition group-open:rotate-180"/></summary><div className="absolute right-0 z-30 mt-1 max-h-56 w-64 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white p-2 shadow-[var(--shadow-soft)]">{props.templates.length ? props.templates.map((template) => <button key={template.id} type="button" onClick={(event) => { props.onLoadTemplate(template.id); event.currentTarget.closest("details")?.removeAttribute("open"); }} className="block w-full rounded-lg p-2 text-left text-sm font-bold hover:bg-[var(--color-surface-raised)]">{template.name}</button>) : <p className="p-2 text-xs text-[var(--color-ink-muted)]">Aucun modèle dryland enregistré.</p>}</div></details>
-              <Button type="button" size="sm" variant="outline" disabled={selectedExercises.length === 0} onClick={() => props.onSaveTemplate(selectedBlock.id)}><BookmarkPlus className="h-4 w-4"/>Enregistrer comme modèle</Button>
-            </div>
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
-              <div className="flex items-center gap-2 text-xs font-black"><Users className="h-4 w-4"/>{props.programMode === "team" ? "Même circuit pour tout le groupe" : "Athlètes du programme"}</div>
-              <div className="mt-2"><AthleteAvatarGroup ids={props.programMode === "team" ? props.targetAthleteIds : selectedBlock.athleteIds} athletes={props.athletes} limit={6}/></div>
-              {props.programMode === "team" && <details className="group mt-2"><summary className="cursor-pointer list-none text-xs font-bold underline">Exclure un athlète <ChevronDown className="ml-1 inline h-3 w-3 transition group-open:rotate-180"/></summary><div className="mt-2 space-y-1">{props.athletes.map((athlete) => { const included = props.targetAthleteIds.includes(athlete.id); return <button key={athlete.id} type="button" aria-pressed={included} onClick={() => props.onTargetAthletesChange(included ? props.targetAthleteIds.filter((id) => id !== athlete.id) : [...props.targetAthleteIds, athlete.id])} className="flex w-full justify-between rounded-md px-2 py-1 text-left text-xs hover:bg-amber-100">{athlete.firstName} {athlete.lastName}<span>{included ? "Inclus" : "Exclu"}</span></button>; })}</div></details>}
-            </div>
+          <header className={drylandStyles.blockHeader}>
+            <div className="min-w-0 flex-1"><Input aria-label="Nom du bloc dryland" value={selectedBlock.title} onChange={(event) => props.onUpdateBlock(selectedBlock.id, { title: event.target.value })} className="h-auto border-0 bg-transparent px-0 text-2xl font-black shadow-none"/><div className={drylandStyles.subtitle}>{props.groupName}<span>·</span><label><Input aria-label="Durée du bloc en minutes" type="number" min={1} max={600} value={selectedBlock.duration} onChange={(event) => props.onUpdateBlock(selectedBlock.id, { duration: Math.min(600, Math.max(1, Number(event.target.value))) })}/> min</label></div></div>
+            <details className={drylandStyles.menu}><summary aria-label="Options du bloc"><MoreHorizontal/></summary><div><button type="button" onClick={() => props.onSaveTemplate(selectedBlock.id)} disabled={!selectedExercises.length}>Enregistrer comme modèle</button><button type="button" onClick={() => props.onRemoveBlock(selectedBlock.id)} className="text-[var(--color-danger)]">Supprimer ce bloc</button></div></details>
+            <details className={drylandStyles.menu}><summary><BookmarkPlus/>Modèles</summary><div>{props.templates.length ? props.templates.map((template) => <button key={template.id} type="button" onClick={(event) => { props.onLoadTemplate(template.id); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{template.name}</button>) : <p>Aucun modèle dryland enregistré.</p>}</div></details>
+          </header>
+          <div className={drylandStyles.athletes}>
+            <div className={drylandStyles.segment}>{([['team', 'Commun'], ['individual', 'Personnalisé']] as const).map(([mode, label]) => <button key={mode} type="button" aria-pressed={props.programMode === mode} onClick={() => props.onProgramModeChange(mode)}>{label}</button>)}</div>
+            <span className="text-sm">{props.programMode === "team" ? "Même circuit pour" : "Circuit pour"} {assignedIds.length} athlète{assignedIds.length !== 1 ? "s" : ""}</span>
+            <AthleteAvatarGroup ids={assignedIds} athletes={props.athletes} limit={6}/>
+            <button type="button" className={drylandStyles.textButton} aria-expanded={editingAthletes} onClick={() => setEditingAthletes(!editingAthletes)}>Modifier</button>
           </div>
-
-          <div className="mt-4 grid grid-cols-2 rounded-xl bg-[var(--color-surface-raised)] p-1">
-            <button type="button" aria-pressed={props.programMode === "team"} onClick={() => props.onProgramModeChange("team")} className={cn("rounded-lg px-3 py-2 text-sm font-black", props.programMode === "team" ? "bg-[var(--color-brand)] text-white" : "text-[var(--color-ink-muted)]")}><Users className="mr-2 inline h-4 w-4"/>Équipe</button>
-            <button type="button" aria-pressed={props.programMode === "individual"} onClick={() => props.onProgramModeChange("individual")} className={cn("rounded-lg px-3 py-2 text-sm font-black", props.programMode === "individual" ? "bg-[var(--color-brand)] text-white" : "text-[var(--color-ink-muted)]")}><UserRound className="mr-2 inline h-4 w-4"/>Par athlète</button>
-          </div>
-          {props.programMode === "individual" && <div className="mt-3"><AssignmentSelector selected={selectedBlock.athleteIds} onChange={(ids) => props.onUpdateBlock(selectedBlock.id, { athleteIds: ids })} athletes={props.athletes}/></div>}
-
-          <section className="mt-4 rounded-xl border border-[var(--color-border)] p-3 sm:p-4">
-            <h3 className="mb-3 flex items-center gap-2 font-black"><Dumbbell className="h-4 w-4 text-[var(--block-dryland-fg)]"/>{props.programMode === "team" ? "Circuit de l’équipe" : "Circuit individuel"}</h3>
-            <div className="space-y-2">{selectedExercises.map((exercise, index) => {
+          {editingAthletes && <div className="mb-4"><AssignmentSelector selected={assignedIds} onChange={(ids) => props.programMode === "team" ? props.onTargetAthletesChange(ids) : props.onUpdateBlock(selectedBlock.id, { athleteIds: ids })} athletes={props.athletes}/></div>}
+          <section className={drylandStyles.circuit} aria-label="Circuit">
+            <div className={drylandStyles.circuitHeader}><Dumbbell className="text-[var(--color-brand-strong)]"/><div className="mr-auto"><h3 className="text-lg font-black">Circuit</h3><p className="text-sm text-[var(--color-ink-muted)]">{selectedExercises.length} exercice{selectedExercises.length !== 1 ? "s" : ""}</p></div>
+              <label className={drylandStyles.control}>Tours<Input aria-label="Nombre de tours" type="number" min={1} max={20} disabled={!selectedExercises.length} value={rounds ?? ""} placeholder={selectedExercises.length ? "Mixte" : "—"} onChange={(event) => updateRounds(Number(event.target.value) || 1)}/></label>
+              <label className={drylandStyles.control}>Repos entre les tours<select aria-label="Repos entre les tours" value={readDrylandRest(selectedBlock.description)} onChange={(event) => props.onUpdateBlock(selectedBlock.id, { description: writeDrylandRest(selectedBlock.description, Number(event.target.value)) })}>{[0,15,20,30,45,60,90,120,180].map((seconds) => <option key={seconds} value={seconds}>{seconds} s</option>)}</select></label>
+            </div>
+            <div className={drylandStyles.tableHeader}><span>Exercice</span><span>Volume</span><span>Repos</span><span/></div>
+            {selectedExercises.map((exercise, index) => {
               const override = selectedBlock.exerciseOverrides[exercise.id];
               const sets = override?.sets ?? exercise.sets ?? 1;
-              const reps = override?.reps ?? exercise.reps;
               const seconds = override?.duration ?? exercise.duration;
-              const quantity = exercise.roundTrip ? "Aller-retour" : seconds ? `${sets} × ${seconds} s` : `${sets} × ${reps ?? "—"}`;
-              return <div key={`${exercise.id}-${index}`} className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-white px-3 py-2">
-                <GripVertical className="h-4 w-4 shrink-0 text-[var(--color-ink-soft)]"/>
-                <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{exercise.name}</p><p className="text-xs text-[var(--color-ink-muted)]">{exercise.category}</p></div>
-                <span className="whitespace-nowrap text-sm font-semibold text-[var(--color-ink-muted)]">{quantity}</span>
-                <details className="relative"><summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-raised)]"><MoreHorizontal className="h-4 w-4"/></summary><div className="absolute right-0 z-20 mt-1 w-52 rounded-xl border border-[var(--color-border)] bg-white p-3 shadow-[var(--shadow-soft)]"><div className="mb-2 text-xs font-black">Modifier l’exercice</div><div className="grid grid-cols-2 gap-2"><Input aria-label={`Séries ${exercise.name}`} type="number" min="1" value={sets} onChange={(event) => updateExercise(exercise, "sets", Number(event.target.value) || 1)} placeholder="Séries"/>{!exercise.roundTrip && <Input aria-label={`Répétitions ${exercise.name}`} type="number" min="1" value={reps ?? ""} onChange={(event) => updateExercise(exercise, "reps", Number(event.target.value) || null)} placeholder="Répétitions"/>}{!exercise.roundTrip && <Input aria-label={`Durée en secondes ${exercise.name}`} type="number" min="1" value={seconds ?? ""} onChange={(event) => updateExercise(exercise, "duration", Number(event.target.value) || null)} placeholder="Secondes"/>}</div><div className="mt-2 flex justify-between gap-2"><button type="button" onClick={() => props.onMoveExercise(selectedBlock.id, index, -1)} disabled={index === 0} className="text-xs font-bold text-[var(--color-brand-strong)] disabled:opacity-40">Monter</button><button type="button" onClick={() => props.onMoveExercise(selectedBlock.id, index, 1)} disabled={index === selectedExercises.length - 1} className="text-xs font-bold text-[var(--color-brand-strong)] disabled:opacity-40">Descendre</button><button type="button" onClick={() => props.onToggleExercise(selectedBlock.id, exercise.id, true, index)} className="text-xs font-bold text-[var(--color-danger)]">Retirer</button></div></div></details>
+              const reps = override?.reps ?? exercise.reps;
+              const volume = exercise.roundTrip ? sets : seconds ?? reps ?? 1;
+              const field = exercise.roundTrip ? "sets" : seconds !== null ? "duration" : "reps";
+              const limit = field === "sets" ? 20 : field === "duration" ? 3600 : 200;
+              return <div key={`${exercise.id}-${index}`} className={drylandStyles.exerciseRow}>
+                <div className={drylandStyles.exerciseName}><span className={drylandStyles.exerciseIcon}><Dumbbell/></span><div className="min-w-0"><p className="font-bold">{exercise.name}</p><p className="text-xs text-[var(--color-ink-muted)]">{exercise.category}{exercise.roundTrip ? " · Aller-retour" : ""}{rounds === null ? ` · ${sets} séries` : ""}</p></div></div>
+                <label className={drylandStyles.volume}><Input aria-label={`Volume ${exercise.name}`} type="number" min={1} max={limit} value={volume} onChange={(event) => updateExercise(exercise, { [field]: Math.min(limit, Math.max(1, Number(event.target.value))) })}/><span>{exercise.roundTrip ? "passages" : seconds !== null ? "s" : "rép."}</span></label>
+                <select aria-label={`Repos ${exercise.name}`} value={readDrylandRest(override?.notes)} onChange={(event) => updateExercise(exercise, { notes: writeDrylandRest(override?.notes, Number(event.target.value)) })}>{[0,15,20,30,45,60,90,120,180].map((value) => <option key={value} value={value}>{value} s</option>)}</select>
+                <details className={drylandStyles.menu}><summary aria-label={`Options ${exercise.name}`}><MoreHorizontal/></summary><div><button type="button" disabled={index === 0} onClick={() => props.onMoveExercise(selectedBlock.id, index, -1)}>Monter</button><button type="button" disabled={index === selectedExercises.length - 1} onClick={() => props.onMoveExercise(selectedBlock.id, index, 1)}>Descendre</button><label className="grid gap-1 p-2 text-xs">Séries<Input type="number" aria-label={`Séries ${exercise.name}`} min={1} max={20} value={sets} onChange={(event) => updateExercise(exercise, { sets: Math.min(20, Math.max(1, Number(event.target.value))) })}/></label><button type="button" className="text-[var(--color-danger)]" onClick={() => props.onToggleExercise(selectedBlock.id, exercise.id, true, index)}>Retirer</button></div></details>
               </div>;
-            })}</div>
-            {selectedExercises.length === 0 && <p className="rounded-lg bg-[var(--color-surface-raised)] p-3 text-sm text-[var(--color-ink-muted)]">Ajoute des exercices pour composer ce circuit.</p>}
-            <Button type="button" variant="outline" className="mt-3 w-full border-dashed text-[var(--color-brand-strong)]" onClick={() => setShowLibrary((value) => !value)}><Plus className="h-4 w-4"/>Ajouter un exercice</Button>
-            {showLibrary && <div className="mt-3 space-y-3">
-              <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-soft)]"/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice" className="pl-9"/></label>
-              <div className="flex flex-wrap gap-2" aria-label="Filtrer les exercices">
-                {exerciseFilters.map((filter) => <button key={filter} type="button" aria-pressed={activeExerciseFilter === filter} onClick={() => setActiveExerciseFilter(filter)} className={cn("rounded-full border px-3 py-1.5 text-xs font-bold transition", activeExerciseFilter === filter ? "border-[var(--color-brand)] bg-[var(--color-brand)]/10 text-[var(--color-brand-strong)]" : "border-[var(--color-border)] bg-white text-[var(--color-ink-muted)] hover:border-[var(--color-brand)]")}>{filter}</button>)}
-              </div>
-              <div className="max-h-64 space-y-2 overflow-y-auto">{availableExercises.map((exercise) => <button key={exercise.id} type="button" onClick={() => { props.onToggleExercise(selectedBlock.id, exercise.id, false); setShowLibrary(false); setSearch(""); }} className="flex w-full items-center justify-between rounded-lg border border-[var(--color-border)] p-3 text-left text-sm hover:border-[var(--color-brand)]"><span><strong>{exercise.name}</strong><span className="ml-2 text-xs text-[var(--color-ink-muted)]">{exercise.category}</span></span><Plus className="h-4 w-4 text-[var(--color-brand-strong)]"/></button>)}{availableExercises.length === 0 && <p className="p-3 text-sm text-[var(--color-ink-muted)]">Aucun exercice trouvé.</p>}</div>
-              <details><summary className="cursor-pointer text-sm font-bold text-[var(--color-brand-strong)]">Créer un exercice rapide</summary><div className="mt-3"><QuickExerciseForm onCreateExercise={props.onCreateExercise}/></div></details>
-            </div>}
+            })}
+            {!selectedExercises.length && <p className="py-8 text-center text-sm text-[var(--color-ink-muted)]">Ajoutez un exercice de la bibliothèque pour commencer votre circuit.</p>}
+            <Button type="button" variant="outline" className="mt-3 w-full border-dashed text-[var(--color-brand-strong)]" onClick={openLibrary}><Plus className="h-4 w-4"/>Ajouter un exercice</Button>
+            <details className="mt-4"><summary className="cursor-pointer text-sm font-semibold text-[var(--color-brand-strong)]">Ajouter une consigne au bloc</summary><Textarea className="mt-2" aria-label="Consignes du bloc" maxLength={4000} value={selectedBlock.description ?? ""} onChange={(event) => props.onUpdateBlock(selectedBlock.id, { description: event.target.value })}/></details>
           </section>
-          <div className="mt-3 flex justify-end"><Button type="button" variant="outline" size="sm" onClick={() => props.onRemoveBlock(selectedBlock.id)}><Trash2 className="h-4 w-4"/>Supprimer ce bloc</Button></div>
-        </> : <div className="flex min-h-80 flex-col items-center justify-center gap-3 text-center"><Dumbbell className="h-10 w-10 text-[var(--block-dryland-fg)]"/><p className="font-bold">Aucun bloc dryland</p><Button type="button" onClick={props.onAddBlock}><Plus className="h-4 w-4"/>Ajouter un bloc</Button></div>}
+        </> : <div className="flex min-h-80 flex-col items-center justify-center gap-3 text-center"><Dumbbell className="h-10 w-10 text-[var(--color-brand-strong)]"/><h3 className="text-lg font-bold">Votre premier circuit commence ici</h3><p className="text-sm text-[var(--color-ink-muted)]">Créez un bloc, puis ajoutez les exercices.</p><Button type="button" onClick={props.onAddBlock}><Plus className="h-4 w-4"/>Ajouter un bloc</Button></div>}
       </div>
+      {showLibrary && <aside className={drylandStyles.library} aria-label="Bibliothèque d’exercices"><div className="flex items-center justify-between gap-2"><h3 className="text-xl font-black">Ajouter des exercices</h3><button type="button" aria-label="Fermer la bibliothèque" onClick={() => setShowLibrary(false)} className="rounded-lg p-2"><X className="h-5 w-5"/></button></div>
+        <div ref={searchRef} className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-ink-muted)]"/><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un exercice…" aria-label="Rechercher un exercice" className="pl-9"/></div>
+        <div className="flex flex-wrap gap-2" aria-label="Filtrer les exercices">{exerciseFilters.map((filter) => <button key={filter} type="button" aria-pressed={activeExerciseFilter === filter} onClick={() => setActiveExerciseFilter(filter)} className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold", activeExerciseFilter === filter ? "border-[var(--color-brand)] bg-[var(--color-brand)]/15 text-[var(--color-ink)]" : "border-[var(--color-border)]")}>{filter}</button>)}</div>
+        <div className={drylandStyles.libraryList}>{availableExercises.map((exercise) => <button key={exercise.id} type="button" disabled={!selectedBlock} aria-label={`Ajouter ${exercise.name} au circuit`} onClick={() => selectedBlock && props.onToggleExercise(selectedBlock.id, exercise.id, false)}><span className={drylandStyles.exerciseIcon}><Dumbbell/></span><span className="min-w-0 flex-1"><strong className="block break-words">{exercise.name}</strong><span className="text-xs text-[var(--color-ink-muted)]">{exercise.equipment || exercise.category}</span></span><Plus className="h-7 w-7 shrink-0 rounded-lg border border-[var(--color-border)] p-1 text-[var(--color-brand-strong)]"/></button>)}{!availableExercises.length && <p className="py-6 text-center text-sm text-[var(--color-ink-muted)]">Aucun exercice trouvé. Essayez un autre terme ou créez votre exercice.</p>}</div>
+        <Button type="button" variant="outline" className="w-full border-[var(--color-brand)] text-[var(--color-brand-strong)]" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4"/>Créer un exercice</Button>
+      </aside>}
     </div>
-
-    <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] bg-white/95 p-3 backdrop-blur">
-      <Button type="button" variant="outline" disabled={selectedIndex <= 0} onClick={props.onBack}><ArrowLeft className="h-4 w-4"/>Bloc précédent{selectedIndex > 0 && props.blocks[selectedIndex - 1] ? <span className="hidden sm:inline"> · {props.blocks[selectedIndex - 1].title}</span> : null}</Button>
-      <div className="text-center text-xs font-semibold text-[var(--color-ink-muted)]">Étape 3 sur 5 · Dryland</div>
-      <Button type="button" variant="action" onClick={props.onSaveAndContinue}>Enregistrer ce bloc et continuer<ArrowRight className="h-4 w-4"/><span className="hidden text-[10px] font-medium sm:inline">{nextBlock ? `Bloc suivant : ${nextBlock.title}` : "Continuer vers Piscine"}</span></Button>
-    </div>
-    </div>
+    <footer className={drylandStyles.footer}><Button type="button" variant="outline" onClick={props.onBack}><ArrowLeft className="h-4 w-4"/>{selectedIndex > 0 ? "Bloc précédent" : "Retour au contenu"}</Button><span className="text-sm text-[var(--color-ink-muted)]">Bloc {selectedIndex + 1} sur {props.blocks.length}</span><Button type="button" variant="action" onClick={props.onSaveAndContinue}>Enregistrer et continuer<ArrowRight className="h-4 w-4"/><span className="hidden text-xs font-normal xl:inline">{nextBlock ? `Suivant : ${nextBlock.title}` : "Piscine"}</span></Button></footer>
+    <dialog ref={dialogRef} className={drylandStyles.dialog} aria-labelledby="create-exercise-title" onCancel={() => setCreateOpen(false)} onClose={() => setCreateOpen(false)} onClick={(event) => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) setCreateOpen(false); } }}><div className="mb-4 flex items-center justify-between gap-4"><div><h2 id="create-exercise-title" className="text-2xl font-black">Créer un exercice</h2><p className="mt-1 text-sm text-[var(--color-ink-muted)]">Ajoutez-le à votre bibliothèque et au circuit actif.</p></div><button type="button" aria-label="Fermer la création d’exercice" onClick={() => setCreateOpen(false)} className="rounded-lg p-2"><X/></button></div>{createOpen && <QuickExerciseForm onCreateExercise={props.onCreateExercise} onCreated={() => setCreateOpen(false)}/>}</dialog>
   </div>;
 }
 
-function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: QuickExerciseInput) => Promise<void> }) {
+function QuickExerciseForm({ onCreateExercise, onCreated }: { onCreateExercise: (input: QuickExerciseInput) => Promise<void>; onCreated: () => void }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [roundTrip, setRoundTrip] = useState(false);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    event.stopPropagation();
     const form = event.currentTarget;
     const formData = new FormData(form);
     const name = String(formData.get("name") ?? "").trim();
@@ -1026,8 +1055,8 @@ function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: Qui
     }
 
     setError(null);
-    startTransition(() => {
-      void onCreateExercise({
+    startTransition(async () => {
+      await onCreateExercise({
         name,
         category,
         equipment,
@@ -1039,7 +1068,7 @@ function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: Qui
         roundTrip: formData.get("roundTrip") === "on",
         tags
       })
-        .then(() => { form.reset(); setRoundTrip(false); })
+        .then(() => { form.reset(); setRoundTrip(false); onCreated(); })
         .catch((caught) => setError(caught instanceof Error ? caught.message : "Creation impossible."));
     });
   }
@@ -1047,16 +1076,16 @@ function QuickExerciseForm({ onCreateExercise }: { onCreateExercise: (input: Qui
   return (
     <form onSubmit={submit} className="mb-4 rounded-[var(--radius-panel)] border border-[var(--block-dryland-fg)]/20 bg-[var(--block-dryland-bg)]/45 p-4">
       <div className="mb-3 flex items-center gap-2 font-black text-[var(--block-dryland-fg)]"><Plus className="h-4 w-4" /> Créer un exercice rapide</div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Input name="name" placeholder="Nom de l'exercice" required />
-        <select name="category" defaultValue="Force" className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm"><option>Échauffement</option><option>Force</option><option>Puissance</option><option>Gainage</option><option>Mobilité</option><option>Technique</option><option>Cardio</option><option>Récupération</option></select>
-        <select name="equipment" defaultValue="" className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm"><option value="">Matériel : aucun</option><option>Haltère</option><option>Élastique</option><option>Tapis</option><option>Medball</option><option>Trampoline</option><option>Tremplin</option></select>
-        <select name="level" defaultValue="Tous niveaux" className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm"><option>Débutant</option><option>Intermédiaire</option><option>Avancé</option><option>Tous niveaux</option></select>
-        <textarea name="description" placeholder="Consignes" className="min-h-16 rounded-xl border border-[var(--color-border)] bg-white p-3 text-sm md:col-span-2" />
-        <Input name="sets" type="number" min="1" placeholder="Séries" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input name="name" aria-label="Nom de l’exercice" autoFocus minLength={2} placeholder="Nom de l'exercice" required />
+        <select aria-label="Catégorie" name="category" defaultValue="Force" className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm"><option>Échauffement</option><option>Force</option><option>Puissance</option><option>Gainage</option><option>Mobilité</option><option>Technique</option><option>Cardio</option><option>Récupération</option></select>
+        <select aria-label="Matériel" name="equipment" defaultValue="" className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm"><option value="">Matériel : aucun</option><option>Haltère</option><option>Élastique</option><option>Tapis</option><option>Medball</option><option>Trampoline</option><option>Tremplin</option></select>
+        <select aria-label="Niveau" name="level" defaultValue="Tous niveaux" className="h-10 rounded-xl border border-[var(--color-border)] bg-white px-3 text-sm"><option>Débutant</option><option>Intermédiaire</option><option>Avancé</option><option>Tous niveaux</option></select>
+        <textarea name="description" aria-label="Consignes" placeholder="Consignes" className="min-h-16 rounded-xl border border-[var(--color-border)] bg-white p-3 text-sm md:col-span-2" />
+        <Input name="sets" aria-label="Séries" type="number" min="1" max="20" placeholder="Séries" />
         <label className="flex items-center gap-2 text-sm font-bold"><input name="roundTrip" type="checkbox" checked={roundTrip} onChange={(event) => setRoundTrip(event.target.checked)} className="h-4 w-4 accent-[var(--color-brand)]" /> Aller-retour</label>
-        {!roundTrip && <Input name="reps" type="number" min="1" placeholder="Répétitions" />}
-        <Input name="tags" placeholder="Tags (facultatif)" />
+        {!roundTrip && <Input name="reps" aria-label="Répétitions" type="number" min="1" max="200" placeholder="Répétitions" />}
+        <Input name="tags" aria-label="Tags" placeholder="Tags (facultatif)" />
         <Button type="submit" variant="action" disabled={pending}><Plus className="h-4 w-4" /> {pending ? "Création..." : "Ajouter"}</Button>
       </div>
       {error && <div className="mt-3 rounded-xl bg-[var(--color-danger)]/10 p-3 text-sm font-semibold text-[var(--color-danger)]">{error}</div>}
