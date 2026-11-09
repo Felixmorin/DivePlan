@@ -353,7 +353,7 @@ export function SessionBuilder({ athletes, drylandLibrary, groups, athletePoolAv
         title: block.title,
         type: "pool" as const,
         assigned: block.athleteIds,
-        content: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes · ${ready ? "Liste prête" : "À compléter"}`,
+        content: `${block.sections.reduce((sum, section) => sum + section.dives.length, 0)} lignes · ${block.sections.reduce((sum, section) => sum + sectionVolume(section), 0)} répétitions`,
         ready
       };
     }),
