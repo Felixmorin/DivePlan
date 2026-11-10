@@ -6,6 +6,7 @@ import { requireCoach } from "@/lib/current-user";
 import { cn } from "@/lib/utils";
 import { SignOutWithPushCleanup } from "@/components/notifications/sign-out-with-push-cleanup";
 import { query } from "@/lib/db";
+import { CoachShellFrame } from "@/components/coach/coach-shell-frame";
 
 const navFeature: Record<string, string> = {
   "/coach": "dashboard",
@@ -52,11 +53,11 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
   const logo = user.club?.logo?.trim();
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[var(--color-coach-bg)] text-[var(--color-ink)]">
-      <aside className="fixed left-0 top-0 z-10 hidden h-screen w-68 flex-col border-r border-[var(--color-border)] bg-[var(--color-navy)] px-4 py-6 text-white lg:flex">
+    <CoachShellFrame>
+      <aside id="coach-sidebar" className="fixed left-0 top-0 z-10 hidden h-screen w-68 flex-col border-r border-[var(--color-border)] bg-[var(--color-navy)] px-4 py-6 text-white lg:flex group-data-[collapsed=true]/coach:w-20 group-data-[collapsed=true]/coach:px-2">
         <Link href="/coach" className="mb-8 flex items-center gap-3 rounded-2xl px-2 py-1 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
           <BrandMark logo={logo} clubName={clubName} />
-          <div>
+          <div className="group-data-[collapsed=true]/coach:hidden">
             <div className="text-lg font-black">DivePlan</div>
             <div className="max-w-40 truncate text-xs font-semibold uppercase text-white/45">{clubName}</div>
           </div>
@@ -67,15 +68,15 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
               const Icon = item.icon;
               const isActive = active === item.label || active === item.match;
               return (
-                <Link key={item.href} href={item.href} style={isActive ? { color: "#ffffff" } : undefined} className={cn("flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-bold transition duration-[var(--duration-fast)] hover:bg-white/8 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive ? "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand)]" : "text-white/62")}>
+                <Link key={item.href} href={item.href} title={item.label} aria-label={item.label} style={isActive ? { color: "#ffffff" } : undefined} className={cn("flex min-h-11 items-center gap-3 rounded-2xl px-3 text-sm font-bold transition duration-[var(--duration-fast)] hover:bg-white/8 hover:text-white group-data-[collapsed=true]/coach:justify-center focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]", isActive ? "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand)]" : "text-white/62")}>
                   <Icon className={cn("h-4 w-4", isActive && "text-white")} />
-                  <span className={cn(isActive && "text-white")}>{item.label}</span>
-                  {item.underConstruction && <span className="ml-auto rounded-full bg-amber-300/15 px-2 py-1 text-[9px] font-black leading-none text-amber-200">En construction</span>}
+                  <span className={cn("group-data-[collapsed=true]/coach:hidden", isActive && "text-white")}>{item.label}</span>
+                  {item.underConstruction && <span className="ml-auto group-data-[collapsed=true]/coach:hidden rounded-full bg-amber-300/15 px-2 py-1 text-[9px] font-black leading-none text-amber-200">En construction</span>}
                 </Link>
               );
             })}
           </nav>
-          <nav aria-label="Outils" className="mt-auto flex items-center justify-end gap-2 border-t border-white/10 pt-4">
+          <nav aria-label="Outils" className="mt-auto flex items-center justify-end gap-2 group-data-[collapsed=true]/coach:flex-col border-t border-white/10 pt-4">
             {visibleUtilityNav.map((item) => {
               const Icon = item.icon;
               const isActive = active === item.label || active === item.match;
@@ -92,14 +93,14 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
                 </Link>
               );
             })}
-            <SignOutWithPushCleanup action={signOutCoach} className="ml-auto shrink-0">
+            <SignOutWithPushCleanup action={signOutCoach} className="ml-auto shrink-0 group-data-[collapsed=true]/coach:mx-auto">
               <button type="submit" aria-label="Déconnexion" title="Déconnexion" className="flex h-8 w-8 items-center justify-center rounded-xl text-white/55 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
                 <LogOut className="h-4 w-4" />
               </button>
             </SignOutWithPushCleanup>
           </nav>
         </div>
-        <div className="mt-4 flex flex-col items-center gap-2 border-t border-white/10 pt-4">
+        <div className="mt-4 flex flex-col items-center gap-2 group-data-[collapsed=true]/coach:hidden border-t border-white/10 pt-4">
           <span className="text-xs font-semibold text-white/55">Powered By</span>
           <Image src="/icons/diveplan-powered-by.png" alt="DivePlan" width={168} height={56} className="h-auto w-42" />
         </div>
@@ -150,10 +151,10 @@ export async function CoachShell({ children, active }: { children: React.ReactNo
           </SignOutWithPushCleanup>
         </div>
       </header>
-      <main className="min-w-0 lg:pl-68">
+      <main className="min-w-0 lg:pl-68 lg:group-data-[collapsed=true]/coach:pl-20">
         <div className="w-full px-3 py-4 sm:px-4 lg:px-5 xl:px-6">{children}</div>
       </main>
-    </div>
+    </CoachShellFrame>
   );
 }
 
