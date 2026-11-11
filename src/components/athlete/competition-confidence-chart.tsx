@@ -20,19 +20,23 @@ const heights = [
   { value: "CUSTOM", label: "Autre" }
 ] as const;
 const colors = ["#0891b2", "#e11d48", "#7c3aed", "#16a34a", "#d97706", "#2563eb", "#db2777", "#475569", "#65a30d", "#9333ea"];
+const diveKey = (point: CompetitionConfidencePoint) => `${point.height}:${point.code.trim().toUpperCase()}`;
 
 export function CompetitionConfidenceChart({ data, initialDiveId, athleteView = false }: { data: CompetitionConfidencePoint[]; initialDiveId?: string; athleteView?: boolean }) {
   const [height, setHeight] = useState("ALL");
-  const [diveId, setDiveId] = useState(initialDiveId ?? "ALL");
+  const [diveId, setDiveId] = useState(() => {
+    const initialDive = data.find((point) => point.competitionDiveId === initialDiveId);
+    return initialDive ? diveKey(initialDive) : "ALL";
+  });
   const [author, setAuthor] = useState("ALL");
   const matchingHeight = height === "ALL" ? data : data.filter((item) => item.height === height);
-  const dives = Array.from(new Map(matchingHeight.map((item) => [item.competitionDiveId, { id: item.competitionDiveId, code: item.code, height: item.height }])).values());
+  const dives = Array.from(new Map(matchingHeight.map((item) => [diveKey(item), { id: diveKey(item), code: item.code, height: item.height }])).values());
   const selectedDive = dives.some((dive) => dive.id === diveId) ? diveId : "ALL";
   const visibleDiveIds = selectedDive === "ALL" ? dives.map((dive) => dive.id) : [selectedDive];
-  const visiblePoints = data.filter((point) => (height === "ALL" || point.height === height) && visibleDiveIds.includes(point.competitionDiveId) && (athleteView || author === "ALL" || point.evaluator === author));
-  const series = Array.from(new Map(visiblePoints.map((point) => [`${point.evaluator}:${point.competitionDiveId}`, {
-    key: `${point.evaluator}:${point.competitionDiveId}`,
-    diveId: point.competitionDiveId,
+  const visiblePoints = data.filter((point) => (height === "ALL" || point.height === height) && visibleDiveIds.includes(diveKey(point)) && (athleteView || author === "ALL" || point.evaluator === author));
+  const series = Array.from(new Map(visiblePoints.map((point) => [`${point.evaluator}:${diveKey(point)}`, {
+    key: `${point.evaluator}:${diveKey(point)}`,
+    diveId: diveKey(point),
     code: point.code,
     evaluator: point.evaluator,
     label: `${point.code} · ${point.evaluator === "COACH" ? "Coach" : "Athlète"}`
@@ -45,7 +49,7 @@ export function CompetitionConfidenceChart({ data, initialDiveId, athleteView = 
         time,
         date: new Intl.DateTimeFormat("fr-CA", { day: "numeric", month: "short", year: "2-digit" }).format(new Date(time))
       };
-      row[`${item.evaluator}:${item.competitionDiveId}`] = item.rating;
+      row[`${item.evaluator}:${diveKey(item)}`] = item.rating;
       byDate.set(String(time), row);
     }
     return Array.from(byDate.values()).sort((a, b) => Number(a.time) - Number(b.time));
@@ -87,7 +91,7 @@ export function CompetitionConfidenceChart({ data, initialDiveId, athleteView = 
             </ResponsiveContainer>
           </div>
         )}
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">{series.map((item) => <span key={item.key} className="inline-flex items-center gap-2 text-xs font-bold text-current/70"><i className={`h-2.5 w-2.5 rounded-full ${item.evaluator === "COACH" ? "border border-current bg-transparent" : ""}`} style={{ color: colors[dives.findIndex((dive) => dive.id === item.diveId)], backgroundColor: item.evaluator === "COACH" ? "transparent" : colors[dives.findIndex((dive) => dive.id === item.diveId)] }} />{item.label}</span>)}</div>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">{series.map((item) => <span key={item.key} className="inline-flex items-center gap-2 text-xs font-bold text-current/70"><i className={`h-2.5 w-2.5 rounded-full ${item.evaluator === "COACH" ? "border border-current bg-transparent" : ""}`} style={{ color: colors[dives.findIndex((dive) => dive.id === item.diveId) % colors.length], backgroundColor: item.evaluator === "COACH" ? "transparent" : colors[dives.findIndex((dive) => dive.id === item.diveId) % colors.length] }} />{item.label}</span>)}</div>
       </CardContent>
     </Card>
   );
