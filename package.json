@@ -35,7 +35,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.11",
+    "@electric-sql/pglite": "^0.5.15",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^26.6.6",
     "@types/react": "^19.2.7",
