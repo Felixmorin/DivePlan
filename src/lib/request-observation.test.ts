@@ -20,6 +20,26 @@ function observation(patch: Partial<RequestObservation> = {}): RequestObservatio
   return { id: randomUUID(), pageId: randomUUID(), route: "/coach", resourcePath: "/api/coach/sessions/short-id/progress", resourceType: "fetch", trigger: "unknown", startedAt: new Date().toISOString(), durationMs: 120, transferBytes: 1234, cacheHit: false, status: 200, ...patch };
 }
 
+test("telemetry report aggregates event users and fetch bursts without exporting identities", async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`CREATE TABLE "AppEvent" ("userId" text, "createdAt" timestamptz, type text);
+      CREATE TABLE "RequestObservation" ("resourcePath" text, "pageId" text, "resourceType" text, "startedAt" timestamptz);
+      INSERT INTO "AppEvent" VALUES ('alice', now(), 'visit'), ('alice', now(), 'visit'), ('bob', now(), 'visit'), (NULL, now(), 'visit');
+      INSERT INTO "RequestObservation" VALUES ('/api/test', 'page1', 'fetch', date_trunc('minute', now())), ('/api/test', 'page1', 'fetch', date_trunc('minute', now())), ('/api/test', 'page2', 'fetch', now()), ('/api/test', 'page1', 'script', now());`);
+    const { GET } = load<{ GET: (request: Request) => Promise<Response> }>("src/app/api/admin/observability/report/route.ts", {
+      "@/lib/current-user": { requireAdmin: async () => {} },
+      "@/lib/db": { query: (sql: string, args: unknown[]) => sql.includes('usersWithEvents') || sql.includes('per_page_minute') ? db.query(sql, args) : Promise.resolve({ rows: [] }) },
+    });
+    const report = await (await GET(new Request("https://app.test/api/admin/observability/report?period=24h"))).json();
+    assert.equal(report.telemetry.activity.eventUsers.usersWithEvents, "2");
+    assert.equal(report.telemetry.activity.eventUsers.eventsWithoutUser, "1");
+    assert.equal(report.telemetry.activity.eventUsersHourly[0].usersWithEvents, "2");
+    assert.deepEqual(JSON.parse(JSON.stringify(report.telemetry.activity.requestFrequency[0])), { resourcePath: "/api/test", requests: "3", pages: "2", maxRequestsPerPageMinute: "2" });
+    assert.doesNotMatch(JSON.stringify(report.telemetry.activity), /alice|bob|page1|page2/);
+  } finally { await db.close(); }
+});
+
 test("observation validation redacts short IDs, rejects secrets, bounds batches and never invents a trigger", () => {
   const sample = observation();
   const parsed = parseObservations([sample, sample])!;

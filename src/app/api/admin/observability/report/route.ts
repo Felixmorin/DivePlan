@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   const limit = detailLimit;
   const collectionIssues: CollectionIssue[] = [];
 
-  const [transfers, database, vitals, browserObservations, browserCount, serverRequests, serverCount, appEvents] = await Promise.all([
+  const [transfers, database, vitals, browserObservations, browserCount, serverRequests, serverCount, appEvents, eventUsers, eventUsersHourly, requestFrequency] = await Promise.all([
     readRows<TelemetryRow>(collectionIssues, "browserTransfersHourly", `SELECT hour, route, "resourceType", SUM(requests)::text AS requests, SUM("transferBytes")::text AS "transferBytes", SUM("cacheHits")::text AS "cacheHits"
       FROM "TransferTelemetryHour" WHERE hour >= $1 GROUP BY hour, route, "resourceType" ORDER BY hour, route, "resourceType"`, [aggregateSince]),
     readRows<TelemetryRow>(collectionIssues, "databaseEgressHourly", `SELECT hour, route, component, SUM(requests)::text AS requests, SUM("resultBytes")::text AS "resultBytes", SUM("durationMs")::text AS "durationMs", MAX("maxDurationMs")::text AS "maxDurationMs", SUM("slowQueries")::text AS "slowQueries"
@@ -48,6 +48,16 @@ export async function GET(request: Request) {
     readRows<{ count: string }>(collectionIssues, "serverRequestsCount", `SELECT count(*)::text AS count FROM "ServerRequestMetric" WHERE "startedAt" >= $1`, [since]),
     readRows<TelemetryRow>(collectionIssues, "appEventsHourlyByType", `SELECT date_trunc('hour', "createdAt") AS hour, type, count(*)::text AS count
       FROM "AppEvent" WHERE "createdAt" >= $1 GROUP BY date_trunc('hour', "createdAt"), type ORDER BY hour, type`, [since]),
+    readRows<TelemetryRow>(collectionIssues, "eventUsers", `SELECT count(DISTINCT "userId")::text AS "usersWithEvents", count(*) FILTER (WHERE "userId" IS NULL)::text AS "eventsWithoutUser"
+      FROM "AppEvent" WHERE "createdAt" >= $1 AND "createdAt" <= $2`, [since, to.toISOString()]),
+    readRows<TelemetryRow>(collectionIssues, "eventUsersHourly", `SELECT date_trunc('hour', "createdAt") AS hour, count(DISTINCT "userId")::text AS "usersWithEvents"
+      FROM "AppEvent" WHERE "createdAt" >= $1 AND "createdAt" <= $2 GROUP BY 1 ORDER BY 1`, [since, to.toISOString()]),
+    readRows<TelemetryRow>(collectionIssues, "requestFrequency", `WITH per_page_minute AS (
+      SELECT "resourcePath", "pageId", date_trunc('minute', "startedAt") AS minute, count(*) AS requests
+      FROM "RequestObservation" WHERE "startedAt" >= $1 AND "startedAt" <= $2 AND "resourceType" = 'fetch'
+      GROUP BY "resourcePath", "pageId", date_trunc('minute', "startedAt")
+    ) SELECT "resourcePath", sum(requests)::text AS requests, count(DISTINCT "pageId")::text AS pages,
+      max(requests)::text AS "maxRequestsPerPageMinute" FROM per_page_minute GROUP BY "resourcePath" ORDER BY sum(requests) DESC, "resourcePath"`, [since, to.toISOString()]),
   ]);
 
   const browserTotal = browserCount[0]?.count == null ? null : Number(browserCount[0].count);
@@ -68,6 +78,7 @@ export async function GET(request: Request) {
       "Distingue les agrégats horaires des observations individuelles et rappelle toute limite de couverture ou troncature.",
       "Les requêtes navigateur de type script/style/image/font représentent des ressources chargées, pas des visites ni des actions API.",
       "Pour suspecter une boucle, cherche des appels répétés et rapprochés vers la même route ou ressource; une page avec plusieurs scripts ou des ressources en cache ne suffit pas.",
+      "Utilise les utilisateurs ayant produit un événement comme indicateur partiel d'activité, pas comme nombre total d'utilisateurs ni comme mesure de concurrence. Examine les pics par page et minute sans présumer qu'ils indiquent une boucle.",
       "Compare les routes et heures entre elles, relève les statuts HTTP >= 400, les événements d'erreur, les hausses de volume, les durées SQL, les requêtes lentes et les Web Vitals dégradés.",
       "Pour chaque constat, cite les champs et valeurs concernés, estime la confiance, indique les explications bénignes possibles et propose une vérification concrète.",
       "N'invente pas de seuils absents du rapport. Signale les données manquantes et sépare les anomalies confirmées des pistes à vérifier.",
@@ -87,6 +98,8 @@ export async function GET(request: Request) {
         "Les observations navigateur ne sont collectées que pour les ressources same-origin visibles par le navigateur.",
         "Le statut HTTP peut être nul si le navigateur ne l'expose pas.",
         "Les événements applicatifs sont groupés par heure et par type; les textes et métadonnées ne sont pas exportés pour protéger la vie privée.",
+        "Les utilisateurs distincts proviennent uniquement des événements associés à un utilisateur; leur nombre horaire ne mesure pas les connexions simultanées.",
+        "La fréquence par page concerne uniquement les fetch observés, sans identifiant de page exporté dans cet agrégat; une page n'est pas nécessairement un utilisateur. Les détails sont soumis à la rétention des observations.",
       ],
     },
     telemetry: {
@@ -96,6 +109,7 @@ export async function GET(request: Request) {
       browserObservations,
       serverRequests,
       appEventsHourlyByType: appEvents,
+      activity: { eventUsers: eventUsers[0] ?? null, eventUsersHourly, requestFrequency },
     },
   };
 
