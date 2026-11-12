@@ -10,8 +10,10 @@ function harness() {
   let available = true;
   let reads = 0;
   const saved: unknown[][] = [];
+  const invalidations: string[] = [];
   const dependencies: Record<string, unknown> = {
     "next/server": { NextResponse: { json: (value: unknown, init?: ResponseInit) => Response.json(value, init) } },
+    "next/cache": { revalidatePath: (path: string) => invalidations.push(path) },
     "@/lib/athlete-session": { getCurrentAthleteIdentity: async () => athlete },
     "@/lib/athlete-progress": {
       getAssignedSessionBlocks: async (sessionId: string, athleteId: string) => {
@@ -27,11 +29,11 @@ function harness() {
   const exports: { POST?: (request: Request) => Promise<Response> } = {};
   runInNewContext(ts.transpileModule(readFileSync("src/app/api/athlete/session-progress/route.ts", "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-  }).outputText, { exports, require: (name: string) => { assert.ok(name in dependencies); return dependencies[name]; } });
-  const send = (body: unknown) => exports.POST!(new Request("https://example.test/api/athlete/session-progress", {
-    method: "POST", body: JSON.stringify(body)
+  }).outputText, { exports, URL, require: (name: string) => { assert.ok(name in dependencies); return dependencies[name]; } });
+  const send = (body: unknown, origin?: string) => exports.POST!(new Request("https://example.test/api/athlete/session-progress", {
+    method: "POST", body: JSON.stringify(body), headers: origin ? { origin } : undefined
   }));
-  return { send, saved, reads: () => reads,
+  return { send, saved, invalidations, reads: () => reads,
     identity: (value: typeof athlete) => { athlete = value; },
     assignment: (value: boolean) => { assigned = value; },
     availability: (value: boolean) => { available = value; } };
@@ -76,11 +78,13 @@ test("valid partial and full progress is passed unchanged, including repeated it
     assert.equal((await h.send(body)).status, 200);
     assert.deepEqual(JSON.parse(JSON.stringify(h.saved.at(-1)?.[0])), body);
     assert.equal(h.saved.at(-1)?.[1], "athlete-a");
+    assert.deepEqual(h.invalidations.slice(-3), ["/athlete", "/athlete/progress", "/athlete/session/session-a"]);
   }
 });
 
 test("authentication, assignment and scheduling still gate valid saves", async () => {
   const h = harness();
+  assert.equal((await h.send(payload, "https://other.test")).status, 403);
   h.identity(null);
   assert.equal((await h.send(null)).status, 401);
   assert.equal(h.reads(), 0);
@@ -113,4 +117,23 @@ test("the real player pagehide payload is accepted with repetitions and golden r
     sessionId: "session-a", exercises: payload.exercises,
     dives: [{ poolDiveId: "dive-a", repetitionsCompleted: 3, goldenRepetitions: 2, feedbackCompleted: false, rating: null, note: null }]
   });
+});
+
+test("player saves use the progress endpoint and surface rejected saves", async () => {
+  const file = ts.createSourceFile("player.tsx", readFileSync("src/components/athlete/session-player.tsx", "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const save = file.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "saveProgress");
+  assert.ok(save);
+  const h = harness();
+  const exports: { saveProgress?: (body: unknown) => Promise<void> } = {};
+  runInNewContext(ts.transpileModule(`export ${save.getText(file)}`, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
+    exports, fetch: (url: string, options: { body: string }) => {
+      assert.equal(url, "/api/athlete/session-progress");
+      return h.send(JSON.parse(options.body));
+    }
+  });
+  await exports.saveProgress!(payload);
+  assert.equal(h.saved.length, 1);
+  h.assignment(false);
+  await assert.rejects(exports.saveProgress!(payload));
+  assert.equal(h.saved.length, 1);
 });

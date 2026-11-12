@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { SessionPlayer } from "@/components/athlete/session-player";
 import { getAthleteSession, getCurrentAthlete } from "@/lib/athlete-session";
-import { completeAthleteSession, recordAthleteSessionPreview, saveAthleteDiveNote, saveAthleteProgress, saveCompetitionDiveEvaluation, startAthleteSession } from "./actions";
+import { completeAthleteSession, recordAthleteSessionPreview, saveAthleteDiveNote, saveCompetitionDiveEvaluation, startAthleteSession } from "./actions";
 import { withDatabaseEgressComponent } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -21,5 +21,5 @@ export default async function AthleteSessionPage({ params }: { params: Promise<{
 
   if (["READY", "LIVE"].includes(session.competitionSimulationStatus ?? "") && session.completionStatus !== "NOT_STARTED" && !session.blocks.some((block) => block.type === "CUSTOM" && (block.description === "COMPETITION_SIMULATION" || block.description?.startsWith("COMPETITION_SIMULATION:")))) redirect(`/athlete/session/${id}/simulation`);
 
-  return <SessionPlayer session={session} onStart={startAthleteSession} onPreview={recordAthleteSessionPreview} onSaveProgress={saveAthleteProgress} onComplete={completeAthleteSession} onSaveDiveNote={saveAthleteDiveNote} onSaveCompetitionEvaluation={saveCompetitionDiveEvaluation} />;
+  return <SessionPlayer session={session} onStart={startAthleteSession} onPreview={recordAthleteSessionPreview} onComplete={completeAthleteSession} onSaveDiveNote={saveAthleteDiveNote} onSaveCompetitionEvaluation={saveCompetitionDiveEvaluation} />;
 }

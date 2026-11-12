@@ -22,7 +22,6 @@ type SessionPlayerProps = {
   session: AthleteSessionView;
   onStart: (sessionId: string) => Promise<void>;
   onPreview: (sessionId: string) => Promise<void>;
-  onSaveProgress: (payload: SaveAthleteProgressPayload) => Promise<void>;
   onComplete: (payload: CompleteSessionPayload) => Promise<Array<{ key: MilestoneKey; title: string; description: string }>>;
   onSaveDiveNote: (sessionId: string, poolDiveId: string, note: string) => Promise<void>;
   onSaveCompetitionEvaluation: (input: { sessionId: string; ratings: Array<{ competitionDiveId: string; rating: number }> }) => Promise<void>;
@@ -33,7 +32,14 @@ type DiveChecks = Record<string, DiveRepState[]>;
 type ExerciseChecks = Record<string, boolean>;
 type SaveStatus = "saved" | "saving" | "error";
 
-export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onComplete, onSaveDiveNote, onSaveCompetitionEvaluation }: SessionPlayerProps) {
+async function saveProgress(payload: SaveAthleteProgressPayload) {
+  const response = await fetch("/api/athlete/session-progress", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error("Progress save failed");
+}
+
+export function SessionPlayer({ session, onStart, onPreview, onComplete, onSaveDiveNote, onSaveCompetitionEvaluation }: SessionPlayerProps) {
   const router = useRouter();
   const { notify } = useToast();
   const blocks = session.blocks;
@@ -164,13 +170,13 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
       }
 
       setError(null);
-      await onSaveProgress(payload);
+      await saveProgress(payload);
       if (version === saveVersion.current) {
         setDirty(false);
         setSaveStatus("saved");
       }
     },
-    [onSaveProgress, session.id]
+    [session.id]
   );
 
   const saveProgressBeforePageHide = useCallback(() => {
@@ -366,7 +372,7 @@ export function SessionPlayer({ session, onStart, onPreview, onSaveProgress, onC
       window.clearTimeout(finalFeedbackSaveTimeout.current);
       finalFeedbackSaveTimeout.current = window.setTimeout(() => {
         const payload = buildSessionProgressPayload(session.id, blocks, exerciseChecksRef.current, diveChecksRef.current, nextFeedback);
-        void onSaveProgress(payload).then(() => {
+        void saveProgress(payload).then(() => {
           if (version === saveVersion.current) {
             setDirty(false);
             setSaveStatus("saved");

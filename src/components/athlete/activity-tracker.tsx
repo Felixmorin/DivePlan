@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 const STORAGE_KEY = "diveplan-visit-id";
 
 export function AthleteActivityTracker() {
   const pathname = usePathname();
+  const pendingActions = useRef<Array<{ action: string; path: string }>>([]);
+  const enqueue = useRef<(action: string, path: string) => void>(() => {});
 
   useEffect(() => {
     let visitId = window.sessionStorage.getItem(STORAGE_KEY);
@@ -23,22 +25,18 @@ export function AthleteActivityTracker() {
         keepalive: true
       }).catch(() => undefined);
     };
-    const log = (action: string, path = window.location.pathname) => send({ action, path });
-    const pendingActions: Array<{ action: string; path: string }> = [];
     let flushTimer: number | undefined;
     const flush = () => {
       if (flushTimer !== undefined) window.clearTimeout(flushTimer);
       flushTimer = undefined;
-      const actions = pendingActions.splice(0);
+      const actions = pendingActions.current.splice(0);
       if (actions.length) send({ actions });
     };
-
-    if (!window.sessionStorage.getItem(`${STORAGE_KEY}-started`)) {
-      window.sessionStorage.setItem(`${STORAGE_KEY}-started`, "1");
-      log("Ouverture de l’application", pathname);
-    } else if (pathname) {
-      log(`Navigation vers ${pathname}`, pathname);
-    }
+    enqueue.current = (action, path) => {
+      pendingActions.current.push({ action, path });
+      if (pendingActions.current.length >= 10) flush();
+      else if (flushTimer === undefined) flushTimer = window.setTimeout(flush, 5000);
+    };
 
     const onClick = (event: MouseEvent) => {
       const target = event.target;
@@ -46,15 +44,21 @@ export function AthleteActivityTracker() {
       const control = target.closest("a, button, [role='button'], input[type='submit']");
       if (!control) return;
       const label = (control.getAttribute("aria-label") || control.textContent || control.getAttribute("title") || "Action").replace(/\s+/g, " ").trim().slice(0, 100);
-      if (label) {
-        pendingActions.push({ action: `Clic : ${label}`, path: window.location.pathname });
-        if (pendingActions.length >= 10) flush();
-        else if (flushTimer === undefined) flushTimer = window.setTimeout(flush, 5000);
-      }
+      if (label) enqueue.current(`Clic : ${label}`, window.location.pathname);
     };
     document.addEventListener("click", onClick, true);
     window.addEventListener("pagehide", flush);
     return () => { flush(); window.removeEventListener("pagehide", flush); document.removeEventListener("click", onClick, true); };
+  }, []);
+
+  useEffect(() => {
+    if (!pathname) return;
+    if (!window.sessionStorage.getItem(`${STORAGE_KEY}-started`)) {
+      window.sessionStorage.setItem(`${STORAGE_KEY}-started`, "1");
+      enqueue.current("Ouverture de l’application", pathname);
+    } else {
+      enqueue.current(`Navigation vers ${pathname}`, pathname);
+    }
   }, [pathname]);
 
   return null;

@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getCurrentAthleteIdentity } from "@/lib/athlete-session";
 import { getAssignedSessionBlocks, persistAthleteProgress, type AthleteProgressPayload } from "@/lib/athlete-progress";
 import { query } from "@/lib/db";
 import { isSessionStartAvailable, SESSION_NOT_STARTED_MESSAGE } from "@/lib/session-availability";
 
 export async function POST(request: Request) {
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) {
+    return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+  }
   const athlete = await getCurrentAthleteIdentity();
 
   if (!athlete) {
@@ -41,6 +46,10 @@ export async function POST(request: Request) {
   }
 
   await persistAthleteProgress(payload, athlete.id, assignedBlocks);
+
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/progress");
+  revalidatePath(`/athlete/session/${payload.sessionId}`);
 
   return NextResponse.json({ ok: true });
 }
