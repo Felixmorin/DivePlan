@@ -77,7 +77,7 @@ export default async function AthleteDetailPage({ params, searchParams }: { para
   const [athleteAvatarUrl] = await resolveAvatarUrls([athlete.avatar]);
   const today=startOfMontrealDay();
   const seasonStartYear=today.getMonth()>=8?today.getFullYear():today.getFullYear()-1;
-  const seasonStart=parseMontrealSessionDate(`${seasonStartYear}-09-01`,"00:00");
+  const seasonStart=parseMontrealSessionDate(`${seasonStartYear}-09-14`,"00:00");
   const [completionRows,diveTotalResult,competitionListRows,competitionDiveRows,competitionDiveVolumeRows,attendanceRows,diveNoteRows,nextSessionRows,nextCompetitionRows]=await Promise.all([
     read<{sessionId:string;status:string;rating:string|null;note:string|null;title:string;date:Date}>(overview,`SELECT c."sessionId",c.status,c.rating,c.note,s.title,s.date FROM "AthleteSessionCompletion" c JOIN "TrainingSession" s ON s.id=c."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE c."athleteId"=$1 AND w."clubId"=$2 ORDER BY c."completedAt" DESC,c."startedAt" DESC LIMIT 8`,[athlete.id,clubId]),
     read<{volume:number}>(overview || history,`SELECT COALESCE(SUM(l."repetitionsCompleted"),0)::int AS volume FROM "AthleteDiveRepetition" l JOIN "Athlete" a ON a.id=l."athleteId" WHERE a.id=$1 AND a."clubId"=$2`,[athlete.id,clubId]),
