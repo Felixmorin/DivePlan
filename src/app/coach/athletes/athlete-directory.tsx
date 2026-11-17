@@ -51,7 +51,7 @@ export function AthleteDirectory({ rows, groups, demo = false }: { rows: Athlete
               <div className="min-w-0"><Identity row={row} /></div>
               <div className="lg:hidden"><Badge variant={row.active ? "success" : "outline"}>{row.active ? "Actif" : "Inactif"}</Badge></div>
               <div className="col-span-2 lg:col-span-1"><Badge variant="outline">{row.groupName}</Badge></div>
-              <div className="col-span-2 lg:col-span-1"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Présence</span><strong className="text-sm font-semibold text-[var(--color-ink)]">{row.attendanceRate === null ? "—" : `${row.attendanceRate}%`}</strong></div>
+              <div className="col-span-2 lg:col-span-1"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Présence</span><strong className="text-sm font-semibold text-[var(--color-ink)]">{row.attendance.total ? `${Math.round(row.attendance.present / row.attendance.total * 100)}% (${row.attendance.present} / ${row.attendance.total})` : "—"}</strong></div>
               <div className="col-span-2 lg:col-span-1"><ActivitySummary row={row} /></div>
               <div className="athlete-volume"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Volume</span><strong>{row.volume}</strong><i style={{ "--volume": `${Math.max(10, Math.min(100, row.volume / Math.max(...visibleRows.map((item) => item.volume), 1) * 100))}%` } as CSSProperties} /></div>
               <div className="text-lg font-black lg:text-right"><span className="mr-2 text-xs font-bold text-[var(--color-ink-muted)] lg:hidden">Moyenne</span>{row.averageVolume === null ? "—" : row.averageVolume.toFixed(1)}</div>

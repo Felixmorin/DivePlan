@@ -24,7 +24,7 @@ export type AthleteRow = {
   groupId?: string | null;
   birthDate?: string | null;
   active: boolean;
-  attendanceRate: number | null;
+  attendance: { present: number; total: number };
   lastActivity?: string;
   volume: number;
   completedSessions: number;
@@ -125,7 +125,7 @@ export default async function AthletesPage() {
     [clubId]
   )]);
 
-  const attendanceByAthlete = new Map(attendanceResult.rows.map(({ athleteId, total, absent }) => [athleteId, total ? Math.round((total - absent) / total * 100) : null]));
+  const attendanceByAthlete = new Map(attendanceResult.rows.map(({ athleteId, total, absent }) => [athleteId, { present: total - absent, total }]));
 
   const rows: AthleteRow[] = athletes.map((athlete, index) => ({
       id: athlete.id,
@@ -137,7 +137,7 @@ export default async function AthletesPage() {
       groupId: athlete.groupId,
       birthDate: athlete.birthDate?.toLocaleDateString("en-CA", { timeZone: "UTC" }) ?? null,
       active: athlete.active,
-      attendanceRate: attendanceByAthlete.get(athlete.id) ?? null,
+      attendance: attendanceByAthlete.get(athlete.id) ?? { present: 0, total: 0 },
       lastActivity: athlete.lastActivity ?? undefined,
       volume: Number(athlete.volume),
       completedSessions: athlete.completedSessions,
@@ -168,7 +168,7 @@ function DemoAthletesPage() {
     level: athlete.level,
     groupName: "Provincial",
     active: athlete.status !== "surveiller",
-    attendanceRate: 87,
+    attendance: { present: 7, total: 8 },
     lastActivity: athlete.lastSession,
     volume: athlete.recentVolume,
     completedSessions: 0,
