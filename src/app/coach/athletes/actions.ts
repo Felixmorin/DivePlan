@@ -702,7 +702,7 @@ export async function addAthleteDiveRepetitions(formData: FormData): Promise<{ e
 export async function updateAthleteDiveFamily(formData: FormData) {
   const { clubId } = await requireCoach();
   const parsed = athleteDiveFamilySchema.extend({
-    originalName: z.string().min(1).max(80),
+    originalName: z.string().max(80),
     originalFamily: athleteDiveFamilySchema.shape.family
   }).safeParse({
     athleteId: formData.get("athleteId"),
@@ -791,7 +791,7 @@ export async function removeAthleteDiveFromVolume(formData: FormData) {
     diveCode: z.string().trim().min(1).max(12),
     height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM, PoolHeight.CUSTOM]),
     heightLabel: z.string().max(80).nullable(),
-    originalName: z.string().min(1).max(80),
+    originalName: z.string().max(80),
     originalFamily: athleteDiveFamilySchema.shape.family
   }).safeParse({
     athleteId: formData.get("athleteId"),
