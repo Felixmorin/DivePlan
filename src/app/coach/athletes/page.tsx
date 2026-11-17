@@ -10,7 +10,7 @@ import { requireCoach } from "@/lib/current-user";
 import { query } from "@/lib/db";
 import { avatarUrlForPage } from "@/lib/avatar";
 import { resolveAvatarUrls } from "@/lib/avatar-storage";
-import { parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
+import { addMontrealDays, parseMontrealSessionDate, startOfMontrealDay } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ export type AthleteRow = {
   groupId?: string | null;
   birthDate?: string | null;
   active: boolean;
-  nextSession?: { id: string; title: string; date: Date; status: string };
+  attendanceRate: number | null;
   lastActivity?: string;
   volume: number;
   completedSessions: number;
@@ -78,23 +78,33 @@ export default async function AthletesPage() {
   const athletes = athletesResult.rows;
   const athleteAvatarUrls = await resolveAvatarUrls(athletes.map((athlete) => athlete.avatar));
   const groups = groupsResult.rows;
-  const athleteIds = athletes.map((athlete) => athlete.id);
   const today = startOfMontrealDay();
   const seasonStartYear = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
   const seasonLabel = `${seasonStartYear}-${seasonStartYear + 1}`;
   const seasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-01`, "00:00");
   const seasonEnd = parseMontrealSessionDate(`${seasonStartYear + 1}-09-01`, "00:00");
-  const [sessions, seasonStatsResult, allTimeSessionStatsResult] = await Promise.all([athleteIds.length ? query<{ athleteId: string; id: string; title: string; date: Date; status: string }>(
-    `SELECT DISTINCT ON (assignment."athleteId") assignment."athleteId", s.id, s.title, s.date, s.status
-     FROM "TrainingSession" s
-     JOIN "TrainingWeek" w ON w.id = s."weekId"
-     JOIN "SessionBlock" block ON block."sessionId" = s.id
-     JOIN "SessionBlockAssignment" assignment ON assignment."sessionBlockId" = block.id
-     WHERE w."clubId" = $1 AND s.status = 'READY' AND s.date >= $2
-       AND assignment."athleteId" = ANY($3::text[])
-     ORDER BY assignment."athleteId", s.date ASC, s.id`,
-    [clubId, startOfMontrealDay(), athleteIds]
-  ) : Promise.resolve({ rows: [] as Array<{ athleteId: string; id: string; title: string; date: Date; status: string }> }),
+  const attendanceSeasonStart = parseMontrealSessionDate(`${seasonStartYear}-09-14`, "00:00");
+  const [attendanceResult, seasonStatsResult, allTimeSessionStatsResult] = await Promise.all([
+  query<{ athleteId: string; total: number; absent: number }>(
+    `WITH group_sessions AS (
+       SELECT a.id AS "athleteId", s.id AS "sessionId"
+       FROM "Athlete" a
+       JOIN "User" u ON u.id = a."userId"
+       JOIN "TrainingWeek" w ON w."groupId" = a."groupId" AND w."clubId" = a."clubId"
+       JOIN "TrainingSession" s ON s."weekId" = w.id
+       WHERE a."clubId" = $1 AND s.status <> 'NOT_DONE'
+         AND s.date >= $2 AND s.date < $3
+         AND (lower(trim(s.title)) NOT IN ('entrainement 2 octobre v2', 'entrainement 14 sept')
+           OR lower(translate(concat_ws(' ', u."firstName", u."lastName"), 'éèêëàâäôöùûüç', 'eeeeaaaoouuuc')) = 'emile cote')
+     )
+     SELECT a.id AS "athleteId", COUNT(gs."sessionId")::int AS total, COUNT(absence."sessionId")::int AS absent
+     FROM "Athlete" a
+     LEFT JOIN group_sessions gs ON gs."athleteId" = a.id
+     LEFT JOIN "AthleteSessionAbsence" absence ON absence."athleteId" = a.id AND absence."sessionId" = gs."sessionId"
+     WHERE a."clubId" = $1
+     GROUP BY a.id`,
+    [clubId, attendanceSeasonStart, addMontrealDays(today, 1)]
+  ),
   query<{ volume: number; completedSessions: number }>(
     `SELECT
        (SELECT COALESCE(SUM(l."repetitionsCompleted"),0)::int FROM "AthleteDiveRepetition" l
@@ -115,12 +125,7 @@ export default async function AthletesPage() {
     [clubId]
   )]);
 
-  const nextByAthlete = new Map<string, AthleteRow["nextSession"]>();
-  sessions.rows.forEach((session) => {
-    if (!nextByAthlete.has(session.athleteId)) {
-      nextByAthlete.set(session.athleteId, { id: session.id, title: session.title, date: session.date, status: session.status });
-    }
-  });
+  const attendanceByAthlete = new Map(attendanceResult.rows.map(({ athleteId, total, absent }) => [athleteId, total ? Math.round((total - absent) / total * 100) : null]));
 
   const rows: AthleteRow[] = athletes.map((athlete, index) => ({
       id: athlete.id,
@@ -132,7 +137,7 @@ export default async function AthletesPage() {
       groupId: athlete.groupId,
       birthDate: athlete.birthDate?.toLocaleDateString("en-CA", { timeZone: "UTC" }) ?? null,
       active: athlete.active,
-      nextSession: nextByAthlete.get(athlete.id),
+      attendanceRate: attendanceByAthlete.get(athlete.id) ?? null,
       lastActivity: athlete.lastActivity ?? undefined,
       volume: Number(athlete.volume),
       completedSessions: athlete.completedSessions,
@@ -163,7 +168,7 @@ function DemoAthletesPage() {
     level: athlete.level,
     groupName: "Provincial",
     active: athlete.status !== "surveiller",
-    nextSession: { id: "demo", title: athlete.lastSession, date: parseMontrealSessionDate("2026-08-25"), status: "READY" },
+    attendanceRate: 87,
     lastActivity: athlete.lastSession,
     volume: athlete.recentVolume,
     completedSessions: 0,
