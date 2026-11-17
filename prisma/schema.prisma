@@ -253,6 +253,7 @@ model Athlete {
   completions      AthleteSessionCompletion[]
   absences         AthleteSessionAbsence[]
   diveLogs         AthleteDiveLog[]
+  manualDiveRepetitions AthleteManualDiveRepetition[]
   diveNotes        AthleteDiveNote[]
   coachSessionNotes CoachAthleteSessionNote[]
   exerciseLogs     AthleteExerciseLog[]
@@ -761,6 +762,21 @@ model AthleteDiveLog {
   poolDive             PoolDive        @relation(fields: [poolDiveId], references: [id], onDelete: Cascade)
 
   @@unique([athleteId, sessionId, poolDiveId])
+}
+
+model AthleteManualDiveRepetition {
+  id                   String   @id @default(cuid())
+  athleteId            String
+  diveCode             String
+  diveName             String
+  height               String
+  heightLabel          String?
+  familyOverride       String
+  repetitionsCompleted Int
+  timestamp            DateTime @default(now())
+  athlete              Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, timestamp], map: "AthleteManualDiveRepetition_athlete_timestamp_idx")
 }
 
 model AthleteDiveNote {

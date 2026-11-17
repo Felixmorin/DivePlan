@@ -42,3 +42,7 @@ qui active cette fonction.
 
 Migration `0031_competition_simulation_repetitions.sql` enregistre chaque passage terminé
 et expose les répétitions de piscine et de simulation dans la même vue d'agrégation.
+
+Migration `0032_manual_dive_repetitions.sql` ajoute les répétitions saisies librement
+par le coach, sans séance, à cette vue. Appliquer cette migration avant de publier
+le code de saisie manuelle ; les séances et leurs répétitions restent conservées.

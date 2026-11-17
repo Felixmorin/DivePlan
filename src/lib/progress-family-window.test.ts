@@ -97,6 +97,23 @@ test("progress family breakdown transfers only the six displayed activity days a
         assert.ok(updated.stats().familyRows.length<=1);
       }
     });
+    await t.test("free repetitions enter family totals and charts without creating a completed session", async () => {
+      await db.exec(`CREATE TABLE "Athlete" (id text PRIMARY KEY);
+        INSERT INTO "Athlete" VALUES ('athlete-a');`);
+      await db.exec(readFileSync("db/migrations/0032_manual_dive_repetitions.sql", "utf8"));
+      await db.exec(`INSERT INTO "AthleteManualDiveRepetition"
+        (id,"athleteId","diveCode","diveName",height,"heightLabel","familyOverride","repetitionsCompleted",timestamp)
+        VALUES ('manual','athlete-a','401C','Saisie libre','PLATFORM','5m','Retourne',12,'2026-11-17 12:00');`);
+      const withManual = await load(false).get("athlete-a");
+      assert.equal(withManual.totalDiveRepetitions, actual.totalDiveRepetitions + 12);
+      assert.equal(withManual.skillData.find((family) => family.name === "Retourne")!.volume,
+        actual.skillData.find((family) => family.name === "Retourne")!.volume + 12);
+      assert.ok(withManual.skillDives.some((dive) => dive.code === "401C" && dive.volume === 12 && dive.heightLabel === "5m"));
+      assert.equal(withManual.chartData.at(-1)!.volume, 12);
+      assert.equal(withManual.dailyFamilyChartData.at(-1)!.familyVolumes.Retourne, 12);
+      assert.equal(withManual.completedSessions, actual.completedSessions);
+      assert.equal(JSON.stringify(withManual.sessionChartData), JSON.stringify(actual.sessionChartData));
+    });
     await t.test("database errors are still propagated without fabricated empty charts",async()=>{
       await db.exec('DROP TABLE "AthleteDiveLog" CASCADE');
       await assert.rejects(load(false).get("athlete-a"),(error:unknown)=>(error as {code:string}).code==="42P01");

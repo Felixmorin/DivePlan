@@ -97,7 +97,11 @@ export default async function AthletesPage() {
   ) : Promise.resolve({ rows: [] as Array<{ athleteId: string; id: string; title: string; date: Date; status: string }> }),
   query<{ volume: number; completedSessions: number }>(
     `SELECT
-       (SELECT COALESCE(SUM(l."repetitionsCompleted"),0)::int FROM "AthleteDiveRepetition" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId" WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3) AS volume,
+       (SELECT COALESCE(SUM(l."repetitionsCompleted"),0)::int FROM "AthleteDiveRepetition" l
+        LEFT JOIN "TrainingSession" s ON s.id=l."sessionId" LEFT JOIN "TrainingWeek" w ON w.id=s."weekId"
+        JOIN "Athlete" a ON a.id=l."athleteId"
+        WHERE (w."clubId"=$1 AND s.date >= $2 AND s.date < $3)
+           OR (l."sessionId" IS NULL AND a."clubId"=$1 AND l.timestamp >= $2 AND l.timestamp < $3)) AS volume,
        (SELECT COUNT(DISTINCT s.id)::int FROM "TrainingSession" s JOIN "TrainingWeek" w ON w.id=s."weekId"
         WHERE w."clubId"=$1 AND s.date >= $2 AND s.date < $3
           AND EXISTS (SELECT 1 FROM "AthleteDiveRepetition" l WHERE l."sessionId"=s.id AND l."repetitionsCompleted" >= 1)) AS "completedSessions"`,

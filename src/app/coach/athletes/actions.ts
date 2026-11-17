@@ -671,16 +671,49 @@ export async function reorderCompetitionDives(formData: FormData) {
   revalidatePath("/athlete/profile");
 }
 
+export async function addAthleteDiveRepetitions(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  const { clubId } = await requireCoach();
+  const parsed = athleteDiveFamilySchema.extend({
+    diveName: z.string().trim().min(1).max(80),
+    heightLabel: z.string().trim().min(1).max(80).nullable(),
+    repetitions: z.coerce.number().int().min(1).max(100000)
+  }).safeParse({
+    ...Object.fromEntries(formData),
+    heightLabel: formData.get("heightLabel") || null
+  });
+  if (!parsed.success) return { error: "Vérifie le code, le nom, la famille, la hauteur et le nombre entier de répétitions (1 à 100 000)." };
+  const { athleteId, diveCode, diveName, height, heightLabel, family, repetitions } = parsed.data;
+  const result = await query(
+    `INSERT INTO "AthleteManualDiveRepetition"
+       (id,"athleteId","diveCode","diveName",height,"heightLabel","familyOverride","repetitionsCompleted")
+     SELECT $1,a.id,$2,$3,$4,$5,$6,$7 FROM "Athlete" a WHERE a.id=$8 AND a."clubId"=$9
+     RETURNING id`,
+    [randomUUID(), diveCode, diveName, height, heightLabel, family, repetitions, athleteId, clubId]
+  );
+  if (!result.rows.length) return { error: "Athlète introuvable." };
+  revalidatePath(`/coach/athletes/${athleteId}`);
+  revalidatePath("/coach/athletes");
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/progress");
+  revalidatePath("/athlete/profile");
+  return { success: true };
+}
+
 export async function updateAthleteDiveFamily(formData: FormData) {
   const { clubId } = await requireCoach();
-  const parsed = athleteDiveFamilySchema.safeParse({
+  const parsed = athleteDiveFamilySchema.extend({
+    originalName: z.string().min(1).max(80),
+    originalFamily: athleteDiveFamilySchema.shape.family
+  }).safeParse({
     athleteId: formData.get("athleteId"),
     diveCode: formData.get("diveCode"),
     height: formData.get("height"),
     heightLabel: formData.get("heightLabel") || null,
     family: formData.get("family"),
     diveName: formData.get("diveName"),
-    repetitions: formData.get("repetitions")
+    repetitions: formData.get("repetitions"),
+    originalName: formData.get("originalName"),
+    originalFamily: formData.get("originalFamily")
   });
 
   if (!parsed.success) {
@@ -694,20 +727,35 @@ export async function updateAthleteDiveFamily(formData: FormData) {
   }
 
   await withTransaction(async (tx) => {
-    const logs = await tx.query<{ id: string; repetitionsCompleted: number }>(
-      `SELECT l.id,l."repetitionsCompleted" FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId"
-       WHERE l."athleteId"=$1 AND d."diveCode"=$2 AND s.height=$3 AND s.label IS NOT DISTINCT FROM $4 ORDER BY l.timestamp,l.id FOR UPDATE OF l`,
-      [athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel]
+    const logs = await tx.query<{ id: string; repetitionsCompleted: number; source: string }>(
+      `SELECT l.id,l."repetitionsCompleted",'pool' AS source FROM "AthleteDiveLog" l JOIN "PoolDive" d ON d.id=l."poolDiveId" JOIN "PoolSection" s ON s.id=d."poolSectionId"
+       WHERE l."athleteId"=$1 AND COALESCE(l."actualDiveCode",d."diveCode")=$2 AND s.height=$3 AND s.label IS NOT DISTINCT FROM $4
+         AND COALESCE(l."actualDiveName",d."diveName")=$5
+         AND COALESCE(l."familyOverride",CASE left(COALESCE(l."actualDiveCode",d."diveCode"),1)
+           WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END)=$6
+       ORDER BY l.timestamp,l.id FOR UPDATE OF l`,
+      [athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel, parsed.data.originalName, parsed.data.originalFamily]
     );
-    await tx.query(
-      `UPDATE "AthleteDiveLog" l SET "familyOverride"=$1,"actualDiveName"=$2 FROM "PoolDive" d JOIN "PoolSection" s ON s.id=d."poolSectionId"
-       WHERE l."poolDiveId"=d.id AND l."athleteId"=$3 AND d."diveCode"=$4 AND s.height=$5 AND s.label IS NOT DISTINCT FROM $6`,
-      [parsed.data.family, parsed.data.diveName, athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel]
+    const manual = await tx.query<{ id: string; repetitionsCompleted: number; source: string }>(
+      `SELECT id,"repetitionsCompleted",'manual' AS source FROM "AthleteManualDiveRepetition"
+       WHERE "athleteId"=$1 AND "diveCode"=$2 AND height=$3 AND "heightLabel" IS NOT DISTINCT FROM $4
+         AND "diveName"=$5 AND "familyOverride"=$6 ORDER BY timestamp,id FOR UPDATE`,
+      [athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel, parsed.data.originalName, parsed.data.originalFamily]
     );
+    logs.rows.push(...manual.rows);
+    const simulation = await tx.query<{ volume: number }>(
+      `SELECT COUNT(*)::int AS volume FROM "CompetitionSimulationRepetition" r JOIN "CompetitionSimulation" cs ON cs.id=r."simulationId"
+       WHERE r."athleteId"=$1 AND r."diveCode"=$2 AND r.height=$3 AND r.height IS NOT DISTINCT FROM $4 AND r."diveName"=$5
+         AND CASE left(r."diveCode",1) WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END=$6`,
+      [athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel, parsed.data.originalName, parsed.data.originalFamily]
+    );
+    const repetitions = parsed.data.repetitions - simulation.rows[0].volume;
+    if (repetitions < 0) throw new Error("Le total ne peut pas être inférieur au nombre de passages en simulation.");
+    if (!logs.rows.length) throw new Error("Ajoute des répétitions manuelles avant de modifier ce plongeon.");
     const oldTotal = logs.rows.reduce((sum, row) => sum + row.repetitionsCompleted, 0);
-    let remaining = parsed.data.repetitions;
+    let remaining = repetitions;
     const updatedRepetitions = logs.rows.map((log) => {
-      const next = oldTotal === 0 ? 0 : Math.floor(parsed.data.repetitions * log.repetitionsCompleted / oldTotal);
+      const next = oldTotal === 0 ? 0 : Math.floor(repetitions * log.repetitionsCompleted / oldTotal);
       remaining -= next;
       return next;
     });
@@ -716,18 +764,24 @@ export async function updateAthleteDiveFamily(formData: FormData) {
       updatedRepetitions[index] += 1;
       remaining -= 1;
     }
-    if (logs.rows.length > 0) {
+    updatedRepetitions[0] += remaining;
+    for (const [source, table, nameColumn] of [["pool", "AthleteDiveLog", "actualDiveName"], ["manual", "AthleteManualDiveRepetition", "diveName"]]) {
+      const indexes = logs.rows.flatMap((row, index) => row.source === source ? [index] : []);
+      if (!indexes.length) continue;
       await tx.query(
-        `UPDATE "AthleteDiveLog" AS l SET "repetitionsCompleted" = updated."repetitionsCompleted"
+        `UPDATE "${table}" AS l SET "repetitionsCompleted" = updated."repetitionsCompleted","familyOverride"=$3,"${nameColumn}"=$4
          FROM unnest($1::text[], $2::int[]) AS updated(id, "repetitionsCompleted")
          WHERE l.id = updated.id`,
-        [logs.rows.map((log) => log.id), updatedRepetitions]
+        [indexes.map((index) => logs.rows[index].id), indexes.map((index) => updatedRepetitions[index]), parsed.data.family, parsed.data.diveName]
       );
     }
   });
 
   revalidatePath(`/coach/athletes/${athlete.id}`);
   revalidatePath("/athlete/progress");
+  revalidatePath("/coach/athletes");
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/profile");
 }
 
 export async function removeAthleteDiveFromVolume(formData: FormData) {
@@ -736,12 +790,16 @@ export async function removeAthleteDiveFromVolume(formData: FormData) {
     athleteId: z.string().min(1),
     diveCode: z.string().trim().min(1).max(12),
     height: z.enum([PoolHeight.ONE_METER, PoolHeight.THREE_METER, PoolHeight.PLATFORM, PoolHeight.CUSTOM]),
-    heightLabel: z.string().max(80).nullable()
+    heightLabel: z.string().max(80).nullable(),
+    originalName: z.string().min(1).max(80),
+    originalFamily: athleteDiveFamilySchema.shape.family
   }).safeParse({
     athleteId: formData.get("athleteId"),
     diveCode: formData.get("diveCode"),
     height: formData.get("height"),
-    heightLabel: formData.get("heightLabel") || null
+    heightLabel: formData.get("heightLabel") || null,
+    originalName: formData.get("originalName"),
+    originalFamily: formData.get("originalFamily")
   });
   if (!parsed.success) throw new Error("Les informations du plongeon sont invalides.");
 
@@ -749,14 +807,24 @@ export async function removeAthleteDiveFromVolume(formData: FormData) {
   const athlete = athleteResult.rows[0];
   if (!athlete) throw new Error("Athlète introuvable.");
 
-  await query(
-    `DELETE FROM "AthleteDiveLog" l USING "PoolDive" d, "PoolSection" s
-     WHERE l."poolDiveId" = d.id AND d."poolSectionId" = s.id AND l."athleteId" = $1 AND d."diveCode" = $2 AND s.height = $3 AND s.label IS NOT DISTINCT FROM $4`,
-    [athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel]
-  );
+  await withTransaction(async (tx) => {
+    await tx.query(
+      `DELETE FROM "AthleteDiveLog" l USING "PoolDive" d, "PoolSection" s
+       WHERE l."poolDiveId" = d.id AND d."poolSectionId" = s.id AND l."athleteId" = $1 AND COALESCE(l."actualDiveCode",d."diveCode") = $2 AND s.height = $3 AND s.label IS NOT DISTINCT FROM $4
+         AND COALESCE(l."actualDiveName",d."diveName")=$5
+         AND COALESCE(l."familyOverride",CASE left(COALESCE(l."actualDiveCode",d."diveCode"),1)
+           WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END)=$6`,
+      [athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel, parsed.data.originalName, parsed.data.originalFamily]
+    );
+    await tx.query(`DELETE FROM "AthleteManualDiveRepetition" WHERE "athleteId"=$1 AND "diveCode"=$2 AND height=$3 AND "heightLabel" IS NOT DISTINCT FROM $4 AND "diveName"=$5 AND "familyOverride"=$6`,
+      [athlete.id, parsed.data.diveCode, parsed.data.height, parsed.data.heightLabel, parsed.data.originalName, parsed.data.originalFamily]);
+  });
 
   revalidatePath(`/coach/athletes/${athlete.id}`);
   revalidatePath("/athlete/progress");
+  revalidatePath("/coach/athletes");
+  revalidatePath("/athlete");
+  revalidatePath("/athlete/profile");
 }
 
 export async function deleteAthlete(formData: FormData) {

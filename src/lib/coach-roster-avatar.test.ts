@@ -28,7 +28,7 @@ test("coach directory and group pages omit disabled photos from SQL while retain
       CREATE TABLE "TrainingWeek" (id text PRIMARY KEY,"clubId" text,"groupId" text);
       CREATE TABLE "TrainingSession" (id text PRIMARY KEY,"weekId" text,title text,date timestamptz,duration int,status text);
       CREATE TABLE "AthleteSessionCompletion" ("athleteId" text,"sessionId" text,status text,"startedAt" timestamptz,"completedAt" timestamptz);
-      CREATE TABLE "AthleteDiveLog" ("athleteId" text,"sessionId" text,"repetitionsCompleted" int);
+      CREATE TABLE "AthleteDiveLog" ("athleteId" text,"sessionId" text,"repetitionsCompleted" int,timestamp timestamp DEFAULT CURRENT_TIMESTAMP);
       CREATE VIEW "AthleteDiveRepetition" AS SELECT * FROM "AthleteDiveLog";
       CREATE TABLE "SessionBlock" (id text PRIMARY KEY,"sessionId" text);
       CREATE TABLE "SessionBlockAssignment" ("sessionBlockId" text,"athleteId" text);
@@ -42,7 +42,7 @@ test("coach directory and group pages omit disabled photos from SQL while retain
       INSERT INTO "Athlete" SELECT 'athlete-'||n,'user-'||n,'club-a','group-a','2010-01-01','Provincial',true FROM generate_series(1,30) n;
       INSERT INTO "Athlete" VALUES ('foreign','foreign-user','club-b','group-b',NULL,'Other',true);
       INSERT INTO "AthleteSessionCompletion" SELECT 'athlete-'||n,'session-a',CASE WHEN n=1 THEN 'IN_PROGRESS' ELSE 'COMPLETED' END,'2026-11-01','2026-11-01' FROM generate_series(1,30) n;
-      INSERT INTO "AthleteDiveLog" SELECT 'athlete-'||n,'session-a',n FROM generate_series(1,30) n;
+      INSERT INTO "AthleteDiveLog" ("athleteId","sessionId","repetitionsCompleted") SELECT 'athlete-'||n,'session-a',n FROM generate_series(1,30) n;
       INSERT INTO "SessionBlock" VALUES ('block','session-a');
       INSERT INTO "SessionBlockAssignment" SELECT 'block','athlete-'||n FROM generate_series(1,30) n;`);
     let clubId = "club-a"; let authorized = true; let legacy = false;
@@ -102,6 +102,16 @@ test("coach directory and group pages omit disabled photos from SQL while retain
         t.diagnostic(`${paths[i]} synthetic SQL rows in JSON: ${beforeBytes} -> ${bytes} bytes; queries ${beforeQueries} -> ${queries}. No HTTP/FOT/latency measurement.`);
       });
     }
+    await t.test("manual volume counts in the directory and season totals without inventing sessions", async () => {
+      const before = renderToStaticMarkup(await pages[0]({ params: Promise.resolve({ id: "unused" }) }));
+      const sessionCount = /&quot;completedSessions&quot;:(\d+)/.exec(before)?.[1];
+      await db.exec(`INSERT INTO "AthleteDiveLog" VALUES ('athlete-1',NULL,7,'2026-11-17'),('foreign',NULL,99,'2026-11-17');`);
+      reset();
+      const after = renderToStaticMarkup(await pages[0]({ params: Promise.resolve({ id: "unused" }) }));
+      assert.ok(results.some((rows) => Array.isArray(rows) && rows.some((row) => row.id === "athlete-1" && row.volume === 8)));
+      assert.ok(results.some((rows) => JSON.stringify(rows) === JSON.stringify([{ volume: 472, completedSessions: 1 }])));
+      assert.equal(/&quot;completedSessions&quot;:(\d+)/.exec(after)?.[1], sessionCount);
+    });
     await t.test("club filtering, empty groups and denied access are retained", async () => {
       const empty = renderToStaticMarkup(await pages[2]({ params: Promise.resolve({ id: "empty" }) }));
       assert.match(empty,/Empty group/); assert.doesNotMatch(empty,/Athlete 01/);

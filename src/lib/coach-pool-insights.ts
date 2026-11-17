@@ -16,9 +16,11 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
       `SELECT l."athleteId", COALESCE(l."familyOverride", CASE LEFT(l."diveCode", 1)
           WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,
         SUM(l."repetitionsCompleted")::int AS volume
-       FROM "AthleteDiveRepetition" l JOIN "AthleteSessionCompletion" c ON c."athleteId"=l."athleteId" AND c."sessionId"=l."sessionId"
-       JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
-       WHERE l."athleteId"=ANY($1::text[]) AND w."clubId"=$2 AND c.status='COMPLETED'
+       FROM "AthleteDiveRepetition" l JOIN "Athlete" a ON a.id=l."athleteId"
+       LEFT JOIN "AthleteSessionCompletion" c ON c."athleteId"=l."athleteId" AND c."sessionId"=l."sessionId"
+       LEFT JOIN "TrainingSession" s ON s.id=l."sessionId" LEFT JOIN "TrainingWeek" w ON w.id=s."weekId"
+       WHERE l."athleteId"=ANY($1::text[]) AND a."clubId"=$2
+         AND (l."sessionId" IS NULL OR (w."clubId"=$2 AND c.status='COMPLETED'))
        GROUP BY l."athleteId", family`, [athleteIds, clubId]),
       query<{ athleteId: string; id: string; position: number; height: PoolInsightHeight; platformHeight: number | null; code: string; volume: number | string; averageRating: number | string | null; ratingCount: number | string | null }>(
       `WITH dives AS (
@@ -30,8 +32,8 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
        ), volume AS (
          SELECT l."athleteId", l."diveCode" AS code, l.height, l."heightLabel",
            SUM(l."repetitionsCompleted")::int AS volume
-         FROM "AthleteDiveRepetition" l JOIN "TrainingSession" s ON s.id=l."sessionId" JOIN "TrainingWeek" w ON w.id=s."weekId"
-         WHERE l."athleteId"=ANY($1::text[]) AND w."clubId"=$2
+         FROM "AthleteDiveRepetition" l JOIN "Athlete" a ON a.id=l."athleteId"
+         WHERE l."athleteId"=ANY($1::text[]) AND a."clubId"=$2
          GROUP BY l."athleteId", code, l.height, l."heightLabel"
        ), ratings AS (
          SELECT "competitionDiveId", AVG(rating)::numeric AS "averageRating", COUNT(*)::int AS "ratingCount"
