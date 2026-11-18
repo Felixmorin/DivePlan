@@ -1,17 +1,19 @@
+import type { WellnessSession } from "@/components/coach/athlete-wellness-trends";
 import { query } from "@/lib/db";
 
 export type PoolInsightHeight = "ONE_METER" | "THREE_METER" | "PLATFORM" | "CUSTOM";
 export type AthletePoolInsight = {
+  wellnessSessions: WellnessSession[];
   families: Array<{ family: string; volume: number }>;
   competitionDives: Array<{ id: string; position: number; height: PoolInsightHeight; platformHeight: number | null; code: string; volume: number; averageRating: number | null; ratingCount: number }>;
 };
 
 /** Historical logged pool volume and athlete-authored confidence for competition dives. */
 export async function getCoachPoolInsights(athleteIds: string[], clubId: string): Promise<Record<string, AthletePoolInsight>> {
-  const result = Object.fromEntries(athleteIds.map((id) => [id, { families: [], competitionDives: [] }])) as Record<string, AthletePoolInsight>;
+  const result = Object.fromEntries(athleteIds.map((id) => [id, { families: [], competitionDives: [], wellnessSessions: [] }])) as Record<string, AthletePoolInsight>;
   if (!athleteIds.length) return result;
 
-  const [familyRows, competitionRows] = await Promise.all([
+  const [familyRows, competitionRows, wellnessRows] = await Promise.all([
     query<{ athleteId: string; family: string; volume: number | string }>(
       `SELECT l."athleteId", COALESCE(l."familyOverride", CASE LEFT(l."diveCode", 1)
           WHEN '1' THEN 'Avant' WHEN '2' THEN 'Arriere' WHEN '3' THEN 'Renverse' WHEN '4' THEN 'Retourne' WHEN '5' THEN 'Vrille' ELSE 'Equilibre' END) AS family,
@@ -52,10 +54,24 @@ export async function getCoachPoolInsights(athleteIds: string[], clubId: string)
        )
        LEFT JOIN ratings ON ratings."competitionDiveId"=dives.id
        GROUP BY dives."athleteId", dives.id, dives.position, dives.height, dives."platformHeight", dives.code, ratings."averageRating", ratings."ratingCount"
-       ORDER BY dives."athleteId", dives.height, dives.position, dives.id`, [athleteIds, clubId])
+       ORDER BY dives."athleteId", dives.height, dives.position, dives.id`, [athleteIds, clubId]),
+    query<WellnessSession & { athleteId: string }>(
+      `SELECT a.id AS "athleteId", recent.id, recent.date, recent.rating
+       FROM "Athlete" a
+       CROSS JOIN LATERAL (
+         SELECT s.id, s.date, c.rating
+         FROM "AthleteSessionCompletion" c
+         JOIN "TrainingSession" s ON s.id=c."sessionId"
+         JOIN "TrainingWeek" w ON w.id=s."weekId"
+         WHERE c."athleteId"=a.id AND w."clubId"=$2
+           AND lower(trim(c.rating)) IN ('pas bien','difficile','moyen','bien','très bien')
+         ORDER BY s.date DESC, s.id DESC LIMIT 7
+       ) recent
+       WHERE a.id=ANY($1::text[]) AND a."clubId"=$2`, [athleteIds, clubId])
   ]);
 
   for (const row of familyRows.rows) result[row.athleteId]?.families.push({ family: row.family, volume: Number(row.volume) });
   for (const row of competitionRows.rows) result[row.athleteId]?.competitionDives.push({ id: row.id, position: row.position, height: row.height, platformHeight: row.platformHeight === null ? null : Number(row.platformHeight), code: row.code, volume: Number(row.volume), averageRating: row.averageRating === null ? null : Number(row.averageRating), ratingCount: Number(row.ratingCount ?? 0) });
+  for (const row of wellnessRows.rows) result[row.athleteId]?.wellnessSessions.push({ id: row.id, date: new Date(row.date).toISOString(), rating: row.rating });
   return result;
 }

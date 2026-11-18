@@ -1,5 +1,6 @@
 "use client";
 
+import { AthleteWellnessTrends } from "@/components/coach/athlete-wellness-trends";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AthletePoolInsight, PoolInsightHeight } from "@/lib/coach-pool-insights";
@@ -23,7 +24,7 @@ export function PoolAthleteInsightPanel({ insight }: { insight?: AthletePoolInsi
   const ratingCount = average.reduce((sum, dive) => sum + dive.ratingCount, 0);
   const averageRating = ratingCount ? average.reduce((sum, dive) => sum + (dive.averageRating ?? 0) * dive.ratingCount, 0) / ratingCount : null;
 
-  return <Card className="xl:sticky xl:top-4">
+  return <div className="space-y-5 xl:sticky xl:top-4"><Card>
     <CardHeader className="pb-3"><p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand-strong)]">Historique</p><CardTitle className="text-lg">Profil piscine</CardTitle></CardHeader>
     <CardContent className="space-y-5">
       <section aria-labelledby="family-volumes-title">
@@ -48,5 +49,7 @@ export function PoolAthleteInsightPanel({ insight }: { insight?: AthletePoolInsi
         {averageRating === null && dives.length > 0 && <p className="mt-2 text-[11px] text-[var(--color-ink-muted)]">Aucune évaluation de l’athlète pour cette épreuve.</p>}
       </section>
     </CardContent>
-  </Card>;
+  </Card>
+    <AthleteWellnessTrends sessions={insight?.wellnessSessions ?? []} />
+  </div>;
 }
