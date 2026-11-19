@@ -88,7 +88,7 @@ details[open] > .banner .bannerChevron { rotate: 180deg; }
 }
 
 .sectionTitle {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 1.0625rem;
   font-weight: 850;
   letter-spacing: -0.02em;
@@ -99,6 +99,8 @@ details[open] > .banner .bannerChevron { rotate: 180deg; }
   display: grid;
   gap: 4px;
 }
+
+.ranking { margin-block-start: 10px; }
 
 .rankButton {
   display: grid;
@@ -270,18 +272,11 @@ details[open] > .banner .bannerChevron { rotate: 180deg; }
   text-align: end;
 }
 
-.notes,
-.noteGroup,
-.coachNotes {
+.notes {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-}
-
-.notes {
-  justify-content: space-between;
-  gap: 8px 14px;
   padding: 8px 12px;
   border-radius: 0 0 6px 6px;
   background: #e9f9fb;
@@ -289,8 +284,7 @@ details[open] > .banner .bannerChevron { rotate: 180deg; }
   font-size: 0.75rem;
 }
 
-.note,
-.coachNote {
+.note {
   display: inline-flex;
   gap: 6px;
   padding: 3px 7px;
@@ -298,10 +292,13 @@ details[open] > .banner .bannerChevron { rotate: 180deg; }
   border-radius: 6px;
 }
 
-.note strong,
-.coachNote strong { color: var(--color-ink); }
-.coachNote { background: #bdf2eb; }
-[data-discarded="true"]:is(.note, .coachNote) strong { text-decoration: line-through; }
+.note strong { color: var(--color-ink); }
+.note[data-coach="true"] {
+  border-color: #fca5a5;
+  background: #fecaca;
+}
+.note[data-coach="true"] strong { color: #991b1b; }
+.note[data-discarded="true"] strong { text-decoration: line-through; }
 
 .editLink {
   display: inline-block;

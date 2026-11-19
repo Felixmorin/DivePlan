@@ -1,8 +1,9 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import Link from "@/components/ui/app-link";
+import { Button } from "@/components/ui/button";
 import type { RankedCompetitionAthlete } from "@/lib/competition-results";
 import { APP_LOCALE } from "@/lib/timezone";
 import styles from "./simulations.module.css";
@@ -12,6 +13,8 @@ const ratingFormat = new Intl.NumberFormat(APP_LOCALE, { minimumFractionDigits: 
 
 export function SimulationResults({ sessionId, results }: { sessionId: string; results: RankedCompetitionAthlete[] }) {
   const [selectedId, setSelectedId] = useState(results[0]?.athleteId);
+  const [allPassagesOpen, setAllPassagesOpen] = useState(false);
+  const passagesRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const index = Math.max(0, results.findIndex((athlete) => athlete.athleteId === selectedId));
   const result = results[index];
@@ -21,6 +24,13 @@ export function SimulationResults({ sessionId, results }: { sessionId: string; r
   }
 
   const initials = result.athleteName.trim().split(/\s+/).slice(0, 2).map((word) => Array.from(word)[0]).join("").toLocaleUpperCase(APP_LOCALE);
+
+  function toggleAllPassages() {
+    const passages = Array.from(passagesRef.current?.querySelectorAll("details") ?? []);
+    const open = passages.some((passage) => !passage.open);
+    for (const passage of passages) passage.open = open;
+    setAllPassagesOpen(open);
+  }
 
   return (
     <div className={styles.results}>
@@ -34,7 +44,11 @@ export function SimulationResults({ sessionId, results }: { sessionId: string; r
                 className={styles.rankButton}
                 aria-pressed={rank === index}
                 aria-controls={panelId}
-                onClick={() => setSelectedId(athlete.athleteId)}
+                onClick={() => {
+                  if (rank === index) return;
+                  setSelectedId(athlete.athleteId);
+                  setAllPassagesOpen(false);
+                }}
               >
                 <span className={styles.rankNumber}>{rank + 1}</span>
                 <span className={styles.rankName}>{athlete.athleteName}</span>
@@ -61,13 +75,24 @@ export function SimulationResults({ sessionId, results }: { sessionId: string; r
           </div>
         </header>
 
-        <h3 className={styles.sectionTitle}>Plongeons</h3>
-        <div key={result.athleteId} className={styles.passages}>
+        <div className="mb-1 flex flex-wrap items-center gap-x-2">
+          <h3 className={styles.sectionTitle}>Plongeons</h3>
+          {result.passages.length > 0 && (
+            <Button type="button" variant="ghost" size="sm" className="text-xs text-[var(--result-accent)] hover:bg-[var(--result-selected)]" aria-controls={`${panelId}-passages`} onClick={toggleAllPassages}>
+              {allPassagesOpen ? "Fermer tout" : "Ouvrir tout"}
+            </Button>
+          )}
+        </div>
+        <div key={result.athleteId} id={`${panelId}-passages`} ref={passagesRef} className={styles.passages}>
           <div className={`${styles.passageGrid} ${styles.columnHeaders}`} aria-hidden="true">
             <span>Passage</span><span>Plongeon</span><span>DD</span><span>Points</span>
           </div>
           {result.passages.map(({ turn, turnIndex, scores, discardedScores, points }, passageIndex) => (
-            <details key={turnIndex} name={`${panelId}-passages`} className={styles.passage}>
+            <details
+              key={turnIndex}
+              className={styles.passage}
+              onToggle={() => setAllPassagesOpen(passagesRef.current?.querySelector("details:not([open])") === null)}
+            >
               <summary className={`${styles.passageGrid} ${styles.passageSummary}`}>
                 <span className={styles.passageIndex}>
                   <ChevronRight className={styles.passageChevron} aria-hidden="true" />
@@ -78,8 +103,8 @@ export function SimulationResults({ sessionId, results }: { sessionId: string; r
                 <strong className={styles.passagePoints}><span className="sr-only">Points </span>{points == null ? "—" : pointsFormat.format(points)}</strong>
               </summary>
               <div className={styles.notes}>
-                {scores.some((score) => !score.judgeCoachId) && (
-                  <div className={styles.noteGroup}>
+                {scores.length > 0 ? (
+                  <>
                     <strong>Notes des juges</strong>
                     {scores.filter((score) => !score.judgeCoachId).map((score, judgeIndex) => (
                       <span key={judgeIndex} className={styles.note} data-discarded={discardedScores.includes(score)}>
@@ -88,20 +113,17 @@ export function SimulationResults({ sessionId, results }: { sessionId: string; r
                         {discardedScores.includes(score) && <span className="sr-only">Écartée</span>}
                       </span>
                     ))}
-                  </div>
-                )}
-                {scores.some((score) => score.judgeCoachId) && (
-                  <div className={styles.coachNotes}>
-                    <strong>Note coach</strong>
                     {scores.filter((score) => score.judgeCoachId).map((score, coachIndex) => (
-                      <span key={coachIndex} className={styles.coachNote} data-discarded={discardedScores.includes(score)}>
+                      <span key={coachIndex} className={styles.note} data-coach="true" data-discarded={discardedScores.includes(score)}>
+                        <span className="sr-only">Coach</span>
                         <strong>{ratingFormat.format(score.rating)}</strong>
                         {discardedScores.includes(score) && <span className="sr-only">Écartée</span>}
                       </span>
                     ))}
-                  </div>
+                  </>
+                ) : (
+                  <span>Aucune note enregistrée</span>
                 )}
-                {scores.length === 0 && <span>Aucune note enregistrée</span>}
               </div>
             </details>
           ))}
