@@ -1,0 +1,338 @@
+.banner,
+.passageSummary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.banner::-webkit-details-marker,
+.passageSummary::-webkit-details-marker {
+  display: none;
+}
+
+.banner {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-height: 78px;
+  padding: 12px 50px 12px 22px;
+  border: 1px solid #072637;
+  border-radius: 12px;
+  background: #021c2d url("/simulation-water.webp") center / cover no-repeat;
+  color: #fff;
+}
+
+.banner:hover {
+  border-color: #28a9bc;
+}
+
+.bannerTitle {
+  overflow-wrap: anywhere;
+  font-size: 1.25rem;
+  font-weight: 850;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  text-shadow: 0 1px 4px #021c2d;
+}
+
+.bannerMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: #e1edf5;
+  font-size: 0.8125rem;
+  text-shadow: 0 1px 4px #021c2d;
+}
+
+.status {
+  margin-inline-start: 6px;
+  padding: 3px 12px;
+  border-radius: 7px;
+  background: #b5f3e8;
+  color: #073842;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  text-shadow: none;
+}
+
+.bannerChevron {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 16px;
+  width: 18px;
+  height: 18px;
+  translate: 0 -50%;
+  filter: drop-shadow(0 1px 3px #021c2d);
+}
+
+details[open] > .banner .bannerChevron { rotate: 180deg; }
+
+.results {
+  --result-accent: #006578;
+  --result-line: #009eb7;
+  --result-selected: #d3f6f9;
+  --result-table: #e1eaf1;
+  display: grid;
+  gap: 14px;
+  margin-block-start: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.sectionTitle {
+  margin: 0 0 10px;
+  font-size: 1.0625rem;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+.ranking,
+.passages {
+  display: grid;
+  gap: 4px;
+}
+
+.rankButton {
+  display: grid;
+  width: 100%;
+  min-height: 36px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-surface-raised);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  text-align: start;
+}
+
+.rankButton:hover,
+.passageSummary:hover {
+  background: #eaf8fa;
+}
+
+.rankButton[aria-pressed="true"],
+.passage[open] {
+  border-color: var(--result-line);
+  background: var(--result-selected);
+}
+
+.rankName {
+  overflow-wrap: anywhere;
+  font-weight: 800;
+}
+
+.rankNumber {
+  display: inline-grid;
+  min-width: 20px;
+  min-height: 20px;
+  place-items: center;
+  padding-inline: 4px;
+  border-radius: 5px;
+  background: var(--result-table);
+  font-weight: 800;
+}
+
+.ranking li:first-child .rankNumber { background: #f8e3a5; }
+
+.rankPoints { text-align: end; }
+.rankButton[aria-pressed="true"] .rankPoints { font-weight: 800; }
+
+.rankPoints small,
+.total small {
+  display: block;
+  color: var(--color-ink-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.athleteHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-block-end: 7px;
+  padding-block-end: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.initials {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  background: #c9f4f7;
+  color: var(--result-accent);
+  font-size: 1.125rem;
+  font-weight: 850;
+}
+
+.athleteInfo {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.athleteInfo h2 {
+  overflow-wrap: anywhere;
+  font-size: 1.5rem;
+  font-weight: 850;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.athleteInfo p {
+  margin-block-start: 3px;
+  color: var(--color-ink-muted);
+  font-size: 0.8125rem;
+}
+
+.total {
+  margin-inline-start: auto;
+  padding-inline-start: 14px;
+  border-inline-start: 1px solid var(--color-border);
+  color: var(--result-accent);
+  text-align: end;
+}
+
+.total strong {
+  font-size: 1.375rem;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+.passageGrid {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 36px minmax(58px, auto);
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+}
+
+.columnHeaders {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--result-table);
+  font-size: 0.6875rem;
+  font-weight: 800;
+}
+
+.columnHeaders > :first-child { text-align: center; }
+.columnHeaders > :last-child { text-align: end; }
+
+.passage {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--color-surface-raised);
+}
+
+.passageSummary {
+  min-height: 32px;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+
+.passage[open] > .passageSummary { background: var(--result-selected); }
+.passage[open] .passageChevron { rotate: 90deg; }
+
+.passageIndex {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.passageChevron {
+  width: 15px;
+  height: 15px;
+}
+
+.dive {
+  display: grid;
+  grid-template-columns: minmax(44px, auto) minmax(0, 1fr);
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.passagePoints {
+  color: var(--result-accent);
+  text-align: end;
+}
+
+.notes,
+.noteGroup,
+.coachNotes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.notes {
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 8px 12px;
+  border-radius: 0 0 6px 6px;
+  background: #e9f9fb;
+  color: var(--result-accent);
+  font-size: 0.75rem;
+}
+
+.note,
+.coachNote {
+  display: inline-flex;
+  gap: 6px;
+  padding: 3px 7px;
+  border: 1px solid #b5d8e1;
+  border-radius: 6px;
+}
+
+.note strong,
+.coachNote strong { color: var(--color-ink); }
+.coachNote { background: #bdf2eb; }
+[data-discarded="true"]:is(.note, .coachNote) strong { text-decoration: line-through; }
+
+.editLink {
+  display: inline-block;
+  margin-block-start: 10px;
+  color: var(--result-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+:is(.banner, .rankButton, .passageSummary, .editLink):focus-visible {
+  outline: 2px solid #00849b;
+  outline-offset: 2px;
+}
+
+@media (min-width: 768px) {
+  .results { grid-template-columns: minmax(180px, 28fr) minmax(0, 72fr); }
+}
+
+@media (max-width: 560px) {
+  .banner {
+    padding-inline-start: 15px;
+    background-image: linear-gradient(90deg, #021c2d 32%, #021c2d44), url("/simulation-water.webp");
+    background-position: right center;
+  }
+
+  .rankButton,
+  .passageSummary { min-height: 44px; }
+  .passageGrid { grid-template-columns: 48px minmax(0, 1fr) 27px minmax(47px, auto); gap: 5px; }
+  .passageIndex { gap: 3px; }
+  .dive { grid-template-columns: 1fr; gap: 0; }
+  .total strong { font-size: 1.125rem; }
+}
